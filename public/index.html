@@ -1058,18 +1058,27 @@ async function analyzeImportedContent(input,key){
 
     for(const base of serverBases){
       if(raw)break;
-      try{
-        const srv=await fetchWithTimeout(base+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,text:input?.text?String(input.text).slice(0,12000):'',fileData:input?.fileData||null,mimeType:input?.mimeType||null,fileName:input?.fileName||null,householdId:HID})},45000);
-        if(srv.ok){
-          const sData=await srv.json();
-          raw=typeof sData==='string'?sData:(sData.output||JSON.stringify(sData.transactions||[]));
-          used='server';
-          break;
+      const body=JSON.stringify({prompt,text:input?.text?String(input.text).slice(0,12000):'',fileData:input?.fileData||null,mimeType:input?.mimeType||null,fileName:input?.fileName||null,householdId:HID});
+      for(let attempt=1;attempt<=2&&!raw;attempt++){
+        try{
+          const srv=await fetchWithTimeout(base+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body},70000);
+          if(srv.ok){
+            const sData=await srv.json();
+            raw=typeof sData==='string'?sData:(sData.output||JSON.stringify(sData.transactions||[]));
+            used='server';
+            break;
+          }
+          let reason='HTTP '+srv.status;
+          try{const errData=await srv.json();reason=errData.error||errData.message||reason;}catch(_){/* keep default */}
+          if(attempt===2||srv.status<500)serverErrors.push(reason);
+          if(!raw&&attempt===1&&srv.status>=500)await new Promise(r=>setTimeout(r,1200));
+        }catch(err){
+          const msg=err?.message||'network error';
+          const retriable=/fetch|network|abort|failed/i.test(String(msg));
+          if(attempt===2||!retriable)serverErrors.push(msg);
+          if(attempt===1&&retriable)await new Promise(r=>setTimeout(r,1200));
         }
-        let reason='HTTP '+srv.status;
-        try{const errData=await srv.json();reason=errData.error||errData.message||reason;}catch(_){/* keep default */}
-        serverErrors.push(reason);
-      }catch(err){serverErrors.push(err?.message||'network error');}
+      }
     }
 
     if(!raw){
