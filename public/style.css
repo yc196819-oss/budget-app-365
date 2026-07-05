@@ -1,0 +1,272 @@
+/* עיצוב מודרני, נקי וכיפי לאפליקציית התקציב */
+:root {
+  --bg-app: #f8fafc;
+  --card-bg: #ffffff;
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --border: #e2e8f0;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  margin: 0;
+  padding: 20px;
+  direction: rtl;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+h1, h2, h3 {
+  margin-top: 0;
+  font-weight: 700;
+}
+
+h1 { color: var(--primary); margin-bottom: 24px; }
+h2 { font-size: 1.3rem; margin-bottom: 16px; color: var(--text-main); }
+
+/* כרטיסים מעוגלים ומודרניים */
+.card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border);
+  margin-bottom: 20px;
+  transition: transform 0.2s;
+}
+
+/* סידור הגריד של האפליקציה - מונע הימרחות על חצי עמוד */
+.app-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .app-grid { grid-template-columns: 1fr; }
+}
+
+/* טפסים קומפקטיים ונעימים */
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.form-control {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background-color: #f8fafc;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  transition: all 0.2s;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary);
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* כפתורים כיפיים */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-primary { background-color: var(--primary); color: white; }
+.btn-primary:hover { background-color: var(--primary-hover); }
+.btn-secondary { background-color: #e0e7ff; color: var(--primary); }
+.btn-secondary:hover { background-color: #c7d2fe; }
+
+/* רשימות קומפקטיות שלא תופסות חצי עמוד (עם גלילה פנימית חכמה אם יש הרבה פריטים) */
+.budget-list-container {
+  max-height: 280px;
+  overflow-y: auto;
+  padding-pipe: 4px;
+}
+
+/* פסי התקדמות מעוגלים של התקציב */
+.budget-progress-item {
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+}
+
+.budget-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.budget-progress {
+  width: 100%;
+  height: 8px;
+  background-color: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.budget-progress-fill {
+  height: 100%;
+  background-color: var(--success);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.budget-progress-fill.warning { background-color: var(--warning); }
+.budget-progress-fill.danger { background-color: var(--danger); }
+
+/* תגיות קטנות ויפות (כמו תגית "פריסה שנתית") */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 999px;
+  margin-right: 6px;
+}
+
+.btn-delete-text {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  padding: 0;
+  font-weight: 500;
+}
+.btn-delete-text:hover { text-decoration: underline; }
+
+.empty-state {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 12px;
+}
+
+/* עיצוב היסטוריית תנועות נקייה ומסודרת */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 10px;
+}
+
+th {
+  background-color: #f1f5f9;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  border-bottom: 2px solid var(--border);
+}
+
+th:first-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+th:last-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+
+td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+  color: var(--text-main);
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+tr:hover td {
+  background-color: #f8fafc;
+}
+
+/* העלמת הכפילות של כרטיסי המובייל במסך המחשב */
+#transactionsCards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  table { display: none; }
+  #transactionsCards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .mobile-tx-card {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+  }
+}
+
+.message-box {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  background-color: var(--success);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  animation: slideIn 0.3s ease;
+}
+
+.message-box.danger {
+  background-color: var(--danger);
+}
+
+.message-box.hidden {
+  display: none;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
