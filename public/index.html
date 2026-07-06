@@ -444,6 +444,15 @@ tr:last-child td{border-bottom:none}
       <p class="muted" id="reminderStatus" style="margin-top:8px"></p>
     </div>
     <div class="panel">
+      <h2>חיבור Gmail לשליחה</h2>
+      <p class="muted" style="margin-bottom:10px">חבר את חשבון Google שלך. לאחר אישור, המיילים יישלחו אוטומטית מחשבון ה-Gmail שחובר.</p>
+      <div class="row">
+        <button class="btn" onclick="connectGoogleMail()">חבר חשבון Google</button>
+        <button class="btn sec" onclick="disconnectGoogleMail()">נתק חשבון</button>
+      </div>
+      <p class="muted" id="googleMailStatus" style="margin-top:8px"></p>
+    </div>
+    <div class="panel">
       <h2>איפוס מערכת מאובטח</h2>
       <p class="muted" style="margin-bottom:10px">האיפוס מוחק את כל נתוני משק הבית. נדרש קוד אימות למייל.</p>
       <div class="row" style="margin-bottom:8px">
@@ -493,7 +502,7 @@ const memberCache={}; let charts={};
 let syncTimer=null, syncInFlight=false;
 const APP_SETTINGS={
   reminders:{enabled:false,time:'20:30',channel:'email'},
-  integrations:{waWebhook:'',waVerifyToken:'',gcWebhook:'',gcSpace:''}
+  integrations:{waWebhook:'',waVerifyToken:'',gcWebhook:'',gcSpace:'',googleMail:{connected:false,email:''}}
 };
 
 // TIMEOUT
@@ -569,6 +578,7 @@ async function boot(){
     await ensureHousehold();
     await loadAll();
     await loadUserSettings();
+    applyGoogleMailCallbackStatus();
     const gk=localStorage.getItem('geminiKey');if(gk){$('#geminiKey').value=gk;$('#keyStatus').textContent='✅ מפתח שמור';}
     render();
     await loadMembers();
@@ -608,6 +618,77 @@ async function loadUserSettings(){
   if($('#waVerifyToken'))$('#waVerifyToken').value=APP_SETTINGS.integrations.waVerifyToken||'';
   if($('#gcWebhook'))$('#gcWebhook').value=APP_SETTINGS.integrations.gcWebhook||'';
   if($('#gcSpace'))$('#gcSpace').value=APP_SETTINGS.integrations.gcSpace||'';
+  renderGoogleMailStatus();
+}
+
+function renderGoogleMailStatus(){
+  const el=$('#googleMailStatus');
+  if(!el)return;
+  const gm=APP_SETTINGS.integrations?.googleMail||{};
+  if(gm.connected&&gm.email){
+    el.textContent='✅ מחובר: '+gm.email;
+  }else{
+    el.textContent='לא מחובר כרגע. ניתן לחבר Gmail כדי לשלוח מיילים מחשבון המשתמש.';
+  }
+}
+
+function applyGoogleMailCallbackStatus(){
+  const qp=new URLSearchParams(location.search);
+  const state=qp.get('google_mail');
+  if(!state)return;
+
+  const statusEl=$('#googleMailStatus');
+  if(state==='connected'){
+    const email=qp.get('google_email')||'';
+    APP_SETTINGS.integrations.googleMail={
+      ...(APP_SETTINGS.integrations.googleMail||{}),
+      connected:true,
+      email
+    };
+    if(statusEl)statusEl.textContent='✅ חיבור Google הצליח: '+email;
+  }else if(state==='error'){
+    const msg=qp.get('google_msg')||'חיבור Google נכשל';
+    if(statusEl)statusEl.textContent='⚠ '+msg;
+  }
+
+  qp.delete('google_mail');
+  qp.delete('google_email');
+  qp.delete('google_msg');
+  const q=qp.toString();
+  history.replaceState({},'',location.pathname+(q?('?'+q):''));
+}
+
+async function connectGoogleMail(){
+  if(!CU||!HID){alert('יש להתחבר קודם למערכת.');return;}
+  const statusEl=$('#googleMailStatus');
+  if(statusEl)statusEl.textContent='פותח מסך אישור Google...';
+  try{
+    const payload={userId:CU.id,householdId:HID,returnTo:location.origin+location.pathname};
+    const r=await fetch(API_BASE+'/api/google/connect-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await r.json();
+    if(!r.ok||!data?.authUrl)throw new Error(data?.error||'לא ניתן לפתוח חיבור Google כרגע');
+    location.href=data.authUrl;
+  }catch(err){
+    if(statusEl)statusEl.textContent='⚠ שגיאה בחיבור Google: '+(err.message||err);
+  }
+}
+
+async function disconnectGoogleMail(){
+  if(!CU||!HID){alert('יש להתחבר קודם למערכת.');return;}
+  if(!confirm('לנתק את חשבון Google מהמערכת?'))return;
+  const statusEl=$('#googleMailStatus');
+  if(statusEl)statusEl.textContent='מנתק חשבון...';
+  try{
+    const r=await fetch(API_BASE+'/api/google/disconnect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:CU.id,householdId:HID})});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data?.error||'ניתוק נכשל');
+    APP_SETTINGS.integrations.googleMail={connected:false,email:''};
+    await persistUserSettings();
+    renderGoogleMailStatus();
+    if(statusEl)statusEl.textContent='החשבון נותק בהצלחה.';
+  }catch(err){
+    if(statusEl)statusEl.textContent='⚠ שגיאה בניתוק: '+(err.message||err);
+  }
 }
 
 async function persistUserSettings(){
@@ -797,11 +878,14 @@ async function loadMembers(){const{data}=await sb.from('memberships').select('di
 // GEMINI PDF IMPORT
 function saveGeminiKey(){const k=$('#geminiKey').value.trim();if(k){localStorage.setItem('geminiKey',k);$('#keyStatus').textContent='✅ מפתח שמור';}else{localStorage.removeItem('geminiKey');$('#keyStatus').textContent='';}}
 async function saveIntegrations(){
+  const keepGoogle=APP_SETTINGS.integrations?.googleMail||{connected:false,email:''};
   APP_SETTINGS.integrations={
+    ...APP_SETTINGS.integrations,
     waWebhook:($('#waWebhook').value||'').trim(),
     waVerifyToken:($('#waVerifyToken').value||'').trim(),
     gcWebhook:($('#gcWebhook').value||'').trim(),
-    gcSpace:($('#gcSpace').value||'').trim()
+    gcSpace:($('#gcSpace').value||'').trim(),
+    googleMail:keepGoogle
   };
   const res=await persistUserSettings();
   $('#integrationStatus').textContent=res.ok?'✅ אינטגרציות נשמרו בהצלחה':'⚠ נשמר מקומית בלבד. טבלת user_settings עדיין לא קיימת.';

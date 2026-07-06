@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -10,6 +11,15 @@ app.use(express.json({ limit: '2mb' }));
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GROK_KEY = process.env.GROK_API_KEY || process.env.XAI_API_KEY || '';
+const GROK_MODEL = process.env.GROK_MODEL || 'grok-2-latest';
+const GROK_BASE_URL = process.env.GROK_BASE_URL || 'https://api.x.ai/v1';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_OAUTH_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || '';
+const GOOGLE_OAUTH_SCOPES = String(
+  process.env.GOOGLE_OAUTH_SCOPES || 'openid,email,https://www.googleapis.com/auth/gmail.send'
+).split(',').map((s) => s.trim()).filter(Boolean);
 const PORT = process.env.PORT || 8787;
 const APP_URL = process.env.APP_URL || 'http://127.0.0.1:5500/budget-final%20(2).html';
 const ALLOW_DEV_RESET_FALLBACK = String(
@@ -46,19 +56,303 @@ function extractJsonText(rawText) {
   return txt.replace(/^```json\n?/i, '').replace(/```$/i, '').trim();
 }
 
+function toDataUrl(fileData, mimeType) {
+  return `data:${mimeType};base64,${String(fileData || '')}`;
+}
+
+function getAvailableAiProviders() {
+  const providers = [];
+  if (GEMINI_KEY) providers.push('gemini');
+  if (GROK_KEY) providers.push('grok');
+  return providers;
+}
+
+async function callGemini({ prompt, text, fileData, mimeType }) {
+  const parts = [{ text: `${prompt}\n\n${String(text || '').slice(0, 12000)}` }];
+  if (fileData) {
+    const normalizedMime = String(mimeType || '').toLowerCase().trim().replace('image/jpg', 'image/jpeg');
+    const supportedImage = /^(image\/png|image\/jpeg|image\/webp)$/.test(normalizedMime);
+    if (!supportedImage) {
+      const err = new Error('Unsupported image mimeType. Use PNG/JPEG/WEBP.');
+      err.statusCode = 400;
+      throw err;
+    }
+    parts.push({ inline_data: { mime_type: normalizedMime, data: String(fileData) } });
+  }
+
+  const payload = {
+    contents: [{ parts }],
+    generationConfig: { temperature: 0.1 }
+  };
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok || data.error) {
+    throw new Error(data.error?.message || 'Gemini provider error');
+  }
+
+  return {
+    provider: 'gemini',
+    model: GEMINI_MODEL,
+    output: data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  };
+}
+
+async function callGrok({ prompt, text, fileData, mimeType }) {
+  const content = [
+    { type: 'text', text: `${prompt}\n\n${String(text || '').slice(0, 12000)}` }
+  ];
+
+  if (fileData) {
+    const normalizedMime = String(mimeType || '').toLowerCase().trim().replace('image/jpg', 'image/jpeg');
+    const supportedImage = /^(image\/png|image\/jpeg|image\/webp)$/.test(normalizedMime);
+    if (!supportedImage) {
+      const err = new Error('Unsupported image mimeType. Use PNG/JPEG/WEBP.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    content.push({
+      type: 'image_url',
+      image_url: { url: toDataUrl(fileData, normalizedMime) }
+    });
+  }
+
+  const response = await fetch(`${GROK_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${GROK_KEY}`
+    },
+    body: JSON.stringify({
+      model: GROK_MODEL,
+      temperature: 0.1,
+      messages: [{ role: 'user', content }]
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok || data.error) {
+    throw new Error(data.error?.message || 'Grok provider error');
+  }
+
+  return {
+    provider: 'grok',
+    model: GROK_MODEL,
+    output: data?.choices?.[0]?.message?.content || ''
+  };
+}
+
+async function generateWithFallback(payload) {
+  const attempted = [];
+
+  if (GEMINI_KEY) {
+    try {
+      const result = await callGemini(payload);
+      return { ...result, attempted };
+    } catch (err) {
+      attempted.push({ provider: 'gemini', error: err.message || 'Unknown Gemini error' });
+    }
+  }
+
+  if (GROK_KEY) {
+    try {
+      const result = await callGrok(payload);
+      return { ...result, attempted };
+    } catch (err) {
+      attempted.push({ provider: 'grok', error: err.message || 'Unknown Grok error' });
+    }
+  }
+
+  const err = new Error(
+    attempted.length
+      ? `All AI providers failed. ${attempted.map((x) => `${x.provider}: ${x.error}`).join(' | ')}`
+      : 'No AI providers configured'
+  );
+  err.attempted = attempted;
+  throw err;
+}
+
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+function isGoogleOAuthConfigured() {
+  return !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_OAUTH_REDIRECT_URI);
+}
+
+function getGoogleOAuthClient() {
+  return new google.auth.OAuth2(
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_OAUTH_REDIRECT_URI
+  );
+}
+
+function encodeState(payload) {
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+}
+
+function decodeState(state) {
+  return JSON.parse(Buffer.from(String(state || ''), 'base64url').toString('utf8'));
+}
+
+function safeAppUrl(inputUrl) {
+  const fallback = APP_URL;
+  try {
+    const u = new URL(String(inputUrl || '').trim());
+    if (u.protocol === 'http:' || u.protocol === 'https:') return u.toString();
+    return fallback;
+  } catch (_err) {
+    return fallback;
+  }
+}
+
+function withQuery(url, params) {
+  const u = new URL(safeAppUrl(url));
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && String(v) !== '') u.searchParams.set(k, String(v));
+  });
+  return u.toString();
+}
+
+function encodeMimeHeader(value) {
+  return `=?UTF-8?B?${Buffer.from(String(value || ''), 'utf8').toString('base64')}?=`;
+}
+
+function toBase64Url(input) {
+  return Buffer.from(String(input || ''), 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+async function getUserSettings(userId) {
+  if (!supabaseAdmin) return null;
+  const id = String(userId || '').trim();
+  if (!id) return null;
+  const { data, error } = await supabaseAdmin
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message || 'Failed to read user settings');
+  return data || null;
+}
+
+async function upsertGoogleMailSettings({ userId, householdId, patch }) {
+  if (!supabaseAdmin) throw new Error('Supabase server credentials are not configured');
+  const existing = await getUserSettings(userId);
+  const existingIntegrations = existing?.integrations && typeof existing.integrations === 'object' ? existing.integrations : {};
+  const currentGoogle = existingIntegrations.googleMail && typeof existingIntegrations.googleMail === 'object'
+    ? existingIntegrations.googleMail
+    : {};
+
+  const merged = {
+    ...existingIntegrations,
+    googleMail: {
+      ...currentGoogle,
+      ...patch
+    }
+  };
+
+  const payload = {
+    user_id: userId,
+    household_id: householdId || existing?.household_id || null,
+    reminders: existing?.reminders && typeof existing.reminders === 'object' ? existing.reminders : {},
+    integrations: merged,
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabaseAdmin
+    .from('user_settings')
+    .upsert(payload, { onConflict: 'user_id' });
+
+  if (error) throw new Error(error.message || 'Failed to save Google integration');
+  return merged.googleMail;
+}
+
+async function sendViaGoogleMail({ userId, to, subject, html, text }) {
+  if (!isGoogleOAuthConfigured()) {
+    throw new Error('Google OAuth is not configured');
+  }
+
+  const settings = await getUserSettings(userId);
+  const googleMail = settings?.integrations?.googleMail;
+  if (!googleMail?.connected || !googleMail?.refreshToken || !googleMail?.email) {
+    throw new Error('Google Mail is not connected for this user');
+  }
+
+  const oauthClient = getGoogleOAuthClient();
+  oauthClient.setCredentials({
+    refresh_token: googleMail.refreshToken,
+    access_token: googleMail.accessToken || undefined,
+    expiry_date: googleMail.expiryDate || undefined
+  });
+
+  const contentType = html ? 'text/html; charset="UTF-8"' : 'text/plain; charset="UTF-8"';
+  const body = html || text || '';
+
+  const raw = [
+    `From: ${googleMail.email}`,
+    `To: ${to}`,
+    `Subject: ${encodeMimeHeader(subject)}`,
+    'MIME-Version: 1.0',
+    `Content-Type: ${contentType}`,
+    '',
+    body
+  ].join('\r\n');
+
+  const gmail = google.gmail({ version: 'v1', auth: oauthClient });
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: {
+      raw: toBase64Url(raw)
+    }
+  });
+
+  return { provider: 'google-gmail', from: googleMail.email };
+}
+
+async function sendMailWithFallback({ userId, to, subject, html, text }) {
+  const errors = [];
+
+  if (userId && isGoogleOAuthConfigured()) {
+    try {
+      return await sendViaGoogleMail({ userId, to, subject, html, text });
+    } catch (err) {
+      errors.push(`google-gmail: ${err.message || err}`);
+    }
+  }
+
+  if (mailer) {
+    try {
+      await mailer.sendMail({
+        from: SMTP_FROM,
+        to,
+        subject,
+        text,
+        html
+      });
+      return { provider: 'smtp', from: SMTP_FROM };
+    } catch (err) {
+      errors.push(`smtp: ${err.message || err}`);
+    }
+  }
+
+  throw new Error(errors.length ? errors.join(' | ') : 'No email provider is configured');
 }
 
 function sixDigitCode() {
   return String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
 }
 
-async function sendResetEmail(email, code) {
-  if (!mailer) {
-    throw new Error('SMTP is not configured on server');
-  }
-
+async function sendResetEmail({ email, code, userId }) {
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px">
       <h2 style="margin:0 0 10px">קוד איפוס מערכת</h2>
@@ -70,19 +364,148 @@ async function sendResetEmail(email, code) {
     </div>
   `;
 
-  await mailer.sendMail({
-    from: SMTP_FROM,
+  return sendMailWithFallback({
+    userId,
     to: email,
     subject: 'קוד איפוס למערכת התקציב',
+    text: `קוד איפוס למערכת התקציב: ${code}`,
     html
   });
 }
 
+app.post('/api/google/connect-url', async (req, res) => {
+  try {
+    if (!isGoogleOAuthConfigured()) {
+      return res.status(503).json({ error: 'Google OAuth is not configured on server' });
+    }
+
+    const { userId, householdId, returnTo } = req.body || {};
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const state = encodeState({
+      userId: String(userId),
+      householdId: String(householdId || ''),
+      returnTo: safeAppUrl(returnTo || APP_URL),
+      ts: Date.now()
+    });
+
+    const oauthClient = getGoogleOAuthClient();
+    const authUrl = oauthClient.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      include_granted_scopes: true,
+      scope: GOOGLE_OAUTH_SCOPES,
+      state
+    });
+
+    return res.json({ ok: true, authUrl });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
+app.get('/api/google/callback', async (req, res) => {
+  const fallbackRedirect = APP_URL;
+  try {
+    if (!isGoogleOAuthConfigured()) {
+      return res.redirect(withQuery(fallbackRedirect, { google_mail: 'error', google_msg: 'Google OAuth is not configured on server' }));
+    }
+
+    const { code, state, error } = req.query || {};
+    const stateData = decodeState(state);
+    const redirectTarget = safeAppUrl(stateData?.returnTo || fallbackRedirect);
+
+    if (error) {
+      return res.redirect(withQuery(redirectTarget, { google_mail: 'error', google_msg: String(error) }));
+    }
+    if (!code || !stateData?.userId) {
+      return res.redirect(withQuery(redirectTarget, { google_mail: 'error', google_msg: 'Missing code or state' }));
+    }
+
+    const oauthClient = getGoogleOAuthClient();
+    const tokenResult = await oauthClient.getToken(String(code));
+    const tokens = tokenResult?.tokens || {};
+    oauthClient.setCredentials(tokens);
+
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauthClient });
+    const me = await oauth2.userinfo.get();
+    const googleEmail = normalizeEmail(me?.data?.email || '');
+
+    const existing = await getUserSettings(stateData.userId);
+    const prevRefresh = existing?.integrations?.googleMail?.refreshToken || '';
+    const refreshToken = tokens.refresh_token || prevRefresh;
+    if (!refreshToken) {
+      return res.redirect(withQuery(redirectTarget, {
+        google_mail: 'error',
+        google_msg: 'Google did not return a refresh token. Revoke access and connect again.'
+      }));
+    }
+
+    await upsertGoogleMailSettings({
+      userId: stateData.userId,
+      householdId: stateData.householdId,
+      patch: {
+        connected: true,
+        provider: 'google',
+        email: googleEmail,
+        refreshToken,
+        accessToken: tokens.access_token || existing?.integrations?.googleMail?.accessToken || '',
+        expiryDate: tokens.expiry_date || null,
+        scope: tokens.scope || '',
+        connectedAt: new Date().toISOString()
+      }
+    });
+
+    return res.redirect(withQuery(redirectTarget, {
+      google_mail: 'connected',
+      google_email: googleEmail
+    }));
+  } catch (err) {
+    return res.redirect(withQuery(fallbackRedirect, {
+      google_mail: 'error',
+      google_msg: err.message || 'Google connect failed'
+    }));
+  }
+});
+
+app.post('/api/google/disconnect', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Supabase server credentials are not configured' });
+    }
+    const { userId, householdId } = req.body || {};
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    await upsertGoogleMailSettings({
+      userId: String(userId),
+      householdId: String(householdId || ''),
+      patch: {
+        connected: false,
+        disconnectedAt: new Date().toISOString(),
+        refreshToken: '',
+        accessToken: '',
+        expiryDate: null,
+        scope: ''
+      }
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
 app.get('/api/health', async (_req, res) => {
+  const availableAiProviders = getAvailableAiProviders();
   return res.json({
     ok: true,
-    aiConfigured: !!GEMINI_KEY,
+    aiConfigured: availableAiProviders.length > 0,
+    aiProviders: availableAiProviders,
     geminiModel: GEMINI_MODEL,
+    grokModel: GROK_MODEL,
+    googleOAuthConfigured: isGoogleOAuthConfigured(),
     supabaseConfigured: !!supabaseAdmin,
     smtpConfigured: !!mailer,
     devResetFallback: ALLOW_DEV_RESET_FALLBACK
@@ -91,8 +514,8 @@ app.get('/api/health', async (_req, res) => {
 
 app.post('/api/ai/import', async (req, res) => {
   try {
-    if (!GEMINI_KEY) {
-      return res.status(503).json({ error: 'GEMINI_API_KEY is not configured on server' });
+    if (!GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
     }
 
     const { prompt, text, fileData, mimeType } = req.body || {};
@@ -103,36 +526,8 @@ app.post('/api/ai/import', async (req, res) => {
       return res.status(400).json({ error: 'text or fileData is required' });
     }
 
-    const parts = [{ text: `${prompt}\n\n${String(text || '').slice(0, 12000)}` }];
-    if (fileData) {
-      const normalizedMime = String(mimeType || '').toLowerCase().trim().replace('image/jpg', 'image/jpeg');
-      const supportedImage = /^(image\/png|image\/jpeg|image\/webp)$/.test(normalizedMime);
-      if (!supportedImage) {
-        return res.status(400).json({ error: 'Unsupported image mimeType. Use PNG/JPEG/WEBP.' });
-      }
-      parts.push({ inline_data: { mime_type: normalizedMime, data: String(fileData) } });
-    }
-
-    const payload = {
-      contents: [{ parts }],
-      generationConfig: { temperature: 0.1 }
-    };
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }
-    );
-
-    const data = await response.json();
-    if (!response.ok || data.error) {
-      return res.status(502).json({ error: data.error?.message || 'AI provider error' });
-    }
-
-    const output = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType });
+    const output = aiResult.output || '[]';
     let parsed = null;
     try {
       parsed = JSON.parse(extractJsonText(output));
@@ -151,9 +546,20 @@ app.post('/api/ai/import', async (req, res) => {
       parsed = [];
     }
 
-    return res.json({ transactions: parsed, output: JSON.stringify(parsed), rawOutput: output });
+    return res.json({
+      transactions: parsed,
+      output: JSON.stringify(parsed),
+      rawOutput: output,
+      aiProvider: aiResult.provider,
+      aiModel: aiResult.model,
+      attemptedProviders: aiResult.attempted
+    });
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Unexpected error' });
+    const statusCode = err.statusCode || 502;
+    return res.status(statusCode).json({
+      error: err.message || 'Unexpected error',
+      attemptedProviders: err.attempted || []
+    });
   }
 });
 
@@ -162,7 +568,7 @@ app.post('/api/chat/parse', async (req, res) => {
     const { text } = req.body || {};
     if (!text) return res.status(400).json({ error: 'text is required' });
 
-    if (!GEMINI_KEY) {
+    if (!GEMINI_KEY && !GROK_KEY) {
       const amountMatch = String(text).match(/(\d+[\.,]?\d*)/);
       const amount = amountMatch ? Number(amountMatch[1].replace(',', '.')) : 0;
       const isIncome = /משכורת|הכנסה|נכנס|קיבלתי/i.test(String(text));
@@ -181,39 +587,34 @@ app.post('/api/chat/parse', async (req, res) => {
       `Message: ${text}`
     ].join('\n');
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
+    const aiResult = await generateWithFallback({ prompt, text });
+    const output = aiResult.output || '{}';
+    return res.json({
+      ...JSON.parse(extractJsonText(output)),
+      _ai: {
+        provider: aiResult.provider,
+        model: aiResult.model,
+        attemptedProviders: aiResult.attempted
       }
-    );
-
-    const data = await response.json();
-    if (!response.ok || data.error) {
-      return res.status(502).json({ error: data.error?.message || 'AI provider error' });
-    }
-
-    const output = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    return res.json(JSON.parse(extractJsonText(output)));
+    });
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Unexpected error' });
+    return res.status(502).json({ error: err.message || 'Unexpected error', attemptedProviders: err.attempted || [] });
   }
 });
 
 app.post('/api/reminders/test', async (req, res) => {
-  const { channel, email, appLink } = req.body || {};
+  const { channel, email, appLink, userId } = req.body || {};
   const msg = `תזכורת ניסיון: אל תשכח לעדכן הוצאות והכנסות היום. ${appLink || ''}`.trim();
-  if ((channel || 'email') === 'email' && email && mailer) {
+  if ((channel || 'email') === 'email' && email) {
     try {
-      await mailer.sendMail({
-        from: SMTP_FROM,
+      const sent = await sendMailWithFallback({
+        userId,
         to: email,
         subject: 'תזכורת ניסיון - מערכת התקציב',
+        html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px"><h2 style="margin:0 0 10px">תזכורת ניסיון</h2><p>${msg}</p><p><a href="${appLink || APP_URL}">מעבר למערכת</a></p></div>`,
         text: msg
       });
-      return res.json({ ok: true, channel: 'email', sent: true, message: msg });
+      return res.json({ ok: true, channel: 'email', sent: true, provider: sent.provider, message: msg });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });
     }
@@ -325,8 +726,8 @@ app.post('/api/reset/request', async (req, res) => {
     }
 
     try {
-      await sendResetEmail(normalized, code);
-      return res.json({ ok: true, expiresAt, sent: true });
+      const sent = await sendResetEmail({ email: normalized, code, userId });
+      return res.json({ ok: true, expiresAt, sent: true, provider: sent.provider });
     } catch (emailErr) {
       if (!ALLOW_DEV_RESET_FALLBACK) {
         return res.status(500).json({ error: emailErr.message || 'Failed to send reset email' });

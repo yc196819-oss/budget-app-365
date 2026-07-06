@@ -24,12 +24,26 @@ services:
         sync: false
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
+      - key: GROK_API_KEY
+        sync: false
+      - key: GROK_MODEL
+        value: grok-2-latest
+      - key: GROK_BASE_URL
+        value: https://api.x.ai/v1
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: APP_URL
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_OAUTH_SCOPES
+        value: openid,email,https://www.googleapis.com/auth/gmail.send
       - key: ALLOW_DEV_RESET_FALLBACK
         value: false
       - key: SMTP_HOST

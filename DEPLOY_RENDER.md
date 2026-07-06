@@ -14,10 +14,21 @@ After first sync, set these values:
 
 ### On `budget-ai`
 - `GEMINI_API_KEY`
+- `GROK_API_KEY` (optional fallback)
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `APP_URL` = public URL of `budget-web` (for example `https://budget-web.onrender.com`)
 - Optional SMTP vars if you want email reset flow
+- `GOOGLE_CLIENT_ID` (for Gmail connect)
+- `GOOGLE_CLIENT_SECRET` (for Gmail connect)
+- `GOOGLE_OAUTH_REDIRECT_URI` = public callback URL of `budget-ai`
+  - Example: `https://budget-ai.onrender.com/api/google/callback`
+
+### Google OAuth Console (required when deploying cloud)
+- Add authorized redirect URI for local:
+  - `http://localhost:8787/api/google/callback`
+- Add authorized redirect URI for cloud:
+  - `https://budget-ai.onrender.com/api/google/callback`
 
 ### On `budget-web`
 - `AI_BASE_URL` = public URL of `budget-ai` (for example `https://budget-ai.onrender.com`)
