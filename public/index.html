@@ -125,6 +125,7 @@ tr:last-child td{border-bottom:none}
       <label>סיסמה</label>
       <input id="authPass" type="password" placeholder="••••••••">
       <button class="auth-btn" id="authBtn" onclick="doAuth()">כניסה</button>
+      <button class="btn sec" id="authGoogleBtn" style="width:100%;margin-top:10px" onclick="doAuthGoogle()">התחברות עם Google</button>
       <div style="margin-top:10px;text-align:center">
         <button class="link-btn" onclick="forgotPassword()">שכחתי סיסמה</button>
       </div>
@@ -535,6 +536,23 @@ async function doAuth(){
   const{error}=await sb.auth.signInWithPassword({email,password:pass});
   if(error){showErr(error.message==='Invalid login credentials'?'אימייל או סיסמה שגויים':(error.message.includes('not confirmed')?'החשבון עדיין לא אומת — בדוק את המייל שלך':error.message));$('#authBtn').textContent='כניסה';}
 }
+async function doAuthGoogle(){
+  const btn=$('#authGoogleBtn');
+  if(btn)btn.textContent='מעביר ל-Google...';
+  const {error}=await sb.auth.signInWithOAuth({
+    provider:'google',
+    options:{
+      redirectTo:location.origin+location.pathname,
+      queryParams:{
+        prompt:'select_account'
+      }
+    }
+  });
+  if(error){
+    showErr('שגיאה בהתחברות עם Google: '+error.message);
+    if(btn)btn.textContent='התחברות עם Google';
+  }
+}
 async function doRegister(){
   const email=$('#regEmail').value.trim(),pass=$('#regPass').value,name=$('#regName').value.trim()||email.split('@')[0];
   if(!email||pass.length<6){showErr('נא למלא אימייל וסיסמה (לפחות 6 תווים)');return;}
@@ -801,7 +819,30 @@ function moAmt(t,y,m){const d=new Date(t.tx_date||t.date);const sy=d.getFullYear
 function yrAmt(t,y){let s=0;for(let m=0;m<12;m++)s+=moAmt(t,y,m);return s;}
 function instMo(p,y,m){const d=new Date(p.first_payment||p.first);const sy=d.getFullYear(),sm=d.getMonth();const n=p.payments_count||p.count;for(let i=0;i<n;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +p.total_amount/n;}return 0;}
 function instPaid(p){const d=new Date(p.first_payment||p.first);const now=new Date();return Math.max(0,Math.min(p.payments_count||p.count,(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth())+1));}
-const rootCats=k=>DB.categories.filter(c=>!c.parent_id&&(k?(c.kind||'expense')===k:true));
+function normalizeCategoryKind(cat){
+  const raw=String(cat?.kind||cat?.type||cat?.group||'').toLowerCase().trim();
+  if(raw==='income'||raw==='incomes'||raw==='הכנסה')return 'income';
+  if(raw==='expense'||raw==='expenses'||raw==='הוצאה')return 'expense';
+  if(raw==='fixed_expenses'||raw==='current_expenses'||raw==='fixed'||raw==='variable')return 'expense';
+  const name=String(cat?.name||'').toLowerCase();
+  if(/משכורת|הכנסה|salary|income/.test(name))return 'income';
+  return 'expense';
+}
+const rootCats=k=>{
+  const roots=DB.categories.filter(c=>!c.parent_id);
+  if(!k)return roots;
+  const matched=roots.filter(c=>normalizeCategoryKind(c)===k);
+  if(matched.length)return matched;
+  if(k==='income'){
+    return roots.filter(c=>/משכורת|הכנסה|salary|income/i.test(String(c.name||'')));
+  }
+  if(k==='expense'){
+    const incomeLike=roots.filter(c=>/משכורת|הכנסה|salary|income/i.test(String(c.name||'')));
+    const expenseLike=roots.filter(c=>!incomeLike.some(i=>i.id===c.id));
+    return expenseLike.length?expenseLike:roots;
+  }
+  return roots;
+};
 const subCats=pid=>DB.categories.filter(c=>c.parent_id===pid);
 
 function onTypeChange(){fillCatSel();}
@@ -894,12 +935,38 @@ async function saveIntegrations(){
 async function testIntegrations(){
   $('#integrationStatus').textContent='בודק אינטגרציות...';
   try{
-    const payload={householdId:HID,channel:'all'};
+    const payload={
+      householdId:HID,
+      userId:CU?.id||null,
+      channel:'all',
+      integrations:{
+        waWebhook:($('#waWebhook').value||'').trim(),
+        waVerifyToken:($('#waVerifyToken').value||'').trim(),
+        gcWebhook:($('#gcWebhook').value||'').trim(),
+        gcSpace:($('#gcSpace').value||'').trim()
+      },
+      message:'✅ בדיקת חיבור ממערכת התקציב המשפחתי'
+    };
     const r=await fetch(API_BASE+'/api/channels/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(!r.ok)throw new Error('endpoint not available');
-    $('#integrationStatus').textContent='✅ בדיקה נשלחה בהצלחה לערוצים שהוגדרו.';
-  }catch(_){
-    $('#integrationStatus').textContent='⚠ צד שרת עדיין לא מחובר. הממשק נשמר ומוכן לחיבור backend.';
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data?.error||'endpoint not available');
+    const gcOk=!!data?.results?.google_chat?.ok;
+    const waOk=!!data?.results?.whatsapp?.ok;
+    if(gcOk&&waOk){
+      $('#integrationStatus').textContent='✅ Google Chat ו-WhatsApp מחוברים ועובדים.';
+    }else if(gcOk){
+      const waMsg=data?.results?.whatsapp?.reason||'WhatsApp לא פעיל כרגע';
+      $('#integrationStatus').textContent='✅ Google Chat פעיל. ⚠ '+waMsg;
+    }else if(waOk){
+      const gcMsg=data?.results?.google_chat?.error||data?.results?.google_chat?.reason||'Google Chat לא פעיל';
+      $('#integrationStatus').textContent='✅ WhatsApp פעיל. ⚠ '+gcMsg;
+    }else{
+      const gcMsg=data?.results?.google_chat?.error||data?.results?.google_chat?.reason||'';
+      const waMsg=data?.results?.whatsapp?.error||data?.results?.whatsapp?.reason||'';
+      $('#integrationStatus').textContent='⚠ בדיקה נכשלה. '+[gcMsg,waMsg].filter(Boolean).join(' | ');
+    }
+  }catch(err){
+    $('#integrationStatus').textContent='⚠ בדיקת חיבור נכשלה: '+(err?.message||'שגיאה לא ידועה');
   }
 }
 
@@ -969,10 +1036,12 @@ async function sendReminderTest(){
       appLink:location.origin+location.pathname
     };
     const r=await fetch(API_BASE+'/api/reminders/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(!r.ok)throw new Error('test endpoint unavailable');
+    let data={};
+    try{data=await r.json();}catch(_){data={};}
+    if(!r.ok)throw new Error(data?.error||'test endpoint unavailable');
     $('#reminderStatus').textContent='✅ תזכורת ניסיון נשלחה.';
-  }catch(_){
-    $('#reminderStatus').textContent='⚠ שירות תזכורות צד שרת עדיין לא זמין. ההגדרות נשמרו ומוכנות.';
+  }catch(err){
+    $('#reminderStatus').textContent='⚠ שליחה נכשלה: '+(err?.message||'שגיאה לא ידועה');
   }
 }
 

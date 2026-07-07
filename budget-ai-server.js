@@ -232,6 +232,74 @@ function toBase64Url(input) {
   return Buffer.from(String(input || ''), 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
+function isGoogleChatWebhookUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'https:' && /(^|\.)chat\.googleapis\.com$/i.test(url.hostname);
+  } catch (_err) {
+    return false;
+  }
+}
+
+async function sendGoogleChatMessage({ webhookUrl, text }) {
+  const url = String(webhookUrl || '').trim();
+  if (!isGoogleChatWebhookUrl(url)) {
+    throw new Error('Invalid Google Chat webhook URL');
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify({ text: String(text || '').slice(0, 3500) }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => '');
+      throw new Error(`Google Chat webhook failed (${response.status}): ${details || 'Unknown error'}`);
+    }
+
+    return { provider: 'google-chat', status: response.status };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function resolveIntegrationsForChannelTest({ userId, householdId, integrations }) {
+  const fromPayload = integrations && typeof integrations === 'object' ? integrations : {};
+  let fromSettings = {};
+
+  if (userId) {
+    try {
+      const settings = await getUserSettings(userId);
+      fromSettings = settings?.integrations && typeof settings.integrations === 'object' ? settings.integrations : {};
+    } catch (_err) {
+      fromSettings = {};
+    }
+  } else if (supabaseAdmin && householdId) {
+    try {
+      const { data } = await supabaseAdmin
+        .from('user_settings')
+        .select('integrations')
+        .eq('household_id', String(householdId))
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      fromSettings = data?.integrations && typeof data.integrations === 'object' ? data.integrations : {};
+    } catch (_err) {
+      fromSettings = {};
+    }
+  }
+
+  return {
+    ...fromSettings,
+    ...fromPayload
+  };
+}
+
 async function getUserSettings(userId) {
   if (!supabaseAdmin) return null;
   const id = String(userId || '').trim();
@@ -623,7 +691,65 @@ app.post('/api/reminders/test', async (req, res) => {
 });
 
 app.post('/api/channels/test', async (req, res) => {
-  return res.json({ ok: true, message: 'Channel test accepted', payload: req.body || {} });
+  try {
+    const {
+      channel = 'all',
+      userId,
+      householdId,
+      integrations,
+      message
+    } = req.body || {};
+
+    const selected = String(channel || 'all').trim().toLowerCase();
+    const wantsGoogleChat = selected === 'all' || selected === 'google_chat';
+    const wantsWhatsapp = selected === 'all' || selected === 'whatsapp';
+
+    if (!wantsGoogleChat && !wantsWhatsapp) {
+      return res.status(400).json({ ok: false, error: 'Invalid channel. Use all, google_chat, or whatsapp.' });
+    }
+
+    const mergedIntegrations = await resolveIntegrationsForChannelTest({ userId, householdId, integrations });
+    const results = {};
+    const sampleText = String(message || '✅ בדיקת חיבור ממערכת התקציב הצליחה.').trim();
+
+    if (wantsGoogleChat) {
+      const gcWebhook = String(mergedIntegrations.gcWebhook || '').trim();
+      if (!gcWebhook) {
+        results.google_chat = { ok: false, reason: 'Google Chat webhook is not configured' };
+      } else {
+        try {
+          const sent = await sendGoogleChatMessage({ webhookUrl: gcWebhook, text: sampleText });
+          results.google_chat = { ok: true, provider: sent.provider, status: sent.status };
+        } catch (err) {
+          results.google_chat = { ok: false, error: err.message || 'Google Chat send failed' };
+        }
+      }
+    }
+
+    if (wantsWhatsapp) {
+      const waWebhook = String(mergedIntegrations.waWebhook || '').trim();
+      if (!waWebhook) {
+        results.whatsapp = { ok: false, reason: 'WhatsApp webhook is not configured' };
+      } else {
+        results.whatsapp = { ok: false, reason: 'WhatsApp channel server flow is not implemented yet' };
+      }
+    }
+
+    const successCount = Object.values(results).filter((r) => r && r.ok).length;
+    const failedCount = Object.keys(results).length - successCount;
+    const statusCode = successCount > 0 ? 200 : 400;
+
+    return res.status(statusCode).json({
+      ok: successCount > 0,
+      results,
+      summary: {
+        successCount,
+        failedCount
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Unexpected error' });
+  }
 });
 
 app.get('/api/user/household/:userId', async (req, res) => {
