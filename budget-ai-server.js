@@ -241,6 +241,15 @@ function isGoogleChatWebhookUrl(value) {
   }
 }
 
+function normalizeWhatsappPhone(value) {
+  let v = String(value || '').trim().replace(/\s+/g, '');
+  if (!v) return '';
+  v = v.replace(/^\+/, '');
+  v = v.replace(/^00/, '');
+  v = v.replace(/[^\d]/g, '');
+  return v;
+}
+
 async function sendGoogleChatMessage({ webhookUrl, text }) {
   const url = String(webhookUrl || '').trim();
   if (!isGoogleChatWebhookUrl(url)) {
@@ -263,6 +272,35 @@ async function sendGoogleChatMessage({ webhookUrl, text }) {
     }
 
     return { provider: 'google-chat', status: response.status };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function sendWhatsAppCallMeBot({ phone, apiKey, text }) {
+  const normalizedPhone = normalizeWhatsappPhone(phone);
+  const key = String(apiKey || '').trim();
+  if (!normalizedPhone || !key) {
+    throw new Error('WhatsApp phone or ApiKey is missing');
+  }
+
+  const url = new URL('https://api.callmebot.com/whatsapp.php');
+  url.searchParams.set('phone', normalizedPhone);
+  url.searchParams.set('text', String(text || '').slice(0, 2000));
+  url.searchParams.set('apikey', key);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      signal: controller.signal
+    });
+    const details = await response.text().catch(() => '');
+    if (!response.ok) {
+      throw new Error(`WhatsApp send failed (${response.status}): ${details || 'Unknown error'}`);
+    }
+    return { provider: 'whatsapp-callmebot', status: response.status, details };
   } finally {
     clearTimeout(timer);
   }
@@ -671,9 +709,10 @@ app.post('/api/chat/parse', async (req, res) => {
 });
 
 app.post('/api/reminders/test', async (req, res) => {
-  const { channel, email, appLink, userId } = req.body || {};
+  const { channel, email, appLink, userId, householdId, integrations } = req.body || {};
   const msg = `תזכורת ניסיון: אל תשכח לעדכן הוצאות והכנסות היום. ${appLink || ''}`.trim();
-  if ((channel || 'email') === 'email' && email) {
+  const selected = String(channel || 'email').trim().toLowerCase();
+  if (selected === 'email' && email) {
     try {
       const sent = await sendMailWithFallback({
         userId,
@@ -687,6 +726,34 @@ app.post('/api/reminders/test', async (req, res) => {
       return res.status(500).json({ ok: false, error: err.message });
     }
   }
+
+  if (selected === 'google_chat') {
+    try {
+      const mergedIntegrations = await resolveIntegrationsForChannelTest({ userId, householdId, integrations });
+      const gcWebhook = String(mergedIntegrations.gcWebhook || '').trim();
+      if (!gcWebhook) return res.status(400).json({ ok: false, error: 'Google Chat webhook is not configured' });
+      const sent = await sendGoogleChatMessage({ webhookUrl: gcWebhook, text: msg });
+      return res.json({ ok: true, channel: 'google_chat', sent: true, provider: sent.provider, status: sent.status, message: msg });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message || 'Google Chat send failed' });
+    }
+  }
+
+  if (selected === 'whatsapp') {
+    try {
+      const mergedIntegrations = await resolveIntegrationsForChannelTest({ userId, householdId, integrations });
+      const waPhone = String(mergedIntegrations.waPhone || '').trim();
+      const waApiKey = String(mergedIntegrations.waApiKey || '').trim();
+      if (!waPhone || !waApiKey) {
+        return res.status(400).json({ ok: false, error: 'WhatsApp phone/api key is not configured' });
+      }
+      const sent = await sendWhatsAppCallMeBot({ phone: waPhone, apiKey: waApiKey, text: msg });
+      return res.json({ ok: true, channel: 'whatsapp', sent: true, provider: sent.provider, status: sent.status, message: msg });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message || 'WhatsApp send failed' });
+    }
+  }
+
   return res.json({ ok: true, channel: channel || 'email', sent: false, email: email || null, message: msg });
 });
 
@@ -727,11 +794,20 @@ app.post('/api/channels/test', async (req, res) => {
     }
 
     if (wantsWhatsapp) {
+      const waPhone = String(mergedIntegrations.waPhone || '').trim();
+      const waApiKey = String(mergedIntegrations.waApiKey || '').trim();
       const waWebhook = String(mergedIntegrations.waWebhook || '').trim();
-      if (!waWebhook) {
-        results.whatsapp = { ok: false, reason: 'WhatsApp webhook is not configured' };
+      if (waPhone && waApiKey) {
+        try {
+          const sent = await sendWhatsAppCallMeBot({ phone: waPhone, apiKey: waApiKey, text: sampleText });
+          results.whatsapp = { ok: true, provider: sent.provider, status: sent.status };
+        } catch (err) {
+          results.whatsapp = { ok: false, error: err.message || 'WhatsApp send failed' };
+        }
+      } else if (!waWebhook) {
+        results.whatsapp = { ok: false, reason: 'WhatsApp phone/api key is not configured' };
       } else {
-        results.whatsapp = { ok: false, reason: 'WhatsApp channel server flow is not implemented yet' };
+        results.whatsapp = { ok: false, reason: 'Webhook mode is advanced. Recommended: fill phone + ApiKey for built-in flow.' };
       }
     }
 

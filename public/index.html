@@ -27,6 +27,10 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);colo
 .auth-box label{display:block;color:var(--muted);font-size:.8rem;font-weight:600;margin-bottom:5px;margin-top:14px;text-transform:uppercase;letter-spacing:.04em}
 .auth-box input{width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--text);padding:12px 14px;border-radius:10px;font-size:.95rem;outline:none}
 .auth-box input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,140,255,.15)}
+.pwd-wrap{position:relative}
+.pwd-wrap input{padding-left:94px}
+.pwd-toggle{position:absolute;left:8px;top:50%;transform:translateY(-50%);border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:5px 10px;border-radius:8px;font-size:.75rem;cursor:pointer}
+.pwd-toggle:disabled{opacity:.6;cursor:not-allowed}
 .auth-btn{width:100%;margin-top:20px;background:linear-gradient(135deg,var(--accent),#8b6fff);color:#fff;border:0;padding:14px;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(108,140,255,.35)}
 .link-btn{background:none;border:0;color:var(--accent2);cursor:pointer;padding:0;font-size:.86rem;font-weight:600}
 .checkline{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--line);padding:8px 10px;border-radius:10px}
@@ -103,6 +107,9 @@ tr:last-child td{border-bottom:none}
 .review-row select,.review-row input{padding:6px 8px;font-size:.8rem}
 .review-grid{min-width:920px}
 #reviewList{overflow-x:auto}
+.guide-box{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
+.guide-box h3{font-size:.95rem;margin-bottom:8px}
+.guide-steps{color:var(--muted);font-size:.84rem;line-height:1.6;margin-bottom:10px}
 @media(max-width:650px){.review-grid{min-width:0}}
 @media(max-width:650px){nav button{padding:7px 8px;font-size:.76rem}.card .value{font-size:1.3rem}th,td{padding:8px 5px;font-size:.78rem}.review-row{grid-template-columns:1fr;gap:4px}}
 </style>
@@ -123,7 +130,10 @@ tr:last-child td{border-bottom:none}
       <label>אימייל</label>
       <input id="authEmail" type="email" placeholder="you@example.com">
       <label>סיסמה</label>
-      <input id="authPass" type="password" placeholder="••••••••">
+      <div class="pwd-wrap">
+        <input id="authPass" type="password" placeholder="••••••••">
+        <button class="pwd-toggle" type="button" onclick="revealPasswordFor('authPass',this)">הצג 5ש׳</button>
+      </div>
       <button class="auth-btn" id="authBtn" onclick="doAuth()">כניסה</button>
       <button class="btn sec" id="authGoogleBtn" style="width:100%;margin-top:10px" onclick="doAuthGoogle()">התחברות עם Google</button>
       <div style="margin-top:10px;text-align:center">
@@ -133,8 +143,12 @@ tr:last-child td{border-bottom:none}
     <div id="registerForm" class="hidden">
       <label>אימייל</label>
       <input id="regEmail" type="email" placeholder="you@example.com">
-      <label>סיסמה (לפחות 6 תווים)</label>
-      <input id="regPass" type="password" placeholder="••••••••">
+      <label>סיסמה מאובטחת</label>
+      <div class="pwd-wrap">
+        <input id="regPass" type="password" placeholder="••••••••" oninput="updatePasswordHint()">
+        <button class="pwd-toggle" type="button" onclick="revealPasswordFor('regPass',this)">הצג 5ש׳</button>
+      </div>
+      <p class="muted" id="regPassHint" style="margin-top:6px">חובה: 8+ תווים, אות גדולה, אות קטנה, מספר ותו מיוחד.</p>
       <label>שם תצוגה</label>
       <input id="regName" placeholder='למשל "דן" או "נעמי"'>
       <p class="muted" style="margin-top:14px">📧 לאחר ההרשמה יישלח מייל אימות לכתובת שלך. לחץ על הקישור בו כדי להפעיל את החשבון.</p>
@@ -378,14 +392,38 @@ tr:last-child td{border-bottom:none}
     <div class="panel"><h2>חברי משק הבית</h2><div id="membersList"></div></div>
     <div class="panel">
       <h2>🔌 אינטגרציות צ'אט חכם</h2>
-      <p class="muted" style="margin-bottom:10px">הגדר חיבור ל-WhatsApp ול-Google Chat. ההודעות ינותחו ויהפכו לתנועות אוטומטית.</p>
-      <div class="row" style="margin-bottom:8px">
-        <input id="waWebhook" placeholder="WhatsApp Webhook URL" style="flex:1;min-width:240px">
-        <input id="waVerifyToken" placeholder="WhatsApp Verify Token" style="min-width:200px">
+      <p class="muted" style="margin-bottom:10px">הגדרה ידידותית: המשתמש ממלא רק שדות פשוטים, והמערכת שולחת בדיקת חיבור בלחיצה אחת.</p>
+      <div class="guide-box">
+        <h3>WhatsApp Bot אישי (ללא קוד)</h3>
+        <div class="guide-steps">
+          1) שלח הודעת WhatsApp לבוט CallMeBot כדי לקבל ApiKey.<br>
+          2) הזן מספר טלפון בפורמט בינלאומי (למשל 9725XXXXXXXX).<br>
+          3) לחץ "בדיקת חיבור" וקבל הודעת ניסיון בוואטסאפ.
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <input id="waPhone" placeholder="WhatsApp Phone (9725XXXXXXXX)" style="flex:1;min-width:220px">
+          <input id="waApiKey" placeholder="WhatsApp ApiKey" style="min-width:180px">
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <input id="waWebhook" placeholder="(מתקדם) WhatsApp Webhook URL" style="flex:1;min-width:240px">
+          <input id="waVerifyToken" placeholder="(מתקדם) Verify Token" style="min-width:200px">
+        </div>
+      </div>
+      <div class="guide-box">
+        <h3>Google Chat (ארגוני)</h3>
+        <div class="guide-steps">
+          1) צור Space ב-Google Chat.<br>
+          2) Add apps → Incoming Webhook.<br>
+          3) הדבק כאן את ה-Webhook ולחץ "בדיקת חיבור".
+        </div>
       </div>
       <div class="row" style="margin-bottom:8px">
         <input id="gcWebhook" placeholder="Google Chat Webhook / Bot URL" style="flex:1;min-width:240px">
         <input id="gcSpace" placeholder="Google Chat Space ID" style="min-width:200px">
+      </div>
+      <div class="guide-box" style="margin-top:8px">
+        <h3>נתונים שתצטרך בהתקנה</h3>
+        <div class="guide-steps" id="integrationInstallData"></div>
       </div>
       <div class="row">
         <button class="btn" onclick="saveIntegrations()">שמור אינטגרציות</button>
@@ -503,8 +541,60 @@ const memberCache={}; let charts={};
 let syncTimer=null, syncInFlight=false;
 const APP_SETTINGS={
   reminders:{enabled:false,time:'20:30',channel:'email'},
-  integrations:{waWebhook:'',waVerifyToken:'',gcWebhook:'',gcSpace:'',googleMail:{connected:false,email:''}}
+  integrations:{waWebhook:'',waVerifyToken:'',waPhone:'',waApiKey:'',gcWebhook:'',gcSpace:'',googleMail:{connected:false,email:''}}
 };
+
+function revealPasswordFor(inputId,btn){
+  const input=$('#'+inputId);
+  if(!input||!btn)return;
+  let left=5;
+  input.type='text';
+  btn.disabled=true;
+  btn.textContent='הסתר בעוד '+left+'ש׳';
+  const timer=setInterval(()=>{
+    left-=1;
+    if(left<=0){
+      clearInterval(timer);
+      input.type='password';
+      btn.disabled=false;
+      btn.textContent='הצג 5ש׳';
+      return;
+    }
+    btn.textContent='הסתר בעוד '+left+'ש׳';
+  },1000);
+}
+
+function getPasswordPolicyIssues(pass){
+  const p=String(pass||'');
+  const issues=[];
+  if(p.length<8)issues.push('לפחות 8 תווים');
+  if(!/[A-Z]/.test(p))issues.push('אות גדולה באנגלית');
+  if(!/[a-z]/.test(p))issues.push('אות קטנה באנגלית');
+  if(!/\d/.test(p))issues.push('מספר');
+  if(!/[^A-Za-z0-9]/.test(p))issues.push('תו מיוחד');
+  return issues;
+}
+
+function updatePasswordHint(){
+  const el=$('#regPassHint');
+  if(!el)return;
+  const issues=getPasswordPolicyIssues($('#regPass')?.value||'');
+  if(!issues.length){
+    el.textContent='✅ סיסמה חזקה.';
+    el.style.color='var(--accent2)';
+  }else{
+    el.textContent='חסר: '+issues.join(' · ');
+    el.style.color='var(--warn)';
+  }
+}
+
+function renderIntegrationInstallData(){
+  const el=$('#integrationInstallData');
+  if(!el)return;
+  const appLink=location.origin+location.pathname;
+  const msgIngress='הודעות בסגנון "קניתי בסופר 120" מזוהות אוטומטית ומוכנסות לתנועות.';
+  el.innerHTML='קישור האפליקציה: <b>'+appLink+'</b><br>ערוץ מומלץ למשתמשים: WhatsApp Bot אישי (Phone + ApiKey בלבד).<br>'+msgIngress;
+}
 
 // TIMEOUT
 let lastActivity=Date.now(); const TIMEOUT_MS=30*60*1000;
@@ -522,6 +612,14 @@ setInterval(()=>{
 // AUTH
 function setAuthMode(m){$('#loginForm').classList.toggle('hidden',m!=='login');$('#registerForm').classList.toggle('hidden',m!=='register');$('#tabLogin').classList.toggle('active',m==='login');$('#tabRegister').classList.toggle('active',m==='register');$('#authErr').classList.add('hidden');}
 function showErr(m,t='err'){const e=$('#authErr');e.textContent=m;e.className='auth-err '+t;e.classList.remove('hidden');}
+function authErrMsg(err,fallback='אירעה שגיאה לא צפויה. נסה שוב בעוד דקה.'){
+  const raw=(err&&typeof err==='object')?String(err.message||err.msg||'').trim():String(err||'').trim();
+  if(raw&&raw!=='{}'&&raw!=='[object Object]'){
+    if(raw.includes('Error sending confirmation email')) return 'לא ניתן כרגע לשלוח מייל אימות מהשרת. נסה שוב בעוד כמה דקות.';
+    return raw;
+  }
+  return fallback;
+}
 async function forgotPassword(){
   const email=($('#authEmail').value||'').trim();
   if(!email){showErr('הכנס אימייל כדי לשלוח קישור איפוס סיסמה');return;}
@@ -555,10 +653,18 @@ async function doAuthGoogle(){
 }
 async function doRegister(){
   const email=$('#regEmail').value.trim(),pass=$('#regPass').value,name=$('#regName').value.trim()||email.split('@')[0];
-  if(!email||pass.length<6){showErr('נא למלא אימייל וסיסמה (לפחות 6 תווים)');return;}
+  if(!email){showErr('נא למלא אימייל');return;}
+  const pwdIssues=getPasswordPolicyIssues(pass);
+  if(pwdIssues.length){showErr('סיסמה לא עומדת במדיניות: '+pwdIssues.join(', '));return;}
   const invite=new URLSearchParams(location.search).get('invite')||'';
-  const{error}=await sb.auth.signUp({email,password:pass,options:{data:{display_name:name,invite_code:invite},emailRedirectTo:location.origin+location.pathname}});
-  if(error){showErr(error.message);return;}
+  let error=null;
+  try{
+    const resp=await sb.auth.signUp({email,password:pass,options:{data:{display_name:name,invite_code:invite},emailRedirectTo:location.origin+location.pathname}});
+    error=resp.error;
+  }catch(e){
+    error=e;
+  }
+  if(error){showErr(authErrMsg(error));return;}
   showErr('✅ נרשמת! נשלח מייל אימות לכתובת '+email+'. לחץ על הקישור בו ואז התחבר.','ok');
 }
 async function doLogout(){
@@ -632,10 +738,13 @@ async function loadUserSettings(){
   if($('#reminderEnabled'))$('#reminderEnabled').checked=!!APP_SETTINGS.reminders.enabled;
   if($('#reminderTime'))$('#reminderTime').value=APP_SETTINGS.reminders.time||'20:30';
   if($('#reminderChannel'))$('#reminderChannel').value=APP_SETTINGS.reminders.channel||'email';
+  if($('#waPhone'))$('#waPhone').value=APP_SETTINGS.integrations.waPhone||'';
+  if($('#waApiKey'))$('#waApiKey').value=APP_SETTINGS.integrations.waApiKey||'';
   if($('#waWebhook'))$('#waWebhook').value=APP_SETTINGS.integrations.waWebhook||'';
   if($('#waVerifyToken'))$('#waVerifyToken').value=APP_SETTINGS.integrations.waVerifyToken||'';
   if($('#gcWebhook'))$('#gcWebhook').value=APP_SETTINGS.integrations.gcWebhook||'';
   if($('#gcSpace'))$('#gcSpace').value=APP_SETTINGS.integrations.gcSpace||'';
+  renderIntegrationInstallData();
   renderGoogleMailStatus();
 }
 
@@ -922,6 +1031,8 @@ async function saveIntegrations(){
   const keepGoogle=APP_SETTINGS.integrations?.googleMail||{connected:false,email:''};
   APP_SETTINGS.integrations={
     ...APP_SETTINGS.integrations,
+    waPhone:($('#waPhone').value||'').trim(),
+    waApiKey:($('#waApiKey').value||'').trim(),
     waWebhook:($('#waWebhook').value||'').trim(),
     waVerifyToken:($('#waVerifyToken').value||'').trim(),
     gcWebhook:($('#gcWebhook').value||'').trim(),
@@ -940,6 +1051,8 @@ async function testIntegrations(){
       userId:CU?.id||null,
       channel:'all',
       integrations:{
+        waPhone:($('#waPhone').value||'').trim(),
+        waApiKey:($('#waApiKey').value||'').trim(),
         waWebhook:($('#waWebhook').value||'').trim(),
         waVerifyToken:($('#waVerifyToken').value||'').trim(),
         gcWebhook:($('#gcWebhook').value||'').trim(),

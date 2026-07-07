@@ -513,6 +513,14 @@ setInterval(()=>{
 // AUTH
 function setAuthMode(m){$('#loginForm').classList.toggle('hidden',m!=='login');$('#registerForm').classList.toggle('hidden',m!=='register');$('#tabLogin').classList.toggle('active',m==='login');$('#tabRegister').classList.toggle('active',m==='register');$('#authErr').classList.add('hidden');}
 function showErr(m,t='err'){const e=$('#authErr');e.textContent=m;e.className='auth-err '+t;e.classList.remove('hidden');}
+function authErrMsg(err,fallback='אירעה שגיאה לא צפויה. נסה שוב בעוד דקה.'){
+  const raw=(err&&typeof err==='object')?String(err.message||err.msg||'').trim():String(err||'').trim();
+  if(raw&&raw!=='{}'&&raw!=='[object Object]'){
+    if(raw.includes('Error sending confirmation email')) return 'לא ניתן כרגע לשלוח מייל אימות מהשרת. נסה שוב בעוד כמה דקות.';
+    return raw;
+  }
+  return fallback;
+}
 async function forgotPassword(){
   const email=($('#authEmail').value||'').trim();
   if(!email){showErr('הכנס אימייל כדי לשלוח קישור איפוס סיסמה');return;}
@@ -548,8 +556,14 @@ async function doRegister(){
   const email=$('#regEmail').value.trim(),pass=$('#regPass').value,name=$('#regName').value.trim()||email.split('@')[0];
   if(!email||pass.length<6){showErr('נא למלא אימייל וסיסמה (לפחות 6 תווים)');return;}
   const invite=new URLSearchParams(location.search).get('invite')||'';
-  const{error}=await sb.auth.signUp({email,password:pass,options:{data:{display_name:name,invite_code:invite},emailRedirectTo:location.origin+location.pathname}});
-  if(error){showErr(error.message);return;}
+  let error=null;
+  try{
+    const resp=await sb.auth.signUp({email,password:pass,options:{data:{display_name:name,invite_code:invite},emailRedirectTo:location.origin+location.pathname}});
+    error=resp.error;
+  }catch(e){
+    error=e;
+  }
+  if(error){showErr(authErrMsg(error));return;}
   showErr('✅ נרשמת! נשלח מייל אימות לכתובת '+email+'. לחץ על הקישור בו ואז התחבר.','ok');
 }
 async function doLogout(){
