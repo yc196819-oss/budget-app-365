@@ -270,6 +270,13 @@ tr:last-child td{border-bottom:none}
         <input id="newSub" placeholder="תת-קטגוריה">
         <button class="btn sec" onclick="addSub()">הוסף תת-קטגוריה</button>
       </div>
+      <div class="row" style="margin-top:12px">
+        <textarea id="bulkCats" placeholder="הדבק כאן רשימה מהירה:&#10;אוכל>סופר,מסעדות&#10;רכב>דלק,ביטוח רכב&#10;משכורת" style="flex:1;min-height:110px"></textarea>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sec" onclick="importBulkCategories()">ייבוא מהיר מהדבקה</button>
+      </div>
+      <p class="muted" id="bulkCatsStatus" style="margin-top:8px"></p>
       <div id="catManage" style="margin-top:16px"></div>
     </div>
   </section>
@@ -1006,12 +1013,102 @@ async function addTransaction(){
   if(error){alert('שגיאה: '+error.message);return;}
   memberCache[CU.id]=MNAME;DB.transactions.unshift(data);$('#exDesc').value='';$('#exAmount').value='';render();
 }
-async function addCat(){const n=$('#newCat').value.trim();if(!n)return;const{data}=await sb.from('categories').insert({household_id:HID,name:n,kind:$('#catKind').value}).select().single();DB.categories.push(data);$('#newCat').value='';render();}
-async function addSub(){const n=$('#newSub').value.trim();if(!n)return;const pid=$('#subParent').value;const pk=DB.categories.find(x=>x.id===pid)?.kind||'expense';const{data}=await sb.from('categories').insert({household_id:HID,name:n,parent_id:pid,kind:pk}).select().single();DB.categories.push(data);$('#newSub').value='';render();}
-async function addLoan(){const amt=parseFloat($('#loanAmt').value);if(!amt||amt<=0){alert('הכנס סכום');return;}const{data}=await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:$('#loanDir').value,counterparty:$('#loanWho').value||'(ללא שם)',amount:amt,loan_date:$('#loanDate').value||todayStr(),note:$('#loanNote').value,settled:false}).select().single();DB.loans.unshift(data);$('#loanWho').value='';$('#loanAmt').value='';$('#loanNote').value='';render();}
+async function addCat(){
+  const n=$('#newCat').value.trim();
+  if(!n)return;
+  const {data,error}=await sb.from('categories').insert({household_id:HID,name:n,kind:$('#catKind').value}).select().single();
+  if(error){alert('שגיאה בשמירת קטגוריה: '+(error.message||error.code||'לא ידוע'));return;}
+  DB.categories.push(data);
+  $('#newCat').value='';
+  render();
+}
+async function addSub(){
+  const n=$('#newSub').value.trim();
+  if(!n)return;
+  const pid=$('#subParent').value;
+  const pk=DB.categories.find(x=>x.id===pid)?.kind||'expense';
+  const {data,error}=await sb.from('categories').insert({household_id:HID,name:n,parent_id:pid,kind:pk}).select().single();
+  if(error){alert('שגיאה בשמירת תת-קטגוריה: '+(error.message||error.code||'לא ידוע'));return;}
+  DB.categories.push(data);
+  $('#newSub').value='';
+  render();
+}
+async function importBulkCategories(){
+  const raw=String($('#bulkCats')?.value||'').trim();
+  const statusEl=$('#bulkCatsStatus');
+  if(!raw){
+    if(statusEl)statusEl.textContent='הדבק רשימת קטגוריות תחילה.';
+    return;
+  }
+
+  const lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  let createdCats=0,createdSubs=0;
+  const kind=$('#catKind')?.value||'expense';
+
+  for(const line of lines){
+    const [catPart,subsPart='']=line.split('>');
+    const catName=String(catPart||'').trim();
+    if(!catName)continue;
+
+    let parent=DB.categories.find(c=>!c.parent_id&&String(c.name||'').trim()===catName&&normalizeCategoryKind(c)===kind);
+    if(!parent){
+      const {data,error}=await sb.from('categories').insert({household_id:HID,name:catName,kind}).select().single();
+      if(error){
+        if(statusEl)statusEl.textContent='שגיאה בייבוא: '+(error.message||error.code||'לא ידוע');
+        return;
+      }
+      parent=data;
+      DB.categories.push(data);
+      createdCats+=1;
+    }
+
+    const subs=String(subsPart||'').split(',').map(x=>x.trim()).filter(Boolean);
+    for(const subName of subs){
+      const exists=DB.categories.some(c=>c.parent_id===parent.id&&String(c.name||'').trim()===subName);
+      if(exists)continue;
+      const {data,error}=await sb.from('categories').insert({household_id:HID,name:subName,parent_id:parent.id,kind}).select().single();
+      if(error){
+        if(statusEl)statusEl.textContent='שגיאה בייבוא תת-קטגוריה: '+(error.message||error.code||'לא ידוע');
+        return;
+      }
+      DB.categories.push(data);
+      createdSubs+=1;
+    }
+  }
+
+  if(statusEl)statusEl.textContent='✅ ייבוא הושלם: '+createdCats+' קטגוריות ו-'+createdSubs+' תתי-קטגוריות נוספו.';
+  render();
+}
+async function addLoan(){
+  const amt=parseFloat($('#loanAmt').value);
+  if(!amt||amt<=0){alert('הכנס סכום');return;}
+  const {data,error}=await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:$('#loanDir').value,counterparty:$('#loanWho').value||'(ללא שם)',amount:amt,loan_date:$('#loanDate').value||todayStr(),note:$('#loanNote').value,settled:false}).select().single();
+  if(error){alert('שגיאה בשמירת הלוואה: '+(error.message||error.code||'לא ידוע'));return;}
+  DB.loans.unshift(data);
+  $('#loanWho').value='';$('#loanAmt').value='';$('#loanNote').value='';
+  render();
+}
 async function addInst(){const total=parseFloat($('#instTotal').value),count=parseInt($('#instCount').value);if(!total||!count){alert('הכנס סכום ומספר תשלומים');return;}const{data}=await sb.from('installments').insert({household_id:HID,created_by:CU.id,description:$('#instDesc').value||'(ללא תיאור)',total_amount:total,payments_count:count,first_payment:$('#instFirst').value||todayStr(),category_id:$('#instCat').value||null}).select().single();DB.installments.push(data);$('#instDesc').value='';$('#instTotal').value='';$('#instCount').value='';render();}
-async function addInv(){const cost=parseFloat($('#invCostIn').value);if(!cost){alert('הכנס עלות');return;}const val=parseFloat($('#invValIn').value)||cost;const{data}=await sb.from('investments').insert({household_id:HID,created_by:CU.id,name:$('#invName').value||'(ללא שם)',asset_type:$('#invType').value,cost,current_value:val,buy_date:$('#invDate').value||todayStr()}).select().single();DB.investments.push(data);$('#invName').value='';$('#invCostIn').value='';$('#invValIn').value='';render();}
-async function addGoal(){const target=parseFloat($('#goalTarget').value);if(!target){alert('הכנס סכום יעד');return;}const saved=parseFloat($('#goalSaved').value)||0;const{data}=await sb.from('goals').insert({household_id:HID,created_by:CU.id,icon:$('#goalIcon').value,name:$('#goalName').value||'(ללא שם)',target_amount:target,saved_amount:saved,due_date:$('#goalDate').value||null}).select().single();DB.goals.push(data);$('#goalName').value='';$('#goalTarget').value='';$('#goalSaved').value='';render();}
+async function addInv(){
+  const cost=parseFloat($('#invCostIn').value);
+  if(!cost){alert('הכנס עלות');return;}
+  const val=parseFloat($('#invValIn').value)||cost;
+  const {data,error}=await sb.from('investments').insert({household_id:HID,created_by:CU.id,name:$('#invName').value||'(ללא שם)',asset_type:$('#invType').value,cost,current_value:val,buy_date:$('#invDate').value||todayStr()}).select().single();
+  if(error){alert('שגיאה בשמירת השקעה: '+(error.message||error.code||'לא ידוע'));return;}
+  DB.investments.push(data);
+  $('#invName').value='';$('#invCostIn').value='';$('#invValIn').value='';
+  render();
+}
+async function addGoal(){
+  const target=parseFloat($('#goalTarget').value);
+  if(!target){alert('הכנס סכום יעד');return;}
+  const saved=parseFloat($('#goalSaved').value)||0;
+  const {data,error}=await sb.from('goals').insert({household_id:HID,created_by:CU.id,icon:$('#goalIcon').value,name:$('#goalName').value||'(ללא שם)',target_amount:target,saved_amount:saved,due_date:$('#goalDate').value||null}).select().single();
+  if(error){alert('שגיאה בשמירת יעד: '+(error.message||error.code||'לא ידוע'));return;}
+  DB.goals.push(data);
+  $('#goalName').value='';$('#goalTarget').value='';$('#goalSaved').value='';
+  render();
+}
 
 // INVITE — pretty link
 async function genInvite(){
