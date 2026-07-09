@@ -878,8 +878,33 @@ const DEFAULT_CATS=[
 ];
 async function seedCategories(){
   for(const cat of DEFAULT_CATS){
-    const{data:c}=await sb.from('categories').insert({household_id:HID,name:cat.name,icon:cat.icon,kind:cat.kind}).select().single();
-    for(const s of cat.subs)await sb.from('categories').insert({household_id:HID,name:s,parent_id:c.id,kind:cat.kind});
+    let root=DB.categories.find(c=>!c.parent_id&&String(c.name||'').trim()===cat.name&&String(c.kind||'').trim()===cat.kind);
+    if(!root){
+      const {data,error}=await sb.from('categories').insert({household_id:HID,name:cat.name,icon:cat.icon,kind:cat.kind}).select().single();
+      if(error)throw error;
+      root=data;
+      DB.categories.push(data);
+    }
+    for(const s of cat.subs){
+      const exists=DB.categories.some(c=>c.parent_id===root.id&&String(c.name||'').trim()===s);
+      if(exists)continue;
+      const {data,error}=await sb.from('categories').insert({household_id:HID,name:s,parent_id:root.id,kind:cat.kind}).select().single();
+      if(error)throw error;
+      DB.categories.push(data);
+    }
+  }
+}
+
+async function ensureDefaultCategoriesExists(){
+  const roots=DB.categories.filter(c=>!c.parent_id);
+  if(roots.length>0)return;
+
+  try{
+    await seedCategories();
+    const {data,error}=await sb.from('categories').select('*').eq('household_id',HID);
+    if(!error&&Array.isArray(data))DB.categories=data;
+  }catch(err){
+    console.warn('Failed to auto-seed default categories:',err?.message||err);
   }
 }
 
@@ -893,6 +918,7 @@ async function loadAll(){
     sb.from('goals').select('*').eq('household_id',HID)
   ]);
   DB.categories=c.data||[];DB.transactions=t.data||[];DB.loans=l.data||[];DB.installments=i.data||[];DB.investments=inv.data||[];DB.goals=g.data||[];
+  await ensureDefaultCategoriesExists();
   const ids=[...new Set(DB.transactions.map(t=>t.created_by).filter(Boolean))];
   for(const id of ids){if(!memberCache[id]){const{data}=await sb.from('memberships').select('display_name').eq('user_id',id).eq('household_id',HID).single();memberCache[id]=data?.display_name||'—';}}
 }
