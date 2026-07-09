@@ -42,6 +42,22 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || '';
 
+const DEFAULT_CATEGORIES = [
+  { name: 'אוכל', icon: '🍽️', kind: 'expense', subs: ['סופר', 'מסעדות ואוכל בחוץ'] },
+  { name: 'רכב', icon: '🚗', kind: 'expense', subs: ['דלק', 'אגרה', 'מוסך', 'ביטוח רכב'] },
+  { name: 'בית ודיור', icon: '🏠', kind: 'expense', subs: ['שכירות / משכנתא', 'חשבונות', 'ריהוט ותחזוקה'] },
+  { name: 'בריאות', icon: '💊', kind: 'expense', subs: ['רופאים', 'תרופות', 'ביטוח בריאות'] },
+  { name: 'פנאי ובידור', icon: '🎭', kind: 'expense', subs: ['ספורט', 'תרבות', 'נסיעות'] },
+  { name: 'שונות', icon: '📦', kind: 'expense', subs: [] },
+  { name: 'משכורת', icon: '💼', kind: 'income', subs: [] },
+  { name: 'עזרה מההורים', icon: '👨‍👩‍👧', kind: 'income', subs: [] },
+  { name: 'עבודה צדדית / פרילנס', icon: '💻', kind: 'income', subs: [] },
+  { name: 'החזרים והטבות', icon: '🧾', kind: 'income', subs: [] },
+  { name: 'רווחי השקעות', icon: '📈', kind: 'income', subs: [] },
+  { name: 'מתנות', icon: '🎁', kind: 'income', subs: [] },
+  { name: 'הכנסה אחרת', icon: '💰', kind: 'income', subs: [] }
+];
+
 const mailer = SMTP_HOST && SMTP_USER && SMTP_PASS
   ? nodemailer.createTransport({
       host: SMTP_HOST,
@@ -381,6 +397,56 @@ async function upsertGoogleMailSettings({ userId, householdId, patch }) {
 
   if (error) throw new Error(error.message || 'Failed to save Google integration');
   return merged.googleMail;
+}
+
+async function ensureDefaultCategoriesForHousehold(householdId) {
+  if (!supabaseAdmin) throw new Error('Supabase server credentials are not configured');
+  const hid = String(householdId || '').trim();
+  if (!hid) throw new Error('householdId is required');
+
+  const { data: current, error: readError } = await supabaseAdmin
+    .from('categories')
+    .select('id,name,parent_id,kind,icon')
+    .eq('household_id', hid);
+
+  if (readError) throw new Error(readError.message || 'Failed to read categories');
+  const all = Array.isArray(current) ? current : [];
+  const roots = all.filter((c) => !c.parent_id);
+  if (roots.length > 0) return all;
+
+  for (const cat of DEFAULT_CATEGORIES) {
+    const { data: root, error: rootError } = await supabaseAdmin
+      .from('categories')
+      .insert({
+        household_id: hid,
+        name: cat.name,
+        icon: cat.icon,
+        kind: cat.kind
+      })
+      .select('id,name,parent_id,kind,icon')
+      .single();
+
+    if (rootError) throw new Error(rootError.message || `Failed to insert root category ${cat.name}`);
+
+    for (const subName of cat.subs) {
+      const { error: subError } = await supabaseAdmin
+        .from('categories')
+        .insert({
+          household_id: hid,
+          name: subName,
+          parent_id: root.id,
+          kind: cat.kind
+        });
+      if (subError) throw new Error(subError.message || `Failed to insert subcategory ${subName}`);
+    }
+  }
+
+  const { data: rebuilt, error: rebuiltError } = await supabaseAdmin
+    .from('categories')
+    .select('*')
+    .eq('household_id', hid);
+  if (rebuiltError) throw new Error(rebuiltError.message || 'Failed to fetch rebuilt categories');
+  return rebuilt || [];
 }
 
 async function sendViaGoogleMail({ userId, to, subject, html, text }) {
@@ -852,6 +918,41 @@ app.get('/api/user/household/:userId', async (req, res) => {
     return res.json({ ok: true, householdId: data.household_id, userId });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
+app.post('/api/categories/bootstrap', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ ok: false, error: 'Supabase server credentials are not configured' });
+    }
+
+    const { householdId, userId } = req.body || {};
+    const hid = String(householdId || '').trim();
+    const uid = String(userId || '').trim();
+    if (!hid || !uid) {
+      return res.status(400).json({ ok: false, error: 'householdId and userId are required' });
+    }
+
+    const { data: membership, error: membershipError } = await supabaseAdmin
+      .from('memberships')
+      .select('user_id')
+      .eq('household_id', hid)
+      .eq('user_id', uid)
+      .limit(1)
+      .maybeSingle();
+
+    if (membershipError) {
+      return res.status(500).json({ ok: false, error: membershipError.message || 'Failed membership check' });
+    }
+    if (!membership?.user_id) {
+      return res.status(403).json({ ok: false, error: 'User is not a member of this household' });
+    }
+
+    const categories = await ensureDefaultCategoriesForHousehold(hid);
+    return res.json({ ok: true, categories, count: categories.length });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Unexpected error' });
   }
 });
 

@@ -900,6 +900,18 @@ async function ensureDefaultCategoriesExists(){
   if(roots.length>0)return;
 
   try{
+    if(CU?.id&&HID){
+      const r=await fetch(API_BASE+'/api/categories/bootstrap',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({householdId:HID,userId:CU.id})
+      });
+      const data=await r.json().catch(()=>({}));
+      if(r.ok&&Array.isArray(data?.categories)&&data.categories.length){
+        DB.categories=data.categories;
+        return;
+      }
+    }
     await seedCategories();
     const {data,error}=await sb.from('categories').select('*').eq('household_id',HID);
     if(!error&&Array.isArray(data))DB.categories=data;
@@ -918,6 +930,9 @@ async function loadAll(){
     sb.from('goals').select('*').eq('household_id',HID)
   ]);
   DB.categories=c.data||[];DB.transactions=t.data||[];DB.loans=l.data||[];DB.installments=i.data||[];DB.investments=inv.data||[];DB.goals=g.data||[];
+  if(c.error){
+    console.warn('Categories read failed:',c.error.message||c.error);
+  }
   await ensureDefaultCategoriesExists();
   const ids=[...new Set(DB.transactions.map(t=>t.created_by).filter(Boolean))];
   for(const id of ids){if(!memberCache[id]){const{data}=await sb.from('memberships').select('display_name').eq('user_id',id).eq('household_id',HID).single();memberCache[id]=data?.display_name||'—';}}
