@@ -876,20 +876,33 @@ const DEFAULT_CATS=[
   {name:'מתנות',icon:'🎁',kind:'income',subs:[]},
   {name:'הכנסה אחרת',icon:'💰',kind:'income',subs:[]}
 ];
+async function catInsert(payload){
+  // Try with kind first; if DB doesn't have kind column, retry without it
+  let {data,error}=await sb.from('categories').insert(payload).select().single();
+  if(error&&String(error.message||error.code||'').includes('kind')){
+    const {kind:_k,...rest}=payload;
+    ({data,error}=await sb.from('categories').insert(rest).select().single());
+  }
+  if(error)throw new Error(error.message||error.code||'category insert failed');
+  // Ensure kind is in memory even if not in DB
+  if(data&&payload.kind)data.kind=payload.kind;
+  return data;
+}
+
 async function seedCategories(){
   for(const cat of DEFAULT_CATS){
-    let root=DB.categories.find(c=>!c.parent_id&&String(c.name||'').trim()===cat.name&&String(c.kind||'').trim()===cat.kind);
+    let root=DB.categories.find(c=>!c.parent_id&&String(c.name||'').trim()===cat.name);
     if(!root){
-      const {data,error}=await sb.from('categories').insert({household_id:HID,name:cat.name,icon:cat.icon,kind:cat.kind}).select().single();
-      if(error)throw error;
+      const data=await catInsert({household_id:HID,name:cat.name,icon:cat.icon,kind:cat.kind});
       root=data;
       DB.categories.push(data);
+    }else if(!root.kind){
+      root.kind=cat.kind;
     }
     for(const s of cat.subs){
       const exists=DB.categories.some(c=>c.parent_id===root.id&&String(c.name||'').trim()===s);
       if(exists)continue;
-      const {data,error}=await sb.from('categories').insert({household_id:HID,name:s,parent_id:root.id,kind:cat.kind}).select().single();
-      if(error)throw error;
+      const data=await catInsert({household_id:HID,name:s,parent_id:root.id,kind:cat.kind});
       DB.categories.push(data);
     }
   }
@@ -1057,8 +1070,8 @@ async function addTransaction(){
 async function addCat(){
   const n=$('#newCat').value.trim();
   if(!n)return;
-  const {data,error}=await sb.from('categories').insert({household_id:HID,name:n,kind:$('#catKind').value}).select().single();
-  if(error){alert('שגיאה בשמירת קטגוריה: '+(error.message||error.code||'לא ידוע'));return;}
+  let data,error;
+  try{data=await catInsert({household_id:HID,name:n,kind:$('#catKind').value});}catch(e){alert('שגיאה בשמירת קטגוריה: '+e.message);return;}
   DB.categories.push(data);
   $('#newCat').value='';
   render();
@@ -1068,8 +1081,8 @@ async function addSub(){
   if(!n)return;
   const pid=$('#subParent').value;
   const pk=DB.categories.find(x=>x.id===pid)?.kind||'expense';
-  const {data,error}=await sb.from('categories').insert({household_id:HID,name:n,parent_id:pid,kind:pk}).select().single();
-  if(error){alert('שגיאה בשמירת תת-קטגוריה: '+(error.message||error.code||'לא ידוע'));return;}
+  let data,error;
+  try{data=await catInsert({household_id:HID,name:n,parent_id:pid,kind:pk});}catch(e){alert('שגיאה בשמירת תת-קטגוריה: '+e.message);return;}
   DB.categories.push(data);
   $('#newSub').value='';
   render();
@@ -1093,12 +1106,7 @@ async function importBulkCategories(){
 
     let parent=DB.categories.find(c=>!c.parent_id&&String(c.name||'').trim()===catName&&normalizeCategoryKind(c)===kind);
     if(!parent){
-      const {data,error}=await sb.from('categories').insert({household_id:HID,name:catName,kind}).select().single();
-      if(error){
-        if(statusEl)statusEl.textContent='שגיאה בייבוא: '+(error.message||error.code||'לא ידוע');
-        return;
-      }
-      parent=data;
+      try{parent=await catInsert({household_id:HID,name:catName,kind});}catch(e){if(statusEl)statusEl.textContent='שגיאה בייבוא: '+e.message;return;}
       DB.categories.push(data);
       createdCats+=1;
     }
@@ -1107,12 +1115,8 @@ async function importBulkCategories(){
     for(const subName of subs){
       const exists=DB.categories.some(c=>c.parent_id===parent.id&&String(c.name||'').trim()===subName);
       if(exists)continue;
-      const {data,error}=await sb.from('categories').insert({household_id:HID,name:subName,parent_id:parent.id,kind}).select().single();
-      if(error){
-        if(statusEl)statusEl.textContent='שגיאה בייבוא תת-קטגוריה: '+(error.message||error.code||'לא ידוע');
-        return;
-      }
-      DB.categories.push(data);
+      let subData;try{subData=await catInsert({household_id:HID,name:subName,parent_id:parent.id,kind});}catch(e){if(statusEl)statusEl.textContent='שגיאה בייבוא תת-קטגוריה: '+e.message;return;}
+      DB.categories.push(subData);
       createdSubs+=1;
     }
   }
@@ -1658,8 +1662,7 @@ async function createReviewSubcategory(i){
   if(!name)return;
   const parent=DB.categories.find(c=>c.id===t.category_id);
   const kind=parent?.kind||'expense';
-  const {data,error}=await sb.from('categories').insert({household_id:HID,name,parent_id:t.category_id,kind}).select().single();
-  if(error){alert('שגיאה בהוספת תת-קטגוריה: '+error.message);return;}
+  let data; try{data=await catInsert({household_id:HID,name,parent_id:t.category_id,kind});}catch(e){alert('שגיאה בהוספת תת-קטגוריה: '+e.message);return;}
   DB.categories.push(data);
   pendingImport[i].subcategory_id=data.id;
   renderReview();
