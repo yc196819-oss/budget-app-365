@@ -748,10 +748,11 @@ function fillPeriod(){
   ms.onchange=()=>{VM=+ms.value;render();};ys.onchange=()=>{VY=+ys.value;render();renderCharts();};
 }
 
-function moAmt(t,y,m){const d=new Date(t.tx_date||t.date);const sy=d.getFullYear(),sm=d.getMonth();if(t.spread==='year'){for(let i=0;i<12;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +t.amount/12;}return 0;}return(sy===y&&sm===m)?+t.amount:0;}
+function moAmt(t,y,m){const d=parseLocalDate(t.tx_date||t.date);const sy=d.getFullYear(),sm=d.getMonth();if(t.spread==='year'){for(let i=0;i<12;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +t.amount/12;}return 0;}return(sy===y&&sm===m)?+t.amount:0;}
 function yrAmt(t,y){let s=0;for(let m=0;m<12;m++)s+=moAmt(t,y,m);return s;}
-function instMo(p,y,m){const d=new Date(p.first_payment||p.first);const sy=d.getFullYear(),sm=d.getMonth();const n=p.payments_count||p.count;for(let i=0;i<n;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +p.total_amount/n;}return 0;}
-function instPaid(p){const d=new Date(p.first_payment||p.first);const now=new Date();return Math.max(0,Math.min(p.payments_count||p.count,(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth())+1));}
+function parseLocalDate(s){const[y,m,d]=(s||'').split('-').map(Number);return(y&&m&&d)?new Date(y,m-1,d):new Date(s);}
+function instMo(p,y,m){const d=parseLocalDate(p.first_payment||p.first);const sy=d.getFullYear(),sm=d.getMonth();const n=p.payments_count||p.count;for(let i=0;i<n;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +p.total_amount/n;}return 0;}
+function instPaid(p){const d=parseLocalDate(p.first_payment||p.first);const now=new Date();return Math.max(0,Math.min(p.payments_count||p.count,(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth())+1));}
 function normalizeCategoryKind(cat){
   const raw=String(cat?.kind||cat?.type||cat?.group||'').toLowerCase().trim();
   if(raw==='income'||raw==='incomes'||raw==='הכנסה')return 'income';
@@ -835,7 +836,7 @@ async function addSub(){const n=$('#newSub').value.trim();if(!n)return;const pid
 async function delCat(id){if(!confirm('מחק קטגוריה זו וכל תת-הקטגוריות שלה?'))return;const subIds=subCats(id).map(s=>s.id);if(subIds.length)await sb.from('categories').delete().in('id',subIds);await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id&&c.parent_id!==id);if(catFilter===id){catFilter='all';catSubFilter=null;}render();}
 async function delSub(id){if(!confirm('מחק תת-קטגוריה זו?'))return;await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id);if(catSubFilter===id)catSubFilter=null;render();}
 async function addLoan(){const amt=parseFloat($('#loanAmt').value);if(!amt||amt<=0){alert('הכנס סכום');return;}const{data}=await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:$('#loanDir').value,counterparty:$('#loanWho').value||'(ללא שם)',amount:amt,loan_date:$('#loanDate').value||todayStr(),note:$('#loanNote').value,settled:false}).select().single();DB.loans.unshift(data);$('#loanWho').value='';$('#loanAmt').value='';$('#loanNote').value='';render();}
-async function addInst(){const total=parseFloat($('#instTotal').value),count=parseInt($('#instCount').value);if(!total||!count){alert('הכנס סכום ומספר תשלומים');return;}const{data}=await sb.from('installments').insert({household_id:HID,created_by:CU.id,description:$('#instDesc').value||'(ללא תיאור)',total_amount:total,payments_count:count,first_payment:$('#instFirst').value||todayStr(),category_id:$('#instCat').value||null}).select().single();DB.installments.push(data);$('#instDesc').value='';$('#instTotal').value='';$('#instCount').value='';render();}
+async function addInst(){const total=parseFloat($('#instTotal').value),count=parseInt($('#instCount').value);if(!total||!count){alert('הכנס סכום ומספר תשלומים');return;}const{data,error}=await sb.from('installments').insert({household_id:HID,created_by:CU.id,description:$('#instDesc').value||'(ללא תיאור)',total_amount:total,payments_count:count,first_payment:$('#instFirst').value||todayStr(),category_id:$('#instCat').value||null}).select().single();if(error){alert('שגיאה בשמירה: '+error.message+'\n\nהנתונים לא נמחקו — נסה שוב.');return;}DB.installments.push(data);$('#instDesc').value='';$('#instTotal').value='';$('#instCount').value='';render();}
 async function addInv(){const cost=parseFloat($('#invCostIn').value);if(!cost){alert('הכנס עלות');return;}const val=parseFloat($('#invValIn').value)||cost;const{data}=await sb.from('investments').insert({household_id:HID,created_by:CU.id,name:$('#invName').value||'(ללא שם)',asset_type:$('#invType').value,cost,current_value:val,buy_date:$('#invDate').value||todayStr()}).select().single();DB.investments.push(data);$('#invName').value='';$('#invCostIn').value='';$('#invValIn').value='';render();}
 async function addGoal(){const target=parseFloat($('#goalTarget').value);if(!target){alert('הכנס סכום יעד');return;}const saved=parseFloat($('#goalSaved').value)||0;const{data}=await sb.from('goals').insert({household_id:HID,created_by:CU.id,icon:$('#goalIcon').value,name:$('#goalName').value||'(ללא שם)',target_amount:target,saved_amount:saved,due_date:$('#goalDate').value||null}).select().single();DB.goals.push(data);$('#goalName').value='';$('#goalTarget').value='';$('#goalSaved').value='';render();}
 
@@ -1533,24 +1534,70 @@ function renderExpenses(){
   const allRoots=rootCats('expense').concat(rootCats('income'));
   f.innerHTML='<span class="pill '+(exFilter==='all'?'on':'')+'" data-f="all">הכל</span>'+allRoots.map(c=>'<span class="pill '+(exFilter===c.id?'on':'')+'" data-f="'+c.id+'">'+(c.icon||'')+' '+c.name+'</span>').join('');
   f.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{exFilter=p.dataset.f;renderExpenses();});
+
+  // תנועות רגילות — מסנן לפי חודש/שנה
   let rows=[...DB.transactions].sort((a,b)=>(b.tx_date||b.date).localeCompare(a.tx_date||a.date));
   rows=rows.filter(t=>{
     const raw=String(t.tx_date||t.date||'').trim();
     if(/^\d{4}-\d{2}-\d{2}$/.test(raw)){
       return Number(raw.slice(0,4))===VY&&Number(raw.slice(5,7))===VM+1;
     }
-    const m=raw.match(/^(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{2}|\d{4})$/);
-    if(m){
-      const yy=String(m[3]).length===2?Number('20'+m[3]):Number(m[3]);
-      const mm=Number(m[2])-1;
-      return yy===VY&&mm===VM;
-    }
+    const m=raw.match(/^(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{2}|\d{4})$/);
+    if(m){const yy=String(m[3]).length===2?Number('20'+m[3]):Number(m[3]);const mm=Number(m[2])-1;return yy===VY&&mm===VM;}
     const d=new Date(raw);
     return !Number.isNaN(d.getTime())&&d.getFullYear()===VY&&d.getMonth()===VM;
   });
   if(exFilter!=='all')rows=rows.filter(t=>t.category_id===exFilter);
+
+  // תשלומים (installments) — מציג כל תשלום שנופל בחודש הנוכחי
+  const instRows=DB.installments.filter(p=>instMo(p,VY,VM)>0).map(p=>{
+    const c=DB.categories.find(x=>x.id===p.category_id);
+    const paid=instPaid(p);
+    const n=p.payments_count||p.count;
+    const moAmt=+p.total_amount/n;
+    const firstD=parseLocalDate(p.first_payment||p.first);
+    // חשב את תאריך התשלום הספציפי של החודש הנוכחי
+    let payDate=p.first_payment||p.first||'';
+    for(let i=0;i<n;i++){
+      let mm=(firstD.getMonth()+i)%12;
+      let yy=firstD.getFullYear()+Math.floor((firstD.getMonth()+i)/12);
+      if(yy===VY&&mm===VM){
+        payDate=yy+'-'+String(mm+1).padStart(2,'0')+'-'+String(firstD.getDate()).padStart(2,'0');
+        break;
+      }
+    }
+    return {
+      _isInst:true,
+      id:p.id,
+      tx_date:payDate,
+      description:p.description+' (תשלום '+(Math.min(paid,n))+'/'+n+')',
+      category_id:p.category_id,
+      type:'expense',
+      nature:'fixed',
+      spread:'month',
+      amount:moAmt,
+      created_by:p.created_by
+    };
+  });
+  if(exFilter!=='all'){
+    // מסנן installments לפי קטגוריה
+    const filteredInst=instRows.filter(r=>r.category_id===exFilter);
+    rows=[...rows,...filteredInst];
+  } else {
+    rows=[...rows,...instRows];
+  }
+  rows.sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||''));
+
   const sum=rows.reduce((s,t)=>s+(t.type==='expense'?+t.amount:0),0);
-  $('#exBody').innerHTML=rows.length?rows.map(t=>{const c=DB.categories.find(x=>x.id===t.category_id);const s=DB.categories.find(x=>x.id===t.subcategory_id);const nat=t.spread==='year'?'<span class="tag yearly">שנתי</span>':(t.nature==='fixed'?'<span class="tag fixed">קבוע</span>':'<span class="tag variable">שוטף</span>');return '<tr><td>'+(t.tx_date||t.date)+'</td><td>'+t.description+'</td><td>'+(c?c.name:'—')+(s?' › '+s.name:'')+'</td><td>'+(t.type==='income'?'הכנסה':'הוצאה')+'</td><td>'+nat+'</td><td>'+(memberCache[t.created_by]||'—')+'</td><td class="'+(t.type==='income'?'pos':'neg')+'">'+fmt(t.amount)+'</td><td><button class="smallbtn" onclick="editTx(\''+t.id+'\')">עריכה</button> <button class="btn danger" onclick="delTx(\''+t.id+'\')">מחק</button></td></tr>';}).join(''):'<tr><td colspan="8" class="empty">אין תנועות</td></tr>';
+  $('#exBody').innerHTML=rows.length?rows.map(t=>{
+    const c=DB.categories.find(x=>x.id===t.category_id);
+    const sub=t.subcategory_id?DB.categories.find(x=>x.id===t.subcategory_id):null;
+    const nat=t._isInst?'<span class="tag fixed">תשלומים</span>':(t.spread==='year'?'<span class="tag yearly">שנתי</span>':(t.nature==='fixed'?'<span class="tag fixed">קבוע</span>':'<span class="tag variable">שוטף</span>'));
+    const btns=t._isInst
+      ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button> <button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
+      :'<button class="smallbtn" onclick="editTx(\''+t.id+'\')">עריכה</button> <button class="btn danger" onclick="delTx(\''+t.id+'\')">מחק</button>';
+    return '<tr><td>'+(t.tx_date||'')+'</td><td>'+t.description+'</td><td>'+(c?c.name:'—')+(sub?' › '+sub.name:'')+'</td><td>'+(t.type==='income'?'הכנסה':'הוצאה')+'</td><td>'+nat+'</td><td>'+(memberCache[t.created_by]||'—')+'</td><td class="'+(t.type==='income'?'pos':'neg')+'">'+fmt(t.amount)+'</td><td>'+btns+'</td></tr>';
+  }).join(''):'<tr><td colspan="8" class="empty">אין תנועות</td></tr>';
   const sr=$('#exSumRow');if(rows.length){sr.classList.remove('hidden');$('#exSum').textContent=fmt(Math.abs(sum));}else sr.classList.add('hidden');
 }
 
