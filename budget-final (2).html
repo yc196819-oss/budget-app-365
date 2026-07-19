@@ -14,6 +14,8 @@
 <style>
 :root{--bg:#0f1117;--surface:#1a1d29;--surface2:#222636;--line:#2c3145;--text:#e8eaf2;--muted:#9aa0b8;--accent:#6c8cff;--accent2:#52d6a4;--danger:#ff6b6b;--warn:#ffb454;--radius:16px;--shadow:0 8px 30px rgba(0,0,0,.35)}
 *{box-sizing:border-box;margin:0;padding:0}
+body.light{--bg:#f4f6fb;--surface:#ffffff;--surface2:#eef1f8;--line:#d5dae8;--text:#1a1d29;--muted:#5a6178;--shadow:0 8px 30px rgba(60,70,120,.12)}
+body.light nav button.active,body.light .auth-tab.active{color:#fff}
 body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
 .app{max-width:1280px;margin:0 auto;padding:20px}
 .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -162,6 +164,7 @@ tr:last-child td{border-bottom:none}
     <div class="user-info">
       <div class="avatar" id="userAvatar">?</div>
       <span id="userName"></span>
+      <button class="btn sec" id="themeBtn" style="padding:6px 12px;font-size:.8rem" onclick="toggleTheme()" title="החלף מצב תצוגה">🌙</button>
       <button class="btn sec" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">יציאה</button>
     </div>
   </header>
@@ -179,6 +182,24 @@ tr:last-child td{border-bottom:none}
       <div class="card"><div class="label">מאזן החודש</div><div class="value neu" id="kBalance">₪0</div></div>
       <div class="card"><div class="label">תשלומים החודש</div><div class="value" id="kInst">₪0</div></div>
       <div class="card"><div class="label">שווי השקעות</div><div class="value pos" id="kInv">₪0</div></div>
+    </div>
+    <div class="panel" id="flowPanel" style="border:1px solid var(--accent)">
+      <h2>💳 בקרת תזרים ואשראי — כמה באמת פנוי לי?</h2>
+      <div class="row" style="gap:16px;flex-wrap:wrap;margin-bottom:18px">
+        <div style="flex:1;min-width:180px">
+          <label class="muted" style="display:block;font-size:.78rem;margin-bottom:5px">יום החיוב באשראי בכל חודש</label>
+          <select id="billingDay" onchange="onFlowChange()" style="width:100%"></select>
+        </div>
+        <div style="flex:1;min-width:180px">
+          <label class="muted" style="display:block;font-size:.78rem;margin-bottom:5px">יתרת עו"ש נוכחית בבנק (₪)</label>
+          <input id="osBalance" type="number" placeholder="למשל 12500" oninput="onFlowChange()" style="width:100%">
+        </div>
+      </div>
+      <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+        <div class="card" style="background:var(--surface2)"><div class="label">חיוב אשראי צפוי הקרוב</div><div class="value neg" id="flowBilling">₪0</div><div class="muted" id="flowBillingNote" style="font-size:.72rem;margin-top:4px"></div></div>
+        <div class="card" style="background:var(--surface2)"><div class="label">יתרת עו"ש שהוזנה</div><div class="value neu" id="flowOs">₪0</div></div>
+        <div class="card" id="flowSafeCard" style="background:linear-gradient(135deg,rgba(82,214,164,.12),rgba(108,140,255,.08));border:1px solid var(--accent2)"><div class="label">💰 באמת פנוי להוצאה</div><div class="value pos" id="flowSafe" style="font-size:1.9rem">₪0</div><div class="muted" id="flowSafeNote" style="font-size:.72rem;margin-top:4px"></div></div>
+      </div>
     </div>
     <div class="panel"><h2>פילוח הוצאות <span class="muted" id="dashPeriod"></span></h2><div class="chart-box"><canvas id="dashPie"></canvas></div></div>
     <div class="panel"><h2>שוטף מול קבוע</h2><div id="fixedVar"></div></div>
@@ -339,6 +360,22 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="panel"><h2>היעדים שלי</h2><div id="goalGrid" class="goalgrid"></div></div>
+
+    <div class="panel" style="border:1px solid var(--accent)">
+      <h2>🚗 מתכנן הלוואות ורכישות גדולות</h2>
+      <p class="muted" style="margin-bottom:14px">הזן את פרטי ההלוואה או הרכישה המתוכננת. המערכת תחשב תשלום חודשי בכל תרחיש ריבית ותשווה לתזרים הפנוי שלך.</p>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="flex:1;min-width:150px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">שם התכנון</label><input id="planName" placeholder="למשל: רכב חדש" style="width:100%"></div>
+        <div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">סכום ההלוואה (₪)</label><input id="planAmount" type="number" placeholder="120000" oninput="calcLoanPlan()" style="width:100%"></div>
+        <div style="flex:1;min-width:120px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">מספר חודשים</label><input id="planMonths" type="number" placeholder="60" value="60" oninput="calcLoanPlan()" style="width:100%"></div>
+      </div>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">ריבית פריים נוכחית (%)</label><input id="planPrime" type="number" step="0.01" value="6" oninput="calcLoanPlan()" style="width:100%"></div>
+        <div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">תוספת/מרווח מעל פריים (%)</label><input id="planSpread" type="number" step="0.01" value="1.5" oninput="calcLoanPlan()" style="width:100%"></div>
+        <div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">הון עצמי / מקדמה (₪)</label><input id="planDown" type="number" placeholder="0" value="0" oninput="calcLoanPlan()" style="width:100%"></div>
+      </div>
+      <div id="planResult"></div>
+    </div>
   </section>
 
   <section id="tab-import" class="hidden">
@@ -443,6 +480,20 @@ tr:last-child td{border-bottom:none}
         <button class="btn sec" onclick="sendReminderTest()">שלח תזכורת ניסיון</button>
       </div>
       <p class="muted" id="reminderStatus" style="margin-top:8px"></p>
+    </div>
+    <div class="panel">
+      <h2>🗓️ מחיקת נתוני חודש בודד</h2>
+      <p class="muted" style="margin-bottom:10px">מוחק את כל התנועות של חודש מסוים בלבד (לא נוגע בשאר החודשים, בקטגוריות או בתשלומים). נדרש קוד אימות למייל.</p>
+      <div class="row" style="margin-bottom:8px">
+        <select id="delMonthSel"></select>
+        <select id="delYearSel"></select>
+        <button class="btn danger" style="padding:10px 16px" onclick="requestMonthDeleteCode()">שלח קוד אימות למייל</button>
+      </div>
+      <div class="row">
+        <input id="delMonthCode" placeholder="קוד אימות שקיבלת במייל" style="min-width:220px">
+        <button class="btn sec" onclick="confirmMonthDelete()">אשר מחיקת החודש</button>
+      </div>
+      <p class="muted" id="delMonthStatus" style="margin-top:8px"></p>
     </div>
     <div class="panel">
       <h2>איפוס מערכת מאובטח</h2>
@@ -751,7 +802,11 @@ function fillPeriod(){
 function moAmt(t,y,m){const d=parseLocalDate(t.tx_date||t.date);const sy=d.getFullYear(),sm=d.getMonth();if(t.spread==='year'){for(let i=0;i<12;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +t.amount/12;}return 0;}return(sy===y&&sm===m)?+t.amount:0;}
 function yrAmt(t,y){let s=0;for(let m=0;m<12;m++)s+=moAmt(t,y,m);return s;}
 function parseLocalDate(s){const[y,m,d]=(s||'').split('-').map(Number);return(y&&m&&d)?new Date(y,m-1,d):new Date(s);}
-function instMo(p,y,m){const d=parseLocalDate(p.first_payment||p.first);const sy=d.getFullYear(),sm=d.getMonth();const n=p.payments_count||p.count;for(let i=0;i<n;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +p.total_amount/n;}return 0;}
+function instMo(p,y,m){const idx=instIndexFor(p,y,m);return idx>0?(+p.total_amount/(p.payments_count||p.count)):0;}
+// מחזיר את מספר התשלום (1-based) שנופל בחודש y/m, או 0 אם אין
+function instIndexFor(p,y,m){const d=parseLocalDate(p.first_payment||p.first);const sy=d.getFullYear(),sm=d.getMonth();const n=p.payments_count||p.count;for(let i=0;i<n;i++){let mm=sm+i,yy=sy+Math.floor((sm+i)/12);mm=mm%12;if(yy===y&&mm===m)return i+1;}return 0;}
+// תאריך התשלום המדויק שנופל בחודש y/m (משמר את יום-החודש של התשלום הראשון)
+function instDateFor(p,y,m){const d=parseLocalDate(p.first_payment||p.first);const day=d.getDate();const dt=new Date(y,m,day);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
 function instPaid(p){const d=parseLocalDate(p.first_payment||p.first);const now=new Date();return Math.max(0,Math.min(p.payments_count||p.count,(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth())+1));}
 function normalizeCategoryKind(cat){
   const raw=String(cat?.kind||cat?.type||cat?.group||'').toLowerCase().trim();
@@ -833,6 +888,8 @@ async function addTransaction(){
 }
 async function addCat(){const n=$('#newCat').value.trim();if(!n)return;const{data,error}=await sb.from('categories').insert({household_id:HID,name:n,kind:$('#catKind').value}).select().single();if(error){alert('שגיאה: '+error.message);return;}DB.categories.push(data);$('#newCat').value='';render();}
 async function addSub(){const n=$('#newSub').value.trim();if(!n)return;const pid=$('#subParent').value;if(!pid){alert('בחר קטגוריית אב תחילה');return;}const pk=DB.categories.find(x=>x.id===pid)?.kind||'expense';const{data,error}=await sb.from('categories').insert({household_id:HID,name:n,parent_id:pid,kind:pk}).select().single();if(error){alert('שגיאה: '+error.message);return;}DB.categories.push(data);$('#newSub').value='';render();}
+async function renameCat(id){const c=DB.categories.find(x=>x.id===id);if(!c)return;const name=prompt('שם חדש',c.name||'');if(name===null||!name.trim())return;const{error}=await sb.from('categories').update({name:name.trim()}).eq('id',id);if(error){alert('שגיאה: '+error.message);return;}c.name=name.trim();render();}
+async function addSubSub(parentSubId){const name=prompt('שם תת-תת קטגוריה');if(name===null||!name.trim())return;const parent=DB.categories.find(x=>x.id===parentSubId);const pk=parent?.kind||'expense';const{data,error}=await sb.from('categories').insert({household_id:HID,name:name.trim(),parent_id:parentSubId,kind:pk}).select().single();if(error){alert('שגיאה: '+error.message);return;}DB.categories.push(data);render();}
 async function delCat(id){if(!confirm('מחק קטגוריה זו וכל תת-הקטגוריות שלה?'))return;const subIds=subCats(id).map(s=>s.id);if(subIds.length)await sb.from('categories').delete().in('id',subIds);await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id&&c.parent_id!==id);if(catFilter===id){catFilter='all';catSubFilter=null;}render();}
 async function delSub(id){if(!confirm('מחק תת-קטגוריה זו?'))return;await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id);if(catSubFilter===id)catSubFilter=null;render();}
 async function addLoan(){const amt=parseFloat($('#loanAmt').value);if(!amt||amt<=0){alert('הכנס סכום');return;}const{data}=await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:$('#loanDir').value,counterparty:$('#loanWho').value||'(ללא שם)',amount:amt,loan_date:$('#loanDate').value||todayStr(),note:$('#loanNote').value,settled:false}).select().single();DB.loans.unshift(data);$('#loanWho').value='';$('#loanAmt').value='';$('#loanNote').value='';render();}
@@ -1433,6 +1490,42 @@ window.delInv=async id=>{if(!confirm('למחוק השקעה?'))return;await sb.f
 window.addToGoal=async id=>{const v=parseFloat(document.getElementById('gadd-'+id)?.value);if(!v)return;const g=DB.goals.find(x=>x.id===id);if(!g)return;const ns=+(g.saved_amount||0)+v;await sb.from('goals').update({saved_amount:ns}).eq('id',id);g.saved_amount=ns;render();};
 window.delGoal=async id=>{if(!confirm('למחוק יעד?'))return;await sb.from('goals').delete().eq('id',id);DB.goals=DB.goals.filter(g=>g.id!==id);render();};
 
+function fillDelMonthSelectors(){
+  const ms=$('#delMonthSel'),ys=$('#delYearSel');
+  if(ms && !ms.options.length){ms.innerHTML=MONTHS.map((m,i)=>'<option value="'+i+'"'+(i===VM?' selected':'')+'>'+m+'</option>').join('');}
+  if(ys && !ys.options.length){const now=new Date().getFullYear();let o='';for(let y=now-5;y<=now+1;y++)o+='<option value="'+y+'"'+(y===VY?' selected':'')+'>'+y+'</option>';ys.innerHTML=o;}
+}
+let _monthDelCode=null;
+async function requestMonthDeleteCode(){
+  fillDelMonthSelectors();
+  if(!confirm('לשלוח קוד אימות למחיקת נתוני החודש שנבחר?'))return;
+  const el=$('#delMonthStatus');el.textContent='שולח קוד...';
+  try{
+    const r=await fetch(API_BASE+'/api/reset/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({householdId:HID,userId:CU.id,email:CU?.email||'',scope:'month'})});
+    const data=await r.json();
+    if(!r.ok){el.textContent='שגיאה בשליחת קוד: '+(data.error||'Unknown');return;}
+    if(data?.fallback==='manual_code'&&data?.devCode){_monthDelCode=String(data.devCode);const inp=$('#delMonthCode');if(inp)inp.value=_monthDelCode;el.textContent='מצב פיתוח: קוד זמני הוזן אוטומטית: '+_monthDelCode;return;}
+    el.textContent='קוד נשלח למייל. הזן אותו כדי לאשר מחיקה.';
+  }catch(err){el.textContent='שגיאה: '+err.message;}
+}
+async function confirmMonthDelete(){
+  const code=($('#delMonthCode').value||'').trim();
+  if(!code){alert('נא להזין קוד אימות');return;}
+  if(_monthDelCode && code!==_monthDelCode){alert('קוד שגוי');return;}
+  const y=parseInt($('#delYearSel').value,10),m=parseInt($('#delMonthSel').value,10);
+  if(!confirm('למחוק את כל תנועות '+MONTHS[m]+' '+y+'? פעולה זו בלתי הפיכה.'))return;
+  const el=$('#delMonthStatus');el.textContent='מוחק...';
+  // מזהה את התנועות של החודש הזה
+  const toDel=DB.transactions.filter(t=>{const d=parseLocalDate(t.tx_date||t.date);return d.getFullYear()===y&&d.getMonth()===m;});
+  if(!toDel.length){el.textContent='אין תנועות בחודש זה.';return;}
+  const ids=toDel.map(t=>t.id);
+  const{error}=await sb.from('transactions').delete().in('id',ids);
+  if(error){el.textContent='שגיאה במחיקה: '+error.message;return;}
+  DB.transactions=DB.transactions.filter(t=>!ids.includes(t.id));
+  $('#delMonthCode').value='';_monthDelCode=null;
+  el.textContent='✅ נמחקו '+ids.length+' תנועות מ-'+MONTHS[m]+' '+y+'.';
+  render();
+}
 async function requestResetCode(){
   if(!confirm('לשלוח קוד איפוס למייל ולהמשיך?'))return;
   const el=$('#resetStatus');
@@ -1473,6 +1566,85 @@ async function confirmSystemReset(){
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='budget-backup-'+todayStr()+'.json';a.click();}
 async function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const bk=JSON.parse(r.result);if(!confirm('לייבא '+((bk.transactions||[]).length)+' תנועות?'))return;for(const t of(bk.transactions||[])){await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type:t.type,description:t.desc||t.description,amount:t.amount,tx_date:t.date||t.tx_date||todayStr(),nature:t.nature||'variable',spread:t.spread||'month',source:'import'});}await loadAll();render();alert('יובא!');}catch(x){alert('קובץ לא תקין');}};r.readAsText(f);}
 
+// ═══ FEATURE: Credit / Cash-flow control (Safe-to-Spend) ═══
+function loadFlowSettings(){
+  const bd=$('#billingDay');
+  if(bd && !bd.options.length){
+    let opts='';
+    for(let d=1;d<=28;d++)opts+='<option value="'+d+'">ה-'+d+' לחודש</option>';
+    bd.innerHTML=opts;
+    bd.value=localStorage.getItem('billingDay')||'2';
+  }
+  const os=$('#osBalance');
+  if(os && !os.value){os.value=localStorage.getItem('osBalance')||'';}
+}
+function onFlowChange(){
+  const bd=$('#billingDay'); if(bd)localStorage.setItem('billingDay',bd.value);
+  const os=$('#osBalance'); if(os)localStorage.setItem('osBalance',os.value);
+  computeFlow();
+}
+// מחזיר {start,end} של מחזור החיוב שיחויב בפעם הקרובה, ביחס לתאריך ההצגה (VY/VM)
+function currentBillingCycle(billingDay){
+  // הוצאות שבוצעו בחודש המוצג נצברות ויורדות ב-billingDay של החודש שאחריו.
+  // מחזור = מ-billingDay של החודש המוצג עד billingDay של החודש הבא.
+  const cycleStart=new Date(VY,VM,billingDay);    // יום החיוב בחודש המוצג
+  const cycleEnd=new Date(VY,VM+1,billingDay);    // יום החיוב בחודש הבא (מועד הירידה בפועל)
+  return {start:cycleStart,end:cycleEnd};
+}
+function computeFlow(){
+  const bdEl=$('#billingDay'); if(!bdEl)return;
+  const billingDay=parseInt(bdEl.value,10)||2;
+  const osBalance=parseFloat(($('#osBalance')||{}).value)||0;
+
+  const {start,end}=currentBillingCycle(billingDay);
+
+  // סך הוצאות האשראי של החודש המוצג — הן שיחויבו בחיוב הקרוב (בחודש הבא)
+  let billing=0;
+  DB.transactions.filter(t=>t.type==='expense').forEach(t=>{
+    billing+=moAmt(t,VY,VM);
+  });
+
+  // חלק יחסי של תשלומים (installments) שצפוי לרדת בחיוב הקרוב —
+  // כלומר תשלום אחד של כל רכישה פעילה שנופל בחודש המוצג
+  DB.installments.forEach(p=>{
+    const mo=instMo(p,VY,VM);
+    if(mo>0) billing+=mo;
+  });
+
+  const safe=osBalance-billing;
+
+  $('#flowBilling').textContent=fmt(billing);
+  $('#flowOs').textContent=fmt(osBalance);
+  const sEl=$('#flowSafe');
+  sEl.textContent=fmt(safe);
+  sEl.className='value '+(safe>=0?'pos':'neg');
+  if(safe<0){sEl.style.color='#ff4d4d';sEl.style.textShadow='0 0 12px rgba(255,77,77,.5)';}
+  else{sEl.style.color='';sEl.style.textShadow='';}
+
+  const chargeTxt=end.getDate()+'/'+(end.getMonth()+1)+'/'+end.getFullYear();
+  $('#flowBillingNote').textContent='הוצאות '+MONTHS[VM]+' · יורד בבנק ב-'+chargeTxt;
+  $('#flowSafeNote').textContent=safe>=0
+    ? '✅ נשאר לך מרווח אחרי החיוב הקרוב'
+    : '⚠️ החיוב הצפוי גבוה מיתרת העו"ש!';
+
+  const card=$('#flowSafeCard');
+  if(card){
+    if(safe<0)card.style.borderColor='#ff4d4d';
+    else card.style.borderColor='var(--accent2)';
+  }
+}
+
+// ═══ ז: Light / Dark theme toggle ═══
+function applyTheme(t){
+  document.body.classList.toggle('light',t==='light');
+  const btn=$('#themeBtn'); if(btn)btn.textContent=t==='light'?'☀️':'🌙';
+  localStorage.setItem('theme',t);
+  // re-render charts so their colors adapt
+  if(typeof render==='function' && CU) setTimeout(()=>{try{render();renderCharts&&renderCharts();}catch(e){}},50);
+}
+function toggleTheme(){applyTheme(document.body.classList.contains('light')?'dark':'light');}
+applyTheme(localStorage.getItem('theme')||'dark');
+
 // RENDER
 function render(){
   fillCatSel();
@@ -1496,6 +1668,9 @@ function render(){
   $('#fixedVar').innerHTML='<div class="catrow"><div class="catname"><span>קבוע</span><span>'+fmt(fix)+' ('+Math.round(fix/t2*100)+'%)</span></div><div class="bar"><span style="width:'+fix/t2*100+'%"></span></div></div><div class="catrow"><div class="catname"><span>שוטף</span><span>'+fmt(vr)+' ('+Math.round(vr/t2*100)+'%)</span></div><div class="bar"><span style="width:'+vr/t2*100+'%"></span></div></div>';
 
   renderExpenses();renderCatSummary();renderCatManage();renderLoans();renderInstallments();renderInvestments();renderGoals();
+  loadFlowSettings();computeFlow();
+  fillDelMonthSelectors&&fillDelMonthSelectors();
+  if(typeof calcLoanPlan==='function' && $('#planResult'))calcLoanPlan();
 }
 
 function drawPie(id,labels,vals){
@@ -1552,30 +1727,20 @@ function renderExpenses(){
   // תשלומים (installments) — מציג כל תשלום שנופל בחודש הנוכחי
   const instRows=DB.installments.filter(p=>instMo(p,VY,VM)>0).map(p=>{
     const c=DB.categories.find(x=>x.id===p.category_id);
-    const paid=instPaid(p);
     const n=p.payments_count||p.count;
-    const moAmt=+p.total_amount/n;
-    const firstD=parseLocalDate(p.first_payment||p.first);
-    // חשב את תאריך התשלום הספציפי של החודש הנוכחי
-    let payDate=p.first_payment||p.first||'';
-    for(let i=0;i<n;i++){
-      let mm=(firstD.getMonth()+i)%12;
-      let yy=firstD.getFullYear()+Math.floor((firstD.getMonth()+i)/12);
-      if(yy===VY&&mm===VM){
-        payDate=yy+'-'+String(mm+1).padStart(2,'0')+'-'+String(firstD.getDate()).padStart(2,'0');
-        break;
-      }
-    }
+    const perMonth=+p.total_amount/n;
+    const idx=instIndexFor(p,VY,VM);        // מספר התשלום המדויק לחודש זה
+    const payDate=instDateFor(p,VY,VM);     // תאריך התשלום המדויק
     return {
       _isInst:true,
       id:p.id,
       tx_date:payDate,
-      description:p.description+' (תשלום '+(Math.min(paid,n))+'/'+n+')',
+      description:p.description+' · תשלום '+idx+' מתוך '+n,
       category_id:p.category_id,
       type:'expense',
       nature:'fixed',
       spread:'month',
-      amount:moAmt,
+      amount:perMonth,
       created_by:p.created_by
     };
   });
@@ -1619,7 +1784,15 @@ function renderCatSummary(){
 
 function renderCatManage(){
   const exp=rootCats('expense'),inc=rootCats('income');
-  const sec=(title,list)=>'<div style="font-weight:700;color:var(--accent);margin:10px 0 6px">'+title+'</div>'+list.map(c=>'<div class="catrow"><div class="catname"><span>'+(c.icon||'')+' '+c.name+'</span><button class="btn danger" onclick="delCat(\''+c.id+'\')">מחק</button></div>'+subCats(c.id).map(s=>'<div class="subcat"><span>'+s.name+'</span><button class="btn danger" onclick="delSub(\''+s.id+'\')">מחק</button></div>').join('')+'</div>').join('');
+  const editBtn=(id,name)=>'<button class="smallbtn" onclick="renameCat(\''+id+'\')" title="שנה שם">✏️</button>';
+  const delB=(fn,id)=>'<button class="btn danger" onclick="'+fn+'(\''+id+'\')">מחק</button>';
+  const renderSub=s=>{
+    // תת-תת קטגוריות (רמה 3)
+    const subsubs=subCats(s.id);
+    const ssHtml=subsubs.map(ss=>'<div class="subcat" style="margin-right:40px;opacity:.9"><span>↳ '+ss.name+'</span><span>'+editBtn(ss.id)+' '+delB('delSub',ss.id)+'</span></div>').join('');
+    return '<div class="subcat"><span>'+s.name+'</span><span>'+editBtn(s.id)+' <button class="smallbtn" onclick="addSubSub(\''+s.id+'\')" title="הוסף תת-תת קטגוריה">➕</button> '+delB('delSub',s.id)+'</span></div>'+ssHtml;
+  };
+  const sec=(title,list)=>'<div style="font-weight:700;color:var(--accent);margin:14px 0 6px">'+title+'</div>'+list.map(c=>'<div class="catrow"><div class="catname"><span>'+(c.icon||'')+' '+c.name+'</span><span>'+editBtn(c.id)+' '+delB('delCat',c.id)+'</span></div>'+subCats(c.id).map(renderSub).join('')+'</div>').join('');
   $('#catManage').innerHTML=sec('קטגוריות הוצאה 💸',exp)+sec('קטגוריות הכנסה 💰',inc);
 }
 
@@ -1629,6 +1802,42 @@ function renderInstallments(){const y=VY,m=VM;const tmo=DB.installments.reduce((
 
 function renderInvestments(){const cost=DB.investments.reduce((s,i)=>s+(+i.cost),0);const value=DB.investments.reduce((s,i)=>s+(+i.current_value),0);const pnl=value-cost;const roi=cost?pnl/cost*100:0;$('#invCost').textContent=fmt(cost);$('#invValue').textContent=fmt(value);$('#invPnl').textContent=(pnl>=0?'+':'')+fmt(pnl);$('#invPnl').className='value '+(pnl>=0?'pos':'neg');$('#invRoi').textContent=(roi>=0?'+':'')+roi.toFixed(1)+'%';$('#invRoi').className='value '+(roi>=0?'pos':'neg');$('#invBody').innerHTML=DB.investments.length?DB.investments.map(i=>{const p=+i.current_value-+i.cost;const r=i.cost?p/+i.cost*100:0;return '<tr><td>'+i.name+'</td><td>'+i.asset_type+'</td><td>'+fmt(+i.cost)+'</td><td><input type="number" value="'+Math.round(+i.current_value)+'" onchange="updInv(\''+i.id+'\',this.value)" style="width:110px"></td><td class="'+(p>=0?'pos':'neg')+'">'+(p>=0?'+':'')+fmt(p)+'</td><td class="'+(r>=0?'pos':'neg')+'">'+(r>=0?'+':'')+r.toFixed(1)+'%</td><td><button class="smallbtn" onclick="editInv(\''+i.id+'\')">עריכה</button> <button class="btn danger" onclick="delInv(\''+i.id+'\')">מחק</button></td></tr>';}).join(''):'<tr><td colspan="7" class="empty">אין השקעות</td></tr>';}
 
+// ח: מחשבון הלוואות — לוח סילוקין (אמורטיזציה)
+function pmt(principal,monthlyRate,months){
+  if(months<=0)return 0;
+  if(monthlyRate===0)return principal/months;
+  return principal*monthlyRate/(1-Math.pow(1+monthlyRate,-months));
+}
+function calcLoanPlan(){
+  const el=$('#planResult');if(!el)return;
+  const amount=Math.max(0,(parseFloat($('#planAmount').value)||0)-(parseFloat($('#planDown').value)||0));
+  const months=parseInt($('#planMonths').value,10)||0;
+  const prime=parseFloat($('#planPrime').value)||0;
+  const spread=parseFloat($('#planSpread').value)||0;
+  if(!amount||!months){el.innerHTML='<p class="muted">הזן סכום ומספר חודשים לחישוב.</p>';return;}
+  // תרחישי ריבית: פריים, פריים+מרווח שהוזן, ותרחישים גבוהים/נמוכים יותר
+  const baseRate=prime+spread;
+  const scenarios=[
+    {label:'פריים בלבד ('+prime.toFixed(2)+'%)',annual:prime},
+    {label:'ריבית שהוזנה ('+baseRate.toFixed(2)+'%)',annual:baseRate,hi:true},
+    {label:'תרחיש גבוה ('+(baseRate+1).toFixed(2)+'%)',annual:baseRate+1},
+    {label:'תרחיש נמוך ('+Math.max(0,baseRate-1).toFixed(2)+'%)',annual:Math.max(0,baseRate-1)}
+  ];
+  // תזרים פנוי משוער — הכנסות פחות הוצאות של החודש המוצג
+  const inc=DB.transactions.filter(t=>t.type==='income').reduce((s,t)=>s+moAmt(t,VY,VM),0);
+  const exp=DB.transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+moAmt(t,VY,VM),0)+DB.installments.reduce((s,p)=>s+instMo(p,VY,VM),0);
+  const freeCash=inc-exp;
+  let rows=scenarios.map(sc=>{
+    const mr=sc.annual/100/12;
+    const monthly=pmt(amount,mr,months);
+    const total=monthly*months;
+    const interest=total-amount;
+    const afford=freeCash-monthly;
+    return '<tr'+(sc.hi?' style="background:rgba(108,140,255,.08)"':'')+'><td style="font-weight:600">'+sc.label+'</td><td class="neg">'+fmt(monthly)+'</td><td>'+fmt(total)+'</td><td class="warn" style="color:var(--warn)">'+fmt(interest)+'</td><td class="'+(afford>=0?'pos':'neg')+'">'+(afford>=0?'✅ ':'⚠️ ')+fmt(afford)+'</td></tr>';
+  }).join('');
+  el.innerHTML='<div style="overflow-x:auto"><table style="min-width:640px"><thead><tr><th>תרחיש ריבית</th><th>תשלום חודשי</th><th>סה"כ החזר</th><th>סה"כ ריבית</th><th>נשאר פנוי בחודש</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<p class="muted" style="margin-top:12px">💡 תזרים פנוי משוער החודש: <b>'+fmt(freeCash)+'</b> (הכנסות פחות הוצאות). עמודת "נשאר פנוי" מראה מה יישאר לך אחרי התשלום החודשי בכל תרחיש.</p>';
+}
 function renderGoals(){$('#pCount').textContent=DB.goals.length;$('#pTarget').textContent=fmt(DB.goals.reduce((s,g)=>s+(+g.target_amount),0));$('#pSaved').textContent=fmt(DB.goals.reduce((s,g)=>s+(+g.saved_amount),0));$('#goalGrid').innerHTML=DB.goals.length?DB.goals.map(g=>{const pct=Math.min(100,+g.saved_amount/+g.target_amount*100);const left=Math.max(0,+g.target_amount-+g.saved_amount);let due='';if(g.due_date){const now=new Date();const d=new Date(g.due_date);const mo=Math.max(0,(d.getFullYear()-now.getFullYear())*12+(d.getMonth()-now.getMonth()));due='<div class="meta" style="margin-top:8px">יעד: '+g.due_date+(mo>0?' · '+fmt(left/mo)+' לחודש':' · הגיע המועד')+'</div>';}return '<div class="goalcard"><h3><span style="font-size:1.1rem;margin-left:6px">'+g.icon+'</span><span style="flex:1">'+g.name+'</span><button class="smallbtn" onclick="editGoal(\''+g.id+'\')">עריכה</button><button class="btn danger" onclick="delGoal(\''+g.id+'\')">מחק</button></h3><div class="meta">'+fmt(+g.saved_amount)+' מתוך '+fmt(+g.target_amount)+' · '+pct.toFixed(0)+'%'+(left>0?' · נותר '+fmt(left):' · הושג! 🎉')+'</div><div class="bar big"><span style="width:'+pct+'%"></span></div>'+due+'<div class="row" style="margin-top:10px"><input type="number" placeholder="הפקד ₪" id="gadd-'+g.id+'" style="width:120px"><button class="smallbtn" onclick="addToGoal(\''+g.id+'\')">הפקד</button></div></div>';}).join(''):'<div class="empty">אין יעדים</div>';}
 
 $('#exDate').value=todayStr();$('#loanDate').value=todayStr();$('#instFirst').value=todayStr();$('#invDate').value=todayStr();
