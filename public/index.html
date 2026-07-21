@@ -1678,13 +1678,19 @@ async function importData(e){const f=e.target.files[0];if(!f)return;const r=new 
 // כרטיסי האשראי המשויכים אליו שנופלים בחודש המוצג (VY/VM) — moAmt() כבר
 // מזיז כל תנועה עם card_id לחודש שבו הכרטיס באמת מחייב, אז אין כאן צורך
 // בחישוב מחזור נפרד לכל כרטיס.
+// שומרים את סכום החיוב שכבר חושב לכל חשבון (לא תלוי בתיבת הקלט), כדי
+// שהקלדה בתיבת היתרה תוכל לעדכן רק טקסט בלי לבנות מחדש את ה-DOM של
+// #flowAccounts — בנייה מחדש על כל הקשה הייתה מוחקת ומחליפה את ה-<input>
+// עצמו ומאבדת פוקוס אחרי כל תו (זו הייתה הסיבה שאי אפשר היה להקליד מספרים).
+let _flowBillingByAccount={};
 function onAccountBalanceChange(accId,val){
   localStorage.setItem('acctBal_'+accId,val);
-  computeFlow();
+  recalcFlowSafe();
 }
 function computeFlow(){
   const box=$('#flowAccounts'); if(!box)return;
   const accounts=DB.bankAccounts||[];
+  _flowBillingByAccount={};
   if(!accounts.length){
     box.innerHTML='<p class="muted">עדיין אין חשבון בנק מוגדר. עבור לטאב "חשבונות וכרטיסים" כדי להוסיף אחד.</p>';
     $('#flowBilling').textContent=fmt(0);$('#flowOs').textContent=fmt(0);
@@ -1695,7 +1701,6 @@ function computeFlow(){
 
   const unassignedInst=DB.installments.reduce((s,p)=>s+instMo(p,VY,VM),0);
 
-  let totalBilling=0,totalBalance=0;
   box.innerHTML=accounts.map(acc=>{
     const cards=(DB.creditCards||[]).filter(c=>c.bank_account_id===acc.id);
     const bal=parseFloat(localStorage.getItem('acctBal_'+acc.id))||0;
@@ -1705,21 +1710,38 @@ function computeFlow(){
       acctBilling+=amt;
       return '<div class="row" style="justify-content:space-between;font-size:.82rem;padding:3px 0"><span class="muted">💳 '+c.name+' (חיוב ה-'+c.billing_day+')</span><span>'+fmt(amt)+'</span></div>';
     }).join('')||'<div class="muted" style="font-size:.8rem">אין כרטיסי אשראי מקושרים לחשבון זה</div>';
-    const safe=bal-acctBilling;
-    totalBilling+=acctBilling;totalBalance+=bal;
+    _flowBillingByAccount[acc.id]=acctBilling;
     return '<div class="card" style="background:var(--surface2);margin-bottom:10px;text-align:right">'
       +'<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
       +'<div style="font-weight:700">🏦 '+acc.name+'</div>'
-      +'<input type="number" placeholder="יתרת עו״ש נוכחית" value="'+(bal||'')+'" oninput="onAccountBalanceChange(\''+acc.id+'\',this.value)" style="width:160px">'
+      +'<input id="acctBalInput_'+acc.id+'" type="number" placeholder="יתרת עו״ש נוכחית" value="'+(bal||'')+'" oninput="onAccountBalanceChange(\''+acc.id+'\',this.value)" style="width:160px">'
       +'</div>'
       +'<div style="margin-top:8px">'+cardLines+'</div>'
       +'<div class="row" style="justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-weight:700">'
-      +'<span>פנוי בחשבון זה אחרי החיוב</span><span class="'+(safe>=0?'pos':'neg')+'">'+fmt(safe)+'</span>'
+      +'<span>פנוי בחשבון זה אחרי החיוב</span><span id="acctSafe_'+acc.id+'">'+fmt(bal-acctBilling)+'</span>'
       +'</div></div>';
   }).join('')+(unassignedInst>0
       ?'<p class="muted" style="font-size:.78rem;margin-top:4px">+ '+fmt(unassignedInst)+' תשלומים שלא משויכים לחשבון/כרטיס ספציפי (לא נכללים בפירוט למעלה)</p>'
       :'');
 
+  recalcFlowSafe();
+}
+// מעדכן רק טקסט (יתרה פנויה לכל חשבון + הסיכומים), בלי לגעת ב-DOM של
+// תיבות הקלט — בטוח לקרוא על כל הקשה.
+function recalcFlowSafe(){
+  const accounts=DB.bankAccounts||[];
+  if(!accounts.length)return;
+  const unassignedInst=DB.installments.reduce((s,p)=>s+instMo(p,VY,VM),0);
+  let totalBilling=0,totalBalance=0;
+  accounts.forEach(acc=>{
+    const billing=_flowBillingByAccount[acc.id]||0;
+    const input=$('#acctBalInput_'+acc.id);
+    const bal=input?(parseFloat(input.value)||0):0;
+    const safe=bal-billing;
+    const safeEl=$('#acctSafe_'+acc.id);
+    if(safeEl){safeEl.textContent=fmt(safe);safeEl.className=safe>=0?'pos':'neg';}
+    totalBilling+=billing;totalBalance+=bal;
+  });
   totalBilling+=unassignedInst;
   const totalSafe=totalBalance-totalBilling;
 
@@ -1915,10 +1937,18 @@ async function delBankAccount(id){
   if(error){alert('שגיאה במחיקה: '+error.message);return;}
   DB.bankAccounts=DB.bankAccounts.filter(a=>a.id!==id);render();
 }
+async function renameBankAccount(id){
+  const a=DB.bankAccounts.find(x=>x.id===id);if(!a)return;
+  const name=prompt('שם חדש לחשבון',a.name||'');
+  if(name===null||!name.trim())return;
+  const{error}=await sb.from('bank_accounts').update({name:name.trim()}).eq('id',id);
+  if(error){alert('שגיאה בעדכון שם: '+error.message);return;}
+  a.name=name.trim();render();
+}
 function renderAccounts(){
   const box=$('#acctManage'); if(!box)return;
   box.innerHTML=DB.bankAccounts.length
-    ? DB.bankAccounts.map(a=>'<div class="catrow"><div class="catname"><span>🏦 '+a.name+(a.bank_name?' · '+a.bank_name:'')+'</span><span><button class="btn danger" onclick="delBankAccount(\''+a.id+'\')">מחק</button></span></div></div>').join('')
+    ? DB.bankAccounts.map(a=>'<div class="catrow"><div class="catname"><span>🏦 '+a.name+(a.bank_name?' · '+a.bank_name:'')+'</span><span><button class="smallbtn" onclick="renameBankAccount(\''+a.id+'\')" title="שנה שם">✏️</button> <button class="btn danger" onclick="delBankAccount(\''+a.id+'\')">מחק</button></span></div></div>').join('')
     : '<div class="empty">אין עדיין חשבונות — הוסף אחד למעלה</div>';
   const sel=$('#newCardAcct');
   if(sel){
@@ -1953,6 +1983,14 @@ async function updateCardBillingDay(id,val){
   const c=DB.creditCards.find(x=>x.id===id);if(c)c.billing_day=day;
   render();
 }
+async function renameCreditCard(id){
+  const c=DB.creditCards.find(x=>x.id===id);if(!c)return;
+  const name=prompt('שם חדש לכרטיס',c.name||'');
+  if(name===null||!name.trim())return;
+  const{error}=await sb.from('credit_cards').update({name:name.trim()}).eq('id',id);
+  if(error){alert('שגיאה בעדכון שם: '+error.message);return;}
+  c.name=name.trim();render();
+}
 function renderCreditCards(){
   const box=$('#cardManage'); if(!box)return;
   let dayOpts='';for(let d=1;d<=28;d++)dayOpts+='<option value="'+d+'">ה-'+d+'</option>';
@@ -1961,6 +1999,7 @@ function renderCreditCards(){
         const acct=DB.bankAccounts.find(a=>a.id===c.bank_account_id);
         return '<div class="catrow"><div class="catname"><span>💳 '+c.name+' <span class="muted">('+(acct?acct.name:'—')+')</span></span>'
           +'<span style="display:flex;align-items:center;gap:8px">'
+          +'<button class="smallbtn" onclick="renameCreditCard(\''+c.id+'\')" title="שנה שם">✏️</button>'
           +'<label class="muted" style="font-size:.78rem">יום חיוב:</label>'
           +'<select onchange="updateCardBillingDay(\''+c.id+'\',this.value)" style="width:auto">'+dayOpts.replace('value="'+c.billing_day+'"','value="'+c.billing_day+'" selected')+'</select>'
           +'<button class="btn danger" onclick="delCreditCard(\''+c.id+'\')">מחק</button>'
