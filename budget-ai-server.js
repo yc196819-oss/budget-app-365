@@ -63,7 +63,14 @@ const mailer = SMTP_HOST && SMTP_USER && SMTP_PASS
       host: SMTP_HOST,
       port: SMTP_PORT,
       secure: SMTP_SECURE,
-      auth: { user: SMTP_USER, pass: SMTP_PASS }
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
+      // Some hosts (e.g. Render's free tier) silently drop outbound SMTP
+      // connections instead of refusing them -- without explicit timeouts
+      // nodemailer's defaults leave the request hanging for minutes with
+      // no error surfaced to the caller. Fail fast instead.
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 8000
     })
   : null;
 
