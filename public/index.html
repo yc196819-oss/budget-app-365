@@ -412,7 +412,7 @@ tr:last-child td{border-bottom:none}
       <button class="btn" onclick="genInvite()">✨ צור קישור הזמנה</button>
       <div id="inviteResult" style="margin-top:16px"></div>
     </div>
-    <div class="panel"><h2>חברי משק הבית</h2><div id="membersList"></div></div>
+    <div class="panel"><h2>חברי משק הבית</h2><div id="membersList"></div><div id="pendingInvites"></div></div>
     <div class="panel">
       <h2>🔌 אינטגרציות צ'אט חכם</h2>
       <p class="muted" style="margin-bottom:10px">הגדר חיבור ל-WhatsApp ול-Google Chat. ההודעות ינותחו ויהפכו לתנועות אוטומטית.</p>
@@ -538,7 +538,7 @@ const MONTHS_SHORT=['ינ','פב','מרץ','אפר','מאי','יונ','יול','
 const PALETTE=['#6c8cff','#52d6a4','#ffb454','#ff6b6b','#b57bff','#4ecdc4','#ff8fab','#95e06c','#ffd93d','#6ec5ff'];
 const API_BASE=(window.__APP_CONFIG?.API_BASE||localStorage.getItem('aiApiBase')||((location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8787':location.origin)).replace(/\/$/, '');
 
-let CU=null,HID=null,MNAME=''; let VM=new Date().getMonth(),VY=new Date().getFullYear();
+let CU=null,HID=null,MNAME='',MROLE='owner'; let VM=new Date().getMonth(),VY=new Date().getFullYear();
 let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[]};
 let exFilter='all',catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
 const memberCache={}; let charts={};
@@ -619,7 +619,7 @@ async function doRegister(){
 }
 async function doLogout(){
   // Immediate local logout so UI never feels stuck on network delays.
-  CU=null;HID=null;stopAutoSync();
+  CU=null;HID=null;MROLE='owner';stopAutoSync();
   $('#authWrap').classList.remove('hidden');
   $('#mainApp').classList.add('hidden');
   try{
@@ -712,18 +712,26 @@ async function persistUserSettings(){
 }
 
 async function ensureHousehold(){
-  const{data:mem}=await sb.from('memberships').select('household_id,display_name').eq('user_id',CU.id).single();
-  if(mem){HID=mem.household_id;MNAME=mem.display_name;}
+  const{data:mem}=await sb.from('memberships').select('household_id,display_name,role').eq('user_id',CU.id).single();
+  if(mem){HID=mem.household_id;MNAME=mem.display_name;MROLE=mem.role||'owner';}
   else{
     const inv=CU.user_metadata?.invite_code||'';
+    const dn=CU.user_metadata?.display_name||CU.email.split('@')[0];
     if(inv){
-      const{data:iv}=await sb.from('invites').select('household_id').eq('code',inv).eq('used',false).single();
-      if(iv){HID=iv.household_id;await sb.from('invites').update({used:true,used_by:CU.id}).eq('code',inv);}
+      const{data:joined,error:joinErr}=await sb.rpc('accept_household_invite',{p_code:inv});
+      if(joinErr){
+        console.warn('הצטרפות דרך קישור הזמנה נכשלה, פותחים משק בית חדש במקום:',joinErr.message);
+      }else if(joined&&joined.length){
+        HID=joined[0].household_id;MROLE=joined[0].role||'member';
+      }
     }
-    if(!HID){const dn=CU.user_metadata?.display_name||CU.email.split('@')[0];const{data:hh}=await sb.from('households').insert({name:dn+' budget',type:'family'}).select().single();HID=hh.id;}
-    const dn=CU.user_metadata?.display_name||CU.email.split('@')[0];MNAME=dn;
-    await sb.from('memberships').insert({household_id:HID,user_id:CU.id,display_name:dn,role:'owner'});
-    if(!CU.user_metadata?.invite_code)await seedCategories();
+    if(!HID){
+      const{data:hh}=await sb.from('households').insert({name:dn+' budget',type:'family'}).select().single();
+      HID=hh.id;MROLE='owner';
+      await sb.from('memberships').insert({household_id:HID,user_id:CU.id,display_name:dn,role:'owner'});
+      await seedCategories();
+    }
+    MNAME=dn;
   }
   $('#userAvatar').textContent=MNAME.slice(0,2);$('#userName').textContent=MNAME;
   $('#settEmail').textContent=CU.email;$('#settName').textContent=MNAME;
@@ -903,11 +911,46 @@ async function genInvite(){
   await sb.from('invites').insert({household_id:HID,code,created_by:CU.id,expires_at:new Date(Date.now()+7*24*3600*1000).toISOString(),used:false});
   const link=location.origin+location.pathname+'?invite='+code;
   $('#inviteResult').innerHTML='<div class="invite-card"><div style="font-size:2rem">💌</div><h3 style="margin:8px 0;font-size:1.1rem">הזמנה למשק הבית של '+MNAME+'</h3><p class="muted">שלח את הקישור הזה — בלחיצה אחת הם מצטרפים לתקציב המשותף</p><span class="invite-link" id="invLink">'+link+'</span><div class="row" style="justify-content:center;gap:8px"><button class="btn" onclick="copyInvite(\''+link+'\')">📋 העתק קישור</button><button class="btn green" onclick="shareWA(\''+link+'\')">💬 שלח בוואטסאפ</button></div><p class="muted" style="margin-top:10px">תקף ל-7 ימים</p></div>';
+  loadPendingInvites();
 }
 window.copyInvite=l=>{navigator.clipboard.writeText(l);alert('הקישור הועתק!');};
 window.shareWA=l=>{const msg=encodeURIComponent('הצטרף לתקציב המשותף שלנו! 💰\n'+l);window.open('https://wa.me/?text='+msg,'_blank');};
 
-async function loadMembers(){const{data}=await sb.from('memberships').select('display_name,role,created_at').eq('household_id',HID);const ml=$('#membersList');if(!data||!data.length){ml.innerHTML='<div class="empty">אין חברים נוספים</div>';return;}ml.innerHTML=data.map(m=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)"><div style="display:flex;align-items:center;gap:10px"><div class="avatar">'+m.display_name.slice(0,2)+'</div><div><div style="font-weight:600">'+m.display_name+'</div><div class="muted">'+m.role+'</div></div></div><div class="muted">'+new Date(m.created_at).toLocaleDateString('he-IL')+'</div></div>').join('');}
+async function loadMembers(){
+  const{data}=await sb.from('memberships').select('user_id,display_name,role,created_at').eq('household_id',HID);
+  const ml=$('#membersList');
+  if(!data||!data.length){ml.innerHTML='<div class="empty">אין חברים נוספים</div>';return;}
+  ml.innerHTML=data.map(m=>{
+    const canRemove=MROLE==='owner'&&m.user_id!==CU.id;
+    const removeBtn=canRemove?'<button class="btn sec" style="padding:6px 12px;font-size:.8rem" onclick="removeMember(\''+m.user_id+'\',\''+(m.display_name||'').replace(/'/g,"")+'\')">הסר</button>':'';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)"><div style="display:flex;align-items:center;gap:10px"><div class="avatar">'+m.display_name.slice(0,2)+'</div><div><div style="font-weight:600">'+m.display_name+'</div><div class="muted">'+(m.role==='owner'?'בעלים':'חבר')+'</div></div></div><div class="row" style="align-items:center;gap:10px"><div class="muted">'+new Date(m.created_at).toLocaleDateString('he-IL')+'</div>'+removeBtn+'</div></div>';
+  }).join('');
+  loadPendingInvites();
+}
+
+async function removeMember(userId,name){
+  if(!confirm('להסיר את '+(name||'החבר הזה')+' ממשק הבית?'))return;
+  const{error}=await sb.rpc('remove_household_member',{p_user_id:userId});
+  if(error){alert('שגיאה בהסרה: '+error.message);return;}
+  await loadMembers();
+}
+
+async function loadPendingInvites(){
+  const box=$('#pendingInvites');
+  if(!box)return;
+  const{data,error}=await sb.from('invites').select('id,code,expires_at,used,revoked,created_at').eq('household_id',HID).eq('used',false).eq('revoked',false).order('created_at',{ascending:false});
+  if(error||!data||!data.length){box.innerHTML='';return;}
+  box.innerHTML='<h3 style="font-size:.95rem;margin:16px 0 8px">הזמנות ממתינות</h3>'+data.map(iv=>{
+    const expired=new Date(iv.expires_at)<new Date();
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)"><div class="muted" style="font-family:monospace">'+iv.code+(expired?' · פג תוקף':' · בתוקף עד '+new Date(iv.expires_at).toLocaleDateString('he-IL'))+'</div><button class="btn sec" style="padding:6px 12px;font-size:.8rem" onclick="revokeInvite(\''+iv.id+'\')">בטל</button></div>';
+  }).join('');
+}
+
+async function revokeInvite(id){
+  const{error}=await sb.rpc('revoke_invite',{p_invite_id:id});
+  if(error){alert('שגיאה בביטול: '+error.message);return;}
+  await loadPendingInvites();
+}
 
 // GEMINI PDF IMPORT
 function saveGeminiKey(){const k=$('#geminiKey').value.trim();if(k){localStorage.setItem('geminiKey',k);$('#keyStatus').textContent='✅ מפתח שמור';}else{localStorage.removeItem('geminiKey');$('#keyStatus').textContent='';}}
