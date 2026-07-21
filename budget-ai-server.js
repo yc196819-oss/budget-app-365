@@ -979,7 +979,10 @@ app.post('/api/import/commit', async (req, res) => {
         subcategory_id: t?.subcategory_id || null,
         nature: 'variable',
         spread: 'month',
-        source: 'ai-file'
+        source: 'ai-file',
+        account_id: t?.account_id || null,
+        card_id: t?.card_id || null,
+        payment_method: t?.card_id ? 'credit' : 'other'
       }))
       .filter((r) => r.amount > 0);
 
