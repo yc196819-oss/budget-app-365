@@ -80,10 +80,11 @@ tr:last-child td{border-bottom:none}
 .subcat{margin-right:20px;padding:5px 0;font-size:.85rem;color:var(--muted);display:flex;justify-content:space-between}
 .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .filtergroup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}
-.filtergroup-label{font-size:.75rem;color:var(--muted);white-space:nowrap;min-width:44px}
 .empty{text-align:center;color:var(--muted);padding:36px}
 .pill{font-size:.78rem;padding:5px 12px;border-radius:20px;background:var(--surface2);border:1px solid var(--line);cursor:pointer;color:var(--muted)}
 .pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pill.group{font-weight:700;border-style:dashed;border-color:var(--accent2)}
+.pill.group.on{border-style:solid}
 .goalcard{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:18px}
 .goalcard h3{font-size:1rem;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .goalcard .meta{color:var(--muted);font-size:.82rem;margin-bottom:10px}
@@ -1867,9 +1868,10 @@ function renderExpenses(){
   const f=$('#exFilters');
   const expRoots=rootCats('expense'),incRoots=rootCats('income');
   const pill=c=>'<span class="pill '+(exFilter===c.id?'on':'')+'" data-f="'+c.id+'">'+(c.icon||'')+' '+c.name+'</span>';
+  const groupPill=(key,label)=>'<span class="pill group '+(exFilter===key?'on':'')+'" data-f="'+key+'">'+label+'</span>';
   f.innerHTML='<span class="pill '+(exFilter==='all'?'on':'')+'" data-f="all">הכל</span>'
-    +(expRoots.length?'<div class="filtergroup"><span class="filtergroup-label">💸 הוצאות</span>'+expRoots.map(pill).join('')+'</div>':'')
-    +(incRoots.length?'<div class="filtergroup"><span class="filtergroup-label">💰 הכנסות</span>'+incRoots.map(pill).join('')+'</div>':'');
+    +(expRoots.length?'<div class="filtergroup">'+groupPill('__expense__','💸 כל ההוצאות')+expRoots.map(pill).join('')+'</div>':'')
+    +(incRoots.length?'<div class="filtergroup">'+groupPill('__income__','💰 כל ההכנסות')+incRoots.map(pill).join('')+'</div>':'');
   f.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{exFilter=p.dataset.f;renderExpenses();});
 
   // תנועות רגילות — מסנן לפי חודש/שנה
@@ -1884,7 +1886,9 @@ function renderExpenses(){
     const d=new Date(raw);
     return !Number.isNaN(d.getTime())&&d.getFullYear()===VY&&d.getMonth()===VM;
   });
-  if(exFilter!=='all')rows=rows.filter(t=>t.category_id===exFilter);
+  if(exFilter==='__income__')rows=rows.filter(t=>t.type==='income');
+  else if(exFilter==='__expense__')rows=rows.filter(t=>t.type==='expense');
+  else if(exFilter!=='all')rows=rows.filter(t=>t.category_id===exFilter);
 
   // תשלומים (installments) — מציג כל תשלום שנופל בחודש הנוכחי
   const instRows=DB.installments.filter(p=>instMo(p,VY,VM)>0).map(p=>{
@@ -1906,12 +1910,14 @@ function renderExpenses(){
       created_by:p.created_by
     };
   });
-  if(exFilter!=='all'){
-    // מסנן installments לפי קטגוריה
+  if(exFilter==='__income__'){
+    // תשלומים הם תמיד מסוג הוצאה — לא שייכים לסינון "כל ההכנסות"
+  } else if(exFilter==='all'||exFilter==='__expense__'){
+    rows=[...rows,...instRows];
+  } else {
+    // מסנן installments לפי קטגוריה ספציפית
     const filteredInst=instRows.filter(r=>r.category_id===exFilter);
     rows=[...rows,...filteredInst];
-  } else {
-    rows=[...rows,...instRows];
   }
   rows.sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||''));
 
