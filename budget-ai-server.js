@@ -42,6 +42,12 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || '';
 
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+// resend.dev works immediately with no domain setup -- fine for a personal
+// app. Once/if a real domain is verified on the Resend account, set
+// RESEND_FROM to an address on that domain instead.
+const RESEND_FROM = process.env.RESEND_FROM || 'Budget App <onboarding@resend.dev>';
+
 const DEFAULT_CATEGORIES = [
   { name: 'אוכל', icon: '🍽️', kind: 'expense', subs: ['סופר', 'מסעדות ואוכל בחוץ'] },
   { name: 'רכב', icon: '🚗', kind: 'expense', subs: ['דלק', 'אגרה', 'מוסך', 'ביטוח רכב'] },
@@ -498,8 +504,41 @@ async function sendViaGoogleMail({ userId, to, subject, html, text }) {
   return { provider: 'google-gmail', from: googleMail.email };
 }
 
+async function sendViaResend({ to, subject, html, text }) {
+  if (!RESEND_API_KEY) {
+    throw new Error('Resend is not configured');
+  }
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: RESEND_FROM,
+      to: [to],
+      subject,
+      html: html || undefined,
+      text: text || (html ? undefined : ' ')
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.message || `Resend request failed (${res.status})`);
+  }
+  return { provider: 'resend', from: RESEND_FROM };
+}
+
 async function sendMailWithFallback({ userId, to, subject, html, text }) {
   const errors = [];
+
+  if (RESEND_API_KEY) {
+    try {
+      return await sendViaResend({ to, subject, html, text });
+    } catch (err) {
+      errors.push(`resend: ${err.message || err}`);
+    }
+  }
 
   if (userId && isGoogleOAuthConfigured()) {
     try {
@@ -687,6 +726,7 @@ app.get('/api/health', async (_req, res) => {
     googleOAuthConfigured: isGoogleOAuthConfigured(),
     supabaseConfigured: !!supabaseAdmin,
     smtpConfigured: !!mailer,
+    resendConfigured: !!RESEND_API_KEY,
     devResetFallback: ALLOW_DEV_RESET_FALLBACK
   });
 });

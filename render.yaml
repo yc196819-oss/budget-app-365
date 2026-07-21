@@ -46,6 +46,10 @@ services:
         value: openid,email,https://www.googleapis.com/auth/gmail.send
       - key: ALLOW_DEV_RESET_FALLBACK
         value: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        value: "Budget App <onboarding@resend.dev>"
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
