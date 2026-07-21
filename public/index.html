@@ -154,6 +154,7 @@ tr:last-child td{border-bottom:none}
       <button data-tab="expenses">💸 תנועות</button>
       <button data-tab="charts">📉 גרפים</button>
       <button data-tab="categories">🗂️ קטגוריות</button>
+      <button data-tab="accounts">🏦 חשבונות וכרטיסים</button>
       <button data-tab="loans">🤝 הלוואות</button>
       <button data-tab="investments">📈 השקעות</button>
       <button data-tab="planning">🎯 יעדים</button>
@@ -185,20 +186,12 @@ tr:last-child td{border-bottom:none}
     </div>
     <div class="panel" id="flowPanel" style="border:1px solid var(--accent)">
       <h2>💳 בקרת תזרים ואשראי — כמה באמת פנוי לי?</h2>
-      <div class="row" style="gap:16px;flex-wrap:wrap;margin-bottom:18px">
-        <div style="flex:1;min-width:180px">
-          <label class="muted" style="display:block;font-size:.78rem;margin-bottom:5px">יום החיוב באשראי בכל חודש</label>
-          <select id="billingDay" onchange="onFlowChange()" style="width:100%"></select>
-        </div>
-        <div style="flex:1;min-width:180px">
-          <label class="muted" style="display:block;font-size:.78rem;margin-bottom:5px">יתרת עו"ש נוכחית בבנק (₪)</label>
-          <input id="osBalance" type="number" placeholder="למשל 12500" oninput="onFlowChange()" style="width:100%">
-        </div>
-      </div>
-      <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
-        <div class="card" style="background:var(--surface2)"><div class="label">חיוב אשראי צפוי הקרוב</div><div class="value neg" id="flowBilling">₪0</div><div class="muted" id="flowBillingNote" style="font-size:.72rem;margin-top:4px"></div></div>
-        <div class="card" style="background:var(--surface2)"><div class="label">יתרת עו"ש שהוזנה</div><div class="value neu" id="flowOs">₪0</div></div>
-        <div class="card" id="flowSafeCard" style="background:linear-gradient(135deg,rgba(82,214,164,.12),rgba(108,140,255,.08));border:1px solid var(--accent2)"><div class="label">💰 באמת פנוי להוצאה</div><div class="value pos" id="flowSafe" style="font-size:1.9rem">₪0</div><div class="muted" id="flowSafeNote" style="font-size:.72rem;margin-top:4px"></div></div>
+      <p class="muted" style="margin-bottom:12px">לכל חשבון יש יום חיוב משלו, לפי הכרטיסים המשויכים אליו. הזן את היתרה הנוכחית בכל חשבון.</p>
+      <div id="flowAccounts"></div>
+      <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:14px">
+        <div class="card" style="background:var(--surface2)"><div class="label">סה"כ חיוב אשראי צפוי</div><div class="value neg" id="flowBilling">₪0</div><div class="muted" id="flowBillingNote" style="font-size:.72rem;margin-top:4px"></div></div>
+        <div class="card" style="background:var(--surface2)"><div class="label">סה"כ יתרות שהוזנו</div><div class="value neu" id="flowOs">₪0</div></div>
+        <div class="card" id="flowSafeCard" style="background:linear-gradient(135deg,rgba(82,214,164,.12),rgba(108,140,255,.08));border:1px solid var(--accent2)"><div class="label">💰 באמת פנוי להוצאה (סה"כ)</div><div class="value pos" id="flowSafe" style="font-size:1.9rem">₪0</div><div class="muted" id="flowSafeNote" style="font-size:.72rem;margin-top:4px"></div></div>
       </div>
     </div>
     <div class="panel"><h2>פילוח הוצאות <span class="muted" id="dashPeriod"></span></h2><div class="chart-box"><canvas id="dashPie"></canvas></div></div>
@@ -217,6 +210,8 @@ tr:last-child td{border-bottom:none}
         <select id="exSub"></select>
         <select id="exNature"><option value="variable">שוטף</option><option value="fixed">קבוע</option></select>
         <select id="exSpread"><option value="month">חודשי</option><option value="year">שנתי</option></select>
+        <select id="exAccount" onchange="fillCardSel()"></select>
+        <select id="exCard"></select>
         <div class="checkline" id="instInlineWrap">
           <input id="exIsInst" type="checkbox" onchange="toggleExpenseInstallments()">
           <label for="exIsInst" style="margin:0;color:var(--text);font-size:.85rem">בתשלומים</label>
@@ -278,6 +273,30 @@ tr:last-child td{border-bottom:none}
         <button class="btn sec" onclick="addSub()">הוסף תת-קטגוריה</button>
       </div>
       <div id="catManage" style="margin-top:16px"></div>
+    </div>
+  </section>
+
+  <section id="tab-accounts" class="hidden">
+    <div class="panel">
+      <h2>🏦 חשבונות בנק</h2>
+      <p class="muted" style="margin-bottom:12px">כל תנועה משויכת לחשבון ספציפי — שימושי כשיש כמה חשבונות במשק הבית (למשל שלך ושל בן/בת הזוג).</p>
+      <div class="row">
+        <input id="newAcctName" placeholder="שם החשבון (למשל: העו״ש שלי)" style="flex:1;min-width:160px">
+        <input id="newAcctBank" placeholder="בנק (אופציונלי)" style="min-width:140px">
+        <button class="btn" onclick="addBankAccount()">הוסף חשבון</button>
+      </div>
+      <div id="acctManage" style="margin-top:16px"></div>
+    </div>
+    <div class="panel">
+      <h2>💳 כרטיסי אשראי</h2>
+      <p class="muted" style="margin-bottom:12px">לכל כרטיס יום חיוב משלו — קובע לאיזה חודש הוצאה שמשויכת לכרטיס תיפול בפועל במאזן ובגרפים.</p>
+      <div class="row">
+        <select id="newCardAcct"></select>
+        <input id="newCardName" placeholder="שם הכרטיס (למשל: ויזה 1234)" style="flex:1;min-width:160px">
+        <select id="newCardBillingDay"></select>
+        <button class="btn" onclick="addCreditCard()">הוסף כרטיס</button>
+      </div>
+      <div id="cardManage" style="margin-top:16px"></div>
     </div>
   </section>
 
@@ -539,7 +558,7 @@ const PALETTE=['#6c8cff','#52d6a4','#ffb454','#ff6b6b','#b57bff','#4ecdc4','#ff8
 const API_BASE=(window.__APP_CONFIG?.API_BASE||localStorage.getItem('aiApiBase')||((location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8787':location.origin)).replace(/\/$/, '');
 
 let CU=null,HID=null,MNAME='',MROLE='owner'; let VM=new Date().getMonth(),VY=new Date().getFullYear();
-let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[]};
+let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[],bankAccounts:[],creditCards:[]};
 let exFilter='all',catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
 const memberCache={}; let charts={};
 let syncTimer=null, syncInFlight=false;
@@ -760,20 +779,23 @@ async function seedCategories(){
 }
 
 async function loadAll(){
-  const[c,t,l,i,inv,g]=await Promise.all([
+  const[c,t,l,i,inv,g,ba,cc]=await Promise.all([
     sb.from('categories').select('*').eq('household_id',HID),
     sb.from('transactions').select('*').eq('household_id',HID).order('tx_date',{ascending:false}),
     sb.from('loans').select('*').eq('household_id',HID).order('loan_date',{ascending:false}),
     sb.from('installments').select('*').eq('household_id',HID),
     sb.from('investments').select('*').eq('household_id',HID),
-    sb.from('goals').select('*').eq('household_id',HID)
+    sb.from('goals').select('*').eq('household_id',HID),
+    sb.from('bank_accounts').select('*').eq('household_id',HID).order('created_at'),
+    sb.from('credit_cards').select('*').eq('household_id',HID).order('created_at')
   ]);
   DB.categories=c.data||[];DB.transactions=t.data||[];DB.loans=l.data||[];DB.installments=i.data||[];DB.investments=inv.data||[];DB.goals=g.data||[];
+  DB.bankAccounts=ba.data||[];DB.creditCards=cc.data||[];
   const ids=[...new Set(DB.transactions.map(t=>t.created_by).filter(Boolean))];
   for(const id of ids){if(!memberCache[id]){const{data}=await sb.from('memberships').select('display_name').eq('user_id',id).eq('household_id',HID).single();memberCache[id]=data?.display_name||'—';}}
 }
 
-const TABS=['dash','expenses','charts','categories','loans','installments','investments','planning','import','sharing','settings'];
+const TABS=['dash','expenses','charts','categories','accounts','loans','installments','investments','planning','import','sharing','settings'];
 function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');if(b.dataset.tab==='dash')syncDashboard(true);if(b.dataset.tab==='charts')renderCharts();if(b.dataset.tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}});}
 
 async function syncDashboard(force=false){
@@ -807,7 +829,20 @@ function fillPeriod(){
   ms.onchange=()=>{VM=+ms.value;render();};ys.onchange=()=>{VY=+ys.value;render();renderCharts();};
 }
 
-function moAmt(t,y,m){const d=parseLocalDate(t.tx_date||t.date);const sy=d.getFullYear(),sm=d.getMonth();if(t.spread==='year'){for(let i=0;i<12;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +t.amount/12;}return 0;}return(sy===y&&sm===m)?+t.amount:0;}
+// אם לתנועה יש כרטיס אשראי משויך, היא "זזה" לחודש שבו הכרטיס בפועל מחייב את
+// חשבון הבנק (לפי יום החיוב של הכרטיס). תנועות בלי כרטיס (מזומן/הו״ק/צ׳ק,
+// או נתונים ישנים שלא הוגרו) נשארות בחודש התאריך שלהן כמו קודם.
+function txEffectiveMonth(t){
+  const d=parseLocalDate(t.tx_date||t.date);
+  let y=d.getFullYear(),m=d.getMonth();
+  const card=t.card_id?(DB.creditCards||[]).find(c=>c.id===t.card_id):null;
+  if(card){
+    const bd=card.billing_day||10;
+    if(d.getDate()>bd){m+=1;if(m>11){m=0;y+=1;}}
+  }
+  return{y,m};
+}
+function moAmt(t,y,m){const{y:sy,m:sm}=txEffectiveMonth(t);if(t.spread==='year'){for(let i=0;i<12;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +t.amount/12;}return 0;}return(sy===y&&sm===m)?+t.amount:0;}
 function yrAmt(t,y){let s=0;for(let m=0;m<12;m++)s+=moAmt(t,y,m);return s;}
 function parseLocalDate(s){const[y,m,d]=(s||'').split('-').map(Number);return(y&&m&&d)?new Date(y,m-1,d):new Date(s);}
 function instMo(p,y,m){const idx=instIndexFor(p,y,m);return idx>0?(+p.total_amount/(p.payments_count||p.count)):0;}
@@ -856,12 +891,39 @@ function fillCatSel(){
   if($('#instCat'))$('#instCat').innerHTML=instRoots.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
   const catKind=$('#catKind')?$('#catKind').value:'expense';
   if($('#subParent'))$('#subParent').innerHTML=rootCats(catKind).map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  fillAccountSel();
   updateSubSel();
   const isExpense=kind==='expense';
   if($('#instInlineWrap'))$('#instInlineWrap').classList.toggle('hidden',!isExpense);
   if(!isExpense&&$('#exIsInst')){$('#exIsInst').checked=false;toggleExpenseInstallments();}
 }
-function updateSubSel(){const c=DB.categories.find(x=>x.id===$('#exCat').value);const subs=c?subCats(c.id):[];$('#exSub').innerHTML='<option value="">— ללא תת —</option>'+subs.map(s=>'<option value="'+s.id+'">'+s.name+'</option>').join('');}
+function fillAccountSel(){
+  const sel=$('#exAccount'); if(!sel)return;
+  const cur=sel.value;
+  sel.innerHTML=(DB.bankAccounts||[]).length
+    ? DB.bankAccounts.map(a=>'<option value="'+a.id+'">🏦 '+a.name+'</option>').join('')
+    : '<option value="">— אין חשבון, הוסף בטאב חשבונות וכרטיסים —</option>';
+  if(cur&&(DB.bankAccounts||[]).some(a=>a.id===cur))sel.value=cur;
+  fillCardSel();
+}
+function fillCardSel(){
+  const accSel=$('#exAccount'),cardSel=$('#exCard'); if(!cardSel)return;
+  const accId=accSel?accSel.value:'';
+  const cards=(DB.creditCards||[]).filter(c=>c.bank_account_id===accId);
+  cardSel.innerHTML='<option value="">ללא כרטיס (מזומן/הו״ק/צ׳ק)</option>'+cards.map(c=>'<option value="'+c.id+'">💳 '+c.name+' (חיוב ה-'+c.billing_day+')</option>').join('');
+}
+function updateSubSel(){
+  const c=DB.categories.find(x=>x.id===$('#exCat').value);
+  const subs=c?subCats(c.id):[];
+  $('#exSub').innerHTML='<option value="">— ללא תת —</option>'+subs.map(s=>'<option value="'+s.id+'">'+s.name+'</option>').join('');
+  if(c){
+    const accSel=$('#exAccount');
+    if(c.default_account_id&&accSel&&(DB.bankAccounts||[]).some(a=>a.id===c.default_account_id)){accSel.value=c.default_account_id;}
+    fillCardSel();
+    const cardSel=$('#exCard');
+    if(c.default_card_id&&cardSel&&[...cardSel.options].some(o=>o.value===c.default_card_id))cardSel.value=c.default_card_id;
+  }
+}
 $('#catKind')&&($('#catKind').onchange=function(){const kind=$('#catKind').value;if($('#subParent'))$('#subParent').innerHTML=rootCats(kind).map(c=>'<option value="'+c.id+'">'+(c.icon||'')+' '+c.name+'</option>').join('');renderCatManage();});
 
 async function addTransaction(){
@@ -890,7 +952,9 @@ async function addTransaction(){
     return;
   }
 
-  const{data,error}=await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type,description:$('#exDesc').value||'(ללא תיאור)',amount,tx_date:$('#exDate').value||todayStr(),category_id:$('#exCat').value||null,subcategory_id:$('#exSub').value||null,nature:$('#exNature').value,spread:$('#exSpread').value,source:'manual'}).select().single();
+  const accountId=$('#exAccount')?.value||null;
+  const cardId=$('#exCard')?.value||null;
+  const{data,error}=await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type,description:$('#exDesc').value||'(ללא תיאור)',amount,tx_date:$('#exDate').value||todayStr(),category_id:$('#exCat').value||null,subcategory_id:$('#exSub').value||null,nature:$('#exNature').value,spread:$('#exSpread').value,source:'manual',account_id:accountId,card_id:cardId,payment_method:cardId?'credit':'other'}).select().single();
   if(error){alert('שגיאה: '+error.message);return;}
   memberCache[CU.id]=MNAME;DB.transactions.unshift(data);$('#exDesc').value='';$('#exAmount').value='';render();
 }
@@ -1610,71 +1674,66 @@ function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'app
 async function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const bk=JSON.parse(r.result);if(!confirm('לייבא '+((bk.transactions||[]).length)+' תנועות?'))return;for(const t of(bk.transactions||[])){await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type:t.type,description:t.desc||t.description,amount:t.amount,tx_date:t.date||t.tx_date||todayStr(),nature:t.nature||'variable',spread:t.spread||'month',source:'import'});}await loadAll();render();alert('יובא!');}catch(x){alert('קובץ לא תקין');}};r.readAsText(f);}
 
 // ═══ FEATURE: Credit / Cash-flow control (Safe-to-Spend) ═══
-function loadFlowSettings(){
-  const bd=$('#billingDay');
-  if(bd && !bd.options.length){
-    let opts='';
-    for(let d=1;d<=28;d++)opts+='<option value="'+d+'">ה-'+d+' לחודש</option>';
-    bd.innerHTML=opts;
-    bd.value=localStorage.getItem('billingDay')||'2';
-  }
-  const os=$('#osBalance');
-  if(os && !os.value){os.value=localStorage.getItem('osBalance')||'';}
-}
-function onFlowChange(){
-  const bd=$('#billingDay'); if(bd)localStorage.setItem('billingDay',bd.value);
-  const os=$('#osBalance'); if(os)localStorage.setItem('osBalance',os.value);
+// כל חשבון בנק מציג את יתרת העו"ש שהוזנה לו ידנית, מינוס סך החיובים של כל
+// כרטיסי האשראי המשויכים אליו שנופלים בחודש המוצג (VY/VM) — moAmt() כבר
+// מזיז כל תנועה עם card_id לחודש שבו הכרטיס באמת מחייב, אז אין כאן צורך
+// בחישוב מחזור נפרד לכל כרטיס.
+function onAccountBalanceChange(accId,val){
+  localStorage.setItem('acctBal_'+accId,val);
   computeFlow();
 }
-// מחזיר {start,end} של מחזור החיוב שיחויב בפעם הקרובה, ביחס לתאריך ההצגה (VY/VM)
-function currentBillingCycle(billingDay){
-  // הוצאות שבוצעו בחודש המוצג נצברות ויורדות ב-billingDay של החודש שאחריו.
-  // מחזור = מ-billingDay של החודש המוצג עד billingDay של החודש הבא.
-  const cycleStart=new Date(VY,VM,billingDay);    // יום החיוב בחודש המוצג
-  const cycleEnd=new Date(VY,VM+1,billingDay);    // יום החיוב בחודש הבא (מועד הירידה בפועל)
-  return {start:cycleStart,end:cycleEnd};
-}
 function computeFlow(){
-  const bdEl=$('#billingDay'); if(!bdEl)return;
-  const billingDay=parseInt(bdEl.value,10)||2;
-  const osBalance=parseFloat(($('#osBalance')||{}).value)||0;
+  const box=$('#flowAccounts'); if(!box)return;
+  const accounts=DB.bankAccounts||[];
+  if(!accounts.length){
+    box.innerHTML='<p class="muted">עדיין אין חשבון בנק מוגדר. עבור לטאב "חשבונות וכרטיסים" כדי להוסיף אחד.</p>';
+    $('#flowBilling').textContent=fmt(0);$('#flowOs').textContent=fmt(0);
+    const sEl0=$('#flowSafe'); if(sEl0){sEl0.textContent=fmt(0);sEl0.className='value pos';}
+    $('#flowSafeNote').textContent='';
+    return;
+  }
 
-  const {start,end}=currentBillingCycle(billingDay);
+  const unassignedInst=DB.installments.reduce((s,p)=>s+instMo(p,VY,VM),0);
 
-  // סך הוצאות האשראי של החודש המוצג — הן שיחויבו בחיוב הקרוב (בחודש הבא)
-  let billing=0;
-  DB.transactions.filter(t=>t.type==='expense').forEach(t=>{
-    billing+=moAmt(t,VY,VM);
-  });
+  let totalBilling=0,totalBalance=0;
+  box.innerHTML=accounts.map(acc=>{
+    const cards=(DB.creditCards||[]).filter(c=>c.bank_account_id===acc.id);
+    const bal=parseFloat(localStorage.getItem('acctBal_'+acc.id))||0;
+    let acctBilling=0;
+    const cardLines=cards.map(c=>{
+      const amt=DB.transactions.filter(t=>t.type==='expense'&&t.card_id===c.id).reduce((s,t)=>s+moAmt(t,VY,VM),0);
+      acctBilling+=amt;
+      return '<div class="row" style="justify-content:space-between;font-size:.82rem;padding:3px 0"><span class="muted">💳 '+c.name+' (חיוב ה-'+c.billing_day+')</span><span>'+fmt(amt)+'</span></div>';
+    }).join('')||'<div class="muted" style="font-size:.8rem">אין כרטיסי אשראי מקושרים לחשבון זה</div>';
+    const safe=bal-acctBilling;
+    totalBilling+=acctBilling;totalBalance+=bal;
+    return '<div class="card" style="background:var(--surface2);margin-bottom:10px;text-align:right">'
+      +'<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+      +'<div style="font-weight:700">🏦 '+acc.name+'</div>'
+      +'<input type="number" placeholder="יתרת עו״ש נוכחית" value="'+(bal||'')+'" oninput="onAccountBalanceChange(\''+acc.id+'\',this.value)" style="width:160px">'
+      +'</div>'
+      +'<div style="margin-top:8px">'+cardLines+'</div>'
+      +'<div class="row" style="justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-weight:700">'
+      +'<span>פנוי בחשבון זה אחרי החיוב</span><span class="'+(safe>=0?'pos':'neg')+'">'+fmt(safe)+'</span>'
+      +'</div></div>';
+  }).join('')+(unassignedInst>0
+      ?'<p class="muted" style="font-size:.78rem;margin-top:4px">+ '+fmt(unassignedInst)+' תשלומים שלא משויכים לחשבון/כרטיס ספציפי (לא נכללים בפירוט למעלה)</p>'
+      :'');
 
-  // חלק יחסי של תשלומים (installments) שצפוי לרדת בחיוב הקרוב —
-  // כלומר תשלום אחד של כל רכישה פעילה שנופל בחודש המוצג
-  DB.installments.forEach(p=>{
-    const mo=instMo(p,VY,VM);
-    if(mo>0) billing+=mo;
-  });
+  totalBilling+=unassignedInst;
+  const totalSafe=totalBalance-totalBilling;
 
-  const safe=osBalance-billing;
-
-  $('#flowBilling').textContent=fmt(billing);
-  $('#flowOs').textContent=fmt(osBalance);
+  $('#flowBilling').textContent=fmt(totalBilling);
+  $('#flowOs').textContent=fmt(totalBalance);
   const sEl=$('#flowSafe');
-  sEl.textContent=fmt(safe);
-  sEl.className='value '+(safe>=0?'pos':'neg');
-  if(safe<0){sEl.style.color='#ff4d4d';sEl.style.textShadow='0 0 12px rgba(255,77,77,.5)';}
-  else{sEl.style.color='';sEl.style.textShadow='';}
-
-  const chargeTxt=end.getDate()+'/'+(end.getMonth()+1)+'/'+end.getFullYear();
-  $('#flowBillingNote').textContent='הוצאות '+MONTHS[VM]+' · יורד בבנק ב-'+chargeTxt;
-  $('#flowSafeNote').textContent=safe>=0
+  sEl.textContent=fmt(totalSafe);
+  sEl.className='value '+(totalSafe>=0?'pos':'neg');
+  $('#flowSafeNote').textContent=totalSafe>=0
     ? '✅ נשאר לך מרווח אחרי החיוב הקרוב'
-    : '⚠️ החיוב הצפוי גבוה מיתרת העו"ש!';
+    : '⚠️ החיוב הצפוי גבוה מסך היתרות שהוזנו!';
 
   const card=$('#flowSafeCard');
-  if(card){
-    if(safe<0)card.style.borderColor='#ff4d4d';
-    else card.style.borderColor='var(--accent2)';
-  }
+  if(card)card.style.borderColor=totalSafe<0?'#ff4d4d':'var(--accent2)';
 }
 
 // ═══ ז: Light / Dark theme toggle ═══
@@ -1711,7 +1770,8 @@ function render(){
   $('#fixedVar').innerHTML='<div class="catrow"><div class="catname"><span>קבוע</span><span>'+fmt(fix)+' ('+Math.round(fix/t2*100)+'%)</span></div><div class="bar"><span style="width:'+fix/t2*100+'%"></span></div></div><div class="catrow"><div class="catname"><span>שוטף</span><span>'+fmt(vr)+' ('+Math.round(vr/t2*100)+'%)</span></div><div class="bar"><span style="width:'+vr/t2*100+'%"></span></div></div>';
 
   renderExpenses();renderCatSummary();renderCatManage();renderLoans();renderInstallments();renderInvestments();renderGoals();
-  loadFlowSettings();computeFlow();
+  renderAccounts();renderCreditCards();
+  computeFlow();
   fillDelMonthSelectors&&fillDelMonthSelectors();
   if(typeof calcLoanPlan==='function' && $('#planResult'))calcLoanPlan();
 }
@@ -1837,6 +1897,76 @@ function renderCatManage(){
   };
   const sec=(title,list)=>'<div style="font-weight:700;color:var(--accent);margin:14px 0 6px">'+title+'</div>'+list.map(c=>'<div class="catrow"><div class="catname"><span>'+(c.icon||'')+' '+c.name+'</span><span>'+editBtn(c.id)+' '+delB('delCat',c.id)+'</span></div>'+subCats(c.id).map(renderSub).join('')+'</div>').join('');
   $('#catManage').innerHTML=sec('קטגוריות הוצאה 💸',exp)+sec('קטגוריות הכנסה 💰',inc);
+}
+
+// ═══ חשבונות בנק וכרטיסי אשראי ═══
+async function addBankAccount(){
+  const name=$('#newAcctName').value.trim();if(!name){alert('הכנס שם לחשבון');return;}
+  const bankName=$('#newAcctBank').value.trim()||null;
+  const{data,error}=await sb.from('bank_accounts').insert({household_id:HID,created_by:CU.id,name,bank_name:bankName}).select().single();
+  if(error){alert('שגיאה בהוספת חשבון: '+error.message+'\n\nהרצת את supabase_accounts_cards.sql ב-Supabase?');return;}
+  DB.bankAccounts.push(data);$('#newAcctName').value='';$('#newAcctBank').value='';render();
+}
+async function delBankAccount(id){
+  const cardsOnAcct=DB.creditCards.filter(c=>c.bank_account_id===id);
+  if(cardsOnAcct.length){alert('אי אפשר למחוק חשבון שיש לו כרטיסי אשראי משויכים — מחק קודם את הכרטיסים: '+cardsOnAcct.map(c=>c.name).join(', '));return;}
+  if(!confirm('למחוק את החשבון? תנועות משויכות יישארו בלי חשבון.'))return;
+  const{error}=await sb.from('bank_accounts').delete().eq('id',id);
+  if(error){alert('שגיאה במחיקה: '+error.message);return;}
+  DB.bankAccounts=DB.bankAccounts.filter(a=>a.id!==id);render();
+}
+function renderAccounts(){
+  const box=$('#acctManage'); if(!box)return;
+  box.innerHTML=DB.bankAccounts.length
+    ? DB.bankAccounts.map(a=>'<div class="catrow"><div class="catname"><span>🏦 '+a.name+(a.bank_name?' · '+a.bank_name:'')+'</span><span><button class="btn danger" onclick="delBankAccount(\''+a.id+'\')">מחק</button></span></div></div>').join('')
+    : '<div class="empty">אין עדיין חשבונות — הוסף אחד למעלה</div>';
+  const sel=$('#newCardAcct');
+  if(sel){
+    const cur=sel.value;
+    sel.innerHTML=DB.bankAccounts.map(a=>'<option value="'+a.id+'">'+a.name+'</option>').join('');
+    if(cur&&DB.bankAccounts.some(a=>a.id===cur))sel.value=cur;
+  }
+  const bdSel=$('#newCardBillingDay');
+  if(bdSel&&!bdSel.options.length){
+    let opts='';for(let d=1;d<=28;d++)opts+='<option value="'+d+'">ה-'+d+' לחודש</option>';
+    bdSel.innerHTML=opts;bdSel.value='10';
+  }
+}
+async function addCreditCard(){
+  const acctId=$('#newCardAcct').value;if(!acctId){alert('קודם הוסף חשבון בנק');return;}
+  const name=$('#newCardName').value.trim();if(!name){alert('הכנס שם לכרטיס');return;}
+  const billingDay=parseInt($('#newCardBillingDay').value,10)||10;
+  const{data,error}=await sb.from('credit_cards').insert({household_id:HID,created_by:CU.id,bank_account_id:acctId,name,billing_day:billingDay}).select().single();
+  if(error){alert('שגיאה בהוספת כרטיס: '+error.message);return;}
+  DB.creditCards.push(data);$('#newCardName').value='';render();
+}
+async function delCreditCard(id){
+  if(!confirm('למחוק את הכרטיס? תנועות משויכות יישארו בלי כרטיס (יחושבו כאילו שולמו ישירות מהחשבון).'))return;
+  const{error}=await sb.from('credit_cards').delete().eq('id',id);
+  if(error){alert('שגיאה במחיקה: '+error.message);return;}
+  DB.creditCards=DB.creditCards.filter(c=>c.id!==id);render();
+}
+async function updateCardBillingDay(id,val){
+  const day=parseInt(val,10);if(!day||day<1||day>28)return;
+  const{error}=await sb.from('credit_cards').update({billing_day:day}).eq('id',id);
+  if(error){alert('שגיאה בעדכון יום חיוב: '+error.message);return;}
+  const c=DB.creditCards.find(x=>x.id===id);if(c)c.billing_day=day;
+  render();
+}
+function renderCreditCards(){
+  const box=$('#cardManage'); if(!box)return;
+  let dayOpts='';for(let d=1;d<=28;d++)dayOpts+='<option value="'+d+'">ה-'+d+'</option>';
+  box.innerHTML=DB.creditCards.length
+    ? DB.creditCards.map(c=>{
+        const acct=DB.bankAccounts.find(a=>a.id===c.bank_account_id);
+        return '<div class="catrow"><div class="catname"><span>💳 '+c.name+' <span class="muted">('+(acct?acct.name:'—')+')</span></span>'
+          +'<span style="display:flex;align-items:center;gap:8px">'
+          +'<label class="muted" style="font-size:.78rem">יום חיוב:</label>'
+          +'<select onchange="updateCardBillingDay(\''+c.id+'\',this.value)" style="width:auto">'+dayOpts.replace('value="'+c.billing_day+'"','value="'+c.billing_day+'" selected')+'</select>'
+          +'<button class="btn danger" onclick="delCreditCard(\''+c.id+'\')">מחק</button>'
+          +'</span></div></div>';
+      }).join('')
+    : '<div class="empty">אין עדיין כרטיסי אשראי — הוסף אחד למעלה</div>';
 }
 
 function renderLoans(){const owedToMe=DB.loans.filter(l=>l.direction==='tome'&&!l.settled).reduce((s,l)=>s+l.amount,0);const iOwe=DB.loans.filter(l=>l.direction==='iowe'&&!l.settled).reduce((s,l)=>s+l.amount,0);const net=owedToMe-iOwe;$('#lOwedToMe').textContent=fmt(owedToMe);$('#lIOwe').textContent=fmt(iOwe);$('#lNet').textContent=fmt(net);$('#lNet').className='value '+(net>=0?'pos':'neg');$('#loanBody').innerHTML=DB.loans.length?[...DB.loans].map(l=>'<tr><td>'+(l.loan_date||l.date)+'</td><td>'+l.counterparty+'</td><td>'+(l.direction==='tome'?'<span class="tag variable">חייבים לי</span>':'<span class="tag fixed">אני חייב</span>')+'</td><td>'+(l.note||'')+'</td><td>'+fmt(l.amount)+'</td><td>'+(l.settled?'<span class="muted">סולק</span>':'פעיל')+'</td><td><button class="smallbtn" onclick="editLoan(\''+l.id+'\')">עריכה</button> '+(!l.settled?'<button class="btn sec" style="font-size:.78rem;padding:5px 9px" onclick="settleLoan(\''+l.id+'\')">סמן כסולק</button> ':'')+'<button class="btn danger" onclick="delLoan(\''+l.id+'\')">מחק</button></td></tr>').join(''):'<tr><td colspan="7" class="empty">אין הלוואות</td></tr>';}
