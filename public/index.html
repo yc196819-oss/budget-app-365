@@ -511,27 +511,23 @@ tr:last-child td{border-bottom:none}
     </div>
     <div class="panel">
       <h2>🗓️ מחיקת נתוני חודש בודד</h2>
-      <p class="muted" style="margin-bottom:10px">מוחק את כל התנועות של חודש מסוים בלבד (לא נוגע בשאר החודשים, בקטגוריות או בתשלומים). נדרש קוד אימות למייל.</p>
+      <p class="muted" style="margin-bottom:10px">מוחק את כל התנועות של חודש מסוים בלבד (לא נוגע בשאר החודשים, בקטגוריות או בתשלומים). לאישור, הזן שוב את הסיסמה שלך.</p>
       <div class="row" style="margin-bottom:8px">
         <select id="delMonthSel"></select>
         <select id="delYearSel"></select>
-        <button class="btn danger" style="padding:10px 16px" onclick="requestMonthDeleteCode()">שלח קוד אימות למייל</button>
       </div>
       <div class="row">
-        <input id="delMonthCode" placeholder="קוד אימות שקיבלת במייל" style="min-width:220px">
-        <button class="btn sec" onclick="confirmMonthDelete()">אשר מחיקת החודש</button>
+        <input id="delMonthPass" type="password" placeholder="הסיסמה שלך" style="min-width:220px">
+        <button class="btn danger" onclick="confirmMonthDelete()">אשר מחיקת החודש</button>
       </div>
       <p class="muted" id="delMonthStatus" style="margin-top:8px"></p>
     </div>
     <div class="panel">
       <h2>איפוס מערכת מאובטח</h2>
-      <p class="muted" style="margin-bottom:10px">האיפוס מוחק את כל נתוני משק הבית. נדרש קוד אימות למייל.</p>
-      <div class="row" style="margin-bottom:8px">
-        <button class="btn danger" style="padding:10px 16px" onclick="requestResetCode()">שלח קוד איפוס למייל</button>
-      </div>
+      <p class="muted" style="margin-bottom:10px">האיפוס מוחק את כל נתוני משק הבית (תנועות, תשלומים, הלוואות, השקעות, יעדים, קטגוריות). חשבונות בנק וכרטיסי אשראי לא נמחקים. לאישור, הזן שוב את הסיסמה שלך.</p>
       <div class="row">
-        <input id="resetCode" placeholder="קוד אימות שקיבלת במייל" style="min-width:220px">
-        <button class="btn sec" onclick="confirmSystemReset()">אשר איפוס מלא</button>
+        <input id="resetPass" type="password" placeholder="הסיסמה שלך" style="min-width:220px">
+        <button class="btn danger" onclick="confirmSystemReset()">אשר איפוס מלא</button>
       </div>
       <p class="muted" id="resetStatus" style="margin-top:8px"></p>
     </div>
@@ -1637,72 +1633,37 @@ function fillDelMonthSelectors(){
   if(ms && !ms.options.length){ms.innerHTML=MONTHS.map((m,i)=>'<option value="'+i+'"'+(i===VM?' selected':'')+'>'+m+'</option>').join('');}
   if(ys && !ys.options.length){const now=new Date().getFullYear();let o='';for(let y=now-5;y<=now+1;y++)o+='<option value="'+y+'"'+(y===VY?' selected':'')+'>'+y+'</option>';ys.innerHTML=o;}
 }
-let _monthDelCode=null;
-async function requestMonthDeleteCode(){
-  fillDelMonthSelectors();
-  if(!confirm('לשלוח קוד אימות למחיקת נתוני החודש שנבחר?'))return;
-  const el=$('#delMonthStatus');el.textContent='שולח קוד...';
-  try{
-    const r=await fetch(API_BASE+'/api/reset/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({householdId:HID,userId:CU.id,email:CU?.email||'',scope:'month'})});
-    const data=await r.json();
-    if(!r.ok){el.textContent='שגיאה בשליחת קוד: '+(data.error||'Unknown');return;}
-    if(data?.fallback==='manual_code'&&data?.devCode){_monthDelCode=String(data.devCode);const inp=$('#delMonthCode');if(inp)inp.value=_monthDelCode;el.textContent='מצב פיתוח: קוד זמני הוזן אוטומטית: '+_monthDelCode;return;}
-    el.textContent='קוד נשלח למייל. הזן אותו כדי לאשר מחיקה.';
-  }catch(err){el.textContent='שגיאה: '+err.message;}
+// אימות מחדש עם הסיסמה הנוכחית — מחליף את זרימת קוד-במייל הישנה (שהייתה
+// תלויה בשרת AI נפרד ובספק מייל, שני דברים ששבורים לפעמים). מוכיח שהמשתמש
+// אכן יודע את הסיסמה שלו, ולא תלוי בשום שירות חיצוני.
+async function reauthenticate(password){
+  if(!password){alert('הזן את הסיסמה שלך לאישור');return false;}
+  const{error}=await sb.auth.signInWithPassword({email:CU.email,password});
+  if(error){alert('סיסמה שגויה: '+error.message);return false;}
+  return true;
 }
 async function confirmMonthDelete(){
-  const code=($('#delMonthCode').value||'').trim();
-  if(!code){alert('נא להזין קוד אימות');return;}
-  if(_monthDelCode && code!==_monthDelCode){alert('קוד שגוי');return;}
   const y=parseInt($('#delYearSel').value,10),m=parseInt($('#delMonthSel').value,10);
+  const el=$('#delMonthStatus');
+  if(!(await reauthenticate($('#delMonthPass').value)))return;
   if(!confirm('למחוק את כל תנועות '+MONTHS[m]+' '+y+'? פעולה זו בלתי הפיכה.'))return;
-  const el=$('#delMonthStatus');el.textContent='מוחק...';
-  // מזהה את התנועות של החודש הזה
-  const toDel=DB.transactions.filter(t=>{const d=parseLocalDate(t.tx_date||t.date);return d.getFullYear()===y&&d.getMonth()===m;});
-  if(!toDel.length){el.textContent='אין תנועות בחודש זה.';return;}
-  const ids=toDel.map(t=>t.id);
-  const{error}=await sb.from('transactions').delete().in('id',ids);
+  el.textContent='מוחק...';
+  const{error}=await sb.rpc('reset_household_month',{p_year:y,p_month:m+1});
   if(error){el.textContent='שגיאה במחיקה: '+error.message;return;}
-  DB.transactions=DB.transactions.filter(t=>!ids.includes(t.id));
-  $('#delMonthCode').value='';_monthDelCode=null;
-  el.textContent='✅ נמחקו '+ids.length+' תנועות מ-'+MONTHS[m]+' '+y+'.';
-  render();
+  $('#delMonthPass').value='';
+  await loadAll();render();
+  el.textContent='✅ נמחקו תנועות '+MONTHS[m]+' '+y+'.';
 }
-async function requestResetCode(){
-  if(!confirm('לשלוח קוד איפוס למייל ולהמשיך?'))return;
-  const el=$('#resetStatus');
-  el.textContent='שולח קוד...';
-  try{
-    const r=await fetch(API_BASE+'/api/reset/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({householdId:HID,userId:CU.id,email:CU?.email||''})});
-    const data=await r.json();
-    if(!r.ok){el.textContent='שגיאה בשליחת קוד: '+(data.error||'Unknown error');return;}
-    if(data?.fallback==='manual_code' && data?.devCode){
-      const input=$('#resetCode');
-      if(input) input.value=String(data.devCode);
-      el.textContent='מצב פיתוח: ספק המייל חסם שליחה לנמען הזה. קוד זמני נוצר והוזן אוטומטית בשדה: '+String(data.devCode);
-      return;
-    }
-    el.textContent='קוד נשלח למייל שלך. הזן אותו כדי לאשר איפוס.';
-  }catch(err){
-    el.textContent='שגיאה בשליחת קוד: '+err.message;
-  }
-}
-
 async function confirmSystemReset(){
-  const code=($('#resetCode').value||'').trim();
-  if(!code){alert('נא להזין קוד');return;}
-  if(!confirm('אישור סופי: למחוק את כל נתוני המערכת?'))return;
   const el=$('#resetStatus');
-  el.textContent='מאמת קוד ומאפס...';
-  try{
-    const r=await fetch(API_BASE+'/api/reset/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({householdId:HID,userId:CU.id,code})});
-    const data=await r.json();
-    if(!r.ok){el.textContent='איפוס נכשל: '+(data.error||'Unknown error');return;}
-    el.textContent='האיפוס הושלם בהצלחה.';
-    await loadAll();render();
-  }catch(err){
-    el.textContent='איפוס נכשל: '+err.message;
-  }
+  if(!(await reauthenticate($('#resetPass').value)))return;
+  if(!confirm('אישור סופי: למחוק את כל נתוני המערכת (תנועות, תשלומים, הלוואות, השקעות, יעדים, קטגוריות)? חשבונות וכרטיסים לא יימחקו. פעולה בלתי הפיכה.'))return;
+  el.textContent='מאפס...';
+  const{error}=await sb.rpc('reset_household_full');
+  if(error){el.textContent='איפוס נכשל: '+error.message;return;}
+  $('#resetPass').value='';
+  el.textContent='האיפוס הושלם בהצלחה.';
+  await loadAll();render();
 }
 
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='budget-backup-'+todayStr()+'.json';a.click();}
