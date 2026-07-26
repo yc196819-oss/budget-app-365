@@ -1835,17 +1835,14 @@ function renderExpenses(){
     +(incRoots.length?'<div class="filtergroup">'+groupPill('__income__','💰 כל ההכנסות')+incRoots.map(pill).join('')+'</div>':'');
   f.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{exFilter=p.dataset.f;renderExpenses();});
 
-  // תנועות רגילות — מסנן לפי חודש/שנה
+  // תנועות רגילות — מסנן לפי חודש/שנה. אם יש לתנועה כרטיס אשראי, מסננים
+  // לפי החודש שבו היא באמת מחויבת (כמו ב-moAmt, לא לפי תאריך הקנייה
+  // הגולמי) — כדי שה"תנועות" שרואים תואמות למה שנספר בסקירה/גרפים לאותו
+  // חודש, ולא ייראה שיש הוצאה בסקירה בלי תנועות שמסבירות אותה.
   let rows=[...DB.transactions].sort((a,b)=>(b.tx_date||b.date).localeCompare(a.tx_date||a.date));
   rows=rows.filter(t=>{
-    const raw=String(t.tx_date||t.date||'').trim();
-    if(/^\d{4}-\d{2}-\d{2}$/.test(raw)){
-      return Number(raw.slice(0,4))===VY&&Number(raw.slice(5,7))===VM+1;
-    }
-    const m=raw.match(/^(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{2}|\d{4})$/);
-    if(m){const yy=String(m[3]).length===2?Number('20'+m[3]):Number(m[3]);const mm=Number(m[2])-1;return yy===VY&&mm===VM;}
-    const d=new Date(raw);
-    return !Number.isNaN(d.getTime())&&d.getFullYear()===VY&&d.getMonth()===VM;
+    const{y,m}=txEffectiveMonth(t);
+    return y===VY&&m===VM;
   });
   if(exFilter==='__income__')rows=rows.filter(t=>t.type==='income');
   else if(exFilter==='__expense__')rows=rows.filter(t=>t.type==='expense');
