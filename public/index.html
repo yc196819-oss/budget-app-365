@@ -834,9 +834,11 @@ function fillPeriod(){
   ms.onchange=()=>{VM=+ms.value;render();};ys.onchange=()=>{VY=+ys.value;render();renderCharts();};
 }
 
-// אם לתנועה יש כרטיס אשראי משויך, היא "זזה" לחודש שבו הכרטיס בפועל מחייב את
-// חשבון הבנק (לפי יום החיוב של הכרטיס). תנועות בלי כרטיס (מזומן/הו״ק/צ׳ק,
-// או נתונים ישנים שלא הוגרו) נשארות בחודש התאריך שלהן כמו קודם.
+// לאיזה חודש "החשבון" של הכרטיס בפועל מחייב את חשבון הבנק (לפי יום החיוב
+// של הכרטיס) — לא לאיזה חודש שייכת ההוצאה עצמה. שימוש: רק בכרטיס "בקרת
+// תזרים" (computeFlow), כדי לדעת כמה כסף באמת ירד מהבנק ומתי. שאר האפליקציה
+// (סקירה/גרפים/תנועות/סיכום קטגוריות) משתמשת ב-moAmt, שממשיך להציג הוצאה
+// בחודש שבו היא באמת נצרכה, בלי קשר לתאריך החיוב של הכרטיס.
 function txEffectiveMonth(t){
   const d=parseLocalDate(t.tx_date||t.date);
   let y=d.getFullYear(),m=d.getMonth();
@@ -847,7 +849,7 @@ function txEffectiveMonth(t){
   }
   return{y,m};
 }
-function moAmt(t,y,m){const{y:sy,m:sm}=txEffectiveMonth(t);if(t.spread==='year'){for(let i=0;i<12;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +t.amount/12;}return 0;}return(sy===y&&sm===m)?+t.amount:0;}
+function moAmt(t,y,m){const d=parseLocalDate(t.tx_date||t.date);const sy=d.getFullYear(),sm=d.getMonth();if(t.spread==='year'){for(let i=0;i<12;i++){let mm=sm+i,yy=sy+Math.floor(mm/12);mm=mm%12;if(yy===y&&mm===m)return +t.amount/12;}return 0;}return(sy===y&&sm===m)?+t.amount:0;}
 function yrAmt(t,y){let s=0;for(let m=0;m<12;m++)s+=moAmt(t,y,m);return s;}
 function parseLocalDate(s){const[y,m,d]=(s||'').split('-').map(Number);return(y&&m&&d)?new Date(y,m-1,d):new Date(s);}
 function instMo(p,y,m){const idx=instIndexFor(p,y,m);return idx>0?(+p.total_amount/(p.payments_count||p.count)):0;}
@@ -1702,7 +1704,10 @@ function computeFlow(){
     const bal=parseFloat(localStorage.getItem('acctBal_'+acc.id))||0;
     let acctBilling=0;
     const cardLines=cards.map(c=>{
-      const amt=DB.transactions.filter(t=>t.type==='expense'&&t.card_id===c.id).reduce((s,t)=>s+moAmt(t,VY,VM),0);
+      const amt=DB.transactions.filter(t=>t.type==='expense'&&t.card_id===c.id).reduce((s,t)=>{
+        const eff=txEffectiveMonth(t);
+        return s+(eff.y===VY&&eff.m===VM?+t.amount:0);
+      },0);
       acctBilling+=amt;
       return '<div class="row" style="justify-content:space-between;font-size:.82rem;padding:3px 0"><span class="muted">💳 '+c.name+' (חיוב ה-'+c.billing_day+')</span><span>'+fmt(amt)+'</span></div>';
     }).join('')||'<div class="muted" style="font-size:.8rem">אין כרטיסי אשראי מקושרים לחשבון זה</div>';
@@ -1835,14 +1840,12 @@ function renderExpenses(){
     +(incRoots.length?'<div class="filtergroup">'+groupPill('__income__','💰 כל ההכנסות')+incRoots.map(pill).join('')+'</div>':'');
   f.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{exFilter=p.dataset.f;renderExpenses();});
 
-  // תנועות רגילות — מסנן לפי חודש/שנה. אם יש לתנועה כרטיס אשראי, מסננים
-  // לפי החודש שבו היא באמת מחויבת (כמו ב-moAmt, לא לפי תאריך הקנייה
-  // הגולמי) — כדי שה"תנועות" שרואים תואמות למה שנספר בסקירה/גרפים לאותו
-  // חודש, ולא ייראה שיש הוצאה בסקירה בלי תנועות שמסבירות אותה.
+  // תנועות רגילות — מסנן לפי חודש/שנה של תאריך הצריכה בפועל (תואם ל-moAmt,
+  // לא לחודש החיוב בכרטיס — זה נשאר רק בכרטיס "בקרת תזרים").
   let rows=[...DB.transactions].sort((a,b)=>(b.tx_date||b.date).localeCompare(a.tx_date||a.date));
   rows=rows.filter(t=>{
-    const{y,m}=txEffectiveMonth(t);
-    return y===VY&&m===VM;
+    const d=parseLocalDate(t.tx_date||t.date);
+    return d.getFullYear()===VY&&d.getMonth()===VM;
   });
   if(exFilter==='__income__')rows=rows.filter(t=>t.type==='income');
   else if(exFilter==='__expense__')rows=rows.filter(t=>t.type==='expense');
