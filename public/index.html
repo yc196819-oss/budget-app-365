@@ -556,7 +556,7 @@ tr:last-child td{border-bottom:none}
 const _url='https://bwwupwbakefjhwropdin.supabase.co', _key='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3d3Vwd2Jha2Vmamh3cm9wZGluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MjgyNzYsImV4cCI6MjA5ODIwNDI3Nn0.-x9BYvkn-21jCr6CIrnh15m9gAUfIS3GMVNbrPuznBE';
 const sb=supabase.createClient(_url,_key);
 const $=s=>document.querySelector(s);
-const fmt=n=>'₪'+Math.abs(Math.round(n)).toLocaleString('he-IL');
+const fmt=n=>(n<0?'-':'')+'₪'+Math.abs(Math.round(n)).toLocaleString('he-IL');
 const uid=()=>Math.random().toString(36).slice(2,10);
 const todayStr=()=>new Date().toISOString().slice(0,10);
 const MONTHS=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
