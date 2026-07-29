@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 <style>
@@ -484,6 +485,7 @@ tr:last-child td{border-bottom:none}
       <div class="row">
         <button class="btn" onclick="exportData()">ייצוא גיבוי JSON</button>
         <button class="btn sec" onclick="exportMonthlyPdf()">ייצוא PDF חודשי</button>
+        <button class="btn sec" onclick="exportMonthlyExcel()">ייצוא Excel חודשי</button>
         <button class="btn sec" onclick="document.getElementById('importFile').click()">ייבוא מגיבוי</button>
         <input type="file" id="importFile" accept=".json" class="hidden" onchange="importData(event)">
       </div>
@@ -1147,35 +1149,101 @@ async function sendReminderTest(){
   }
 }
 
-function exportMonthlyPdf(){
+// jsPDF's built-in fonts don't include Hebrew glyphs or ₪ at all -- doc.text()
+// with Hebrew input silently renders garbage. Instead, render a real (hidden)
+// HTML element -- the browser's own font handles Hebrew/RTL correctly -- and
+// rasterize that into the PDF via html2canvas, so what you see is what's in
+// the file.
+async function exportMonthlyPdf(){
   const jspdfLib=window.jspdf;
   if(!jspdfLib||!jspdfLib.jsPDF){alert('ספריית PDF לא נטענה');return;}
-  const doc=new jspdfLib.jsPDF({orientation:'p',unit:'mm',format:'a4'});
+  if(!window.html2canvas){alert('ספריית html2canvas לא נטענה');return;}
   const y=VY,m=VM;
   const exp=DB.transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+moAmt(t,y,m),0)+DB.installments.reduce((s,p)=>s+instMo(p,y,m),0);
   const inc=DB.transactions.filter(t=>t.type==='income').reduce((s,t)=>s+moAmt(t,y,m),0);
   const bal=inc-exp;
 
-  doc.setFontSize(16);
-  doc.text('Budget Monthly Summary',10,14);
-  doc.setFontSize(11);
-  doc.text('Period: '+MONTHS[m]+' '+y,10,22);
-  doc.text('Income: '+fmt(inc),10,30);
-  doc.text('Expense: '+fmt(exp),10,37);
-  doc.text('Balance: '+fmt(bal),10,44);
+  const rows=[...DB.transactions].filter(t=>{const d=parseLocalDate(t.tx_date||t.date);return d.getFullYear()===y&&d.getMonth()===m;}).sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||''));
+  const rowsHtml=rows.map(t=>{
+    const c=DB.categories.find(x=>x.id===t.category_id);
+    return '<tr><td style="padding:4px 8px;border-bottom:1px solid #ddd">'+(t.tx_date||'')+'</td>'
+      +'<td style="padding:4px 8px;border-bottom:1px solid #ddd">'+(t.description||'')+'</td>'
+      +'<td style="padding:4px 8px;border-bottom:1px solid #ddd">'+(c?c.name:'—')+'</td>'
+      +'<td style="padding:4px 8px;border-bottom:1px solid #ddd">'+(t.type==='income'?'הכנסה':'הוצאה')+'</td>'
+      +'<td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:left">'+fmt(t.amount)+'</td></tr>';
+  }).join('');
 
-  let lineY=56;
-  doc.setFontSize(10);
-  doc.text('Recent Transactions:',10,lineY);
-  lineY+=6;
-  const rows=[...DB.transactions].sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||''));
-  for(const t of rows.slice(0,18)){
-    const tx=(t.tx_date||'')+' | '+(t.type==='income'?'Income':'Expense')+' | '+(t.description||'')+' | '+fmt(t.amount);
-    doc.text(tx.slice(0,105),10,lineY);
-    lineY+=5;
-    if(lineY>280)break;
+  const wrap=document.createElement('div');
+  wrap.style.cssText='position:fixed;top:-99999px;left:-99999px;width:780px;background:#fff;color:#111;padding:24px;direction:rtl;font-family:Arial,Tahoma,sans-serif';
+  wrap.innerHTML=
+    '<h2 style="margin:0 0 4px">סיכום תקציב חודשי</h2>'
+    +'<div style="color:#555;margin-bottom:16px">'+MONTHS[m]+' '+y+'</div>'
+    +'<div style="display:flex;gap:16px;margin-bottom:20px">'
+      +'<div style="flex:1;background:#f2f5ff;border-radius:10px;padding:12px"><div style="font-size:.8rem;color:#666">הכנסות</div><div style="font-size:1.3rem;font-weight:700;color:#1a7a4c">'+fmt(inc)+'</div></div>'
+      +'<div style="flex:1;background:#fff2f2;border-radius:10px;padding:12px"><div style="font-size:.8rem;color:#666">הוצאות</div><div style="font-size:1.3rem;font-weight:700;color:#c0392b">'+fmt(exp)+'</div></div>'
+      +'<div style="flex:1;background:#f2f2f2;border-radius:10px;padding:12px"><div style="font-size:.8rem;color:#666">מאזן</div><div style="font-size:1.3rem;font-weight:700">'+fmt(bal)+'</div></div>'
+    +'</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:.85rem">'
+      +'<thead><tr style="background:#eee"><th style="padding:6px 8px;text-align:right">תאריך</th><th style="padding:6px 8px;text-align:right">תיאור</th><th style="padding:6px 8px;text-align:right">קטגוריה</th><th style="padding:6px 8px;text-align:right">סוג</th><th style="padding:6px 8px;text-align:left">סכום</th></tr></thead>'
+      +'<tbody>'+(rowsHtml||'<tr><td colspan="5" style="padding:12px;text-align:center;color:#888">אין תנועות בחודש זה</td></tr>')+'</tbody>'
+    +'</table>';
+  document.body.appendChild(wrap);
+
+  try{
+    const canvas=await html2canvas(wrap,{scale:2,backgroundColor:'#ffffff'});
+    const imgData=canvas.toDataURL('image/png');
+    const doc=new jspdfLib.jsPDF({orientation:'p',unit:'mm',format:'a4'});
+    const pageWidth=doc.internal.pageSize.getWidth();
+    const pageHeight=doc.internal.pageSize.getHeight();
+    const imgWidth=pageWidth-20;
+    const imgHeight=canvas.height*imgWidth/canvas.width;
+    let heightLeft=imgHeight,position=10;
+    doc.addImage(imgData,'PNG',10,position,imgWidth,imgHeight);
+    heightLeft-=(pageHeight-20);
+    while(heightLeft>0){
+      position=heightLeft-imgHeight+10;
+      doc.addPage();
+      doc.addImage(imgData,'PNG',10,position,imgWidth,imgHeight);
+      heightLeft-=(pageHeight-20);
+    }
+    doc.save('budget-report-'+y+'-'+String(m+1).padStart(2,'0')+'.pdf');
+  }catch(err){
+    alert('שגיאה בייצוא PDF: '+err.message);
+  }finally{
+    document.body.removeChild(wrap);
   }
-  doc.save('budget-report-'+y+'-'+String(m+1).padStart(2,'0')+'.pdf');
+}
+function exportMonthlyExcel(){
+  if(!window.XLSX){alert('ספריית Excel לא נטענה');return;}
+  const y=VY,m=VM;
+  const rows=[...DB.transactions].filter(t=>{const d=parseLocalDate(t.tx_date||t.date);return d.getFullYear()===y&&d.getMonth()===m;}).sort((a,b)=>(a.tx_date||'').localeCompare(b.tx_date||''));
+  const instRows=DB.installments.filter(p=>instMo(p,y,m)>0).map(p=>({_isInst:true,tx_date:instDateFor(p,y,m),description:p.description,category_id:p.category_id,type:'expense',amount:instMo(p,y,m)}));
+  const all=[...rows,...instRows].sort((a,b)=>(a.tx_date||'').localeCompare(b.tx_date||''));
+
+  const sheetRows=all.map(t=>{
+    const c=DB.categories.find(x=>x.id===t.category_id);
+    const sub=t.subcategory_id?DB.categories.find(x=>x.id===t.subcategory_id):null;
+    return {
+      'תאריך':t.tx_date||'',
+      'תיאור':t.description||'',
+      'קטגוריה':c?c.name:'',
+      'תת-קטגוריה':sub?sub.name:'',
+      'סוג':t.type==='income'?'הכנסה':'הוצאה',
+      'סכום':+t.amount
+    };
+  });
+  const inc=all.filter(t=>t.type==='income').reduce((s,t)=>s+ +t.amount,0);
+  const exp=all.filter(t=>t.type==='expense').reduce((s,t)=>s+ +t.amount,0);
+  sheetRows.push({});
+  sheetRows.push({'תאריך':'','תיאור':'סה"כ הכנסות','קטגוריה':'','תת-קטגוריה':'','סוג':'','סכום':inc});
+  sheetRows.push({'תאריך':'','תיאור':'סה"כ הוצאות','קטגוריה':'','תת-קטגוריה':'','סוג':'','סכום':exp});
+  sheetRows.push({'תאריך':'','תיאור':'מאזן','קטגוריה':'','תת-קטגוריה':'','סוג':'','סכום':inc-exp});
+
+  const ws=window.XLSX.utils.json_to_sheet(sheetRows);
+  ws['!cols']=[{wch:12},{wch:28},{wch:16},{wch:16},{wch:10},{wch:12}];
+  const wb=window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb,ws,MONTHS[m]+' '+y);
+  window.XLSX.writeFile(wb,'budget-report-'+y+'-'+String(m+1).padStart(2,'0')+'.xlsx');
 }
 async function handlePDF(e){
   const f=e.target.files[0];if(!f)return;
