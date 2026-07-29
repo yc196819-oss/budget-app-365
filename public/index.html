@@ -1581,6 +1581,31 @@ window.editTx=async id=>{
   if(error){alert('שגיאה בעדכון: '+error.message);return;}
   t.description=d||'(ללא תיאור)';t.amount=amount;t.tx_date=dt;render();
 };
+// קטגוריה/תת-קטגוריה נערכות ישירות בטבלת התנועות (לא דרך editTx), כי הן
+// דורשות בחירה מרשימה, לא טקסט חופשי.
+function txCategoryCell(t){
+  const kind=t.type==='income'?'income':'expense';
+  const roots=rootCats(kind);
+  const catOpts=['<option value="">— ללא —</option>'].concat(roots.map(c=>'<option value="'+c.id+'" '+(c.id===t.category_id?'selected':'')+'>'+(c.icon||'')+' '+c.name+'</option>')).join('');
+  const subs=t.category_id?subCats(t.category_id):[];
+  const subOpts='<option value="">— ללא תת —</option>'+subs.map(s=>'<option value="'+s.id+'" '+(s.id===t.subcategory_id?'selected':'')+'>'+s.name+'</option>').join('');
+  return '<div style="display:flex;flex-direction:column;gap:3px;min-width:130px">'
+    +'<select style="font-size:.78rem;padding:3px 4px" onchange="updateTxCategory(\''+t.id+'\',this.value)">'+catOpts+'</select>'
+    +'<select style="font-size:.75rem;padding:3px 4px" onchange="updateTxSubcategory(\''+t.id+'\',this.value)">'+subOpts+'</select>'
+    +'</div>';
+}
+window.updateTxCategory=async(id,categoryId)=>{
+  const t=DB.transactions.find(x=>x.id===id);if(!t)return;
+  const {error}=await sb.from('transactions').update({category_id:categoryId||null,subcategory_id:null}).eq('id',id);
+  if(error){alert('שגיאה בעדכון קטגוריה: '+error.message);return;}
+  t.category_id=categoryId||null;t.subcategory_id=null;render();
+};
+window.updateTxSubcategory=async(id,subcategoryId)=>{
+  const t=DB.transactions.find(x=>x.id===id);if(!t)return;
+  const {error}=await sb.from('transactions').update({subcategory_id:subcategoryId||null}).eq('id',id);
+  if(error){alert('שגיאה בעדכון תת-קטגוריה: '+error.message);return;}
+  t.subcategory_id=subcategoryId||null;render();
+};
 window.editLoan=async id=>{
   const l=DB.loans.find(x=>x.id===id);if(!l)return;
   const who=prompt('שם צד ההלוואה',l.counterparty||'');if(who===null)return;
@@ -1884,13 +1909,14 @@ function renderExpenses(){
 
   const sum=rows.reduce((s,t)=>s+(t.type==='expense'?+t.amount:0),0);
   $('#exBody').innerHTML=rows.length?rows.map(t=>{
-    const c=DB.categories.find(x=>x.id===t.category_id);
-    const sub=t.subcategory_id?DB.categories.find(x=>x.id===t.subcategory_id):null;
     const nat=t._isInst?'<span class="tag fixed">תשלומים</span>':(t.spread==='year'?'<span class="tag yearly">שנתי</span>':(t.nature==='fixed'?'<span class="tag fixed">קבוע</span>':'<span class="tag variable">שוטף</span>'));
     const btns=t._isInst
       ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button> <button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
       :'<button class="smallbtn" onclick="editTx(\''+t.id+'\')">עריכה</button> <button class="btn danger" onclick="delTx(\''+t.id+'\')">מחק</button>';
-    return '<tr><td>'+(t.tx_date||'')+'</td><td>'+t.description+'</td><td>'+(c?c.name:'—')+(sub?' › '+sub.name:'')+'</td><td>'+(t.type==='income'?'הכנסה':'הוצאה')+'</td><td>'+nat+'</td><td>'+(memberCache[t.created_by]||'—')+'</td><td class="'+(t.type==='income'?'pos':'neg')+'">'+fmt(t.amount)+'</td><td>'+btns+'</td></tr>';
+    const catCell=t._isInst
+      ?(()=>{const c=DB.categories.find(x=>x.id===t.category_id);return c?c.name:'—';})()
+      :txCategoryCell(t);
+    return '<tr><td>'+(t.tx_date||'')+'</td><td>'+t.description+'</td><td>'+catCell+'</td><td>'+(t.type==='income'?'הכנסה':'הוצאה')+'</td><td>'+nat+'</td><td>'+(memberCache[t.created_by]||'—')+'</td><td class="'+(t.type==='income'?'pos':'neg')+'">'+fmt(t.amount)+'</td><td>'+btns+'</td></tr>';
   }).join(''):'<tr><td colspan="8" class="empty">אין תנועות</td></tr>';
   const sr=$('#exSumRow');if(rows.length){sr.classList.remove('hidden');$('#exSum').textContent=fmt(Math.abs(sum));}else sr.classList.add('hidden');
 }
