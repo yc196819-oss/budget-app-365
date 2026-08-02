@@ -12,13 +12,17 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;800&family=Suez+One&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0f1117;--surface:#1a1d29;--surface2:#222636;--line:#2c3145;--text:#e8eaf2;--muted:#9aa0b8;--accent:#6c8cff;--accent2:#52d6a4;--danger:#ff6b6b;--warn:#ffb454;--radius:16px;--shadow:0 8px 30px rgba(0,0,0,.35)}
+:root{--bg:#0f1117;--surface:#1a1d29;--surface2:#222636;--surface3:#2a2f42;--line:#2c3145;--line2:#363c54;--text:#e8eaf2;--muted:#9aa0b8;--faint:#666c85;--accent:#6c8cff;--accent2:#52d6a4;--danger:#ff6b6b;--warn:#ffb454;--radius:16px;--shadow:0 8px 30px rgba(0,0,0,.35);
+  --cat-1:#8b7cff;--cat-2:#5ab4ff;--cat-3:#f2c14e;--cat-4:#4fd0c5;--cat-5:#ff8f6b;--cat-6:#52d6a4;--cat-7:#f2a65a;--cat-8:#ff8fc7}
 *{box-sizing:border-box;margin:0;padding:0}
-body.light{--bg:#f4f6fb;--surface:#ffffff;--surface2:#eef1f8;--line:#d5dae8;--text:#1a1d29;--muted:#5a6178;--shadow:0 8px 30px rgba(60,70,120,.12)}
-body.light nav button.active,body.light .auth-tab.active{color:#fff}
-body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
-.app{max-width:1280px;margin:0 auto;padding:20px}
+body.light{--bg:#f4f6fb;--surface:#ffffff;--surface2:#eef1f8;--surface3:#e4e8f4;--line:#d5dae8;--line2:#c3cae0;--text:#1a1d29;--muted:#5a6178;--faint:#8f96ad;--shadow:0 8px 30px rgba(60,70,120,.12)}
+body.light .auth-tab.active{color:#fff}
+body{font-family:'Heebo','Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+.app{max-width:none;margin:0;padding:0;display:flex;align-items:stretch;min-height:100vh}
 .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .auth-box{background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:40px;width:100%;max-width:440px;box-shadow:var(--shadow)}
 .auth-logo{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:1.6rem;margin:0 auto 16px;box-shadow:0 4px 20px rgba(108,140,255,.4)}
@@ -36,20 +40,47 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);colo
 .auth-err{font-size:.85rem;margin-top:10px;text-align:center;padding:10px;border-radius:8px}
 .auth-err.err{color:var(--danger);background:rgba(255,107,107,.1)}
 .auth-err.ok{color:var(--accent2);background:rgba(82,214,164,.1)}
-.logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:1.1rem;flex-shrink:0}
-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px}
-header h1{font-size:1.35rem;font-weight:700;display:flex;align-items:center;gap:10px}
-.user-info{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.87rem}
+.logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:1.1rem;flex-shrink:0;font-family:'Suez One',serif;color:#0f1117}
 .avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:.85rem;font-weight:700;color:#fff;flex-shrink:0}
-nav{display:flex;gap:4px;background:var(--surface);padding:6px;border-radius:14px;flex-wrap:wrap}
-nav button{background:none;border:0;color:var(--muted);padding:8px 12px;border-radius:10px;cursor:pointer;font-size:.83rem;font-weight:600;white-space:nowrap}
-nav button.active{background:var(--accent);color:#fff}
+
+/* ===== sidebar rail ===== */
+.rail{width:224px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px;gap:16px;position:sticky;top:0;height:100vh;overflow-y:auto;transition:width .2s ease}
+.rail.collapsed{width:68px}
+.rail-head{display:flex;align-items:center;gap:10px;padding:0 4px}
+.rail-word{font-size:1.05rem;font-weight:800;white-space:nowrap;overflow:hidden;display:flex;align-items:center}
+.rail-collapse{margin-right:auto;background:none;border:0;color:var(--faint);width:24px;height:24px;border-radius:8px;cursor:pointer;flex-shrink:0;font-size:.9rem}
+.rail-collapse:hover{background:var(--surface2);color:var(--text)}
+.rail.collapsed .rail-word,.rail.collapsed .navlbl,.rail.collapsed .rail-group-label{display:none}
+.rail.collapsed .rail-head{justify-content:center}
+.rail.collapsed .rail-collapse{margin-right:0}
+nav{display:flex;flex-direction:column;gap:2px;background:none;padding:0;border-radius:0}
+.rail-group-label{font-size:.66rem;font-weight:700;color:var(--faint);padding:10px 10px 2px;white-space:nowrap;letter-spacing:.01em}
+nav button{display:flex;align-items:center;gap:8px;background:none;border:0;color:var(--muted);padding:9px 12px;border-radius:10px;cursor:pointer;font-size:.85rem;font-weight:600;white-space:nowrap;text-align:right;width:100%;position:relative}
+nav button:hover{background:var(--surface2);color:var(--text)}
+nav button.active{background:linear-gradient(90deg,rgba(108,140,255,.18),rgba(108,140,255,.03));color:var(--text)}
+nav button.active::before{content:"";position:absolute;right:-12px;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--accent);box-shadow:0 0 8px rgba(108,140,255,.6)}
+.rail.collapsed nav button{justify-content:center;padding:10px 0}
+.user-info.rail-foot{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.85rem;margin-top:auto;padding-top:12px;border-top:1px solid var(--line);flex-wrap:wrap}
+.rail.collapsed .user-info.rail-foot{justify-content:center}
+.shell-main{flex:1;min-width:0;padding:22px 26px 50px}
+@media(max-width:820px){
+  .rail{position:sticky;width:100%;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:10px 12px;gap:8px 14px;overflow-x:auto}
+  .rail.collapsed{width:100%}
+  nav{flex-direction:row;flex-wrap:wrap}
+  .rail-group-label{padding:0;width:100%;display:none}
+  .user-info.rail-foot{margin-right:auto;margin-top:0;padding-top:0;border-top:0;width:auto}
+  .shell-main{padding:18px 14px 40px}
+}
 .grid{display:grid;gap:16px}
 .cards{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
 .card .label{color:var(--muted);font-size:.75rem;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
-.card .value{font-size:1.6rem;font-weight:800}
+.card .value{font-size:1.6rem;font-weight:800;font-variant-numeric:tabular-nums}
 .pos{color:var(--accent2)}.neg{color:var(--danger)}.neu{color:var(--accent)}
+.trend{display:inline-flex;align-items:center;gap:3px;font-size:.72rem;font-weight:700;margin-top:5px;padding:2px 7px;border-radius:7px;font-variant-numeric:tabular-nums}
+.trend.up{background:rgba(82,214,164,.14);color:var(--accent2)}
+.trend.down{background:rgba(255,107,107,.14);color:var(--danger)}
+.trend.flat{background:var(--surface2);color:var(--faint)}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-top:16px;box-shadow:var(--shadow)}
 .panel h2{font-size:1.05rem;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-weight:700}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -71,6 +102,32 @@ tr:last-child td{border-bottom:none}
 .tag.variable{background:rgba(82,214,164,.18);color:var(--accent2)}
 .tag.yearly{background:rgba(255,180,84,.18);color:var(--warn)}
 .hidden{display:none!important}
+
+/* ===== transactions: summary hero + day-grouped cards ===== */
+.tx-summary{background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px;flex-wrap:wrap}
+.tx-summary .lbl{color:var(--muted);font-size:.78rem;font-weight:600;margin-bottom:4px}
+.tx-summary .hero-num{font-family:'Suez One',serif;font-size:2.1rem;line-height:1;font-variant-numeric:tabular-nums}
+.tx-chips{display:flex;gap:10px;flex-wrap:wrap}
+.tx-chip{display:flex;align-items:center;gap:8px;background:var(--surface3);border:1px solid var(--line2);padding:8px 14px;border-radius:12px}
+.tx-chip .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.tx-chip .dot.in{background:var(--accent2);box-shadow:0 0 6px rgba(82,214,164,.7)}
+.tx-chip .dot.out{background:var(--danger);box-shadow:0 0 6px rgba(255,107,107,.6)}
+.tx-chip b{font-variant-numeric:tabular-nums;font-size:.9rem}
+.tx-chip span.l{color:var(--muted);font-size:.7rem;display:block}
+.day-group{margin-bottom:4px}
+.day-head{display:flex;align-items:baseline;gap:8px;padding:12px 2px 6px}
+.day-head b{font-size:.8rem;font-weight:700}
+.day-head span{font-size:.7rem;color:var(--faint)}
+.tx-card{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 14px;margin-bottom:7px;transition:border-color .15s,transform .15s}
+.tx-card:hover{border-color:var(--line2);transform:translateY(-1px)}
+.tx-badge{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:1.05rem;flex-shrink:0}
+.tx-mid{flex:1;min-width:0}
+.tx-desc{font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tx-meta{display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap}
+.tx-cattag{font-size:.71rem;font-weight:600;padding:2px 8px;border-radius:7px}
+.tx-pmtag{font-size:.71rem;color:var(--faint)}
+.tx-amt{font-weight:800;font-size:.95rem;font-variant-numeric:tabular-nums;flex-shrink:0;white-space:nowrap}
+.tx-actions{display:flex;gap:4px;flex-shrink:0}
 .muted{color:var(--muted);font-size:.85rem}
 .bar{height:10px;border-radius:6px;background:var(--surface2);overflow:hidden;margin-top:6px}
 .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
@@ -151,30 +208,38 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <div id="mainApp" class="app hidden">
-  <header>
-    <h1><span class="logo">₪</span> ניהול תקציב <span class="sync-dot" id="syncDot"></span></h1>
-    <nav id="nav">
-      <button data-tab="dash" class="active">📊 סקירה</button>
-      <button data-tab="expenses">💸 תנועות</button>
-      <button data-tab="installments">🧾 תשלומים</button>
-      <button data-tab="charts">📉 גרפים</button>
-      <button data-tab="categories">🗂️ קטגוריות</button>
-      <button data-tab="accounts">🏦 חשבונות וכרטיסים</button>
-      <button data-tab="loans">🤝 הלוואות</button>
-      <button data-tab="investments">📈 השקעות</button>
-      <button data-tab="planning">🎯 יעדים</button>
-      <button data-tab="import">🤖 ייבוא AI</button>
-      <button data-tab="sharing">👥 שיתוף</button>
-      <button data-tab="settings">⚙️ ניהול</button>
-    </nav>
-    <div class="user-info">
-      <div class="avatar" id="userAvatar">?</div>
-      <span id="userName"></span>
-      <button class="btn sec" id="themeBtn" style="padding:6px 12px;font-size:.8rem" onclick="toggleTheme()" title="החלף מצב תצוגה">🌙</button>
-      <button class="btn sec" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">יציאה</button>
+  <aside class="rail" id="rail">
+    <div class="rail-head">
+      <span class="logo">₪</span>
+      <span class="rail-word">ניהול תקציב <span class="sync-dot" id="syncDot"></span></span>
+      <button class="rail-collapse" id="railCollapseBtn" title="כווץ/הרחב תפריט" aria-label="כווץ תפריט">◂</button>
     </div>
-  </header>
+    <nav id="nav">
+      <div class="rail-group-label">ראשי</div>
+      <button data-tab="dash" class="active">📊 <span class="navlbl">סקירה</span></button>
+      <button data-tab="expenses">💸 <span class="navlbl">תנועות</span></button>
+      <button data-tab="charts">📉 <span class="navlbl">גרפים</span></button>
+      <div class="rail-group-label">ניהול כספי</div>
+      <button data-tab="installments">🧾 <span class="navlbl">תשלומים</span></button>
+      <button data-tab="categories">🗂️ <span class="navlbl">קטגוריות</span></button>
+      <button data-tab="accounts">🏦 <span class="navlbl">חשבונות וכרטיסים</span></button>
+      <button data-tab="loans">🤝 <span class="navlbl">הלוואות</span></button>
+      <button data-tab="investments">📈 <span class="navlbl">השקעות</span></button>
+      <button data-tab="planning">🎯 <span class="navlbl">יעדים</span></button>
+      <div class="rail-group-label">מערכת</div>
+      <button data-tab="import">🤖 <span class="navlbl">ייבוא AI</span></button>
+      <button data-tab="sharing">👥 <span class="navlbl">שיתוף</span></button>
+      <button data-tab="settings">⚙️ <span class="navlbl">ניהול</span></button>
+    </nav>
+    <div class="user-info rail-foot">
+      <div class="avatar" id="userAvatar">?</div>
+      <span id="userName" class="navlbl"></span>
+      <button class="btn sec" id="themeBtn" style="padding:6px 12px;font-size:.8rem" onclick="toggleTheme()" title="החלף מצב תצוגה">🌙</button>
+      <button class="btn sec navlbl" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">יציאה</button>
+    </div>
+  </aside>
 
+  <main class="shell-main">
   <div class="row" style="margin-bottom:14px;justify-content:flex-end">
     <span class="muted">תצוגה:</span>
     <select id="monthSel"></select>
@@ -183,9 +248,9 @@ tr:last-child td{border-bottom:none}
 
   <section id="tab-dash">
     <div class="grid cards">
-      <div class="card"><div class="label">הכנסות החודש</div><div class="value pos" id="kIncome">₪0</div></div>
-      <div class="card"><div class="label">הוצאות החודש</div><div class="value neg" id="kExpense">₪0</div></div>
-      <div class="card"><div class="label">מאזן החודש</div><div class="value neu" id="kBalance">₪0</div></div>
+      <div class="card"><div class="label">הכנסות החודש</div><div class="value pos" id="kIncome">₪0</div><span class="trend flat" id="kIncomeTrend"></span></div>
+      <div class="card"><div class="label">הוצאות החודש</div><div class="value neg" id="kExpense">₪0</div><span class="trend flat" id="kExpenseTrend"></span></div>
+      <div class="card"><div class="label">מאזן החודש</div><div class="value neu" id="kBalance">₪0</div><span class="trend flat" id="kBalanceTrend"></span></div>
       <div class="card"><div class="label">תשלומים החודש</div><div class="value" id="kInst">₪0</div></div>
       <div class="card"><div class="label">שווי השקעות</div><div class="value pos" id="kInv">₪0</div></div>
     </div>
@@ -229,12 +294,16 @@ tr:last-child td{border-bottom:none}
     </div>
     <div class="panel">
       <h2>תנועות</h2>
+      <div class="tx-summary hidden" id="txSummary">
+        <div><div class="lbl">יתרה בתקופה המסוננת</div><div class="hero-num" id="txHeroNum">₪0</div></div>
+        <div class="tx-chips">
+          <div class="tx-chip"><span class="dot in"></span><div><span class="l">הכנסות</span><b id="txChipIn">₪0</b></div></div>
+          <div class="tx-chip"><span class="dot out"></span><div><span class="l">הוצאות</span><b id="txChipOut">₪0</b></div></div>
+        </div>
+      </div>
       <div class="filters" id="exFilters"></div>
-      <table>
-        <thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th>סוג</th><th>אופי</th><th>דווח ע"י</th><th>סכום</th><th></th></tr></thead>
-        <tbody id="exBody"></tbody>
-        <tfoot><tr id="exSumRow" class="hidden"><td colspan="6" style="font-weight:700">סה"כ מסוננים</td><td id="exSum" style="font-weight:700;color:var(--accent)"></td><td></td></tr></tfoot>
-      </table>
+      <div id="exBody"></div>
+      <p class="empty hidden" id="exEmpty">אין תנועות</p>
     </div>
   </section>
 
@@ -534,6 +603,7 @@ tr:last-child td{border-bottom:none}
       <p class="muted" id="resetStatus" style="margin-top:8px"></p>
     </div>
   </section>
+  </main>
 </div>
 
 <div id="loanModal" class="modal-overlay hidden">
@@ -817,7 +887,16 @@ async function loadAll(){
 }
 
 const TABS=['dash','expenses','charts','categories','accounts','loans','installments','investments','planning','import','sharing','settings'];
-function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');if(b.dataset.tab==='dash')syncDashboard(true);if(b.dataset.tab==='charts')renderCharts();if(b.dataset.tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}});}
+function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');if(b.dataset.tab==='dash')syncDashboard(true);if(b.dataset.tab==='charts')renderCharts();if(b.dataset.tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}});
+  const collapseBtn=$('#railCollapseBtn');
+  if(collapseBtn)collapseBtn.onclick=()=>{
+    const rail=$('#rail');rail.classList.toggle('collapsed');
+    const collapsed=rail.classList.contains('collapsed');
+    collapseBtn.textContent=collapsed?'▸':'◂';
+    localStorage.setItem('railCollapsed',collapsed?'1':'');
+  };
+  if(collapseBtn&&localStorage.getItem('railCollapsed')){$('#rail').classList.add('collapsed');collapseBtn.textContent='▸';}
+}
 
 async function syncDashboard(force=false){
   if(!CU||!HID||syncInFlight)return;
@@ -1877,6 +1956,18 @@ function applyTheme(t){
 function toggleTheme(){applyTheme(document.body.classList.contains('light')?'dark':'light');}
 applyTheme(localStorage.getItem('theme')||'dark');
 
+function renderTrend(id,cur,prev,invert){
+  const el=$('#'+id);if(!el)return;
+  if(!prev){el.className='trend flat';el.textContent='אין נתוני השוואה';return;}
+  const diff=cur-prev;
+  const pct=Math.round(Math.abs(diff)/Math.abs(prev)*100);
+  if(diff===0){el.className='trend flat';el.textContent='ללא שינוי';return;}
+  const arrow=diff>0?'↑':'↓';
+  const isGood=invert?diff<0:diff>0;
+  el.className='trend '+(isGood?'up':'down');
+  el.textContent=arrow+' '+pct+'% מהחודש הקודם';
+}
+
 // RENDER
 function render(){
   fillCatSel();
@@ -1887,6 +1978,14 @@ function render(){
   $('#kIncome').textContent=fmt(mInc);$('#kExpense').textContent=fmt(mExp);
   $('#kBalance').textContent=fmt(bal);$('#kBalance').className='value '+(bal>=0?'pos':'neg');
   $('#kInst').textContent=fmt(instMoT);
+
+  let pm=m-1,py=y;if(pm<0){pm=11;py=y-1;}
+  const pInc=inc.reduce((s,t)=>s+moAmt(t,py,pm),0);
+  const pInstMoT=DB.installments.reduce((s,p)=>s+instMo(p,py,pm),0);
+  const pExp=exp.reduce((s,t)=>s+moAmt(t,py,pm),0)+pInstMoT;
+  renderTrend('kIncomeTrend',mInc,pInc,false);
+  renderTrend('kExpenseTrend',mExp,pExp,true);
+  renderTrend('kBalanceTrend',bal,pInc-pExp,false);
   $('#kInv').textContent=fmt(DB.investments.reduce((s,i)=>s+(+i.current_value),0));
   $('#dashPeriod').textContent='— '+MONTHS[m]+' '+y;
 
@@ -1935,6 +2034,20 @@ function renderCharts(){
   const trend=[];for(let m=0;m<12;m++){let v=exp.filter(t=>t.category_id===selId).reduce((s,t)=>s+moAmt(t,VY,m),0);v+=DB.installments.filter(p=>p.category_id===selId).reduce((s,p)=>s+instMo(p,VY,m),0);trend.push(Math.round(v));}
   if(charts.catTrend)charts.catTrend.destroy();
   charts.catTrend=new Chart(document.getElementById('catTrend'),{type:'line',data:{labels:MONTHS_SHORT,datasets:[{label:'הוצאה חודשית',data:trend,borderColor:'#52d6a4',backgroundColor:'rgba(82,214,164,.16)',fill:true,tension:.45,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:'#52d6a4'}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#b8bfd6'},grid:{display:false}},y:{ticks:{color:'#b8bfd6'},grid:{color:'rgba(44,49,69,.55)'}}},plugins:{legend:{display:false},tooltip:{backgroundColor:'#171a25',borderColor:'#2c3145',borderWidth:1,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
+}
+
+const CAT_COLORS=['#8b7cff','#5ab4ff','#f2c14e','#4fd0c5','#ff8f6b','#52d6a4','#f2a65a','#ff8fc7'];
+function catColor(id){
+  if(!id)return '#8d93ac';
+  let h=0;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))>>>0;
+  return CAT_COLORS[h%CAT_COLORS.length];
+}
+function hexA(hex,a){const n=parseInt(hex.slice(1),16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
+const PM_LABELS={standing_order:'↻ הוראת קבע',credit:'💳 אשראי',check:'🖊 צ׳ק',cash:'💵 מזומן'};
+function txPmTag(t){
+  if(t._isInst)return '<span class="tx-pmtag">🧾 תשלומים</span>';
+  const l=PM_LABELS[t.payment_method];
+  return l?'<span class="tx-pmtag">'+l+'</span>':'';
 }
 
 function renderExpenses(){
@@ -1990,17 +2103,58 @@ function renderExpenses(){
   rows.sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||''));
 
   const sum=rows.reduce((s,t)=>s+(t.type==='expense'?+t.amount:0),0);
-  $('#exBody').innerHTML=rows.length?rows.map(t=>{
-    const nat=t._isInst?'<span class="tag fixed">תשלומים</span>':(t.spread==='year'?'<span class="tag yearly">שנתי</span>':(t.nature==='fixed'?'<span class="tag fixed">קבוע</span>':'<span class="tag variable">שוטף</span>'));
-    const btns=t._isInst
-      ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button> <button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
-      :'<button class="smallbtn" onclick="editTx(\''+t.id+'\')">עריכה</button> <button class="btn danger" onclick="delTx(\''+t.id+'\')">מחק</button>';
-    const catCell=t._isInst
-      ?(()=>{const c=DB.categories.find(x=>x.id===t.category_id);return c?c.name:'—';})()
-      :txCategoryCell(t);
-    return '<tr><td>'+(t.tx_date||'')+'</td><td>'+t.description+'</td><td>'+catCell+'</td><td>'+(t.type==='income'?'הכנסה':'הוצאה')+'</td><td>'+nat+'</td><td>'+(memberCache[t.created_by]||'—')+'</td><td class="'+(t.type==='income'?'pos':'neg')+'">'+fmt(t.amount)+'</td><td>'+btns+'</td></tr>';
-  }).join(''):'<tr><td colspan="8" class="empty">אין תנועות</td></tr>';
-  const sr=$('#exSumRow');if(rows.length){sr.classList.remove('hidden');$('#exSum').textContent=fmt(Math.abs(sum));}else sr.classList.add('hidden');
+  const incSum=rows.reduce((s,t)=>s+(t.type==='income'?+t.amount:0),0);
+  const net=incSum-sum;
+
+  const heroEl=$('#txHeroNum'),summaryEl=$('#txSummary');
+  if(rows.length){
+    summaryEl.classList.remove('hidden');
+    heroEl.textContent=(net<0?'−':'+')+'₪'+Math.abs(Math.round(net)).toLocaleString('he-IL');
+    heroEl.className='hero-num '+(net<0?'neg':'pos');
+    $('#txChipIn').textContent=fmt(incSum);
+    $('#txChipOut').textContent=fmt(sum);
+  } else summaryEl.classList.add('hidden');
+
+  const body=$('#exBody'),emptyEl=$('#exEmpty');
+  if(!rows.length){body.innerHTML='';emptyEl.classList.remove('hidden');return;}
+  emptyEl.classList.add('hidden');
+
+  // קיבוץ לפי תאריך — הרשימה כבר ממוינת יורד לפי tx_date
+  const groups=[];
+  let curDate=null,curGroup=null;
+  rows.forEach(t=>{
+    const dk=t.tx_date||'';
+    if(dk!==curDate){curDate=dk;curGroup={date:dk,items:[]};groups.push(curGroup);}
+    curGroup.items.push(t);
+  });
+
+  body.innerHTML=groups.map(g=>{
+    const d=parseLocalDate(g.date);
+    const dayLbl=isNaN(d)?g.date:d.toLocaleDateString('he-IL',{day:'numeric',month:'long'});
+    const wdLbl=isNaN(d)?'':d.toLocaleDateString('he-IL',{weekday:'long'});
+    const cards=g.items.map(t=>{
+      const c=DB.categories.find(x=>x.id===t.category_id);
+      const color=catColor(t.category_id);
+      const icon=c?(c.icon||'📌'):'❔';
+      const subName=t.subcategory_id?(DB.categories.find(x=>x.id===t.subcategory_id)||{}).name:null;
+      const catLabel=(c?c.name:'ללא קטגוריה')+(subName?' · '+subName:'');
+      const catEditor=t._isInst?'':'<div style="margin-top:5px">'+txCategoryCell(t)+'</div>';
+      const btns=t._isInst
+        ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
+        :'<button class="smallbtn" onclick="editTx(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delTx(\''+t.id+'\')">מחק</button>';
+      return '<div class="tx-card">'
+        +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+icon+'</div>'
+        +'<div class="tx-mid">'
+          +'<div class="tx-desc">'+t.description+'</div>'
+          +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+catLabel+'</span>'+txPmTag(t)+'</div>'
+          +catEditor
+        +'</div>'
+        +'<div class="tx-amt '+(t.type==='income'?'pos':'neg')+'">'+(t.type==='income'?'+':'−')+'₪'+Math.abs(Math.round(t.amount)).toLocaleString('he-IL')+'</div>'
+        +'<div class="tx-actions">'+btns+'</div>'
+        +'</div>';
+    }).join('');
+    return '<div class="day-group"><div class="day-head"><b>'+dayLbl+'</b><span>'+wdLbl+'</span></div>'+cards+'</div>';
+  }).join('');
 }
 
 function renderCatSummary(){
