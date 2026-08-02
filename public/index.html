@@ -663,8 +663,13 @@ if(new URLSearchParams(location.search).get('invite')){
   setTimeout(()=>{if(!CU){$('#joinModal').classList.remove('hidden');setAuthMode('register');}},400);
 }
 
+let bootPromise=null;
 sb.auth.onAuthStateChange(async(ev,session)=>{
-  if(session){CU=session.user;await boot();}
+  if(session){
+    CU=session.user;
+    if(!bootPromise)bootPromise=boot().finally(()=>{bootPromise=null;});
+    await bootPromise;
+  }
   else{CU=null;HID=null;stopAutoSync();$('#authWrap').classList.remove('hidden');$('#mainApp').classList.add('hidden');}
 });
 
@@ -738,7 +743,8 @@ async function persistUserSettings(){
 }
 
 async function ensureHousehold(){
-  const{data:mem}=await sb.from('memberships').select('household_id,display_name,role').eq('user_id',CU.id).single();
+  const{data:mems}=await sb.from('memberships').select('household_id,display_name,role').eq('user_id',CU.id).order('created_at',{ascending:true}).limit(1);
+  let mem=mems&&mems[0];
   if(mem){HID=mem.household_id;MNAME=mem.display_name;MROLE=mem.role||'owner';}
   else{
     const inv=CU.user_metadata?.invite_code||'';
@@ -753,11 +759,19 @@ async function ensureHousehold(){
     }
     if(!HID){
       const{data:hh}=await sb.from('households').insert({name:dn+' budget',type:'family'}).select().single();
-      HID=hh.id;MROLE='owner';
-      await sb.from('memberships').insert({household_id:HID,user_id:CU.id,display_name:dn,role:'owner'});
-      await seedCategories();
+      const{error:insErr}=await sb.from('memberships').insert({household_id:hh.id,user_id:CU.id,display_name:dn,role:'owner'});
+      if(insErr){
+        // another concurrent boot already created our membership first — drop this duplicate household and use the real one
+        await sb.from('households').delete().eq('id',hh.id);
+        const{data:retry}=await sb.from('memberships').select('household_id,display_name,role').eq('user_id',CU.id).order('created_at',{ascending:true}).limit(1);
+        mem=retry&&retry[0];
+        if(mem){HID=mem.household_id;MROLE=mem.role||'owner';}
+      }else{
+        HID=hh.id;MROLE='owner';
+        await seedCategories();
+      }
     }
-    MNAME=dn;
+    MNAME=mem?mem.display_name:dn;
   }
   $('#userAvatar').textContent=MNAME.slice(0,2);$('#userName').textContent=MNAME;
   $('#settEmail').textContent=CU.email;$('#settName').textContent=MNAME;
