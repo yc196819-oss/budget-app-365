@@ -160,23 +160,42 @@ tr:last-child td{border-bottom:none}
 .catrow:last-child{border:0}
 .catname{font-weight:700;display:flex;justify-content:space-between;margin-bottom:4px}
 .subcat{margin-right:20px;padding:5px 0;font-size:.85rem;color:var(--muted);display:flex;justify-content:space-between}
-.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.filters{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
 .filtergroup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}
+.filter-row{display:flex;gap:7px;align-items:center;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
+.filter-row::-webkit-scrollbar{height:5px}
+.filter-row::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.filter-row::-webkit-scrollbar-track{background:transparent}
 .empty{text-align:center;color:var(--muted);padding:36px}
-.pill{font-size:.78rem;padding:5px 12px;border-radius:20px;background:var(--surface2);border:1px solid var(--line);cursor:pointer;color:var(--muted)}
+.pill{font-size:.79rem;padding:6px 13px;border-radius:20px;background:var(--surface2);border:1px solid var(--line);cursor:pointer;color:var(--muted);font-weight:600;white-space:nowrap;flex-shrink:0;transition:transform .12s,filter .12s}
+.pill:hover{transform:translateY(-1px)}
 .pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
-.pill.group{font-weight:700;border-style:dashed;border-color:var(--accent2)}
-.pill.group.on{border-style:solid}
-.goalcard{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:18px}
-.goalcard h3{font-size:1rem;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pill.group{font-weight:800}
+.pill.all-pill{font-weight:800}
+.goalcard{background:var(--surface2);border:1px solid var(--line);border-radius:16px;padding:18px;cursor:pointer;transition:border-color .15s,transform .15s;position:relative}
+.goalcard:hover{border-color:var(--accent);transform:translateY(-2px)}
 .goalcard .meta{color:var(--muted);font-size:.82rem;margin-bottom:10px}
 .goalgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.goalcard-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.goalcard-icon{width:38px;height:38px;border-radius:11px;background:var(--surface3);display:grid;place-items:center;font-size:1.15rem;flex-shrink:0}
+.goalcard-name{flex:1;font-weight:800;font-size:1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.goalcard-menu{display:flex;gap:4px;opacity:0;transition:opacity .15s;flex-shrink:0}
+.goalcard:hover .goalcard-menu{opacity:1}
+.icon-btn{width:27px;height:27px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;display:grid;place-items:center;font-size:.8rem;flex-shrink:0}
+.icon-btn:hover{background:var(--surface3);color:var(--text)}
+.icon-btn.danger:hover{background:rgba(255,107,107,.14);color:var(--danger);border-color:var(--danger)}
+.goalcard-hint{font-size:.68rem;color:var(--faint);margin-top:10px;text-align:center;opacity:.75}
 .smallbtn{font-size:.78rem;padding:5px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--line);color:var(--text);cursor:pointer}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);display:inline-block;margin-right:4px;box-shadow:0 0 6px var(--accent2)}
 .modal-overlay{position:fixed;inset:0;background:rgba(8,9,14,.72);display:flex;align-items:center;justify-content:center;z-index:999;backdrop-filter:blur(6px);animation:modalIn .15s ease}
 @keyframes modalIn{from{opacity:0}to{opacity:1}}
 .modal{background:var(--surface);border:1px solid var(--line2);border-radius:20px;padding:28px;max-width:480px;width:90%;box-shadow:var(--shadow);animation:modalPop .18s cubic-bezier(.2,.9,.3,1.2)}
 @keyframes modalPop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+.modal-lg{max-width:640px;padding:34px;max-height:86vh;overflow-y:auto}
+.plan-head{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.plan-head-icon{width:54px;height:54px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:1.7rem;flex-shrink:0;box-shadow:0 4px 16px rgba(108,140,255,.35)}
+.plan-head h3{margin:0 0 2px}
+.plan-head p{margin:0;color:var(--muted);font-size:.85rem}
 .modal h3{font-size:1.15rem;margin-bottom:10px;font-weight:800;display:flex;align-items:center;gap:8px}
 .modal p{color:var(--muted);font-size:.9rem;margin-bottom:18px;line-height:1.6}
 .modal .row{justify-content:flex-end}
@@ -668,10 +687,10 @@ const fmt=n=>(n<0?'-':'')+'₪'+Math.abs(Math.round(n)).toLocaleString('he-IL');
 
 // ═══ styled modal kit — replaces native alert()/confirm()/prompt() ═══
 const UI={};
-UI._open=(inner)=>{
+UI._open=(inner,opts={})=>{
   const ov=document.createElement('div');
   ov.className='modal-overlay';
-  ov.innerHTML='<div class="modal" role="dialog" aria-modal="true">'+inner+'</div>';
+  ov.innerHTML='<div class="modal'+(opts.large?' modal-lg':'')+'" role="dialog" aria-modal="true">'+inner+'</div>';
   document.body.appendChild(ov);
   const onEsc=e=>{if(e.key==='Escape')close();};
   const close=()=>{ov.remove();document.removeEventListener('keydown',onEsc);};
@@ -2223,11 +2242,24 @@ function txPmTag(t){
 function renderExpenses(){
   const f=$('#exFilters');
   const expRoots=rootCats('expense'),incRoots=rootCats('income');
-  const pill=c=>'<span class="pill '+(exFilter===c.id?'on':'')+'" data-f="'+c.id+'">'+(c.icon||'')+' '+c.name+'</span>';
-  const groupPill=(key,label)=>'<span class="pill group '+(exFilter===key?'on':'')+'" data-f="'+key+'">'+label+'</span>';
-  f.innerHTML='<span class="pill '+(exFilter==='all'?'on':'')+'" data-f="all">הכל</span>'
-    +(expRoots.length?'<div class="filtergroup">'+groupPill('__expense__','💸 כל ההוצאות')+expRoots.map(pill).join('')+'</div>':'')
-    +(incRoots.length?'<div class="filtergroup">'+groupPill('__income__','💰 כל ההכנסות')+incRoots.map(pill).join('')+'</div>':'');
+  const pillStyle=(active,color)=>active
+    ?('background:'+color+';color:#0c0e15;border-color:'+color)
+    :('background:'+hexA(color,.13)+';color:'+color+';border-color:'+hexA(color,.32));
+  const pill=c=>{
+    const active=exFilter===c.id,color=catColor(c.id);
+    return '<button type="button" class="pill'+(active?' on':'')+'" data-f="'+c.id+'" style="'+pillStyle(active,color)+'">'+(c.icon||'')+' '+c.name+'</button>';
+  };
+  const groupPill=(key,label,color)=>{
+    const active=exFilter===key;
+    return '<button type="button" class="pill group'+(active?' on':'')+'" data-f="'+key+'" style="'+pillStyle(active,color)+'">'+label+'</button>';
+  };
+  const allActive=exFilter==='all';
+  f.innerHTML='<div class="filter-row">'
+    +'<button type="button" class="pill all-pill'+(allActive?' on':'')+'" data-f="all">📋 הכל</button>'
+    +(expRoots.length?groupPill('__expense__','💸 כל ההוצאות','#ff6b6b'):'')
+    +expRoots.map(pill).join('')
+    +'</div>'
+    +(incRoots.length?'<div class="filter-row">'+groupPill('__income__','💰 כל ההכנסות','#52d6a4')+incRoots.map(pill).join('')+'</div>':'');
   f.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{exFilter=p.dataset.f;renderExpenses();});
 
   // תנועות רגילות — מסנן לפי חודש/שנה של תאריך הצריכה בפועל (תואם ל-moAmt,
@@ -2488,21 +2520,29 @@ function calcLoanPlan(){
 }
 function renderGoals(){$('#pCount').textContent=DB.goals.length;$('#pTarget').textContent=fmt(DB.goals.reduce((s,g)=>s+(+g.target_amount),0));$('#pSaved').textContent=fmt(DB.goals.reduce((s,g)=>s+(+g.saved_amount),0));$('#goalGrid').innerHTML=DB.goals.length?DB.goals.map(g=>{const pct=Math.min(100,+g.saved_amount/+g.target_amount*100);const left=Math.max(0,+g.target_amount-+g.saved_amount);let due='';if(g.target_date){const now=new Date();const d=new Date(g.target_date);const mo=Math.max(0,(d.getFullYear()-now.getFullYear())*12+(d.getMonth()-now.getMonth()));due='<div class="meta" style="margin-top:8px">יעד: '+g.target_date+(mo>0?' · '+fmt(left/mo)+' לחודש':' · הגיע המועד')+'</div>';}
   const planItems=Array.isArray(g.plan_items)?g.plan_items:[];
-  const planNote=planItems.length?'<div class="meta" style="margin-top:4px">📋 תוכנית: '+planItems.length+' סעיפים · '+fmt(planItems.reduce((s,it)=>s+(+it.amount||0),0))+' מתוכנן</div>':'';
-  return '<div class="goalcard"><h3><span style="font-size:1.1rem;margin-left:6px">'+g.icon+'</span><span style="flex:1">'+g.name+'</span><button class="smallbtn" onclick="openGoalPlan(\''+g.id+'\')" title="תוכנית מפורטת">📋 תוכנית</button><button class="smallbtn" onclick="editGoal(\''+g.id+'\')">עריכה</button><button class="btn danger" onclick="delGoal(\''+g.id+'\')">מחק</button></h3><div class="meta">'+fmt(+g.saved_amount)+' מתוך '+fmt(+g.target_amount)+' · '+pct.toFixed(0)+'%'+(left>0?' · נותר '+fmt(left):' · הושג! 🎉')+'</div><div class="bar big"><span style="width:'+pct+'%"></span></div>'+due+planNote+'<div class="row" style="margin-top:10px"><input type="number" placeholder="הפקד ₪" id="gadd-'+g.id+'" style="width:120px"><button class="smallbtn" onclick="addToGoal(\''+g.id+'\')">הפקד</button></div></div>';}).join(''):'<div class="empty">אין יעדים</div>';}
+  const planNote=planItems.length?'<div class="meta" style="margin-top:-4px;margin-bottom:8px">📋 '+planItems.length+' סעיפים מתוכננים · '+fmt(planItems.reduce((s,it)=>s+(+it.amount||0),0))+'</div>':'';
+  return '<div class="goalcard" ondblclick="openGoalPlan(\''+g.id+'\')">'
+    +'<div class="goalcard-top"><div class="goalcard-icon">'+g.icon+'</div><div class="goalcard-name">'+g.name+'</div>'
+    +'<div class="goalcard-menu"><button type="button" class="icon-btn" onclick="event.stopPropagation();editGoal(\''+g.id+'\')" title="עריכה">✏️</button><button type="button" class="icon-btn danger" onclick="event.stopPropagation();delGoal(\''+g.id+'\')" title="מחיקה">🗑️</button></div>'
+    +'</div>'
+    +'<div class="meta">'+fmt(+g.saved_amount)+' מתוך '+fmt(+g.target_amount)+' · '+pct.toFixed(0)+'%'+(left>0?' · נותר '+fmt(left):' · הושג! 🎉')+'</div>'
+    +'<div class="bar big"><span style="width:'+pct+'%"></span></div>'+due+planNote
+    +'<div class="row" style="margin-top:10px" onclick="event.stopPropagation()"><input type="number" placeholder="הפקד ₪" id="gadd-'+g.id+'" style="width:120px"><button type="button" class="smallbtn" onclick="addToGoal(\''+g.id+'\')">הפקד</button></div>'
+    +'<div class="goalcard-hint">לחיצה כפולה לפתיחת תוכנית מפורטת 📋</div>'
+    +'</div>';}).join(''):'<div class="empty">אין יעדים</div>';}
 
 window.openGoalPlan=id=>{
   const g=DB.goals.find(x=>x.id===id);if(!g)return;
   const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
   const items=(Array.isArray(g.plan_items)?g.plan_items:[]).map(x=>({name:x.name||'',amount:+x.amount||0}));
-  const html='<h3>'+(g.icon||'🎯')+' תוכנית — '+g.name+'</h3>'
-    +'<p style="margin-bottom:10px">סכום יעד כולל: '+fmt(g.target_amount)+'</p>'
+  const html='<div class="plan-head"><div class="plan-head-icon">'+(g.icon||'🎯')+'</div><div><h3>תוכנית — '+g.name+'</h3><p>סכום יעד כולל: '+fmt(g.target_amount)+'</p></div></div>'
+    +'<label style="margin-top:0">סעיפי תקציב</label>'
     +'<div id="planRows"></div>'
     +'<button type="button" class="smallbtn" id="planAddRow" style="margin-top:2px">➕ הוסף סעיף</button>'
     +'<div class="plan-total"><span>סה"כ מתוכנן</span><span id="planTotalVal"></span></div>'
-    +'<label>הערות חופשיות</label><textarea id="planNotes" rows="4">'+esc(g.notes||'')+'</textarea>'
+    +'<label>הערות חופשיות</label><textarea id="planNotes" rows="4" placeholder="כל מה שלא נכנס לטבלה — רעיונות, קישורים, תזכורות...">'+esc(g.notes||'')+'</textarea>'
     +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn sec" id="planCancel">ביטול</button><button class="btn" id="planSave">שמירת תוכנית</button></div>';
-  const {ov,close}=UI._open(html);
+  const {ov,close}=UI._open(html,{large:true});
   const rowsEl=ov.querySelector('#planRows');
   function renderRows(){
     rowsEl.innerHTML=items.length?items.map((it,i)=>
