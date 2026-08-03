@@ -145,6 +145,7 @@ tr:last-child td{border-bottom:none}
 .day-head span{font-size:.7rem;color:var(--faint)}
 .tx-card{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 14px;margin-bottom:7px;transition:border-color .15s,transform .15s}
 .tx-card:hover{border-color:var(--line2);transform:translateY(-1px)}
+.tx-card.settled{opacity:.6}
 .tx-badge{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:1.05rem;flex-shrink:0}
 .tx-mid{flex:1;min-width:0}
 .tx-desc{font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -160,7 +161,10 @@ tr:last-child td{border-bottom:none}
 .catrow{padding:12px 0;border-bottom:1px solid var(--line)}
 .catrow:last-child{border:0}
 .catname{font-weight:700;display:flex;justify-content:space-between;margin-bottom:4px}
-.subcat{margin-right:20px;padding:5px 0;font-size:.85rem;color:var(--muted);display:flex;justify-content:space-between}
+.subcat{margin-right:20px;padding:6px 4px;font-size:.85rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;border-radius:8px}
+.subcat:hover{background:var(--surface3)}
+.subcat span:first-child{display:flex;align-items:center}
+.subcat .icon-btn{width:24px;height:24px;font-size:.7rem}
 .filters{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
 .filtergroup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}
 .filter-row{display:flex;gap:7px;align-items:center;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
@@ -220,9 +224,12 @@ tr:last-child td{border-bottom:none}
 .dropzone{border:2px dashed var(--line);border-radius:14px;padding:36px;text-align:center;cursor:pointer;transition:.2s}
 .dropzone:hover{border-color:var(--accent);background:rgba(108,140,255,.05)}
 .dropzone.drag{border-color:var(--accent2);background:rgba(82,214,164,.08)}
-.review-row{display:grid;grid-template-columns:1fr 100px 130px 220px 90px 40px;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--line);font-size:.85rem}
-.review-row select,.review-row input{padding:6px 8px;font-size:.8rem}
-.review-grid{min-width:920px}
+.review-row{display:grid;grid-template-columns:1fr 100px 130px 220px 90px 40px;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);font-size:.85rem;background:var(--surface);transition:background .12s}
+.review-row:last-child{border-bottom:0}
+.review-row:hover{background:var(--surface2)}
+.review-row.review-head{background:var(--surface2);color:var(--faint);font-weight:800;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em}
+.review-row select,.review-row input{padding:7px 9px;font-size:.8rem;border-radius:8px}
+.review-grid{min-width:920px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 #reviewList{overflow-x:auto}
 @media(max-width:650px){.review-grid{min-width:0}}
 @media(max-width:650px){nav button{padding:7px 8px;font-size:.76rem}.card .value{font-size:1.3rem}th,td{padding:8px 5px;font-size:.78rem}.review-row{grid-template-columns:1fr;gap:4px}}
@@ -450,7 +457,7 @@ tr:last-child td{border-bottom:none}
         <button class="btn" onclick="addLoan()">הוסף</button>
       </div>
     </div>
-    <div class="panel"><h2>הלוואות</h2><table><thead><tr><th>תאריך</th><th>מי</th><th>כיוון</th><th>הערה</th><th>סכום</th><th>סטטוס</th><th></th></tr></thead><tbody id="loanBody"></tbody></table></div>
+    <div class="panel"><h2>הלוואות</h2><div id="loanBody"></div></div>
   </section>
 
   <section id="tab-installments" class="hidden">
@@ -470,7 +477,7 @@ tr:last-child td{border-bottom:none}
         <button class="btn" onclick="addInst()">הוסף</button>
       </div>
     </div>
-    <div class="panel"><h2>רכישות בתשלומים</h2><table><thead><tr><th>תיאור</th><th>קטגוריה</th><th>סכום כולל</th><th>תשלום חודשי</th><th>התקדמות</th><th>נותר</th><th></th></tr></thead><tbody id="instBody"></tbody></table></div>
+    <div class="panel"><h2>רכישות בתשלומים</h2><div id="instBody"></div></div>
   </section>
 
   <section id="tab-investments" class="hidden">
@@ -491,7 +498,7 @@ tr:last-child td{border-bottom:none}
         <button class="btn" onclick="addInv()">הוסף</button>
       </div>
     </div>
-    <div class="panel"><h2>תיק ההשקעות</h2><table><thead><tr><th>שם</th><th>סוג</th><th>עלות</th><th>שווי נוכחי</th><th>רווח/הפסד</th><th>תשואה</th><th></th></tr></thead><tbody id="invBody"></tbody></table></div>
+    <div class="panel"><h2>תיק ההשקעות</h2><div id="invBody"></div></div>
   </section>
 
   <section id="tab-planning" class="hidden">
@@ -1224,11 +1231,16 @@ window.shareWA=l=>{const msg=encodeURIComponent('הצטרף לתקציב המש�
 async function loadMembers(){
   const{data}=await sb.from('memberships').select('user_id,display_name,role,created_at').eq('household_id',HID);
   const ml=$('#membersList');
-  if(!data||!data.length){ml.innerHTML='<div class="empty">אין חברים נוספים</div>';return;}
+  if(!data||!data.length){ml.innerHTML='<p class="empty">אין חברים נוספים</p>';return;}
   ml.innerHTML=data.map(m=>{
     const canRemove=MROLE==='owner'&&m.user_id!==CU.id;
-    const removeBtn=canRemove?'<button class="btn sec" style="padding:6px 12px;font-size:.8rem" onclick="removeMember(\''+m.user_id+'\',\''+(m.display_name||'').replace(/'/g,"")+'\')">הסר</button>':'';
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)"><div style="display:flex;align-items:center;gap:10px"><div class="avatar">'+m.display_name.slice(0,2)+'</div><div><div style="font-weight:600">'+m.display_name+'</div><div class="muted">'+(m.role==='owner'?'בעלים':'חבר')+'</div></div></div><div class="row" style="align-items:center;gap:10px"><div class="muted">'+new Date(m.created_at).toLocaleDateString('he-IL')+'</div>'+removeBtn+'</div></div>';
+    const color=catColor(m.user_id);
+    const removeBtn=canRemove?'<button type="button" class="icon-btn danger" onclick="removeMember(\''+m.user_id+'\',\''+(m.display_name||'').replace(/'/g,"")+'\')" title="הסרה">🗑️</button>':'';
+    return '<div class="tx-card">'
+      +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+';border-radius:50%;font-weight:800;font-size:.85rem">'+m.display_name.slice(0,2)+'</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+m.display_name+'</div><div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(m.role==='owner'?'👑 בעלים':'חבר')+'</span><span class="tx-pmtag">הצטרפ/ה '+new Date(m.created_at).toLocaleDateString('he-IL')+'</span></div></div>'
+      +'<div class="tx-actions">'+removeBtn+'</div>'
+      +'</div>';
   }).join('');
   loadPendingInvites();
 }
@@ -1245,9 +1257,14 @@ async function loadPendingInvites(){
   if(!box)return;
   const{data,error}=await sb.from('invites').select('id,code,expires_at,used,revoked,created_at').eq('household_id',HID).eq('used',false).eq('revoked',false).order('created_at',{ascending:false});
   if(error||!data||!data.length){box.innerHTML='';return;}
-  box.innerHTML='<h3 style="font-size:.95rem;margin:16px 0 8px">הזמנות ממתינות</h3>'+data.map(iv=>{
+  box.innerHTML='<h3 style="font-size:.9rem;font-weight:800;margin:18px 0 8px;color:var(--muted)">הזמנות ממתינות</h3>'+data.map(iv=>{
     const expired=new Date(iv.expires_at)<new Date();
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)"><div class="muted" style="font-family:monospace">'+iv.code+(expired?' · פג תוקף':' · בתוקף עד '+new Date(iv.expires_at).toLocaleDateString('he-IL'))+'</div><button class="btn sec" style="padding:6px 12px;font-size:.8rem" onclick="revokeInvite(\''+iv.id+'\')">בטל</button></div>';
+    const color=expired?'#8d93ac':'#52d6a4';
+    return '<div class="tx-card">'
+      +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">✉️</div>'
+      +'<div class="tx-mid"><div class="tx-desc" style="font-family:monospace;letter-spacing:.05em">'+iv.code+'</div><div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(expired?'פג תוקף':'בתוקף עד '+new Date(iv.expires_at).toLocaleDateString('he-IL'))+'</span></div></div>'
+      +'<div class="tx-actions"><button type="button" class="smallbtn" onclick="revokeInvite(\''+iv.id+'\')">ביטול</button></div>'
+      +'</div>';
   }).join('');
 }
 
@@ -1808,11 +1825,12 @@ function renderReview(){
   $('#reviewCount').textContent=pendingImport.length+' תנועות';
   const allCats=rootCats('expense').concat(rootCats('income'));
   const warning=!allCats.length?'<div class="empty" style="margin-bottom:10px">אין קטגוריות זמינות כרגע. אפשר עדיין לאשר הוספה, או לעבור לקטגוריות וליצור לפחות קטגוריה אחת.</div>':'';
-  $('#reviewList').innerHTML=warning+'<div class="review-row review-grid" style="font-weight:700;color:var(--muted)"><span>תיאור</span><span>סכום</span><span>קטגוריה</span><span>תת-קטגוריה</span><span>סוג</span><span></span></div>'+pendingImport.map((t,i)=>{
+  const rows=pendingImport.map((t,i)=>{
     const catOpts=['<option value="">— ללא קטגוריה —</option>'].concat(allCats.map(c=>'<option value="'+c.id+'" '+(c.id===t.category_id?'selected':'')+'>'+c.name+'</option>')).join('');
     const subOpts=getReviewSubcategoryOptions(i);
-    return '<div class="review-row review-grid"><input value="'+(t.description||'')+'" onchange="pendingImport['+i+'].description=this.value"><input type="number" value="'+t.amount+'" onchange="pendingImport['+i+'].amount=+this.value"><select onchange="onReviewCategoryChange('+i+',this.value)">'+catOpts+'</select><div style="display:flex;gap:6px;align-items:center"><select style="flex:1" onchange="pendingImport['+i+'].subcategory_id=this.value||null">'+subOpts+'</select><button class="smallbtn" type="button" onclick="createReviewSubcategory('+i+')">+ תת</button></div><select onchange="pendingImport['+i+'].type=this.value"><option value="expense" '+(t.type==='expense'?'selected':'')+'>הוצאה</option><option value="income" '+(t.type==='income'?'selected':'')+'>הכנסה</option></select><button class="btn danger" onclick="pendingImport.splice('+i+',1);renderReview()">✕</button></div>';
+    return '<div class="review-row"><input value="'+(t.description||'')+'" onchange="pendingImport['+i+'].description=this.value"><input type="number" value="'+t.amount+'" onchange="pendingImport['+i+'].amount=+this.value"><select onchange="onReviewCategoryChange('+i+',this.value)">'+catOpts+'</select><div style="display:flex;gap:6px;align-items:center"><select style="flex:1" onchange="pendingImport['+i+'].subcategory_id=this.value||null">'+subOpts+'</select><button class="smallbtn" type="button" onclick="createReviewSubcategory('+i+')">+ תת</button></div><select onchange="pendingImport['+i+'].type=this.value"><option value="expense" '+(t.type==='expense'?'selected':'')+'>הוצאה</option><option value="income" '+(t.type==='income'?'selected':'')+'>הכנסה</option></select><button type="button" class="icon-btn danger" onclick="pendingImport.splice('+i+',1);renderReview()" title="הסר">✕</button></div>';
   }).join('');
+  $('#reviewList').innerHTML=warning+'<div class="review-grid"><div class="review-row review-head"><span>תיאור</span><span>סכום</span><span>קטגוריה</span><span>תת-קטגוריה</span><span>סוג</span><span></span></div>'+rows+'</div>';
 }
 
 function getReviewSubcategoryOptions(i){
@@ -2397,15 +2415,24 @@ function renderCatSummary(){
 
 function renderCatManage(){
   const exp=rootCats('expense'),inc=rootCats('income');
-  const editBtn=(id,name)=>'<button class="smallbtn" onclick="renameCat(\''+id+'\')" title="שנה שם">✏️</button>';
-  const delB=(fn,id)=>'<button class="btn danger" onclick="'+fn+'(\''+id+'\')">מחק</button>';
+  const iconBtn=(fn,id,icon,title,danger)=>'<button type="button" class="icon-btn'+(danger?' danger':'')+'" onclick="'+fn+'(\''+id+'\')" title="'+title+'">'+icon+'</button>';
   const renderSub=s=>{
-    // תת-תת קטגוריות (רמה 3)
+    const color=catColor(s.id);
     const subsubs=subCats(s.id);
-    const ssHtml=subsubs.map(ss=>'<div class="subcat" style="margin-right:40px;opacity:.9"><span>↳ '+ss.name+'</span><span>'+editBtn(ss.id)+' '+delB('delSub',ss.id)+'</span></div>').join('');
-    return '<div class="subcat"><span>'+s.name+'</span><span>'+editBtn(s.id)+' <button class="smallbtn" onclick="addSubSub(\''+s.id+'\')" title="הוסף תת-תת קטגוריה">➕</button> '+delB('delSub',s.id)+'</span></div>'+ssHtml;
+    const ssHtml=subsubs.map(ss=>'<div class="subcat" style="margin-right:36px"><span><span class="sw" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+catColor(ss.id)+';margin-left:8px"></span>↳ '+ss.name+'</span><span>'+iconBtn('renameCat',ss.id,'✏️','שנה שם')+iconBtn('delSub',ss.id,'🗑️','מחיקה',true)+'</span></div>').join('');
+    return '<div class="subcat"><span><span class="sw" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';margin-left:8px"></span>'+s.name+'</span><span>'+iconBtn('renameCat',s.id,'✏️','שנה שם')+'<button type="button" class="icon-btn" onclick="addSubSub(\''+s.id+'\')" title="הוסף תת-תת קטגוריה">➕</button>'+iconBtn('delSub',s.id,'🗑️','מחיקה',true)+'</span></div>'+ssHtml;
   };
-  const sec=(title,list)=>'<div style="font-weight:700;color:var(--accent);margin:14px 0 6px">'+title+'</div>'+list.map(c=>'<div class="catrow"><div class="catname"><span>'+(c.icon||'')+' '+c.name+'</span><span>'+editBtn(c.id)+' '+delB('delCat',c.id)+'</span></div>'+subCats(c.id).map(renderSub).join('')+'</div>').join('');
+  const cat=c=>{
+    const color=catColor(c.id);
+    return '<div class="tx-card" style="flex-wrap:wrap;align-items:flex-start">'
+      +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+(c.icon||'📌')+'</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+c.name+'</div>'
+      +(subCats(c.id).length?'<div style="margin-top:8px">'+subCats(c.id).map(renderSub).join('')+'</div>':'')
+      +'</div>'
+      +'<div class="tx-actions">'+iconBtn('renameCat',c.id,'✏️','שנה שם')+iconBtn('delCat',c.id,'🗑️','מחיקה',true)+'</div>'
+      +'</div>';
+  };
+  const sec=(title,list)=>'<div style="font-weight:800;color:var(--accent);margin:16px 0 8px;font-size:.9rem">'+title+'</div>'+(list.length?list.map(cat).join(''):'<p class="empty">אין קטגוריות</p>');
   $('#catManage').innerHTML=sec('קטגוריות הוצאה 💸',exp)+sec('קטגוריות הכנסה 💰',inc);
 }
 
@@ -2436,8 +2463,15 @@ async function renameBankAccount(id){
 function renderAccounts(){
   const box=$('#acctManage'); if(!box)return;
   box.innerHTML=DB.bankAccounts.length
-    ? DB.bankAccounts.map(a=>'<div class="catrow"><div class="catname"><span>🏦 '+a.name+(a.bank_name?' · '+a.bank_name:'')+'</span><span><button class="smallbtn" onclick="renameBankAccount(\''+a.id+'\')" title="שנה שם">✏️</button> <button class="btn danger" onclick="delBankAccount(\''+a.id+'\')">מחק</button></span></div></div>').join('')
-    : '<div class="empty">אין עדיין חשבונות — הוסף אחד למעלה</div>';
+    ? DB.bankAccounts.map(a=>{
+        const color=catColor(a.id);
+        return '<div class="tx-card">'
+          +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">🏦</div>'
+          +'<div class="tx-mid"><div class="tx-desc">'+a.name+'</div>'+(a.bank_name?'<div class="tx-meta"><span class="tx-pmtag">'+a.bank_name+'</span></div>':'')+'</div>'
+          +'<div class="tx-actions"><button type="button" class="smallbtn" onclick="renameBankAccount(\''+a.id+'\')" title="שנה שם">✏️</button><button type="button" class="icon-btn danger" onclick="delBankAccount(\''+a.id+'\')" title="מחיקה">🗑️</button></div>'
+          +'</div>';
+      }).join('')
+    : '<p class="empty">אין עדיין חשבונות — הוסף אחד למעלה</p>';
   const sel=$('#newCardAcct');
   if(sel){
     const cur=sel.value;
@@ -2485,22 +2519,93 @@ function renderCreditCards(){
   box.innerHTML=DB.creditCards.length
     ? DB.creditCards.map(c=>{
         const acct=DB.bankAccounts.find(a=>a.id===c.bank_account_id);
-        return '<div class="catrow"><div class="catname"><span>💳 '+c.name+' <span class="muted">('+(acct?acct.name:'—')+')</span></span>'
-          +'<span style="display:flex;align-items:center;gap:8px">'
-          +'<button class="smallbtn" onclick="renameCreditCard(\''+c.id+'\')" title="שנה שם">✏️</button>'
-          +'<label class="muted" style="font-size:.78rem">יום חיוב:</label>'
-          +'<select onchange="updateCardBillingDay(\''+c.id+'\',this.value)" style="width:auto">'+dayOpts.replace('value="'+c.billing_day+'"','value="'+c.billing_day+'" selected')+'</select>'
-          +'<button class="btn danger" onclick="delCreditCard(\''+c.id+'\')">מחק</button>'
-          +'</span></div></div>';
+        const color=catColor(c.id);
+        return '<div class="tx-card">'
+          +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">💳</div>'
+          +'<div class="tx-mid"><div class="tx-desc">'+c.name+'</div>'
+          +'<div class="tx-meta"><span class="tx-pmtag">'+(acct?acct.name:'—')+'</span></div></div>'
+          +'<div class="row" style="gap:6px;flex-shrink:0">'
+          +'<label class="muted" style="font-size:.74rem;white-space:nowrap">יום חיוב</label>'
+          +'<select onchange="updateCardBillingDay(\''+c.id+'\',this.value)" style="width:auto;padding:6px 8px;font-size:.8rem">'+dayOpts.replace('value="'+c.billing_day+'"','value="'+c.billing_day+'" selected')+'</select>'
+          +'</div>'
+          +'<div class="tx-actions"><button type="button" class="smallbtn" onclick="renameCreditCard(\''+c.id+'\')" title="שנה שם">✏️</button><button type="button" class="icon-btn danger" onclick="delCreditCard(\''+c.id+'\')" title="מחיקה">🗑️</button></div>'
+          +'</div>';
       }).join('')
-    : '<div class="empty">אין עדיין כרטיסי אשראי — הוסף אחד למעלה</div>';
+    : '<p class="empty">אין עדיין כרטיסי אשראי — הוסף אחד למעלה</p>';
 }
 
-function renderLoans(){const owedToMe=DB.loans.filter(l=>l.direction==='tome'&&!l.settled).reduce((s,l)=>s+l.amount,0);const iOwe=DB.loans.filter(l=>l.direction==='iowe'&&!l.settled).reduce((s,l)=>s+l.amount,0);const net=owedToMe-iOwe;$('#lOwedToMe').textContent=fmt(owedToMe);$('#lIOwe').textContent=fmt(iOwe);$('#lNet').textContent=fmt(net);$('#lNet').className='value '+(net>=0?'pos':'neg');$('#loanBody').innerHTML=DB.loans.length?[...DB.loans].map(l=>'<tr><td>'+(l.loan_date||l.date)+'</td><td>'+l.counterparty+'</td><td>'+(l.direction==='tome'?'<span class="tag variable">חייבים לי</span>':'<span class="tag fixed">אני חייב</span>')+'</td><td>'+(l.note||'')+'</td><td>'+fmt(l.amount)+'</td><td>'+(l.settled?'<span class="muted">סולק</span>':'פעיל')+'</td><td><button class="smallbtn" onclick="editLoan(\''+l.id+'\')">עריכה</button> '+(!l.settled?'<button class="btn sec" style="font-size:.78rem;padding:5px 9px" onclick="settleLoan(\''+l.id+'\')">סמן כסולק</button> ':'')+'<button class="btn danger" onclick="delLoan(\''+l.id+'\')">מחק</button></td></tr>').join(''):'<tr><td colspan="7" class="empty">אין הלוואות</td></tr>';}
+function renderLoans(){
+  const owedToMe=DB.loans.filter(l=>l.direction==='tome'&&!l.settled).reduce((s,l)=>s+l.amount,0);
+  const iOwe=DB.loans.filter(l=>l.direction==='iowe'&&!l.settled).reduce((s,l)=>s+l.amount,0);
+  const net=owedToMe-iOwe;
+  $('#lOwedToMe').textContent=fmt(owedToMe);$('#lIOwe').textContent=fmt(iOwe);
+  $('#lNet').textContent=fmt(net);$('#lNet').className='value '+(net>=0?'pos':'neg');
+  const box=$('#loanBody');
+  if(!DB.loans.length){box.innerHTML='<p class="empty">אין הלוואות</p>';return;}
+  box.innerHTML=[...DB.loans].map(l=>{
+    const color=l.direction==='tome'?'#52d6a4':'#ff6b6b';
+    const dirLabel=l.direction==='tome'?'חייבים לי':'אני חייב';
+    return '<div class="tx-card'+(l.settled?' settled':'')+'">'
+      +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">🤝</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+l.counterparty+(l.settled?' · <span class="muted">סולק ✅</span>':'')+'</div>'
+      +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+dirLabel+'</span>'
+      +(l.note?'<span class="tx-pmtag">'+l.note+'</span>':'')+'<span class="tx-pmtag">'+(l.loan_date||l.date||'')+'</span></div></div>'
+      +'<div class="tx-amt" style="color:'+color+'">'+fmt(l.amount)+'</div>'
+      +'<div class="tx-actions"><button type="button" class="smallbtn" onclick="editLoan(\''+l.id+'\')" title="עריכה">✏️</button>'
+      +(!l.settled?'<button type="button" class="smallbtn" onclick="settleLoan(\''+l.id+'\')" title="סמן כסולק">✔️</button>':'')
+      +'<button type="button" class="icon-btn danger" onclick="delLoan(\''+l.id+'\')" title="מחיקה">🗑️</button></div>'
+      +'</div>';
+  }).join('');
+}
 
-function renderInstallments(){const y=VY,m=VM;const tmo=DB.installments.reduce((s,p)=>s+instMo(p,y,m),0);let open=0,active=0;DB.installments.forEach(p=>{const paid=instPaid(p);const rem=(p.payments_count||p.count)-paid;if(rem>0){open+=rem*(+p.total_amount/(p.payments_count||p.count));active++;}});$('#iThisMonth').textContent=fmt(tmo);$('#iOpen').textContent=fmt(open);$('#iCount').textContent=active;$('#instBody').innerHTML=DB.installments.length?[...DB.installments].map(p=>{const c=DB.categories.find(x=>x.id===p.category_id);const n=p.payments_count||p.count;const paid=instPaid(p);const rem=n-paid;return '<tr><td>'+p.description+'</td><td>'+(c?c.name:'—')+'</td><td>'+fmt(+p.total_amount)+'</td><td class="neg">'+fmt(+p.total_amount/n)+'</td><td>'+paid+'/'+n+'<div class="bar"><span style="width:'+paid/n*100+'%"></span></div></td><td>'+(rem>0?fmt(rem*(+p.total_amount/n)):'<span class="muted">שולם</span>')+'</td><td><button class="smallbtn" onclick="editInst(\''+p.id+'\')">עריכה</button> <button class="btn danger" onclick="delInst(\''+p.id+'\')">מחק</button></td></tr>';}).join(''):'<tr><td colspan="7" class="empty">אין תשלומים</td></tr>';}
+function renderInstallments(){
+  const y=VY,m=VM;const tmo=DB.installments.reduce((s,p)=>s+instMo(p,y,m),0);
+  let open=0,active=0;
+  DB.installments.forEach(p=>{const paid=instPaid(p);const rem=(p.payments_count||p.count)-paid;if(rem>0){open+=rem*(+p.total_amount/(p.payments_count||p.count));active++;}});
+  $('#iThisMonth').textContent=fmt(tmo);$('#iOpen').textContent=fmt(open);$('#iCount').textContent=active;
+  const box=$('#instBody');
+  if(!DB.installments.length){box.innerHTML='<p class="empty">אין תשלומים</p>';return;}
+  box.innerHTML=[...DB.installments].map(p=>{
+    const c=DB.categories.find(x=>x.id===p.category_id);
+    const color=catColor(p.category_id);
+    const n=p.payments_count||p.count;const paid=instPaid(p);const rem=n-paid;const pct=Math.min(100,paid/n*100);
+    return '<div class="tx-card">'
+      +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">🧾</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+p.description+'</div>'
+      +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(c?(c.icon||'')+' '+c.name:'ללא קטגוריה')+'</span>'
+      +'<span class="tx-pmtag">'+paid+'/'+n+' תשלומים · סה"כ '+fmt(+p.total_amount)+'</span></div>'
+      +'<div class="bar" style="margin-top:6px"><span style="width:'+pct+'%"></span></div></div>'
+      +'<div class="tx-amt neg">'+fmt(+p.total_amount/n)+'<div class="muted" style="font-size:.68rem;font-weight:600;margin-top:2px">'+(rem>0?'נותר '+fmt(rem*(+p.total_amount/n)):'שולם ✅')+'</div></div>'
+      +'<div class="tx-actions"><button type="button" class="smallbtn" onclick="editInst(\''+p.id+'\')" title="עריכה">✏️</button><button type="button" class="icon-btn danger" onclick="delInst(\''+p.id+'\')" title="מחיקה">🗑️</button></div>'
+      +'</div>';
+  }).join('');
+}
 
-function renderInvestments(){const cost=DB.investments.reduce((s,i)=>s+(+i.cost),0);const value=DB.investments.reduce((s,i)=>s+(+i.current_value),0);const pnl=value-cost;const roi=cost?pnl/cost*100:0;$('#invCost').textContent=fmt(cost);$('#invValue').textContent=fmt(value);$('#invPnl').textContent=(pnl>=0?'+':'')+fmt(pnl);$('#invPnl').className='value '+(pnl>=0?'pos':'neg');$('#invRoi').textContent=(roi>=0?'+':'')+roi.toFixed(1)+'%';$('#invRoi').className='value '+(roi>=0?'pos':'neg');$('#invBody').innerHTML=DB.investments.length?DB.investments.map(i=>{const p=+i.current_value-+i.cost;const r=i.cost?p/+i.cost*100:0;return '<tr><td>'+i.name+'</td><td>'+i.asset_type+'</td><td>'+fmt(+i.cost)+'</td><td><input type="number" value="'+Math.round(+i.current_value)+'" onchange="updInv(\''+i.id+'\',this.value)" style="width:110px"></td><td class="'+(p>=0?'pos':'neg')+'">'+(p>=0?'+':'')+fmt(p)+'</td><td class="'+(r>=0?'pos':'neg')+'">'+(r>=0?'+':'')+r.toFixed(1)+'%</td><td><button class="smallbtn" onclick="editInv(\''+i.id+'\')">עריכה</button> <button class="btn danger" onclick="delInv(\''+i.id+'\')">מחק</button></td></tr>';}).join(''):'<tr><td colspan="7" class="empty">אין השקעות</td></tr>';}
+function renderInvestments(){
+  const cost=DB.investments.reduce((s,i)=>s+(+i.cost),0);
+  const value=DB.investments.reduce((s,i)=>s+(+i.current_value),0);
+  const pnl=value-cost;const roi=cost?pnl/cost*100:0;
+  $('#invCost').textContent=fmt(cost);$('#invValue').textContent=fmt(value);
+  $('#invPnl').textContent=(pnl>=0?'+':'')+fmt(pnl);$('#invPnl').className='value '+(pnl>=0?'pos':'neg');
+  $('#invRoi').textContent=(roi>=0?'+':'')+roi.toFixed(1)+'%';$('#invRoi').className='value '+(roi>=0?'pos':'neg');
+  const box=$('#invBody');
+  if(!DB.investments.length){box.innerHTML='<p class="empty">אין השקעות</p>';return;}
+  box.innerHTML=DB.investments.map(i=>{
+    const p=+i.current_value-+i.cost;const r=i.cost?p/+i.cost*100:0;
+    const color=catColor(i.id);
+    return '<div class="tx-card">'
+      +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">📈</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+i.name+'</div>'
+      +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(i.asset_type||'—')+'</span>'
+      +'<span class="tx-pmtag">עלות '+fmt(+i.cost)+'</span></div></div>'
+      +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">'
+      +'<input type="number" value="'+Math.round(+i.current_value)+'" onchange="updInv(\''+i.id+'\',this.value)" style="width:110px;text-align:left" title="שווי נוכחי">'
+      +'<div class="tx-amt '+(p>=0?'pos':'neg')+'" style="font-size:.85rem">'+(p>=0?'+':'')+fmt(p)+' ('+(r>=0?'+':'')+r.toFixed(1)+'%)</div>'
+      +'</div>'
+      +'<div class="tx-actions"><button type="button" class="smallbtn" onclick="editInv(\''+i.id+'\')" title="עריכה">✏️</button><button type="button" class="icon-btn danger" onclick="delInv(\''+i.id+'\')" title="מחיקה">🗑️</button></div>'
+      +'</div>';
+  }).join('');
+}
 
 // ח: מחשבון הלוואות — לוח סילוקין (אמורטיזציה)
 function pmt(principal,monthlyRate,months){
