@@ -173,11 +173,25 @@ tr:last-child td{border-bottom:none}
 .goalgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
 .smallbtn{font-size:.78rem;padding:5px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--line);color:var(--text);cursor:pointer}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);display:inline-block;margin-right:4px;box-shadow:0 0 6px var(--accent2)}
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:999;backdrop-filter:blur(4px)}
-.modal{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px;max-width:520px;width:90%;box-shadow:var(--shadow)}
-.modal h3{font-size:1.1rem;margin-bottom:10px;font-weight:700}
-.modal p{color:var(--muted);font-size:.9rem;margin-bottom:18px}
+.modal-overlay{position:fixed;inset:0;background:rgba(8,9,14,.72);display:flex;align-items:center;justify-content:center;z-index:999;backdrop-filter:blur(6px);animation:modalIn .15s ease}
+@keyframes modalIn{from{opacity:0}to{opacity:1}}
+.modal{background:var(--surface);border:1px solid var(--line2);border-radius:20px;padding:28px;max-width:480px;width:90%;box-shadow:var(--shadow);animation:modalPop .18s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes modalPop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+.modal h3{font-size:1.15rem;margin-bottom:10px;font-weight:800;display:flex;align-items:center;gap:8px}
+.modal p{color:var(--muted);font-size:.9rem;margin-bottom:18px;line-height:1.6}
 .modal .row{justify-content:flex-end}
+.modal label{display:block;color:var(--muted);font-size:.78rem;font-weight:700;margin:12px 0 5px}
+.modal input,.modal textarea,.modal select{width:100%;font-family:inherit}
+.modal textarea{resize:vertical;min-height:70px}
+.btn.danger-solid{background:var(--danger);color:#fff}
+.btn.danger-solid:hover{filter:brightness(1.1)}
+.plan-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.plan-row input[type="text"]{flex:1}
+.plan-row input[type="number"]{width:120px}
+.plan-row .smallbtn{flex-shrink:0}
+.plan-total{display:flex;justify-content:space-between;align-items:center;padding-top:12px;margin-top:8px;border-top:1px solid var(--line);font-weight:800}
+.plan-total .over{color:var(--danger)}
+.plan-total .under{color:var(--accent2)}
 .invite-card{background:linear-gradient(135deg,rgba(108,140,255,.12),rgba(82,214,164,.08));border:1px solid var(--accent);border-radius:16px;padding:24px;margin-top:12px;text-align:center}
 .invite-link{font-family:monospace;font-size:.9rem;color:var(--accent2);background:var(--surface);padding:12px 16px;border-radius:10px;display:block;margin:12px 0;border:1px dashed var(--line);word-break:break-all}
 .timeout-bar{height:3px;background:var(--accent);position:fixed;bottom:0;left:0;transition:width 1s linear;z-index:1000}
@@ -651,6 +665,58 @@ const _url='https://bwwupwbakefjhwropdin.supabase.co', _key='eyJhbGciOiJIUzI1NiI
 const sb=supabase.createClient(_url,_key);
 const $=s=>document.querySelector(s);
 const fmt=n=>(n<0?'-':'')+'₪'+Math.abs(Math.round(n)).toLocaleString('he-IL');
+
+// ═══ styled modal kit — replaces native alert()/confirm()/prompt() ═══
+const UI={};
+UI._open=(inner)=>{
+  const ov=document.createElement('div');
+  ov.className='modal-overlay';
+  ov.innerHTML='<div class="modal" role="dialog" aria-modal="true">'+inner+'</div>';
+  document.body.appendChild(ov);
+  const onEsc=e=>{if(e.key==='Escape')close();};
+  const close=()=>{ov.remove();document.removeEventListener('keydown',onEsc);};
+  document.addEventListener('keydown',onEsc);
+  ov.addEventListener('mousedown',e=>{if(e.target===ov)close();});
+  return {ov,close};
+};
+UI.alert=(message,opts={})=>new Promise(resolve=>{
+  const title=opts.title||(opts.type==='error'?'⚠️ שגיאה':opts.type==='success'?'✅ בוצע':'הודעה');
+  const {ov,close}=UI._open('<h3>'+title+'</h3><p style="white-space:pre-line">'+message+'</p><div class="row"><button class="btn" id="uiOk">אישור</button></div>');
+  const ok=ov.querySelector('#uiOk');
+  ok.onclick=()=>{close();resolve();};
+  ok.focus();
+});
+UI.confirm=(message,opts={})=>new Promise(resolve=>{
+  const {title='אישור פעולה',danger=false,okLabel='אישור',cancelLabel='ביטול'}=opts;
+  const {ov,close}=UI._open('<h3>'+(danger?'⚠️ ':'')+title+'</h3><p>'+message+'</p><div class="row"><button class="btn sec" id="uiCancel">'+cancelLabel+'</button><button class="btn '+(danger?'danger-solid':'')+'" id="uiConfirm">'+okLabel+'</button></div>');
+  ov.querySelector('#uiCancel').onclick=()=>{close();resolve(false);};
+  const okBtn=ov.querySelector('#uiConfirm');
+  okBtn.onclick=()=>{close();resolve(true);};
+  okBtn.focus();
+});
+UI.prompt=(title,fields)=>new Promise(resolve=>{
+  const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
+  const fieldsHtml=fields.map((f,i)=>{
+    const val=esc(f.value);
+    const input=f.type==='textarea'
+      ?'<textarea id="uif'+i+'">'+val+'</textarea>'
+      :'<input id="uif'+i+'" type="'+(f.type||'text')+'" value="'+val+'"'+(f.step?' step="'+f.step+'"':'')+(f.placeholder?' placeholder="'+esc(f.placeholder)+'"':'')+'>';
+    return '<label>'+f.label+'</label>'+input;
+  }).join('');
+  const {ov,close}=UI._open('<h3>'+title+'</h3>'+fieldsHtml+'<div class="row" style="margin-top:18px"><button class="btn sec" id="uiCancel">ביטול</button><button class="btn" id="uiSave">שמירה</button></div>');
+  const collect=()=>{
+    const out={};
+    fields.forEach((f,i)=>{
+      const el=ov.querySelector('#uif'+i);
+      out[f.key]=f.type==='number'?parseFloat(el.value):el.value;
+    });
+    return out;
+  };
+  ov.querySelector('#uiCancel').onclick=()=>{close();resolve(null);};
+  ov.querySelector('#uiSave').onclick=()=>{const v=collect();close();resolve(v);};
+  const first=ov.querySelector('#uif0');
+  if(first){first.focus();if(first.select)first.select();}
+});
 const uid=()=>Math.random().toString(36).slice(2,10);
 const todayStr=()=>new Date().toISOString().slice(0,10);
 const MONTHS=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
@@ -1094,10 +1160,22 @@ async function addTransaction(){
 }
 async function addCat(){const n=$('#newCat').value.trim();if(!n)return;const{data,error}=await sb.from('categories').insert({household_id:HID,name:n,kind:$('#catKind').value}).select().single();if(error){alert('שגיאה: '+error.message);return;}DB.categories.push(data);$('#newCat').value='';render();}
 async function addSub(){const n=$('#newSub').value.trim();if(!n)return;const pid=$('#subParent').value;if(!pid){alert('בחר קטגוריית אב תחילה');return;}const pk=DB.categories.find(x=>x.id===pid)?.kind||'expense';const{data,error}=await sb.from('categories').insert({household_id:HID,name:n,parent_id:pid,kind:pk}).select().single();if(error){alert('שגיאה: '+error.message);return;}DB.categories.push(data);$('#newSub').value='';render();}
-async function renameCat(id){const c=DB.categories.find(x=>x.id===id);if(!c)return;const name=prompt('שם חדש',c.name||'');if(name===null||!name.trim())return;const{error}=await sb.from('categories').update({name:name.trim()}).eq('id',id);if(error){alert('שגיאה: '+error.message);return;}c.name=name.trim();render();}
-async function addSubSub(parentSubId){const name=prompt('שם תת-תת קטגוריה');if(name===null||!name.trim())return;const parent=DB.categories.find(x=>x.id===parentSubId);const pk=parent?.kind||'expense';const{data,error}=await sb.from('categories').insert({household_id:HID,name:name.trim(),parent_id:parentSubId,kind:pk}).select().single();if(error){alert('שגיאה: '+error.message);return;}DB.categories.push(data);render();}
-async function delCat(id){if(!confirm('מחק קטגוריה זו וכל תת-הקטגוריות שלה?'))return;const subIds=subCats(id).map(s=>s.id);if(subIds.length)await sb.from('categories').delete().in('id',subIds);await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id&&c.parent_id!==id);if(catFilter===id){catFilter='all';catSubFilter=null;}render();}
-async function delSub(id){if(!confirm('מחק תת-קטגוריה זו?'))return;await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id);if(catSubFilter===id)catSubFilter=null;render();}
+async function renameCat(id){
+  const c=DB.categories.find(x=>x.id===id);if(!c)return;
+  const v=await UI.prompt('שינוי שם קטגוריה',[{key:'name',label:'שם',value:c.name}]);
+  if(!v||!v.name.trim())return;
+  const{error}=await sb.from('categories').update({name:v.name.trim()}).eq('id',id);
+  if(error){UI.alert(error.message,{type:'error'});return;}
+  c.name=v.name.trim();render();
+}
+async function addSubSub(parentSubId){
+  const v=await UI.prompt('תת-תת קטגוריה חדשה',[{key:'name',label:'שם'}]);
+  if(!v||!v.name.trim())return;
+  const parent=DB.categories.find(x=>x.id===parentSubId);const pk=parent?.kind||'expense';
+  const{data,error}=await sb.from('categories').insert({household_id:HID,name:v.name.trim(),parent_id:parentSubId,kind:pk}).select().single();
+  if(error){UI.alert(error.message,{type:'error'});return;}
+  DB.categories.push(data);render();
+}
 async function addLoan(){const amt=parseFloat($('#loanAmt').value);if(!amt||amt<=0){alert('הכנס סכום');return;}const{data}=await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:$('#loanDir').value,counterparty:$('#loanWho').value||'(ללא שם)',amount:amt,loan_date:$('#loanDate').value||todayStr(),note:$('#loanNote').value,settled:false}).select().single();DB.loans.unshift(data);$('#loanWho').value='';$('#loanAmt').value='';$('#loanNote').value='';render();}
 async function addInst(){const total=parseFloat($('#instTotal').value),count=parseInt($('#instCount').value);if(!total||!count){alert('הכנס סכום ומספר תשלומים');return;}const{data,error}=await sb.from('installments').insert({household_id:HID,created_by:CU.id,description:$('#instDesc').value||'(ללא תיאור)',total_amount:total,payments_count:count,first_payment:$('#instFirst').value||todayStr(),category_id:$('#instCat').value||null}).select().single();if(error){alert('שגיאה בשמירה: '+error.message+'\n\nהנתונים לא נמחקו — נסה שוב.');return;}DB.installments.push(data);$('#instDesc').value='';$('#instTotal').value='';$('#instCount').value='';render();}
 async function addInv(){const cost=parseFloat($('#invCostIn').value);if(!cost){alert('הכנס עלות');return;}const val=parseFloat($('#invValIn').value)||cost;const{data}=await sb.from('investments').insert({household_id:HID,created_by:CU.id,name:$('#invName').value||'(ללא שם)',asset_type:$('#invType').value,cost,current_value:val,buy_date:$('#invDate').value||todayStr()}).select().single();DB.investments.push(data);$('#invName').value='';$('#invCostIn').value='';$('#invValIn').value='';render();}
@@ -1127,9 +1205,9 @@ async function loadMembers(){
 }
 
 async function removeMember(userId,name){
-  if(!confirm('להסיר את '+(name||'החבר הזה')+' ממשק הבית?'))return;
+  if(!await UI.confirm('להסיר את '+(name||'החבר הזה')+' ממשק הבית?',{danger:true,title:'הסרת חבר'}))return;
   const{error}=await sb.rpc('remove_household_member',{p_user_id:userId});
-  if(error){alert('שגיאה בהסרה: '+error.message);return;}
+  if(error){UI.alert(error.message,{type:'error'});return;}
   await loadMembers();
 }
 
@@ -1723,13 +1801,14 @@ function onReviewCategoryChange(i,categoryId){
 
 async function createReviewSubcategory(i){
   const t=pendingImport[i]||{};
-  if(!t.category_id){alert('בחר קודם קטגוריה ראשית');return;}
-  const name=(prompt('שם תת-קטגוריה חדשה')||'').trim();
+  if(!t.category_id){UI.alert('בחר קודם קטגוריה ראשית',{type:'error'});return;}
+  const v=await UI.prompt('תת-קטגוריה חדשה',[{key:'name',label:'שם'}]);
+  const name=(v?.name||'').trim();
   if(!name)return;
   const parent=DB.categories.find(c=>c.id===t.category_id);
   const kind=parent?.kind||'expense';
   const {data,error}=await sb.from('categories').insert({household_id:HID,name,parent_id:t.category_id,kind}).select().single();
-  if(error){alert('שגיאה בהוספת תת-קטגוריה: '+error.message);return;}
+  if(error){UI.alert(error.message,{type:'error'});return;}
   DB.categories.push(data);
   pendingImport[i].subcategory_id=data.id;
   renderReview();
@@ -1766,12 +1845,16 @@ window.settleLoanAction=async a=>{if(pendingLoan){await sb.from('loans').update(
 
 window.editTx=async id=>{
   const t=DB.transactions.find(x=>x.id===id);if(!t)return;
-  const d=prompt('תיאור חדש',t.description||'');if(d===null)return;
-  const a=prompt('סכום חדש',String(t.amount||0));if(a===null)return;
-  const amount=parseFloat(a);if(!amount||amount<=0){alert('סכום לא תקין');return;}
-  const dt=prompt('תאריך (YYYY-MM-DD)',t.tx_date||t.date||todayStr());if(dt===null)return;
+  const v=await UI.prompt('עריכת תנועה',[
+    {key:'d',label:'תיאור',value:t.description},
+    {key:'a',label:'סכום',type:'number',step:'0.01',value:t.amount},
+    {key:'dt',label:'תאריך',type:'date',value:t.tx_date||t.date||todayStr()}
+  ]);
+  if(!v)return;
+  if(!v.a||v.a<=0){UI.alert('סכום לא תקין',{type:'error'});return;}
+  const d=v.d,amount=v.a,dt=v.dt;
   const {error}=await sb.from('transactions').update({description:d||'(ללא תיאור)',amount,tx_date:dt}).eq('id',id);
-  if(error){alert('שגיאה בעדכון: '+error.message);return;}
+  if(error){UI.alert(error.message,{type:'error'});return;}
   t.description=d||'(ללא תיאור)';t.amount=amount;t.tx_date=dt;render();
 };
 // קטגוריה/תת-קטגוריה נערכות ישירות בטבלת התנועות (לא דרך editTx), כי הן
@@ -1818,52 +1901,68 @@ window.updateTxSubcategory=async(id,subcategoryId)=>{
 };
 window.editLoan=async id=>{
   const l=DB.loans.find(x=>x.id===id);if(!l)return;
-  const who=prompt('שם צד ההלוואה',l.counterparty||'');if(who===null)return;
-  const amtTxt=prompt('סכום חדש',String(l.amount||0));if(amtTxt===null)return;
-  const amount=parseFloat(amtTxt);if(!amount||amount<=0){alert('סכום לא תקין');return;}
-  const note=prompt('הערה',l.note||'');if(note===null)return;
+  const v=await UI.prompt('עריכת הלוואה',[
+    {key:'who',label:'שם צד ההלוואה',value:l.counterparty},
+    {key:'amount',label:'סכום',type:'number',step:'0.01',value:l.amount},
+    {key:'note',label:'הערה',type:'textarea',value:l.note}
+  ]);
+  if(!v)return;
+  if(!v.amount||v.amount<=0){UI.alert('סכום לא תקין',{type:'error'});return;}
+  const who=v.who,amount=v.amount,note=v.note;
   const {error}=await sb.from('loans').update({counterparty:who||'(ללא שם)',amount,note}).eq('id',id);
-  if(error){alert('שגיאה בעדכון: '+error.message);return;}
+  if(error){UI.alert(error.message,{type:'error'});return;}
   l.counterparty=who||'(ללא שם)';l.amount=amount;l.note=note;render();
 };
 window.editInst=async id=>{
   const p=DB.installments.find(x=>x.id===id);if(!p)return;
-  const desc=prompt('תיאור רכישה',p.description||'');if(desc===null)return;
-  const totalTxt=prompt('סכום כולל',String(p.total_amount||0));if(totalTxt===null)return;
-  const countTxt=prompt('מספר תשלומים',String(p.payments_count||p.count||1));if(countTxt===null)return;
-  const total=parseFloat(totalTxt),count=parseInt(countTxt,10);
-  if(!total||total<=0||!count||count<2){alert('נתונים לא תקינים');return;}
+  const v=await UI.prompt('עריכת רכישה בתשלומים',[
+    {key:'desc',label:'תיאור',value:p.description},
+    {key:'total',label:'סכום כולל',type:'number',step:'0.01',value:p.total_amount},
+    {key:'count',label:'מספר תשלומים',type:'number',value:p.payments_count||p.count||1}
+  ]);
+  if(!v)return;
+  const total=v.total,count=parseInt(v.count,10);
+  if(!total||total<=0||!count||count<2){UI.alert('נתונים לא תקינים',{type:'error'});return;}
+  const desc=v.desc;
   const {error}=await sb.from('installments').update({description:desc||'(ללא תיאור)',total_amount:total,payments_count:count}).eq('id',id);
-  if(error){alert('שגיאה בעדכון: '+error.message);return;}
+  if(error){UI.alert(error.message,{type:'error'});return;}
   p.description=desc||'(ללא תיאור)';p.total_amount=total;p.payments_count=count;render();
 };
 window.editInv=async id=>{
   const i=DB.investments.find(x=>x.id===id);if(!i)return;
-  const name=prompt('שם השקעה',i.name||'');if(name===null)return;
-  const costTxt=prompt('עלות',String(i.cost||0));if(costTxt===null)return;
-  const cost=parseFloat(costTxt);if(!cost||cost<=0){alert('עלות לא תקינה');return;}
+  const v=await UI.prompt('עריכת השקעה',[
+    {key:'name',label:'שם השקעה',value:i.name},
+    {key:'cost',label:'עלות',type:'number',step:'0.01',value:i.cost}
+  ]);
+  if(!v)return;
+  if(!v.cost||v.cost<=0){UI.alert('עלות לא תקינה',{type:'error'});return;}
+  const name=v.name,cost=v.cost;
   const {error}=await sb.from('investments').update({name:name||'(ללא שם)',cost}).eq('id',id);
-  if(error){alert('שגיאה בעדכון: '+error.message);return;}
+  if(error){UI.alert(error.message,{type:'error'});return;}
   i.name=name||'(ללא שם)';i.cost=cost;render();
 };
 window.editGoal=async id=>{
   const g=DB.goals.find(x=>x.id===id);if(!g)return;
-  const name=prompt('שם היעד',g.name||'');if(name===null)return;
-  const targetTxt=prompt('סכום יעד',String(g.target_amount||0));if(targetTxt===null)return;
-  const target=parseFloat(targetTxt);if(!target||target<=0){alert('סכום יעד לא תקין');return;}
+  const v=await UI.prompt('עריכת יעד',[
+    {key:'name',label:'שם היעד',value:g.name},
+    {key:'target',label:'סכום יעד',type:'number',step:'0.01',value:g.target_amount}
+  ]);
+  if(!v)return;
+  if(!v.target||v.target<=0){UI.alert('סכום יעד לא תקין',{type:'error'});return;}
+  const name=v.name,target=v.target;
   const {error}=await sb.from('goals').update({name:name||'(ללא שם)',target_amount:target}).eq('id',id);
-  if(error){alert('שגיאה בעדכון: '+error.message);return;}
+  if(error){UI.alert(error.message,{type:'error'});return;}
   g.name=name||'(ללא שם)';g.target_amount=target;render();
 };
-window.delTx=async id=>{if(!confirm('למחוק את התנועה?'))return;await sb.from('transactions').delete().eq('id',id);DB.transactions=DB.transactions.filter(t=>t.id!==id);render();};
-window.delCat=async id=>{if(!confirm('למחוק?'))return;await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id&&c.parent_id!==id);render();};
-window.delSub=async id=>{if(!confirm('למחוק תת-קטגוריה?'))return;await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id);render();};
-window.delLoan=async id=>{if(!confirm('למחוק הלוואה?'))return;await sb.from('loans').delete().eq('id',id);DB.loans=DB.loans.filter(l=>l.id!==id);render();};
-window.delInst=async id=>{if(!confirm('למחוק רכישת תשלומים?'))return;await sb.from('installments').delete().eq('id',id);DB.installments=DB.installments.filter(p=>p.id!==id);render();};
+window.delTx=async id=>{if(!await UI.confirm('למחוק את התנועה?',{danger:true,title:'מחיקת תנועה'}))return;await sb.from('transactions').delete().eq('id',id);DB.transactions=DB.transactions.filter(t=>t.id!==id);render();};
+window.delCat=async id=>{if(!await UI.confirm('למחוק קטגוריה זו וכל תת-הקטגוריות שלה?',{danger:true,title:'מחיקת קטגוריה'}))return;const subIds=subCats(id).map(s=>s.id);if(subIds.length)await sb.from('categories').delete().in('id',subIds);await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id&&c.parent_id!==id);if(catFilter===id){catFilter='all';catSubFilter=null;}render();};
+window.delSub=async id=>{if(!await UI.confirm('למחוק תת-קטגוריה?',{danger:true,title:'מחיקת תת-קטגוריה'}))return;await sb.from('categories').delete().eq('id',id);DB.categories=DB.categories.filter(c=>c.id!==id);if(catSubFilter===id)catSubFilter=null;render();};
+window.delLoan=async id=>{if(!await UI.confirm('למחוק הלוואה?',{danger:true,title:'מחיקת הלוואה'}))return;await sb.from('loans').delete().eq('id',id);DB.loans=DB.loans.filter(l=>l.id!==id);render();};
+window.delInst=async id=>{if(!await UI.confirm('למחוק רכישת תשלומים?',{danger:true,title:'מחיקת תשלומים'}))return;await sb.from('installments').delete().eq('id',id);DB.installments=DB.installments.filter(p=>p.id!==id);render();};
 window.updInv=async(id,v)=>{const val=parseFloat(v)||0;await sb.from('investments').update({current_value:val}).eq('id',id);const i=DB.investments.find(x=>x.id===id);if(i)i.current_value=val;render();};
-window.delInv=async id=>{if(!confirm('למחוק השקעה?'))return;await sb.from('investments').delete().eq('id',id);DB.investments=DB.investments.filter(i=>i.id!==id);render();};
+window.delInv=async id=>{if(!await UI.confirm('למחוק השקעה?',{danger:true,title:'מחיקת השקעה'}))return;await sb.from('investments').delete().eq('id',id);DB.investments=DB.investments.filter(i=>i.id!==id);render();};
 window.addToGoal=async id=>{const v=parseFloat(document.getElementById('gadd-'+id)?.value);if(!v)return;const g=DB.goals.find(x=>x.id===id);if(!g)return;const ns=+(g.saved_amount||0)+v;await sb.from('goals').update({saved_amount:ns}).eq('id',id);g.saved_amount=ns;render();};
-window.delGoal=async id=>{if(!confirm('למחוק יעד?'))return;await sb.from('goals').delete().eq('id',id);DB.goals=DB.goals.filter(g=>g.id!==id);render();};
+window.delGoal=async id=>{if(!await UI.confirm('למחוק יעד?',{danger:true,title:'מחיקת יעד'}))return;await sb.from('goals').delete().eq('id',id);DB.goals=DB.goals.filter(g=>g.id!==id);render();};
 
 function fillDelMonthSelectors(){
   const ms=$('#delMonthSel'),ys=$('#delYearSel');
@@ -1883,7 +1982,7 @@ async function confirmMonthDelete(){
   const y=parseInt($('#delYearSel').value,10),m=parseInt($('#delMonthSel').value,10);
   const el=$('#delMonthStatus');
   if(!(await reauthenticate($('#delMonthPass').value)))return;
-  if(!confirm('למחוק את כל תנועות '+MONTHS[m]+' '+y+'? פעולה זו בלתי הפיכה.'))return;
+  if(!await UI.confirm('למחוק את כל תנועות '+MONTHS[m]+' '+y+'? פעולה זו בלתי הפיכה.',{danger:true,title:'מחיקת חודש שלם'}))return;
   el.textContent='מוחק...';
   const{error}=await sb.rpc('reset_household_month',{p_year:y,p_month:m+1});
   if(error){el.textContent='שגיאה במחיקה: '+error.message;return;}
@@ -1894,7 +1993,7 @@ async function confirmMonthDelete(){
 async function confirmSystemReset(){
   const el=$('#resetStatus');
   if(!(await reauthenticate($('#resetPass').value)))return;
-  if(!confirm('אישור סופי: למחוק את כל נתוני המערכת (תנועות, תשלומים, הלוואות, השקעות, יעדים, קטגוריות)? חשבונות וכרטיסים לא יימחקו. פעולה בלתי הפיכה.'))return;
+  if(!await UI.confirm('אישור סופי: למחוק את כל נתוני המערכת (תנועות, תשלומים, הלוואות, השקעות, יעדים, קטגוריות)? חשבונות וכרטיסים לא יימחקו. פעולה בלתי הפיכה.',{danger:true,title:'איפוס מלא של המערכת'}))return;
   el.textContent='מאפס...';
   const{error}=await sb.rpc('reset_household_full');
   if(error){el.textContent='איפוס נכשל: '+error.message;return;}
@@ -1904,7 +2003,7 @@ async function confirmSystemReset(){
 }
 
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='budget-backup-'+todayStr()+'.json';a.click();}
-async function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const bk=JSON.parse(r.result);if(!confirm('לייבא '+((bk.transactions||[]).length)+' תנועות?'))return;for(const t of(bk.transactions||[])){await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type:t.type,description:t.desc||t.description,amount:t.amount,tx_date:t.date||t.tx_date||todayStr(),nature:t.nature||'variable',spread:t.spread||'month',source:'import'});}await loadAll();render();alert('יובא!');}catch(x){alert('קובץ לא תקין');}};r.readAsText(f);}
+async function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const bk=JSON.parse(r.result);if(!await UI.confirm('לייבא '+((bk.transactions||[]).length)+' תנועות?',{title:'ייבוא נתונים'}))return;for(const t of(bk.transactions||[])){await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type:t.type,description:t.desc||t.description,amount:t.amount,tx_date:t.date||t.tx_date||todayStr(),nature:t.nature||'variable',spread:t.spread||'month',source:'import'});}await loadAll();render();UI.alert('יובא בהצלחה!',{type:'success'});}catch(x){UI.alert('קובץ לא תקין',{type:'error'});}};r.readAsText(f);}
 
 // ═══ FEATURE: Credit / Cash-flow control (Safe-to-Spend) ═══
 // כל חשבון בנק מציג את יתרת העו"ש שהוזנה לו ידנית, מינוס סך החיובים של כל
@@ -2268,19 +2367,19 @@ async function addBankAccount(){
 }
 async function delBankAccount(id){
   const cardsOnAcct=DB.creditCards.filter(c=>c.bank_account_id===id);
-  if(cardsOnAcct.length){alert('אי אפשר למחוק חשבון שיש לו כרטיסי אשראי משויכים — מחק קודם את הכרטיסים: '+cardsOnAcct.map(c=>c.name).join(', '));return;}
-  if(!confirm('למחוק את החשבון? תנועות משויכות יישארו בלי חשבון.'))return;
+  if(cardsOnAcct.length){UI.alert('אי אפשר למחוק חשבון שיש לו כרטיסי אשראי משויכים — מחק קודם את הכרטיסים: '+cardsOnAcct.map(c=>c.name).join(', '),{type:'error'});return;}
+  if(!await UI.confirm('למחוק את החשבון? תנועות משויכות יישארו בלי חשבון.',{danger:true,title:'מחיקת חשבון בנק'}))return;
   const{error}=await sb.from('bank_accounts').delete().eq('id',id);
-  if(error){alert('שגיאה במחיקה: '+error.message);return;}
+  if(error){UI.alert(error.message,{type:'error'});return;}
   DB.bankAccounts=DB.bankAccounts.filter(a=>a.id!==id);render();
 }
 async function renameBankAccount(id){
   const a=DB.bankAccounts.find(x=>x.id===id);if(!a)return;
-  const name=prompt('שם חדש לחשבון',a.name||'');
-  if(name===null||!name.trim())return;
-  const{error}=await sb.from('bank_accounts').update({name:name.trim()}).eq('id',id);
-  if(error){alert('שגיאה בעדכון שם: '+error.message);return;}
-  a.name=name.trim();render();
+  const v=await UI.prompt('שינוי שם חשבון',[{key:'name',label:'שם החשבון',value:a.name}]);
+  if(!v||!v.name.trim())return;
+  const{error}=await sb.from('bank_accounts').update({name:v.name.trim()}).eq('id',id);
+  if(error){UI.alert(error.message,{type:'error'});return;}
+  a.name=v.name.trim();render();
 }
 function renderAccounts(){
   const box=$('#acctManage'); if(!box)return;
@@ -2308,9 +2407,9 @@ async function addCreditCard(){
   DB.creditCards.push(data);$('#newCardName').value='';render();
 }
 async function delCreditCard(id){
-  if(!confirm('למחוק את הכרטיס? תנועות משויכות יישארו בלי כרטיס (יחושבו כאילו שולמו ישירות מהחשבון).'))return;
+  if(!await UI.confirm('למחוק את הכרטיס? תנועות משויכות יישארו בלי כרטיס (יחושבו כאילו שולמו ישירות מהחשבון).',{danger:true,title:'מחיקת כרטיס אשראי'}))return;
   const{error}=await sb.from('credit_cards').delete().eq('id',id);
-  if(error){alert('שגיאה במחיקה: '+error.message);return;}
+  if(error){UI.alert(error.message,{type:'error'});return;}
   DB.creditCards=DB.creditCards.filter(c=>c.id!==id);render();
 }
 async function updateCardBillingDay(id,val){
@@ -2322,11 +2421,11 @@ async function updateCardBillingDay(id,val){
 }
 async function renameCreditCard(id){
   const c=DB.creditCards.find(x=>x.id===id);if(!c)return;
-  const name=prompt('שם חדש לכרטיס',c.name||'');
-  if(name===null||!name.trim())return;
-  const{error}=await sb.from('credit_cards').update({name:name.trim()}).eq('id',id);
-  if(error){alert('שגיאה בעדכון שם: '+error.message);return;}
-  c.name=name.trim();render();
+  const v=await UI.prompt('שינוי שם כרטיס',[{key:'name',label:'שם הכרטיס',value:c.name}]);
+  if(!v||!v.name.trim())return;
+  const{error}=await sb.from('credit_cards').update({name:v.name.trim()}).eq('id',id);
+  if(error){UI.alert(error.message,{type:'error'});return;}
+  c.name=v.name.trim();render();
 }
 function renderCreditCards(){
   const box=$('#cardManage'); if(!box)return;
@@ -2387,7 +2486,57 @@ function calcLoanPlan(){
   el.innerHTML='<div style="overflow-x:auto"><table style="min-width:640px"><thead><tr><th>תרחיש ריבית</th><th>תשלום חודשי</th><th>סה"כ החזר</th><th>סה"כ ריבית</th><th>נשאר פנוי בחודש</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<p class="muted" style="margin-top:12px">💡 תזרים פנוי משוער החודש: <b>'+fmt(freeCash)+'</b> (הכנסות פחות הוצאות). עמודת "נשאר פנוי" מראה מה יישאר לך אחרי התשלום החודשי בכל תרחיש.</p>';
 }
-function renderGoals(){$('#pCount').textContent=DB.goals.length;$('#pTarget').textContent=fmt(DB.goals.reduce((s,g)=>s+(+g.target_amount),0));$('#pSaved').textContent=fmt(DB.goals.reduce((s,g)=>s+(+g.saved_amount),0));$('#goalGrid').innerHTML=DB.goals.length?DB.goals.map(g=>{const pct=Math.min(100,+g.saved_amount/+g.target_amount*100);const left=Math.max(0,+g.target_amount-+g.saved_amount);let due='';if(g.target_date){const now=new Date();const d=new Date(g.target_date);const mo=Math.max(0,(d.getFullYear()-now.getFullYear())*12+(d.getMonth()-now.getMonth()));due='<div class="meta" style="margin-top:8px">יעד: '+g.target_date+(mo>0?' · '+fmt(left/mo)+' לחודש':' · הגיע המועד')+'</div>';}return '<div class="goalcard"><h3><span style="font-size:1.1rem;margin-left:6px">'+g.icon+'</span><span style="flex:1">'+g.name+'</span><button class="smallbtn" onclick="editGoal(\''+g.id+'\')">עריכה</button><button class="btn danger" onclick="delGoal(\''+g.id+'\')">מחק</button></h3><div class="meta">'+fmt(+g.saved_amount)+' מתוך '+fmt(+g.target_amount)+' · '+pct.toFixed(0)+'%'+(left>0?' · נותר '+fmt(left):' · הושג! 🎉')+'</div><div class="bar big"><span style="width:'+pct+'%"></span></div>'+due+'<div class="row" style="margin-top:10px"><input type="number" placeholder="הפקד ₪" id="gadd-'+g.id+'" style="width:120px"><button class="smallbtn" onclick="addToGoal(\''+g.id+'\')">הפקד</button></div></div>';}).join(''):'<div class="empty">אין יעדים</div>';}
+function renderGoals(){$('#pCount').textContent=DB.goals.length;$('#pTarget').textContent=fmt(DB.goals.reduce((s,g)=>s+(+g.target_amount),0));$('#pSaved').textContent=fmt(DB.goals.reduce((s,g)=>s+(+g.saved_amount),0));$('#goalGrid').innerHTML=DB.goals.length?DB.goals.map(g=>{const pct=Math.min(100,+g.saved_amount/+g.target_amount*100);const left=Math.max(0,+g.target_amount-+g.saved_amount);let due='';if(g.target_date){const now=new Date();const d=new Date(g.target_date);const mo=Math.max(0,(d.getFullYear()-now.getFullYear())*12+(d.getMonth()-now.getMonth()));due='<div class="meta" style="margin-top:8px">יעד: '+g.target_date+(mo>0?' · '+fmt(left/mo)+' לחודש':' · הגיע המועד')+'</div>';}
+  const planItems=Array.isArray(g.plan_items)?g.plan_items:[];
+  const planNote=planItems.length?'<div class="meta" style="margin-top:4px">📋 תוכנית: '+planItems.length+' סעיפים · '+fmt(planItems.reduce((s,it)=>s+(+it.amount||0),0))+' מתוכנן</div>':'';
+  return '<div class="goalcard"><h3><span style="font-size:1.1rem;margin-left:6px">'+g.icon+'</span><span style="flex:1">'+g.name+'</span><button class="smallbtn" onclick="openGoalPlan(\''+g.id+'\')" title="תוכנית מפורטת">📋 תוכנית</button><button class="smallbtn" onclick="editGoal(\''+g.id+'\')">עריכה</button><button class="btn danger" onclick="delGoal(\''+g.id+'\')">מחק</button></h3><div class="meta">'+fmt(+g.saved_amount)+' מתוך '+fmt(+g.target_amount)+' · '+pct.toFixed(0)+'%'+(left>0?' · נותר '+fmt(left):' · הושג! 🎉')+'</div><div class="bar big"><span style="width:'+pct+'%"></span></div>'+due+planNote+'<div class="row" style="margin-top:10px"><input type="number" placeholder="הפקד ₪" id="gadd-'+g.id+'" style="width:120px"><button class="smallbtn" onclick="addToGoal(\''+g.id+'\')">הפקד</button></div></div>';}).join(''):'<div class="empty">אין יעדים</div>';}
+
+window.openGoalPlan=id=>{
+  const g=DB.goals.find(x=>x.id===id);if(!g)return;
+  const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
+  const items=(Array.isArray(g.plan_items)?g.plan_items:[]).map(x=>({name:x.name||'',amount:+x.amount||0}));
+  const html='<h3>'+(g.icon||'🎯')+' תוכנית — '+g.name+'</h3>'
+    +'<p style="margin-bottom:10px">סכום יעד כולל: '+fmt(g.target_amount)+'</p>'
+    +'<div id="planRows"></div>'
+    +'<button type="button" class="smallbtn" id="planAddRow" style="margin-top:2px">➕ הוסף סעיף</button>'
+    +'<div class="plan-total"><span>סה"כ מתוכנן</span><span id="planTotalVal"></span></div>'
+    +'<label>הערות חופשיות</label><textarea id="planNotes" rows="4">'+esc(g.notes||'')+'</textarea>'
+    +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn sec" id="planCancel">ביטול</button><button class="btn" id="planSave">שמירת תוכנית</button></div>';
+  const {ov,close}=UI._open(html);
+  const rowsEl=ov.querySelector('#planRows');
+  function renderRows(){
+    rowsEl.innerHTML=items.length?items.map((it,i)=>
+      '<div class="plan-row">'
+      +'<input type="text" placeholder="למשל: כרטיסי טיסה" value="'+esc(it.name)+'" data-i="'+i+'" data-f="name">'
+      +'<input type="number" placeholder="סכום ₪" value="'+(it.amount||'')+'" data-i="'+i+'" data-f="amount">'
+      +'<button type="button" class="smallbtn" data-del="'+i+'" title="הסר">🗑️</button>'
+      +'</div>'
+    ).join(''):'<p class="empty" style="padding:10px 0">עוד לא נוספו סעיפים</p>';
+    rowsEl.querySelectorAll('input').forEach(inp=>inp.oninput=()=>{
+      const i=+inp.dataset.i,f=inp.dataset.f;
+      items[i][f]=f==='amount'?(parseFloat(inp.value)||0):inp.value;
+      updateTotal();
+    });
+    rowsEl.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{items.splice(+btn.dataset.del,1);renderRows();updateTotal();});
+  }
+  function updateTotal(){
+    const total=items.reduce((s,it)=>s+(+it.amount||0),0);
+    const target=+g.target_amount||0;
+    const diff=target-total;
+    ov.querySelector('#planTotalVal').innerHTML=fmt(total)+(target?' <span class="'+(diff<0?'over':'under')+'">('+(diff<0?'חריגה של '+fmt(-diff):'נותרו '+fmt(diff))+')</span>':'');
+  }
+  ov.querySelector('#planAddRow').onclick=()=>{items.push({name:'',amount:0});renderRows();updateTotal();};
+  ov.querySelector('#planCancel').onclick=close;
+  ov.querySelector('#planSave').onclick=async()=>{
+    const notesVal=ov.querySelector('#planNotes').value;
+    const cleaned=items.filter(it=>it.name&&it.name.trim()).map(it=>({name:it.name.trim(),amount:+it.amount||0}));
+    const {error}=await sb.from('goals').update({plan_items:cleaned,notes:notesVal}).eq('id',id);
+    if(error){UI.alert(error.message,{type:'error'});return;}
+    g.plan_items=cleaned;g.notes=notesVal;
+    close();render();
+  };
+  renderRows();updateTotal();
+};
 
 $('#exDate').value=todayStr();$('#loanDate').value=todayStr();$('#instFirst').value=todayStr();$('#invDate').value=todayStr();
 $('#exInstFirst').value=todayStr();
