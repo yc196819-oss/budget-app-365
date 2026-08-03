@@ -106,13 +106,14 @@ tr:last-child td{border-bottom:none}
 /* ===== charts: legend + averages ===== */
 .pie-box{height:280px}
 .chart-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-.chart-legend-item{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--line);padding:6px 12px 6px 8px;border-radius:11px;cursor:pointer;font-family:inherit;color:var(--text);font-size:.78rem;transition:opacity .15s,border-color .15s}
-.chart-legend-item:hover{border-color:var(--line2)}
-.chart-legend-item.off{opacity:.4}
-.chart-legend-item .sw{width:10px;height:10px;border-radius:3px;flex-shrink:0}
-.chart-legend-item .lbl{font-weight:600}
-.chart-legend-item .val{color:var(--muted);font-variant-numeric:tabular-nums}
-.avg-badge{font-size:.72rem;font-weight:700;color:var(--muted);background:var(--surface2);border:1px solid var(--line2);padding:3px 10px;border-radius:8px;font-variant-numeric:tabular-nums;margin-right:auto}
+.chart-legend-item{display:flex;align-items:center;gap:7px;border:1px solid transparent;padding:7px 14px 7px 10px;border-radius:999px;cursor:pointer;font-family:inherit;font-size:.79rem;font-weight:700;transition:transform .12s,opacity .15s}
+.chart-legend-item:hover{transform:translateY(-1px)}
+.chart-legend-item.off{opacity:.35}
+.chart-legend-item .sw{width:9px;height:9px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor}
+.chart-legend-item .lbl{font-weight:700}
+.chart-legend-item .val{opacity:.75;font-variant-numeric:tabular-nums;font-weight:600}
+.avg-badge{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;font-weight:800;color:var(--accent);background:linear-gradient(135deg,rgba(108,140,255,.16),rgba(82,214,164,.10));border:1px solid rgba(108,140,255,.35);padding:5px 13px;border-radius:999px;font-variant-numeric:tabular-nums;margin-right:auto}
+.avg-badge::before{content:"⌀"}
 
 /* ===== category picker popover ===== */
 .cat-picker{position:relative;display:inline-block}
@@ -757,33 +758,12 @@ let exFilter='all',catFilter='all',catSubFilter=null,pendingLoan=null,pendingImp
 const memberCache={}; let charts={};
 if(window.Chart){
   Chart.defaults.font.family="'Heebo','Segoe UI',sans-serif";
-  Chart.register({
-    id:'avgLine',
-    afterDraw(chart,args,opts){
-      opts=opts||{};
-      if(opts.value==null)return;
-      const{ctx,chartArea,scales:{y}}=chart;
-      if(!chartArea||!y)return;
-      const yPos=y.getPixelForValue(opts.value);
-      ctx.save();
-      ctx.strokeStyle=opts.color||'#9aa0b8';
-      ctx.setLineDash([6,5]);
-      ctx.lineWidth=1.5;
-      ctx.beginPath();ctx.moveTo(chartArea.left,yPos);ctx.lineTo(chartArea.right,yPos);ctx.stroke();
-      if(opts.label){
-        ctx.setLineDash([]);
-        ctx.font="700 11px Heebo";
-        const txt=opts.label;
-        const tw=ctx.measureText(txt).width;
-        ctx.fillStyle=opts.color||'#9aa0b8';
-        ctx.fillRect(chartArea.left,yPos-16,tw+12,16);
-        ctx.fillStyle='#0c0e15';
-        ctx.textBaseline='middle';
-        ctx.fillText(txt,chartArea.left+6,yPos-8);
-      }
-      ctx.restore();
-    }
-  });
+}
+function vGradient(ctx,chartArea,colorTop,colorBottom){
+  if(!chartArea)return colorTop;
+  const g=ctx.createLinearGradient(0,chartArea.top,0,chartArea.bottom);
+  g.addColorStop(0,colorTop);g.addColorStop(1,colorBottom);
+  return g;
 }
 let syncTimer=null, syncInFlight=false;
 const APP_SETTINGS={
@@ -2217,7 +2197,7 @@ function drawPie(id,labels,vals){
   const total=vals.reduce((s,v)=>s+v,0);
   charts[id]=new Chart(el,{type:'doughnut',data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:3,borderColor:cssVar('--surface'),hoverOffset:8,hoverBorderColor:cssVar('--surface')}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{backgroundColor:cssVar('--surface2'),borderColor:cssVar('--line2'),borderWidth:1,titleColor:cssVar('--text'),bodyColor:cssVar('--text'),padding:11,cornerRadius:10,titleFont:{family:'Heebo'},bodyFont:{family:'Heebo'},callbacks:{label:c=>c.label+': ₪'+Math.round(c.raw).toLocaleString('he-IL')+' ('+Math.round(c.raw/total*100)+'%)'}}}}});
   if(legendEl){
-    legendEl.innerHTML=labels.map((l,i)=>'<button type="button" class="chart-legend-item" data-i="'+i+'"><span class="sw" style="background:'+colors[i]+'"></span><span class="lbl">'+l+'</span><span class="val">'+fmt(vals[i])+'</span></button>').join('');
+    legendEl.innerHTML=labels.map((l,i)=>'<button type="button" class="chart-legend-item" data-i="'+i+'" style="background:'+hexA(colors[i],.15)+';color:'+colors[i]+'"><span class="sw" style="background:'+colors[i]+';color:'+colors[i]+'"></span><span class="lbl">'+l+'</span><span class="val">'+fmt(vals[i])+'</span></button>').join('');
     legendEl.querySelectorAll('.chart-legend-item').forEach(btn=>btn.onclick=()=>{
       const i=+btn.dataset.i,ch=charts[id];
       ch.toggleDataVisibility(i);ch.update();
@@ -2243,7 +2223,7 @@ function renderCharts(){
   charts.monthlyStack=new Chart(document.getElementById('monthlyStack'),{type:'bar',data:{labels:MONTHS_SHORT,datasets},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{stacked:true,ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:tipBase}}});
   const stackLegend=$('#monthlyStackLegend');
   if(stackLegend){
-    stackLegend.innerHTML=datasets.map((d,i)=>'<button type="button" class="chart-legend-item" data-i="'+i+'"><span class="sw" style="background:'+d.backgroundColor+'"></span><span class="lbl">'+d.label+'</span></button>').join('');
+    stackLegend.innerHTML=datasets.map((d,i)=>'<button type="button" class="chart-legend-item" data-i="'+i+'" style="background:'+hexA(d.backgroundColor,.15)+';color:'+d.backgroundColor+'"><span class="sw" style="background:'+d.backgroundColor+';color:'+d.backgroundColor+'"></span><span class="lbl">'+d.label+'</span></button>').join('');
     stackLegend.querySelectorAll('.chart-legend-item').forEach(btn=>btn.onclick=()=>{
       const i=+btn.dataset.i,ch=charts.monthlyStack;
       ch.setDatasetVisibility(i,!ch.isDatasetVisible(i));ch.update();
@@ -2257,7 +2237,8 @@ function renderCharts(){
   $('#stackAvg').textContent='ממוצע חודשי: '+fmt(stackAvg);
   $('#totalAvg').textContent='ממוצע חודשי: '+fmt(stackAvg);
   if(charts.monthlyTotal)charts.monthlyTotal.destroy();
-  charts.monthlyTotal=new Chart(document.getElementById('monthlyTotal'),{type:'bar',data:{labels:MONTHS_SHORT,datasets:[{label:'סך הוצאות',data:totals,backgroundColor:cssVar('--accent'),borderRadius:10,borderSkipped:false,maxBarThickness:42}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},avgLine:{value:stackAvg,color:cssVar('--warn'),label:'ממוצע '+fmt(stackAvg)},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
+  const accentHex=cssVar('--accent')||'#6c8cff';
+  charts.monthlyTotal=new Chart(document.getElementById('monthlyTotal'),{type:'bar',data:{labels:MONTHS_SHORT,datasets:[{label:'סך הוצאות',data:totals,backgroundColor:c=>vGradient(c.chart.ctx,c.chart.chartArea,accentHex,hexA(accentHex,.55)),hoverBackgroundColor:accentHex,borderRadius:10,borderSkipped:false,maxBarThickness:42}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
 
   // category trend line
   const ts=$('#trendCat');
@@ -2268,7 +2249,7 @@ function renderCharts(){
   $('#trendAvg').textContent='ממוצע חודשי: '+fmt(trendAvg);
   const trendColor=catColor(selId);
   if(charts.catTrend)charts.catTrend.destroy();
-  charts.catTrend=new Chart(document.getElementById('catTrend'),{type:'line',data:{labels:MONTHS_SHORT,datasets:[{label:'הוצאה חודשית',data:trend,borderColor:trendColor,backgroundColor:hexA(trendColor,.16),fill:true,tension:.4,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:trendColor}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},avgLine:{value:trendAvg,color:cssVar('--warn'),label:'ממוצע '+fmt(trendAvg)},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
+  charts.catTrend=new Chart(document.getElementById('catTrend'),{type:'line',data:{labels:MONTHS_SHORT,datasets:[{label:'הוצאה חודשית',data:trend,borderColor:trendColor,backgroundColor:c=>vGradient(c.chart.ctx,c.chart.chartArea,hexA(trendColor,.4),hexA(trendColor,0)),fill:true,tension:.4,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:trendColor,pointBorderColor:cssVar('--surface'),pointBorderWidth:2,borderWidth:2.5}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
 }
 
 const PM_LABELS={standing_order:'↻ הוראת קבע',credit:'💳 אשראי',check:'🖊 צ׳ק',cash:'💵 מזומן'};
