@@ -163,6 +163,18 @@ tr:last-child td{border-bottom:none}
 .catname{font-weight:700;display:flex;justify-content:space-between;margin-bottom:4px}
 .subcat{margin-right:20px;padding:6px 4px;font-size:.85rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;border-radius:8px}
 .subcat:hover{background:var(--surface3)}
+.budget-row{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.budget-row:last-child{border-bottom:0}
+.budget-row .bicon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:1rem;flex-shrink:0}
+.budget-row .bname{font-weight:700;font-size:.88rem;flex:1}
+.budget-row input[type="number"]{width:110px}
+.budget-progress-item{margin-bottom:16px}
+.budget-progress-item:last-child{margin-bottom:0}
+.budget-progress-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;font-size:.85rem;gap:8px}
+.budget-progress-head b{font-weight:700;display:flex;align-items:center;gap:6px}
+.budget-progress-head span{font-size:.78rem;font-variant-numeric:tabular-nums;flex-shrink:0;white-space:nowrap}
+.budget-bar{height:9px;border-radius:5px;background:var(--surface2);overflow:hidden}
+.budget-bar>span{display:block;height:100%;border-radius:5px;transition:width .3s}
 .subcat span:first-child{display:flex;align-items:center}
 .subcat .icon-btn{width:24px;height:24px;font-size:.7rem}
 .filters{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
@@ -228,6 +240,7 @@ tr:last-child td{border-bottom:none}
 .review-row:last-child{border-bottom:0}
 .review-row:hover{background:var(--surface2)}
 .review-row.review-head{background:var(--surface2);color:var(--faint);font-weight:800;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em}
+.review-row.review-dupe{background:rgba(255,180,84,.1);border-right:3px solid var(--warn)}
 .review-row select,.review-row input{padding:7px 9px;font-size:.8rem;border-radius:8px}
 .review-grid{min-width:920px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 #reviewList{overflow-x:auto}
@@ -329,6 +342,7 @@ tr:last-child td{border-bottom:none}
         <div class="card" id="flowSafeCard" style="background:linear-gradient(135deg,rgba(82,214,164,.12),rgba(108,140,255,.08));border:1px solid var(--accent2)"><div class="label">💰 באמת פנוי להוצאה (סה"כ)</div><div class="value pos" id="flowSafe" style="font-size:1.9rem">₪0</div><div class="muted" id="flowSafeNote" style="font-size:.72rem;margin-top:4px"></div></div>
       </div>
     </div>
+    <div class="panel hidden" id="budgetProgressPanel"><h2>💰 תקציב חודשי</h2><div id="budgetProgress"></div></div>
     <div class="panel"><h2>פילוח הוצאות <span class="muted" id="dashPeriod"></span></h2><div class="chart-box pie-box"><canvas id="dashPie"></canvas></div><div class="chart-legend" id="dashPieLegend"></div></div>
     <div class="panel"><h2>שוטף מול קבוע</h2><div id="fixedVar"></div></div>
   </section>
@@ -399,6 +413,11 @@ tr:last-child td{border-bottom:none}
       <div class="filters" id="catFilters"></div>
       <div id="catSummary"></div>
       <div id="catSumFooter" class="hidden" style="margin-top:14px;padding-top:14px;border-top:2px solid var(--accent);display:flex;justify-content:space-between;font-weight:800;font-size:1.05rem"><span id="catSumLabel">סה"כ</span><span id="catSumTotal" style="color:var(--accent)">₪0</span></div>
+    </div>
+    <div class="panel">
+      <h2>💰 תקציב חודשי לפי קטגוריה</h2>
+      <p class="muted" style="margin-bottom:12px">קבעו סכום מקסימלי לחודש לכל קטגוריית הוצאה — זה יופיע בדשבורד עם התקדמות בזמן אמת. השאירו ריק כדי לבטל.</p>
+      <div id="budgetManage"></div>
     </div>
     <div class="panel">
       <h2>ניהול קטגוריות</h2>
@@ -760,7 +779,7 @@ function cssVar(name){return getComputedStyle(document.body).getPropertyValue(na
 const API_BASE=(window.__APP_CONFIG?.API_BASE||localStorage.getItem('aiApiBase')||((location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8787':location.origin)).replace(/\/$/, '');
 
 let CU=null,HID=null,MNAME='',MROLE='owner'; let VM=new Date().getMonth(),VY=new Date().getFullYear();
-let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[],bankAccounts:[],creditCards:[]};
+let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[],bankAccounts:[],creditCards:[],categoryBudgets:[]};
 let exFilter='all',catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
 const memberCache={}; let charts={};
 if(window.Chart){
@@ -1002,7 +1021,7 @@ async function seedCategories(){
 }
 
 async function loadAll(){
-  const[c,t,l,i,inv,g,ba,cc]=await Promise.all([
+  const[c,t,l,i,inv,g,ba,cc,cb]=await Promise.all([
     sb.from('categories').select('*').eq('household_id',HID),
     sb.from('transactions').select('*').eq('household_id',HID).order('tx_date',{ascending:false}),
     sb.from('loans').select('*').eq('household_id',HID).order('loan_date',{ascending:false}),
@@ -1010,10 +1029,11 @@ async function loadAll(){
     sb.from('investments').select('*').eq('household_id',HID),
     sb.from('goals').select('*').eq('household_id',HID),
     sb.from('bank_accounts').select('*').eq('household_id',HID).order('created_at'),
-    sb.from('credit_cards').select('*').eq('household_id',HID).order('created_at')
+    sb.from('credit_cards').select('*').eq('household_id',HID).order('created_at'),
+    sb.from('category_budgets').select('*').eq('household_id',HID)
   ]);
   DB.categories=c.data||[];DB.transactions=t.data||[];DB.loans=l.data||[];DB.installments=i.data||[];DB.investments=inv.data||[];DB.goals=g.data||[];
-  DB.bankAccounts=ba.data||[];DB.creditCards=cc.data||[];
+  DB.bankAccounts=ba.data||[];DB.creditCards=cc.data||[];DB.categoryBudgets=cb.data||[];
   const neededIds=[...new Set(DB.transactions.map(t=>t.created_by).filter(Boolean))].filter(id=>!memberCache[id]);
   if(neededIds.length){
     const{data:mems}=await sb.from('memberships').select('user_id,display_name').eq('household_id',HID).in('user_id',neededIds);
@@ -1673,7 +1693,7 @@ async function analyzeImportedContent(input,key){
     }
 
     raw=raw.trim().replace(/^```json\n?/,'').replace(/```$/,'').trim();
-    pendingImport=normalizeImportedTransactions(JSON.parse(raw));
+    pendingImport=flagPossibleDuplicates(normalizeImportedTransactions(JSON.parse(raw)));
     applyImportSourceToAll();
     $('#importStatus').innerHTML='<p style="color:var(--accent2)">✅ נמצאו '+pendingImport.length+' תנועות ('+used+')</p>';
     renderReview();
@@ -1797,6 +1817,27 @@ function normalizeImportedTransactions(items){
   }).filter(x=>x.amount>0);
 }
 
+function flagPossibleDuplicates(items){
+  items.forEach(t=>{
+    const tDate=parseLocalDate(t.date);
+    const match=DB.transactions.find(ex=>{
+      if(ex.type!==t.type)return false;
+      if(Math.abs(+ex.amount-t.amount)>0.01)return false;
+      const exDate=parseLocalDate(ex.tx_date||ex.date);
+      const dayDiff=Math.abs((exDate-tDate)/86400000);
+      return dayDiff<=3;
+    });
+    t._dupe=!!match;
+    t._dupeInfo=match?((match.tx_date||match.date)+' · '+match.description):null;
+  });
+  return items;
+}
+function removeFlaggedDuplicates(){
+  const before=pendingImport.length;
+  pendingImport=pendingImport.filter(t=>!t._dupe);
+  renderReview();
+  UI.alert('הוסרו '+(before-pendingImport.length)+' תנועות שסומנו ככפילות אפשריות.',{type:'success'});
+}
 function fillImportSourceSel(){
   const sel=$('#importSourceSel'); if(!sel)return;
   const cur=sel.value;
@@ -1826,13 +1867,16 @@ function renderReview(){
   const p=$('#reviewPanel');p.classList.remove('hidden');
   $('#reviewCount').textContent=pendingImport.length+' תנועות';
   const allCats=rootCats('expense').concat(rootCats('income'));
+  const dupeCount=pendingImport.filter(t=>t._dupe).length;
   const warning=!allCats.length?'<div class="empty" style="margin-bottom:10px">אין קטגוריות זמינות כרגע. אפשר עדיין לאשר הוספה, או לעבור לקטגוריות וליצור לפחות קטגוריה אחת.</div>':'';
+  const dupeWarning=dupeCount?'<div class="row" style="background:rgba(255,180,84,.12);border:1px solid var(--warn);border-radius:12px;padding:10px 14px;margin-bottom:10px;justify-content:space-between"><span>⚠️ '+dupeCount+' תנועות נראות כמו כפילות של תנועות שכבר קיימות במערכת (מסומנות למטה בכתום)</span><button type="button" class="smallbtn" onclick="removeFlaggedDuplicates()">הסר את כל הכפילויות המסומנות</button></div>':'';
   const rows=pendingImport.map((t,i)=>{
     const catOpts=['<option value="">— ללא קטגוריה —</option>'].concat(allCats.map(c=>'<option value="'+c.id+'" '+(c.id===t.category_id?'selected':'')+'>'+c.name+'</option>')).join('');
     const subOpts=getReviewSubcategoryOptions(i);
-    return '<div class="review-row"><input value="'+(t.description||'')+'" onchange="pendingImport['+i+'].description=this.value"><input type="number" value="'+t.amount+'" onchange="pendingImport['+i+'].amount=+this.value"><select onchange="onReviewCategoryChange('+i+',this.value)">'+catOpts+'</select><div style="display:flex;gap:6px;align-items:center"><select style="flex:1" onchange="pendingImport['+i+'].subcategory_id=this.value||null">'+subOpts+'</select><button class="smallbtn" type="button" onclick="createReviewSubcategory('+i+')">+ תת</button></div><select onchange="pendingImport['+i+'].type=this.value"><option value="expense" '+(t.type==='expense'?'selected':'')+'>הוצאה</option><option value="income" '+(t.type==='income'?'selected':'')+'>הכנסה</option></select><button type="button" class="icon-btn danger" onclick="pendingImport.splice('+i+',1);renderReview()" title="הסר">✕</button></div>';
+    const dupeTitle=t._dupe?'⚠️ כנראה כפילות של תנועה קיימת: '+t._dupeInfo:'';
+    return '<div class="review-row'+(t._dupe?' review-dupe':'')+'" title="'+dupeTitle+'"><input value="'+(t.description||'')+'" onchange="pendingImport['+i+'].description=this.value"><input type="number" value="'+t.amount+'" onchange="pendingImport['+i+'].amount=+this.value"><select onchange="onReviewCategoryChange('+i+',this.value)">'+catOpts+'</select><div style="display:flex;gap:6px;align-items:center"><select style="flex:1" onchange="pendingImport['+i+'].subcategory_id=this.value||null">'+subOpts+'</select><button class="smallbtn" type="button" onclick="createReviewSubcategory('+i+')">+ תת</button></div><select onchange="pendingImport['+i+'].type=this.value"><option value="expense" '+(t.type==='expense'?'selected':'')+'>הוצאה</option><option value="income" '+(t.type==='income'?'selected':'')+'>הכנסה</option></select><button type="button" class="icon-btn danger" onclick="pendingImport.splice('+i+',1);renderReview()" title="הסר">✕</button></div>';
   }).join('');
-  $('#reviewList').innerHTML=warning+'<div class="review-grid"><div class="review-row review-head"><span>תיאור</span><span>סכום</span><span>קטגוריה</span><span>תת-קטגוריה</span><span>סוג</span><span></span></div>'+rows+'</div>';
+  $('#reviewList').innerHTML=warning+dupeWarning+'<div class="review-grid"><div class="review-row review-head"><span>תיאור</span><span>סכום</span><span>קטגוריה</span><span>תת-קטגוריה</span><span>סוג</span><span></span></div>'+rows+'</div>';
 }
 
 function getReviewSubcategoryOptions(i){
@@ -2195,7 +2239,7 @@ function render(){
   const t2=fix+vr||1;
   $('#fixedVar').innerHTML='<div class="catrow"><div class="catname"><span>קבוע</span><span>'+fmt(fix)+' ('+Math.round(fix/t2*100)+'%)</span></div><div class="bar"><span style="width:'+fix/t2*100+'%"></span></div></div><div class="catrow"><div class="catname"><span>שוטף</span><span>'+fmt(vr)+' ('+Math.round(vr/t2*100)+'%)</span></div><div class="bar"><span style="width:'+vr/t2*100+'%"></span></div></div>';
 
-  renderExpenses();renderCatSummary();renderCatManage();renderLoans();renderInstallments();renderInvestments();renderGoals();
+  renderExpenses();renderCatSummary();renderCatManage();renderBudgetManage();renderBudgetProgress();renderLoans();renderInstallments();renderInvestments();renderGoals();
   renderAccounts();renderCreditCards();fillImportSourceSel();
   computeFlow();
   fillDelMonthSelectors&&fillDelMonthSelectors();
@@ -2413,6 +2457,62 @@ function renderCatSummary(){
   $('#catSummary').innerHTML=html||'<div class="empty">אין נתונים לשנה זו</div>';
   const footer=$('#catSumFooter');
   if(catFilter!=='all'){footer.classList.remove('hidden');footer.style.display='flex';const cat=DB.categories.find(x=>x.id===catFilter);const sub=catSubFilter?DB.categories.find(x=>x.id===catSubFilter):null;$('#catSumLabel').textContent='סה"כ '+(sub?sub.name:cat?cat.name:'');$('#catSumTotal').textContent=fmt(grand);}else footer.classList.add('hidden');
+}
+
+function renderBudgetManage(){
+  const box=$('#budgetManage');if(!box)return;
+  const roots=rootCats('expense');
+  if(!roots.length){box.innerHTML='<p class="empty">אין קטגוריות הוצאה עדיין</p>';return;}
+  box.innerHTML=roots.map(c=>{
+    const color=catColor(c.id);
+    const b=DB.categoryBudgets.find(x=>x.category_id===c.id);
+    return '<div class="budget-row">'
+      +'<div class="bicon" style="background:'+hexA(color,.16)+';color:'+color+'">'+(c.icon||'📌')+'</div>'
+      +'<div class="bname">'+c.name+'</div>'
+      +'<input type="number" placeholder="ללא הגבלה" value="'+(b?b.monthly_amount:'')+'" onchange="updateCategoryBudget(\''+c.id+'\',this.value)">'
+      +'</div>';
+  }).join('');
+}
+window.updateCategoryBudget=async(categoryId,val)=>{
+  const amount=parseFloat(val);
+  const existing=DB.categoryBudgets.find(x=>x.category_id===categoryId);
+  if(!val||isNaN(amount)||amount<=0){
+    if(existing){
+      const{error}=await sb.from('category_budgets').delete().eq('id',existing.id);
+      if(error){UI.alert(error.message,{type:'error'});return;}
+      DB.categoryBudgets=DB.categoryBudgets.filter(x=>x.id!==existing.id);
+    }
+    render();return;
+  }
+  const{data,error}=await sb.from('category_budgets').upsert({household_id:HID,category_id:categoryId,monthly_amount:amount,created_by:CU.id},{onConflict:'household_id,category_id'}).select().single();
+  if(error){UI.alert(error.message+'\n\nהרצת את supabase_category_budgets.sql ב-Supabase?',{type:'error'});return;}
+  if(existing)Object.assign(existing,data);else DB.categoryBudgets.push(data);
+  render();
+};
+
+function renderBudgetProgress(){
+  const panel=$('#budgetProgressPanel'),box=$('#budgetProgress');
+  if(!panel||!box)return;
+  if(!DB.categoryBudgets.length){panel.classList.add('hidden');return;}
+  panel.classList.remove('hidden');
+  const y=VY,m=VM;
+  const exp=DB.transactions.filter(t=>t.type==='expense');
+  const items=DB.categoryBudgets.map(b=>{
+    const c=DB.categories.find(x=>x.id===b.category_id);
+    if(!c)return null;
+    let spent=exp.filter(t=>t.category_id===c.id).reduce((s,t)=>s+moAmt(t,y,m),0);
+    spent+=DB.installments.filter(p=>p.category_id===c.id).reduce((s,p)=>s+instMo(p,y,m),0);
+    return{c,budget:+b.monthly_amount,spent};
+  }).filter(Boolean).sort((a,b)=>(b.spent/(b.budget||1))-(a.spent/(a.budget||1)));
+  box.innerHTML=items.map(it=>{
+    const pct=it.budget?Math.min(999,it.spent/it.budget*100):0;
+    const color=pct>=100?'var(--danger)':pct>=70?'var(--warn)':'var(--accent2)';
+    const remaining=it.budget-it.spent;
+    return '<div class="budget-progress-item">'
+      +'<div class="budget-progress-head"><b>'+(it.c.icon||'')+' '+it.c.name+'</b><span style="color:'+color+'">'+fmt(it.spent)+' מתוך '+fmt(it.budget)+(remaining>=0?' · נותרו '+fmt(remaining):' · חריגה של '+fmt(-remaining))+'</span></div>'
+      +'<div class="budget-bar"><span style="width:'+Math.min(100,pct)+'%;background:'+color+'"></span></div>'
+      +'</div>';
+  }).join('');
 }
 
 function renderCatManage(){
