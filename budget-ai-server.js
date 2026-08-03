@@ -1,11 +1,13 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
+const PUBLIC_DIR = path.join(__dirname, 'public');
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
@@ -1158,6 +1160,18 @@ app.post('/api/reset/confirm', async (req, res) => {
   }
 });
 
+// Serves the frontend from this same service, so there's only one Render
+// service (and one cold-start) instead of two. Registered after every /api/*
+// route above so those still take priority.
+app.use(express.static(PUBLIC_DIR));
+app.get('/app-config.js', (req, res) => {
+  res.type('application/javascript');
+  res.send(`window.__APP_CONFIG = { API_BASE: '' };`);
+});
+app.use((req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
+
 app.listen(PORT, () => {
-  console.log(`Budget AI server listening on http://localhost:${PORT}`);
+  console.log(`Budget app server listening on http://localhost:${PORT}`);
 });

@@ -885,11 +885,9 @@ async function boot(){
   fillPeriod();
   try{
     await ensureHousehold();
-    await loadAll();
-    await loadUserSettings();
     const gk=localStorage.getItem('geminiKey');if(gk){$('#geminiKey').value=gk;$('#keyStatus').textContent='✅ מפתח שמור';}
+    await Promise.all([loadAll(),loadUserSettings(),loadMembers()]);
     render();
-    await loadMembers();
     startAutoSync();
   }catch(err){
     console.error('Boot failed:',err);
@@ -1016,8 +1014,12 @@ async function loadAll(){
   ]);
   DB.categories=c.data||[];DB.transactions=t.data||[];DB.loans=l.data||[];DB.installments=i.data||[];DB.investments=inv.data||[];DB.goals=g.data||[];
   DB.bankAccounts=ba.data||[];DB.creditCards=cc.data||[];
-  const ids=[...new Set(DB.transactions.map(t=>t.created_by).filter(Boolean))];
-  for(const id of ids){if(!memberCache[id]){const{data}=await sb.from('memberships').select('display_name').eq('user_id',id).eq('household_id',HID).single();memberCache[id]=data?.display_name||'—';}}
+  const neededIds=[...new Set(DB.transactions.map(t=>t.created_by).filter(Boolean))].filter(id=>!memberCache[id]);
+  if(neededIds.length){
+    const{data:mems}=await sb.from('memberships').select('user_id,display_name').eq('household_id',HID).in('user_id',neededIds);
+    (mems||[]).forEach(m=>{memberCache[m.user_id]=m.display_name||'—';});
+    neededIds.forEach(id=>{if(!memberCache[id])memberCache[id]='—';});
+  }
 }
 
 const TABS=['dash','expenses','charts','categories','accounts','loans','installments','investments','planning','import','sharing','settings'];
