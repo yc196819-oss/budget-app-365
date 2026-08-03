@@ -369,6 +369,7 @@ tr:last-child td{border-bottom:none}
       <h2>הוצאות לפי חודש — <span id="chartYearLbl" class="muted"></span><span class="avg-badge" id="stackAvg"></span></h2>
       <p class="muted" style="margin-bottom:12px">כל עמודה = חודש, מחולק לפי קטגוריות</p>
       <div class="chart-box"><canvas id="monthlyStack"></canvas></div>
+      <div class="chart-legend" id="monthlyStackLegend"></div>
     </div>
     <div class="panel">
       <h2>סך הוצאות כללי לפי חודש<span class="avg-badge" id="totalAvg"></span></h2>
@@ -754,7 +755,36 @@ let CU=null,HID=null,MNAME='',MROLE='owner'; let VM=new Date().getMonth(),VY=new
 let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[],bankAccounts:[],creditCards:[]};
 let exFilter='all',catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
 const memberCache={}; let charts={};
-if(window.Chart){Chart.defaults.font.family="'Heebo','Segoe UI',sans-serif";}
+if(window.Chart){
+  Chart.defaults.font.family="'Heebo','Segoe UI',sans-serif";
+  Chart.register({
+    id:'avgLine',
+    afterDraw(chart,args,opts){
+      opts=opts||{};
+      if(opts.value==null)return;
+      const{ctx,chartArea,scales:{y}}=chart;
+      if(!chartArea||!y)return;
+      const yPos=y.getPixelForValue(opts.value);
+      ctx.save();
+      ctx.strokeStyle=opts.color||'#9aa0b8';
+      ctx.setLineDash([6,5]);
+      ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(chartArea.left,yPos);ctx.lineTo(chartArea.right,yPos);ctx.stroke();
+      if(opts.label){
+        ctx.setLineDash([]);
+        ctx.font="700 11px Heebo";
+        const txt=opts.label;
+        const tw=ctx.measureText(txt).width;
+        ctx.fillStyle=opts.color||'#9aa0b8';
+        ctx.fillRect(chartArea.left,yPos-16,tw+12,16);
+        ctx.fillStyle='#0c0e15';
+        ctx.textBaseline='middle';
+        ctx.fillText(txt,chartArea.left+6,yPos-8);
+      }
+      ctx.restore();
+    }
+  });
+}
 let syncTimer=null, syncInFlight=false;
 const APP_SETTINGS={
   reminders:{enabled:false,time:'20:30',channel:'email'},
@@ -2207,10 +2237,19 @@ function renderCharts(){
   // stacked monthly by category
   const datasets=cats.map((c,i)=>{
     const data=[];for(let m=0;m<12;m++){let v=exp.filter(t=>t.category_id===c.id).reduce((s,t)=>s+moAmt(t,VY,m),0);v+=DB.installments.filter(p=>p.category_id===c.id).reduce((s,p)=>s+instMo(p,VY,m),0);data.push(Math.round(v));}
-    return{label:c.name,data,backgroundColor:PALETTE[i%PALETTE.length]};
+    return{label:c.name,data,backgroundColor:PALETTE[i%PALETTE.length],borderRadius:0,maxBarThickness:36};
   }).filter(d=>d.data.some(v=>v>0));
   if(charts.monthlyStack)charts.monthlyStack.destroy();
-  charts.monthlyStack=new Chart(document.getElementById('monthlyStack'),{type:'bar',data:{labels:MONTHS_SHORT,datasets:datasets.map(d=>({...d,borderRadius:8,borderSkipped:false,maxBarThickness:36}))},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}},y:{stacked:true,ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{labels:{color:textColor,usePointStyle:true,pointStyle:'circle',font:{family:'Heebo'}}},tooltip:tipBase}}});
+  charts.monthlyStack=new Chart(document.getElementById('monthlyStack'),{type:'bar',data:{labels:MONTHS_SHORT,datasets},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{stacked:true,ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:tipBase}}});
+  const stackLegend=$('#monthlyStackLegend');
+  if(stackLegend){
+    stackLegend.innerHTML=datasets.map((d,i)=>'<button type="button" class="chart-legend-item" data-i="'+i+'"><span class="sw" style="background:'+d.backgroundColor+'"></span><span class="lbl">'+d.label+'</span></button>').join('');
+    stackLegend.querySelectorAll('.chart-legend-item').forEach(btn=>btn.onclick=()=>{
+      const i=+btn.dataset.i,ch=charts.monthlyStack;
+      ch.setDatasetVisibility(i,!ch.isDatasetVisible(i));ch.update();
+      btn.classList.toggle('off',!ch.isDatasetVisible(i));
+    });
+  }
 
   // total per month
   const totals=[];for(let m=0;m<12;m++){let v=exp.reduce((s,t)=>s+moAmt(t,VY,m),0);v+=DB.installments.reduce((s,p)=>s+instMo(p,VY,m),0);totals.push(Math.round(v));}
@@ -2218,7 +2257,7 @@ function renderCharts(){
   $('#stackAvg').textContent='ממוצע חודשי: '+fmt(stackAvg);
   $('#totalAvg').textContent='ממוצע חודשי: '+fmt(stackAvg);
   if(charts.monthlyTotal)charts.monthlyTotal.destroy();
-  charts.monthlyTotal=new Chart(document.getElementById('monthlyTotal'),{type:'bar',data:{labels:MONTHS_SHORT,datasets:[{label:'סך הוצאות',data:totals,backgroundColor:cssVar('--accent'),borderRadius:10,borderSkipped:false,maxBarThickness:42}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
+  charts.monthlyTotal=new Chart(document.getElementById('monthlyTotal'),{type:'bar',data:{labels:MONTHS_SHORT,datasets:[{label:'סך הוצאות',data:totals,backgroundColor:cssVar('--accent'),borderRadius:10,borderSkipped:false,maxBarThickness:42}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},avgLine:{value:stackAvg,color:cssVar('--warn'),label:'ממוצע '+fmt(stackAvg)},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
 
   // category trend line
   const ts=$('#trendCat');
@@ -2229,7 +2268,7 @@ function renderCharts(){
   $('#trendAvg').textContent='ממוצע חודשי: '+fmt(trendAvg);
   const trendColor=catColor(selId);
   if(charts.catTrend)charts.catTrend.destroy();
-  charts.catTrend=new Chart(document.getElementById('catTrend'),{type:'line',data:{labels:MONTHS_SHORT,datasets:[{label:'הוצאה חודשית',data:trend,borderColor:trendColor,backgroundColor:hexA(trendColor,.16),fill:true,tension:.4,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:trendColor}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
+  charts.catTrend=new Chart(document.getElementById('catTrend'),{type:'line',data:{labels:MONTHS_SHORT,datasets:[{label:'הוצאה חודשית',data:trend,borderColor:trendColor,backgroundColor:hexA(trendColor,.16),fill:true,tension:.4,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:trendColor}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},avgLine:{value:trendAvg,color:cssVar('--warn'),label:'ממוצע '+fmt(trendAvg)},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
 }
 
 const PM_LABELS={standing_order:'↻ הוראת קבע',credit:'💳 אשראי',check:'🖊 צ׳ק',cash:'💵 מזומן'};
