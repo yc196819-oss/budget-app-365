@@ -408,9 +408,11 @@ tr:last-child td{border-bottom:none}
   <section id="tab-expenses" class="hidden">
     <div class="panel">
       <h2>✨ הוספה מהירה עם AI</h2>
-      <p class="muted" style="margin-bottom:10px">כתבו בשפה חופשית — למשל "שילמתי 80 שקל בסופר" — וה-AI ימלא את הטופס למטה לאישור.</p>
+      <p class="muted" style="margin-bottom:10px">כתבו בשפה חופשית או צלמו קבלה — וה-AI ימלא את הטופס למטה לאישור.</p>
       <div class="row">
         <input id="quickAddText" placeholder='למשל: "שילמתי 80 שקל בסופר" או "קיבלתי 500 שקל מתנה"' style="flex:1" onkeydown="if(event.key==='Enter')aiQuickAdd()">
+        <input type="file" id="quickAddPhoto" accept="image/*" capture="environment" class="hidden" onchange="aiQuickAddPhoto(this.files[0])">
+        <button type="button" class="btn sec" onclick="document.getElementById('quickAddPhoto').click()" title="צלם/העלה קבלה">📷 קבלה</button>
         <button type="button" class="btn" id="quickAddBtn" onclick="aiQuickAdd()">✨ מלא עם AI</button>
       </div>
     </div>
@@ -1882,23 +1884,22 @@ function findCategoryByHint(type,hint){
   return null;
 }
 
-async function aiQuickAdd(){
-  const inp=$('#quickAddText');if(!inp)return;
-  const text=inp.value.trim();if(!text)return;
-  const btn=$('#quickAddBtn');const origLabel=btn?btn.textContent:'';
+function quickAddCategoryList(){
+  const expCats=rootCats('expense'),incCats=rootCats('income');
+  return expCats.map(c=>{const subs=subCats(c.id).map(s=>s.name+'(id:'+s.id+')').join(',');return '- '+c.name+'(id:'+c.id+',הוצאה)'+(subs?' תתי:'+subs:'');}).join('\n')+'\n'+incCats.map(c=>'- '+c.name+'(id:'+c.id+',הכנסה)').join('\n');
+}
+async function submitQuickAdd(prompt,extra,btn){
+  const origLabel=btn?btn.textContent:'';
   if(btn){btn.disabled=true;btn.textContent='מנתח...';}
   try{
-    const expCats=rootCats('expense'),incCats=rootCats('income');
-    const catList=expCats.map(c=>{const subs=subCats(c.id).map(s=>s.name+'(id:'+s.id+')').join(',');return '- '+c.name+'(id:'+c.id+',הוצאה)'+(subs?' תתי:'+subs:'');}).join('\n')+'\n'+incCats.map(c=>'- '+c.name+'(id:'+c.id+',הכנסה)').join('\n');
-    const prompt='המשתמש תיאר תנועה כספית אחת בשפה חופשית. חלץ ממנה תנועה מובנית. תאריך היום: '+todayStr()+' (אם לא צוין תאריך אחר בטקסט, השתמש בהיום). קטגוריות זמינות:\n'+catList+'\n\nהחזר JSON בלבד (ללא markdown) — מערך עם תנועה אחת:\n[{"date":"YYYY-MM-DD","description":"תיאור קצר וברור","amount":מספר חיובי,"type":"expense"|"income","category_id":"uuid מהרשימה או null","subcategory_id":"uuid מהרשימה או null"}]';
-    const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,text})});
+    const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,text:'',...extra})});
     const data=await res.json();
     if(data.error||!Array.isArray(data.transactions)||!data.transactions.length){
-      UI.alert('לא הצלחתי להבין את התנועה. נסו לנסח מחדש — למשל: "שילמתי 50 שקל בסופר".',{type:'error'});
+      UI.alert('לא הצלחתי לזהות תנועה. נסו שוב או מלאו ידנית.',{type:'error'});
       return;
     }
     const t=normalizeImportedTransactions(data.transactions)[0];
-    if(!t){UI.alert('לא זוהתה תנועה תקינה בטקסט.',{type:'error'});return;}
+    if(!t){UI.alert('לא זוהתה תנועה תקינה.',{type:'error'});return;}
     $('#exType').value=t.type;fillCatSel();
     $('#exDesc').value=t.description;
     $('#exAmount').value=t.amount;
@@ -1906,7 +1907,6 @@ async function aiQuickAdd(){
     if(t.category_id)$('#exCat').value=t.category_id;
     updateSubSel();
     if(t.subcategory_id)$('#exSub').value=t.subcategory_id;
-    inp.value='';
     UI.alert('התנועה מולאה בטופס למטה — בדקו ולחצו "הוסף" לאישור.',{type:'success'});
   }catch(err){
     UI.alert('שגיאה: '+err.message,{type:'error'});
@@ -1914,7 +1914,26 @@ async function aiQuickAdd(){
     if(btn){btn.disabled=false;btn.textContent=origLabel;}
   }
 }
-window.aiQuickAdd=aiQuickAdd;
+window.aiQuickAdd=async()=>{
+  const inp=$('#quickAddText');if(!inp)return;
+  const text=inp.value.trim();if(!text)return;
+  const prompt='המשתמש תיאר תנועה כספית אחת בשפה חופשית. חלץ ממנה תנועה מובנית. תאריך היום: '+todayStr()+' (אם לא צוין תאריך אחר בטקסט, השתמש בהיום). קטגוריות זמינות:\n'+quickAddCategoryList()+'\n\nהחזר JSON בלבד (ללא markdown) — מערך עם תנועה אחת:\n[{"date":"YYYY-MM-DD","description":"תיאור קצר וברור","amount":מספר חיובי,"type":"expense"|"income","category_id":"uuid מהרשימה או null","subcategory_id":"uuid מהרשימה או null"}]';
+  await submitQuickAdd(prompt,{text},$('#quickAddBtn'));
+  inp.value='';
+};
+window.aiQuickAddPhoto=async(file)=>{
+  if(!file)return;
+  const photoInp=$('#quickAddPhoto');
+  try{
+    const fileData=await fileToBase64(file);
+    const prompt='זו תמונה של קבלה/חשבונית בודדת. חלץ ממנה תנועה כספית אחת. תאריך היום: '+todayStr()+' (אם אין תאריך בקבלה, השתמש בהיום). קטגוריות זמינות:\n'+quickAddCategoryList()+'\n\nהחזר JSON בלבד (ללא markdown) — מערך עם תנועה אחת:\n[{"date":"YYYY-MM-DD","description":"שם העסק/תיאור קצר","amount":מספר חיובי (הסכום הכולל),"type":"expense","category_id":"uuid מהרשימה או null","subcategory_id":"uuid מהרשימה או null"}]';
+    await submitQuickAdd(prompt,{fileData,mimeType:file.type},$('#quickAddBtn'));
+  }catch(err){
+    UI.alert('שגיאה בקריאת התמונה: '+err.message,{type:'error'});
+  }finally{
+    if(photoInp)photoInp.value='';
+  }
+};
 
 function normalizeImportedTransactions(items){
   if(!Array.isArray(items))return [];
@@ -3072,7 +3091,7 @@ window.openGoalPlan=id=>{
   const html='<div class="plan-head"><div class="plan-head-icon">'+(g.icon||'🎯')+'</div><div><h3>תוכנית — '+g.name+'</h3><p>סכום יעד כולל: '+fmt(g.target_amount)+'</p></div></div>'
     +'<label style="margin-top:0">סעיפי תקציב</label>'
     +'<div id="planRows"></div>'
-    +'<button type="button" class="smallbtn" id="planAddRow" style="margin-top:2px">➕ הוסף סעיף</button>'
+    +'<div class="row" style="margin-top:2px"><button type="button" class="smallbtn" id="planAddRow">➕ הוסף סעיף</button><button type="button" class="smallbtn" id="planAiSuggest">🤖 הצע תוכנית עם AI</button></div>'
     +'<div class="plan-total"><span>סה"כ מתוכנן</span><span id="planTotalVal"></span></div>'
     +'<label>הערות חופשיות</label><textarea id="planNotes" rows="4" placeholder="כל מה שלא נכנס לטבלה — רעיונות, קישורים, תזכורות...">'+esc(g.notes||'')+'</textarea>'
     +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn sec" id="planCancel">ביטול</button><button class="btn" id="planSave">שמירת תוכנית</button></div>';
@@ -3100,6 +3119,27 @@ window.openGoalPlan=id=>{
     ov.querySelector('#planTotalVal').innerHTML=fmt(total)+(target?' <span class="'+(diff<0?'over':'under')+'">('+(diff<0?'חריגה של '+fmt(-diff):'נותרו '+fmt(diff))+')</span>':'');
   }
   ov.querySelector('#planAddRow').onclick=()=>{items.push({name:'',amount:0});renderRows();updateTotal();};
+  ov.querySelector('#planAiSuggest').onclick=async()=>{
+    const btn=ov.querySelector('#planAiSuggest');const orig=btn.textContent;
+    btn.disabled=true;btn.textContent='חושב...';
+    try{
+      const prompt='הצע תוכנית תקציב לסעיפי הוצאה עבור היעד "'+g.name+'" (סוג: '+(g.icon||'')+'), עם סכום יעד כולל של '+Math.round(+g.target_amount||0)+' ₪. הצע 4-7 סעיפים ריאליים עם סכומים משוערים שמסתכמים בערך לסכום היעד. החזר JSON בלבד (ללא markdown) — מערך:\n[{"name":"שם הסעיף","amount":מספר}]';
+      const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,text:g.name})});
+      const data=await res.json();
+      if(data.error||!Array.isArray(data.transactions)||!data.transactions.length){
+        UI.alert('לא הצלחתי להציע תוכנית כרגע. נסו שוב או הוסיפו סעיפים ידנית.',{type:'error'});
+        return;
+      }
+      const suggested=data.transactions.filter(x=>x&&x.name).map(x=>({name:String(x.name),amount:+x.amount||0}));
+      if(!suggested.length){UI.alert('לא התקבלו סעיפים תקינים.',{type:'error'});return;}
+      items.push(...suggested);
+      renderRows();updateTotal();
+    }catch(err){
+      UI.alert('שגיאה: '+err.message,{type:'error'});
+    }finally{
+      btn.disabled=false;btn.textContent=orig;
+    }
+  };
   ov.querySelector('#planCancel').onclick=close;
   ov.querySelector('#planSave').onclick=async()=>{
     const notesVal=ov.querySelector('#planNotes').value;
