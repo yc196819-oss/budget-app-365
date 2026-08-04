@@ -2406,19 +2406,33 @@ function renderCharts(){
 
 let lastAdvice=null;
 function buildAdviceSummary(){
-  const last6=[];
+  const monthKeys=[];
   for(let i=5;i>=0;i--){
     let mo=VM-i,yr=VY;
     while(mo<0){mo+=12;yr--;}
+    monthKeys.push({mo,yr,label:MONTHS[mo]+' '+yr});
+  }
+  const last6Months=monthKeys.map(({mo,yr,label})=>{
     const exp=DB.transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+moAmt(t,yr,mo),0)+DB.installments.reduce((s,p)=>s+instMo(p,yr,mo),0);
     const inc=DB.transactions.filter(t=>t.type==='income').reduce((s,t)=>s+moAmt(t,yr,mo),0);
-    last6.push({month:MONTHS[mo]+' '+yr,income:Math.round(inc),expense:Math.round(exp),balance:Math.round(inc-exp)});
-  }
-  const currentMonthCategoryBreakdown=rootCats('expense').map(c=>{
-    let v=DB.transactions.filter(t=>t.type==='expense'&&t.category_id===c.id).reduce((s,t)=>s+moAmt(t,VY,VM),0);
-    v+=DB.installments.filter(p=>p.category_id===c.id).reduce((s,p)=>s+instMo(p,VY,VM),0);
-    return{category:c.name,amount:Math.round(v)};
-  }).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount).slice(0,8);
+    return{month:label,income:Math.round(inc),expense:Math.round(exp),balance:Math.round(inc-exp)};
+  });
+  // per-category 6-month trend (not just current month) so follow-up questions
+  // about a specific category ("what about my car?") have real data to work with
+  const categorySpendingHistory=rootCats('expense').map(c=>{
+    const monthlyAmounts=monthKeys.map(({mo,yr,label})=>{
+      let v=DB.transactions.filter(t=>t.type==='expense'&&t.category_id===c.id).reduce((s,t)=>s+moAmt(t,yr,mo),0);
+      v+=DB.installments.filter(p=>p.category_id===c.id).reduce((s,p)=>s+instMo(p,yr,mo),0);
+      return{month:label,amount:Math.round(v)};
+    });
+    const total6Months=monthlyAmounts.reduce((s,x)=>s+x.amount,0);
+    if(total6Months<=0)return null;
+    const subcategoriesThisMonth=subCats(c.id).map(s=>{
+      const v=DB.transactions.filter(t=>t.type==='expense'&&t.subcategory_id===s.id).reduce((sum,t)=>sum+moAmt(t,VY,VM),0);
+      return{subcategory:s.name,amount:Math.round(v)};
+    }).filter(x=>x.amount>0);
+    return{category:c.name,monthlyAmounts,total6Months,avgMonthly:Math.round(total6Months/6),subcategoriesThisMonth};
+  }).filter(Boolean).sort((a,b)=>b.total6Months-a.total6Months);
   const budgetsVsActual=DB.categoryBudgets.map(b=>{
     const c=DB.categories.find(x=>x.id===b.category_id);
     if(!c)return null;
@@ -2427,7 +2441,7 @@ function buildAdviceSummary(){
     return{category:c.name,monthlyBudget:+b.monthly_amount,spentSoFarThisMonth:Math.round(spent)};
   }).filter(Boolean);
   const savingsGoals=DB.goals.map(g=>({name:g.name,target:+g.target_amount,saved:+g.saved_amount}));
-  return{currentMonth:MONTHS[VM]+' '+VY,last6Months:last6,currentMonthCategoryBreakdown,budgetsVsActual,savingsGoals};
+  return{currentMonth:MONTHS[VM]+' '+VY,last6Months,categorySpendingHistory,budgetsVsActual,savingsGoals};
 }
 async function loadAdvice(force){
   const box=$('#advisorContent');if(!box)return;
