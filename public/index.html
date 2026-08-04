@@ -159,6 +159,14 @@ tr:last-child td{border-bottom:none}
 .advisor-spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:advisorspin .8s linear infinite;margin:0 auto 14px}
 @keyframes advisorspin{to{transform:rotate(360deg)}}
 
+/* ===== shared "AI is thinking" indicator — used in buttons, chat bubbles, inline status text ===== */
+.ai-dots{display:inline-flex;gap:3px;align-items:center;vertical-align:middle}
+.ai-dots span{width:6px;height:6px;border-radius:50%;background:currentColor;animation:aiDotBounce 1.1s infinite ease-in-out;opacity:.4}
+.ai-dots span:nth-child(2){animation-delay:.15s}
+.ai-dots span:nth-child(3){animation-delay:.3s}
+@keyframes aiDotBounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+.ai-thinking-inline{display:inline-flex;align-items:center;gap:7px}
+
 /* ===== charts: legend + averages ===== */
 .pie-box{height:280px}
 .chart-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
@@ -1657,7 +1665,7 @@ async function handlePDF(e){
       if(!text.trim()){
         throw new Error('לא נמצא טקסט קריא ב-PDF. נסה תמונה או קובץ עם טקסט.');
       }
-      $('#importStatus').innerHTML='<p class="muted">🤖 הבינה המלאכותית מנתחת ומסווגת...</p>';
+      $('#importStatus').innerHTML='<p class="muted ai-thinking-inline">🤖 הבינה המלאכותית מנתחת ומסווגת'+AI_DOTS+'</p>';
       await analyzeImportedContent({text,fileName:f.name,fileKind:'pdf'},key);
     }else if(isText){
       const text=await f.text();
@@ -1890,7 +1898,7 @@ function quickAddCategoryList(){
 }
 async function submitQuickAdd(prompt,extra,btn){
   const origLabel=btn?btn.textContent:'';
-  if(btn){btn.disabled=true;btn.textContent='מנתח...';}
+  if(btn){btn.disabled=true;btn.innerHTML='מנתח '+AI_DOTS;}
   try{
     const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,text:'',...extra})});
     const data=await res.json();
@@ -2595,7 +2603,7 @@ function renderAdvisorChat(){
   const log=$('#advisorChatLog');if(!log)return;
   const esc=s=>String(s).replace(/</g,'&lt;');
   const chatMsgs=(currentConversation?.messages||[]).filter(m=>m.role==='user'||m.role==='ai');
-  log.innerHTML=chatMsgs.length?chatMsgs.map(m=>'<div class="advisor-chat-msg '+m.role+'">'+esc(m.text)+'</div>').join(''):'<div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div>';
+  log.innerHTML=chatMsgs.length?chatMsgs.map(m=>'<div class="advisor-chat-msg '+m.role+'">'+(m.pending?AI_DOTS:esc(m.text))+'</div>').join(''):'<div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div>';
   log.scrollTop=log.scrollHeight;
 }
 window.sendAdvisorChat=async()=>{
@@ -2604,7 +2612,7 @@ window.sendAdvisorChat=async()=>{
   const msg=inp.value.trim();if(!msg)return;
   inp.value='';
   currentConversation.messages.push({role:'user',text:msg});
-  currentConversation.messages.push({role:'ai',text:'...'});
+  currentConversation.messages.push({role:'ai',text:'',pending:true});
   renderAdvisorChat();
   try{
     const summary=buildAdviceSummary();
@@ -2623,14 +2631,15 @@ window.sendAdvisorChat=async()=>{
 };
 
 const WELCOME_TIPS=[
-  {icon:'💸',title:'הוספת תנועות',text:'בטאב "תנועות" מוסיפים הכנסה או הוצאה עם קטגוריה, תאריך וסכום — זה הבסיס לכל השאר. בכל תנועה אפשר לשנות קטגוריה ישירות מהרשימה בלחיצה על התג הצבעוני.'},
+  {icon:'✨',title:'הוספה מהירה עם AI',text:'בראש טאב "תנועות" כתבו בשפה חופשית — "שילמתי 80 שקל בסופר" — או צלמו קבלה עם כפתור 📷, וה-AI ימלא את הטופס לאישור.'},
+  {icon:'💸',title:'הוספת תנועות',text:'אפשר גם להוסיף ידנית עם קטגוריה, תאריך וסכום. בכל תנועה קיימת אפשר לשנות קטגוריה ישירות מהרשימה בלחיצה על התג הצבעוני.'},
   {icon:'🗂️',title:'קטגוריות צבעוניות',text:'כל קטגוריה מקבלת צבע קבוע שחוזר בכל המערכת — בתנועות, בגרפים, בכל מקום. אפשר להוסיף/לערוך/למחוק בטאב "קטגוריות", כולל תתי-קטגוריות.'},
   {icon:'💰',title:'תקציב חודשי',text:'בטאב "קטגוריות" קבעו סכום מקסימלי לחודש לכל קטגוריית הוצאה, ותראו פס התקדמות צבעוני (ירוק/כתום/אדום) בדשבורד מול ההוצאה בפועל.'},
   {icon:'📉',title:'גרפים',text:'בטאב "גרפים" רואים הוצאות לפי חודש מחולק לקטגוריות, סך הוצאות כללי, ומגמה של קטגוריה בודדת לאורך השנה — כולל ממוצע חודשי לכל גרף.'},
-  {icon:'🤖',title:'ייבוא AI מדוח אשראי',text:'בטאב "ייבוא AI" אפשר לצרף קובץ (PDF/אקסל/תמונה) של פירוט חיובי אשראי, וה-AI קורא אותו ומזין את התנועות אוטומטית עם קטגוריה — כולל אזהרה על כפילויות אפשריות מול תנועות קיימות.'},
+  {icon:'🤖',title:'ייבוא AI מדוח אשראי',text:'בטאב "ייבוא AI" אפשר לצרף קובץ (PDF/אקסל/תמונה) של פירוט חיובי אשראי שלם, וה-AI מזין את כל התנועות אוטומטית עם קטגוריה — כולל אזהרה על כפילויות אפשריות מול תנועות קיימות.'},
   {icon:'💳',title:'בקרת תזרים',text:'בדשבורד יש כרטיס "כמה באמת פנוי לי" שמחשב לפי יום החיוב של כל כרטיס אשראי מתי בדיוק כל הוצאה תרד בפועל מהחשבון.'},
-  {icon:'🎯',title:'יעדים עם תוכנית',text:'לחיצה כפולה על כרטיס יעד פותחת חלון תכנון מפורט — סעיפי תקציב (כמו "כרטיסי טיסה", "ביטוח נסיעות"), הערות חופשיות, ומעקב התקדמות.'},
-  {icon:'🧠',title:'יועץ AI',text:'בטאב "יועץ AI" מקבלים ניתוח אישי של ההרגלים הכספיים שלכם מבוסס על הנתונים האמיתיים, ואפשר גם לשוחח איתו ולשאול שאלות המשך.'}
+  {icon:'🎯',title:'יעדים עם תוכנית',text:'לחיצה כפולה על כרטיס יעד פותחת חלון תכנון מפורט — סעיפי תקציב, הערות חופשיות, ומעקב התקדמות. יש גם כפתור "🤖 הצע תוכנית עם AI" שמציע סעיפים לפי שם היעד והסכום.'},
+  {icon:'🧠',title:'יועץ AI אישי',text:'בטאב "יועץ AI" לוחצים "התחל ייעוץ" לניתוח אישי מבוסס הנתונים האמיתיים שלכם (לא רק של משק הבית — גם ההוצאות האישיות שלכם), אפשר לשוחח עם היועץ בשאלות המשך, וכל שיחה נשמרת ונגישה שוב מאוחר יותר — רק לכם, לא משותפת עם שאר בני הבית.'}
 ];
 window.showWelcomeGuide=()=>{
   const html='<button type="button" onclick="this.closest(\'.modal-overlay\').remove()" style="position:absolute;left:16px;top:16px;background:none;border:0;color:var(--muted);font-size:1.1rem;cursor:pointer;line-height:1" title="סגור">✕</button>'
@@ -2642,6 +2651,7 @@ window.showWelcomeGuide=()=>{
   ov.querySelector('#welcomeOk').onclick=()=>{localStorage.setItem('welcomeSeen_v1','1');close();};
 };
 
+const AI_DOTS='<span class="ai-dots"><span></span><span></span><span></span></span>';
 const PM_LABELS={standing_order:'↻ הוראת קבע',credit:'💳 אשראי',check:'🖊 צ׳ק',cash:'💵 מזומן'};
 function txPmTag(t){
   if(t._isInst)return '<span class="tx-pmtag">🧾 תשלומים</span>';
@@ -3121,7 +3131,7 @@ window.openGoalPlan=id=>{
   ov.querySelector('#planAddRow').onclick=()=>{items.push({name:'',amount:0});renderRows();updateTotal();};
   ov.querySelector('#planAiSuggest').onclick=async()=>{
     const btn=ov.querySelector('#planAiSuggest');const orig=btn.textContent;
-    btn.disabled=true;btn.textContent='חושב...';
+    btn.disabled=true;btn.innerHTML='חושב '+AI_DOTS;
     try{
       const prompt='הצע תוכנית תקציב לסעיפי הוצאה עבור היעד "'+g.name+'" (סוג: '+(g.icon||'')+'), עם סכום יעד כולל של '+Math.round(+g.target_amount||0)+' ₪. הצע 4-7 סעיפים ריאליים עם סכומים משוערים שמסתכמים בערך לסכום היעד. החזר JSON בלבד (ללא markdown) — מערך:\n[{"name":"שם הסעיף","amount":מספר}]';
       const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,text:g.name})});
