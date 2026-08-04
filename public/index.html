@@ -147,6 +147,11 @@ tr:last-child td{border-bottom:none}
 .welcome-tip b{display:block;margin-bottom:2px;font-size:.88rem}
 .welcome-tip span.d{color:var(--muted);font-size:.82rem;line-height:1.5}
 .advisor-loading{text-align:center;padding:50px 20px;color:var(--muted)}
+.advisor-chat-log{display:flex;flex-direction:column;gap:10px;max-height:360px;overflow-y:auto;padding:6px 2px}
+.advisor-chat-msg{max-width:78%;padding:10px 14px;border-radius:14px;font-size:.85rem;line-height:1.55;white-space:pre-line}
+.advisor-chat-msg.user{align-self:flex-start;background:var(--accent);color:#fff}
+.advisor-chat-msg.ai{align-self:flex-end;background:var(--surface2);border:1px solid var(--line)}
+.advisor-chat-empty{text-align:center;color:var(--muted);padding:20px;font-size:.85rem}
 .advisor-spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:advisorspin .8s linear infinite;margin:0 auto 14px}
 @keyframes advisorspin{to{transform:rotate(360deg)}}
 
@@ -466,6 +471,15 @@ tr:last-child td{border-bottom:none}
         <button type="button" class="btn sec" id="advisorRefreshBtn" onclick="loadAdvice(true)">🔄 רענון ניתוח</button>
       </div>
       <div id="advisorContent"><div class="advisor-loading"><div class="advisor-spinner"></div>לחצו על הטאב כדי לקבל ניתוח</div></div>
+    </div>
+    <div class="panel">
+      <h2>💬 שיחה עם היועץ</h2>
+      <p class="muted" style="margin-bottom:12px">שאלות המשך על הניתוח — למשל "איך אני יכול לצמצם את ההוצאה על אוכל?"</p>
+      <div id="advisorChatLog" class="advisor-chat-log"><div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div></div>
+      <div class="row" style="margin-top:10px">
+        <input id="advisorChatInput" placeholder="שאלו את היועץ..." style="flex:1" onkeydown="if(event.key==='Enter')sendAdvisorChat()">
+        <button type="button" class="btn" onclick="sendAdvisorChat()">שליחה</button>
+      </div>
     </div>
   </section>
 
@@ -954,8 +968,19 @@ sb.auth.onAuthStateChange(async(ev,session)=>{
     CU=session.user;
     if(!bootPromise)bootPromise=boot().finally(()=>{bootPromise=null;});
     await bootPromise;
+    return;
   }
-  else{CU=null;HID=null;stopAutoSync();$('#authWrap').classList.remove('hidden');$('#mainApp').classList.add('hidden');}
+  // Guard against a spurious/transient null-session event (e.g. a refresh-token
+  // race when the same account is signed in on another tab/device) — double
+  // check before actually kicking the user back to the login screen.
+  const{data}=await sb.auth.getSession();
+  if(data?.session){
+    CU=data.session.user;
+    if(!bootPromise)bootPromise=boot().finally(()=>{bootPromise=null;});
+    await bootPromise;
+    return;
+  }
+  CU=null;HID=null;stopAutoSync();$('#authWrap').classList.remove('hidden');$('#mainApp').classList.add('hidden');
 });
 
 async function boot(){
@@ -1106,7 +1131,7 @@ async function loadAll(){
 }
 
 const TABS=['dash','expenses','charts','advisor','categories','accounts','loans','installments','investments','planning','import','sharing','settings'];
-function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');if(b.dataset.tab==='dash')syncDashboard(true);if(b.dataset.tab==='charts')renderCharts();if(b.dataset.tab==='advisor')loadAdvice(false);if(b.dataset.tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}});
+function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');if(b.dataset.tab==='dash')syncDashboard(true);if(b.dataset.tab==='charts')renderCharts();if(b.dataset.tab==='advisor'){loadAdvice(false);renderAdvisorChat();}if(b.dataset.tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}});
   const collapseBtn=$('#railCollapseBtn');
   if(collapseBtn)collapseBtn.onclick=()=>{
     const rail=$('#rail');rail.classList.toggle('collapsed');
@@ -2436,18 +2461,50 @@ function renderAdvice(a){
     +'</div>';
 }
 
+let advisorChatHistory=[];
+function renderAdvisorChat(){
+  const log=$('#advisorChatLog');if(!log)return;
+  const esc=s=>String(s).replace(/</g,'&lt;');
+  log.innerHTML=advisorChatHistory.length?advisorChatHistory.map(m=>'<div class="advisor-chat-msg '+m.role+'">'+esc(m.text)+'</div>').join(''):'<div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div>';
+  log.scrollTop=log.scrollHeight;
+}
+window.sendAdvisorChat=async()=>{
+  const inp=$('#advisorChatInput');if(!inp)return;
+  const msg=inp.value.trim();if(!msg)return;
+  inp.value='';
+  advisorChatHistory.push({role:'user',text:msg});
+  advisorChatHistory.push({role:'ai',text:'...'});
+  renderAdvisorChat();
+  try{
+    const summary=buildAdviceSummary();
+    const res=await fetch(API_BASE+'/api/ai/advice-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary,history:advisorChatHistory.slice(0,-2),message:msg})});
+    const data=await res.json();
+    advisorChatHistory.pop();
+    advisorChatHistory.push({role:'ai',text:data.error?('שגיאה: '+data.error):(data.reply||'לא התקבלה תשובה')});
+  }catch(err){
+    advisorChatHistory.pop();
+    advisorChatHistory.push({role:'ai',text:'שגיאה: '+err.message});
+  }
+  renderAdvisorChat();
+};
+
 const WELCOME_TIPS=[
-  {icon:'💸',title:'הוספת תנועות',text:'בטאב "תנועות" מוסיפים הכנסה או הוצאה עם קטגוריה, תאריך וסכום — זה הבסיס לכל השאר.'},
-  {icon:'🗂️',title:'קטגוריות צבעוניות',text:'כל קטגוריה מקבלת צבע קבוע שחוזר בכל המערכת — בתנועות, בגרפים, בכל מקום. אפשר להוסיף/לערוך בטאב "קטגוריות".'},
-  {icon:'💰',title:'תקציב חודשי',text:'בטאב "קטגוריות" קבעו סכום מקסימלי לחודש לכל קטגוריית הוצאה, ותראו התקדמות בזמן אמת בדשבורד.'},
-  {icon:'🎯',title:'יעדים עם תוכנית',text:'לחיצה כפולה על כרטיס יעד פותחת חלון תכנון מפורט — סעיפי תקציב, הערות, ומעקב התקדמות.'},
-  {icon:'🧠',title:'יועץ AI',text:'בטאב "יועץ AI" מקבלים ניתוח אישי של ההרגלים הכספיים שלכם, מבוסס על הנתונים האמיתיים שלכם.'}
+  {icon:'💸',title:'הוספת תנועות',text:'בטאב "תנועות" מוסיפים הכנסה או הוצאה עם קטגוריה, תאריך וסכום — זה הבסיס לכל השאר. בכל תנועה אפשר לשנות קטגוריה ישירות מהרשימה בלחיצה על התג הצבעוני.'},
+  {icon:'🗂️',title:'קטגוריות צבעוניות',text:'כל קטגוריה מקבלת צבע קבוע שחוזר בכל המערכת — בתנועות, בגרפים, בכל מקום. אפשר להוסיף/לערוך/למחוק בטאב "קטגוריות", כולל תתי-קטגוריות.'},
+  {icon:'💰',title:'תקציב חודשי',text:'בטאב "קטגוריות" קבעו סכום מקסימלי לחודש לכל קטגוריית הוצאה, ותראו פס התקדמות צבעוני (ירוק/כתום/אדום) בדשבורד מול ההוצאה בפועל.'},
+  {icon:'📉',title:'גרפים',text:'בטאב "גרפים" רואים הוצאות לפי חודש מחולק לקטגוריות, סך הוצאות כללי, ומגמה של קטגוריה בודדת לאורך השנה — כולל ממוצע חודשי לכל גרף.'},
+  {icon:'🤖',title:'ייבוא AI מדוח אשראי',text:'בטאב "ייבוא AI" אפשר לצרף קובץ (PDF/אקסל/תמונה) של פירוט חיובי אשראי, וה-AI קורא אותו ומזין את התנועות אוטומטית עם קטגוריה — כולל אזהרה על כפילויות אפשריות מול תנועות קיימות.'},
+  {icon:'💳',title:'בקרת תזרים',text:'בדשבורד יש כרטיס "כמה באמת פנוי לי" שמחשב לפי יום החיוב של כל כרטיס אשראי מתי בדיוק כל הוצאה תרד בפועל מהחשבון.'},
+  {icon:'🎯',title:'יעדים עם תוכנית',text:'לחיצה כפולה על כרטיס יעד פותחת חלון תכנון מפורט — סעיפי תקציב (כמו "כרטיסי טיסה", "ביטוח נסיעות"), הערות חופשיות, ומעקב התקדמות.'},
+  {icon:'🧠',title:'יועץ AI',text:'בטאב "יועץ AI" מקבלים ניתוח אישי של ההרגלים הכספיים שלכם מבוסס על הנתונים האמיתיים, ואפשר גם לשוחח איתו ולשאול שאלות המשך.'}
 ];
 window.showWelcomeGuide=()=>{
-  const html='<h3>👋 ברוכים הבאים!</h3><p>כמה דברים שכדאי לדעת לפני שמתחילים:</p>'
+  const html='<button type="button" onclick="this.closest(\'.modal-overlay\').remove()" style="position:absolute;left:16px;top:16px;background:none;border:0;color:var(--muted);font-size:1.1rem;cursor:pointer;line-height:1" title="סגור">✕</button>'
+    +'<h3>👋 ברוכים הבאים!</h3><p>כמה דברים שכדאי לדעת לפני שמתחילים:</p>'
     +WELCOME_TIPS.map(t=>'<div class="welcome-tip"><span class="wicon">'+t.icon+'</span><div><b>'+t.title+'</b><span class="d">'+t.text+'</span></div></div>').join('')
-    +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn" id="welcomeOk">הבנתי, בואו נתחיל 🚀</button></div>';
+    +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn" id="welcomeOk">הבנתי — לעולם אל תציג שוב</button></div>';
   const{ov,close}=UI._open(html,{large:true});
+  ov.querySelector('.modal').style.position='relative';
   ov.querySelector('#welcomeOk').onclick=()=>{localStorage.setItem('welcomeSeen_v1','1');close();};
 };
 

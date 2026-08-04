@@ -833,6 +833,33 @@ app.post('/api/ai/advice', async (req, res) => {
   }
 });
 
+app.post('/api/ai/advice-chat', async (req, res) => {
+  try {
+    if (!GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
+    }
+
+    const { summary, history, message } = req.body || {};
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    const historyText = Array.isArray(history)
+      ? history.map((h) => `${h.role === 'user' ? 'משתמש' : 'יועץ'}: ${h.text}`).join('\n')
+      : '';
+
+    const prompt = `אתה יועץ פיננסי מקצועי ואדיב שעונה בעברית על שאלות המשך לגבי תקציב משפחתי, בהתבסס על נתוני סיכום (JSON) שצורפו. ענה בקצרה ובאופן פרקטי (2-5 משפטים), ישירות לשאלה, בלי markdown ובלי כותרות. אם השאלה לא קשורה לכסף/תקציב, הפנה בעדינות בחזרה לנושא.
+${historyText ? '\nהיסטוריית שיחה קודמת:\n' + historyText + '\n' : ''}
+שאלת המשתמש הנוכחית: ${message}`;
+
+    const aiResult = await generateWithFallback({ prompt, text: JSON.stringify(summary || {}) });
+    return res.json({ reply: (aiResult.output || '').trim(), aiProvider: aiResult.provider });
+  } catch (err) {
+    const statusCode = err.statusCode || 502;
+    return res.status(statusCode).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
 app.post('/api/chat/parse', async (req, res) => {
   try {
     const { text } = req.body || {};
