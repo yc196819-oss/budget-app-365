@@ -37,6 +37,47 @@ Check with the user whether these have been run in the Supabase SQL Editor:
   "start consultation" and chat will fail to save (though they degrade gracefully —
   no crash, just nothing persists).
 
+## Full system scan (2026-08-04) — improvement points, ranked
+
+1. **[Blocking] The critical dashboard-zero bug above** — nothing else matters much
+   until this is root-caused.
+2. **Google OAuth redirect URI is stale.** `GOOGLE_OAUTH_REDIRECT_URI` (both in Render's
+   env and in Google Cloud Console's authorized redirect URIs) still points at the old
+   `budget-ai-816e.onrender.com` domain from before the service merge. If "Sign in with
+   Google" is actually used, it is currently broken. Needs: update the env var on
+   `budget-web` AND the redirect URI list in Google Cloud Console to the new domain.
+   Never confirmed with the user whether this login method is even in use.
+3. **Email reminders are unverified.** The Settings → תזכורות "send test" button shows
+   "שירות תזכורות צד שרת עדיין לא זמין" — the `/api/reminders/test` route exists
+   server-side, so this is either a genuine send failure or a stale UI message; not yet
+   root-caused. `resendConfigured:false` per `/api/health` (Resend key not set) but
+   `smtpConfigured:true` — worth checking whether the SMTP fallback path actually works.
+4. **AI-import text gets truncated inconsistently.** Frontend allows up to 30,000 chars
+   for spreadsheets/text before sending; the backend (`callGemini`/`callGrok`) truncates
+   to 12,000 chars with no user-facing warning. A long statement could silently lose
+   the tail end of its transactions. Fix: either raise the backend limit to match, or
+   surface a warning when truncation happens.
+5. **Old `budget-ai` Render service** — should be manually deleted once the merged
+   `budget-web` service has been confirmed stable for a while (housekeeping, not
+   costing anything on the free tier, just clutter/confusion risk like the earlier
+   duplicate-service mixup this session already ran into once).
+6. **Dead legacy code still in the repo**: root `server.js` (old Mongo-based server,
+   still what `package.json`'s `"start"` script points to, though Render's `render.yaml`
+   bypasses it) and the `server/` folder (local-JSON-file-backed routes for
+   transactions/categories/budgets/debts/savings — none of it wired into the live
+   Supabase-backed app). Not causing bugs today, but a real trap for a future session
+   that doesn't know to ignore it. Worth deleting outright if confirmed unused.
+7. **No duplicate-detection on AI quick-add** (text or photo). The bulk AI-import flow
+   flags likely duplicates against existing transactions; the newer quick-add/receipt-
+   photo flow (which fills the manual form directly) does not run that same check.
+   Low risk since it's single-transaction entry, but worth adding for consistency.
+8. **Mobile CSS is best-effort, not visually verified.** All the phone-width fixes this
+   session were reasoned through the CSS, not confirmed against a real device
+   screenshot. Keep an eye out for anything that still looks broken on a phone.
+9. **No retry within a single AI provider on transient failure** — a single failed
+   Gemini call falls through straight to Grok (a paid API) instead of retrying Gemini
+   once first. Minor cost-efficiency issue, not urgent.
+
 ## Architecture notes for continuity
 - Single Render service now (`budget-web`, running `budget-ai-server.js`, which
   serves both the frontend AND the AI/backend routes — the old separate `budget-ai`
