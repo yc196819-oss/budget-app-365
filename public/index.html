@@ -21,7 +21,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body.light{--bg:#f4f6fb;--surface:#ffffff;--surface2:#eef1f8;--surface3:#e4e8f4;--line:#d5dae8;--line2:#c3cae0;--text:#1a1d29;--muted:#5a6178;--faint:#8f96ad;--shadow:0 8px 30px rgba(60,70,120,.12)}
 body.light .auth-tab.active{color:#fff}
-body{font-family:'Heebo','Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+body{font-family:'Heebo','Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden}
 .app{max-width:none;margin:0;padding:0;display:flex;align-items:stretch;min-height:100vh}
 .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .auth-box{background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:40px;width:100%;max-width:440px;box-shadow:var(--shadow)}
@@ -66,10 +66,35 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
 @media(max-width:820px){
   .rail{position:sticky;width:100%;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:10px 12px;gap:8px 14px;overflow-x:auto}
   .rail.collapsed{width:100%}
-  nav{flex-direction:row;flex-wrap:wrap}
-  .rail-group-label{padding:0;width:100%;display:none}
-  .user-info.rail-foot{margin-right:auto;margin-top:0;padding-top:0;border-top:0;width:auto}
+  nav{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;flex:1;min-width:0;scrollbar-width:thin}
+  nav button{flex-shrink:0}
+  .rail-group-label{display:none}
+  .rail-collapse{display:none}
+  .user-info.rail-foot{margin-top:0;padding-top:0;border-top:0;width:auto;flex-shrink:0}
   .shell-main{padding:18px 14px 40px}
+}
+@media(max-width:600px){
+  .rail{padding:8px 10px}
+  .rail-word{display:none}
+  .rail-head{gap:6px}
+  .user-info.rail-foot span:not(.avatar){display:none}
+  .user-info.rail-foot .btn{padding:6px 8px!important}
+  .panel{padding:16px;margin-top:12px}
+  .grid.cards{grid-template-columns:repeat(auto-fit,minmax(135px,1fr))}
+  .card{padding:14px}
+  .card .value{font-size:1.25rem}
+  .modal{padding:20px;width:94%}
+  .modal-lg{padding:20px}
+  .plan-head{gap:10px}
+  .plan-head-icon{width:44px;height:44px;font-size:1.35rem}
+  .plan-row{flex-wrap:nowrap}
+  .plan-row input[type="text"]{min-width:0}
+  .plan-row input[type="number"]{width:78px}
+  .tx-card{flex-wrap:wrap;gap:8px 10px}
+  .tx-amt{margin-right:auto}
+  .goalcard-hint{display:none}
+  .tx-summary{padding:14px 16px}
+  .tx-summary .hero-num{font-size:1.6rem}
 }
 .grid{display:grid;gap:16px}
 .cards{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
@@ -102,6 +127,28 @@ tr:last-child td{border-bottom:none}
 .tag.variable{background:rgba(82,214,164,.18);color:var(--accent2)}
 .tag.yearly{background:rgba(255,180,84,.18);color:var(--warn)}
 .hidden{display:none!important}
+
+/* ===== AI advisor ===== */
+.advisor-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.advisor-health{display:flex;align-items:center;gap:16px;padding:20px 24px;border-radius:16px;margin-bottom:22px}
+.advisor-health.good{background:linear-gradient(135deg,rgba(82,214,164,.16),rgba(82,214,164,.03));border:1px solid rgba(82,214,164,.4)}
+.advisor-health.watch{background:linear-gradient(135deg,rgba(255,180,84,.16),rgba(255,180,84,.03));border:1px solid rgba(255,180,84,.4)}
+.advisor-health.risk{background:linear-gradient(135deg,rgba(255,107,107,.16),rgba(255,107,107,.03));border:1px solid rgba(255,107,107,.4)}
+.advisor-health-icon{font-size:2.3rem;flex-shrink:0}
+.advisor-health-text{font-family:'Suez One',serif;font-size:1.25rem;line-height:1.4}
+.advisor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px}
+.advisor-section h3{font-size:.88rem;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.advisor-item{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px;font-size:.85rem;line-height:1.55}
+.advisor-item.strength{border-right:3px solid var(--accent2)}
+.advisor-item.concern{border-right:3px solid var(--warn)}
+.advisor-item.tip{border-right:3px solid var(--accent)}
+.welcome-tip{display:flex;gap:12px;align-items:flex-start;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.welcome-tip .wicon{font-size:1.3rem;flex-shrink:0}
+.welcome-tip b{display:block;margin-bottom:2px;font-size:.88rem}
+.welcome-tip span.d{color:var(--muted);font-size:.82rem;line-height:1.5}
+.advisor-loading{text-align:center;padding:50px 20px;color:var(--muted)}
+.advisor-spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:advisorspin .8s linear infinite;margin:0 auto 14px}
+@keyframes advisorspin{to{transform:rotate(360deg)}}
 
 /* ===== charts: legend + averages ===== */
 .pie-box{height:280px}
@@ -297,6 +344,7 @@ tr:last-child td{border-bottom:none}
       <button data-tab="dash" class="active">📊 <span class="navlbl">סקירה</span></button>
       <button data-tab="expenses">💸 <span class="navlbl">תנועות</span></button>
       <button data-tab="charts">📉 <span class="navlbl">גרפים</span></button>
+      <button data-tab="advisor">🧠 <span class="navlbl">יועץ AI</span></button>
       <div class="rail-group-label">ניהול כספי</div>
       <button data-tab="installments">🧾 <span class="navlbl">תשלומים</span></button>
       <button data-tab="categories">🗂️ <span class="navlbl">קטגוריות</span></button>
@@ -312,6 +360,7 @@ tr:last-child td{border-bottom:none}
     <div class="user-info rail-foot">
       <div class="avatar" id="userAvatar">?</div>
       <span id="userName" class="navlbl"></span>
+      <button class="btn sec" onclick="showWelcomeGuide()" title="מדריך שימוש" style="padding:6px 10px;font-size:.8rem">❓</button>
       <button class="btn sec" id="themeBtn" style="padding:6px 12px;font-size:.8rem" onclick="toggleTheme()" title="החלף מצב תצוגה">🌙</button>
       <button class="btn sec navlbl" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">יציאה</button>
     </div>
@@ -404,6 +453,19 @@ tr:last-child td{border-bottom:none}
         <span class="muted">בחר קטגוריה כדי לראות את המגמה החודשית שלה לאורך השנה</span>
       </div>
       <div class="chart-box small"><canvas id="catTrend"></canvas></div>
+    </div>
+  </section>
+
+  <section id="tab-advisor" class="hidden">
+    <div class="panel">
+      <div class="advisor-hero-top">
+        <div>
+          <h2 style="margin-bottom:4px">🧠 יועץ התקציב האישי שלכם</h2>
+          <p class="muted">ניתוח מבוסס על הנתונים שלכם בפועל — לא טיפים כלליים.</p>
+        </div>
+        <button type="button" class="btn sec" id="advisorRefreshBtn" onclick="loadAdvice(true)">🔄 רענון ניתוח</button>
+      </div>
+      <div id="advisorContent"><div class="advisor-loading"><div class="advisor-spinner"></div>לחצו על הטאב כדי לקבל ניתוח</div></div>
     </div>
   </section>
 
@@ -908,6 +970,7 @@ async function boot(){
     await Promise.all([loadAll(),loadUserSettings(),loadMembers()]);
     render();
     startAutoSync();
+    if(!localStorage.getItem('welcomeSeen_v1'))setTimeout(showWelcomeGuide,600);
   }catch(err){
     console.error('Boot failed:',err);
     stopAutoSync();
@@ -1042,8 +1105,8 @@ async function loadAll(){
   }
 }
 
-const TABS=['dash','expenses','charts','categories','accounts','loans','installments','investments','planning','import','sharing','settings'];
-function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');if(b.dataset.tab==='dash')syncDashboard(true);if(b.dataset.tab==='charts')renderCharts();if(b.dataset.tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}});
+const TABS=['dash','expenses','charts','advisor','categories','accounts','loans','installments','investments','planning','import','sharing','settings'];
+function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');if(b.dataset.tab==='dash')syncDashboard(true);if(b.dataset.tab==='charts')renderCharts();if(b.dataset.tab==='advisor')loadAdvice(false);if(b.dataset.tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}});
   const collapseBtn=$('#railCollapseBtn');
   if(collapseBtn)collapseBtn.onclick=()=>{
     const rail=$('#rail');rail.classList.toggle('collapsed');
@@ -2315,6 +2378,78 @@ function renderCharts(){
   if(charts.catTrend)charts.catTrend.destroy();
   charts.catTrend=new Chart(document.getElementById('catTrend'),{type:'line',data:{labels:MONTHS_SHORT,datasets:[{label:'הוצאה חודשית',data:trend,borderColor:trendColor,backgroundColor:c=>vGradient(c.chart.ctx,c.chart.chartArea,hexA(trendColor,.4),hexA(trendColor,0)),fill:true,tension:.4,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:trendColor,pointBorderColor:cssVar('--surface'),pointBorderWidth:2,borderWidth:2.5}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
 }
+
+let lastAdvice=null;
+function buildAdviceSummary(){
+  const last6=[];
+  for(let i=5;i>=0;i--){
+    let mo=VM-i,yr=VY;
+    while(mo<0){mo+=12;yr--;}
+    const exp=DB.transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+moAmt(t,yr,mo),0)+DB.installments.reduce((s,p)=>s+instMo(p,yr,mo),0);
+    const inc=DB.transactions.filter(t=>t.type==='income').reduce((s,t)=>s+moAmt(t,yr,mo),0);
+    last6.push({month:MONTHS[mo]+' '+yr,income:Math.round(inc),expense:Math.round(exp),balance:Math.round(inc-exp)});
+  }
+  const currentMonthCategoryBreakdown=rootCats('expense').map(c=>{
+    let v=DB.transactions.filter(t=>t.type==='expense'&&t.category_id===c.id).reduce((s,t)=>s+moAmt(t,VY,VM),0);
+    v+=DB.installments.filter(p=>p.category_id===c.id).reduce((s,p)=>s+instMo(p,VY,VM),0);
+    return{category:c.name,amount:Math.round(v)};
+  }).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount).slice(0,8);
+  const budgetsVsActual=DB.categoryBudgets.map(b=>{
+    const c=DB.categories.find(x=>x.id===b.category_id);
+    if(!c)return null;
+    let spent=DB.transactions.filter(t=>t.type==='expense'&&t.category_id===c.id).reduce((s,t)=>s+moAmt(t,VY,VM),0);
+    spent+=DB.installments.filter(p=>p.category_id===c.id).reduce((s,p)=>s+instMo(p,VY,VM),0);
+    return{category:c.name,monthlyBudget:+b.monthly_amount,spentSoFarThisMonth:Math.round(spent)};
+  }).filter(Boolean);
+  const savingsGoals=DB.goals.map(g=>({name:g.name,target:+g.target_amount,saved:+g.saved_amount}));
+  return{currentMonth:MONTHS[VM]+' '+VY,last6Months:last6,currentMonthCategoryBreakdown,budgetsVsActual,savingsGoals};
+}
+async function loadAdvice(force){
+  const box=$('#advisorContent');if(!box)return;
+  if(lastAdvice&&!force){renderAdvice(lastAdvice);return;}
+  box.innerHTML='<div class="advisor-loading"><div class="advisor-spinner"></div>מנתח את הנתונים שלכם...</div>';
+  const btn=$('#advisorRefreshBtn');if(btn)btn.disabled=true;
+  try{
+    const summary=buildAdviceSummary();
+    const res=await fetch(API_BASE+'/api/ai/advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary})});
+    const data=await res.json();
+    if(data.error){box.innerHTML='<p class="empty">שגיאה בקבלת ניתוח: '+data.error+'</p>';return;}
+    lastAdvice=data.advice;
+    renderAdvice(lastAdvice);
+  }catch(err){
+    box.innerHTML='<p class="empty">שגיאה בטעינת הניתוח: '+err.message+'</p>';
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+function renderAdvice(a){
+  const box=$('#advisorContent');if(!box||!a)return;
+  const level=['good','watch','risk'].includes(a.healthLevel)?a.healthLevel:'watch';
+  const icon=level==='good'?'✅':level==='risk'?'🚨':'⚠️';
+  const label=level==='good'?'מצב תקציבי יציב':level==='risk'?'דורש טיפול':'יש נקודות לשים לב';
+  const sec=(title,icon2,items,cls)=>(items&&items.length)?('<div class="advisor-section"><h3>'+icon2+' '+title+'</h3>'+items.map(t=>'<div class="advisor-item '+cls+'">'+t+'</div>').join('')+'</div>'):'';
+  box.innerHTML='<div class="advisor-health '+level+'"><div class="advisor-health-icon">'+icon+'</div><div><div class="muted" style="font-size:.78rem;font-weight:700;margin-bottom:4px">'+label+'</div><div class="advisor-health-text">'+(a.headline||'')+'</div></div></div>'
+    +'<div class="advisor-grid">'
+    +sec('מה עובד טוב','💪',a.strengths,'strength')
+    +sec('נקודות לתשומת לב','👀',a.concerns,'concern')
+    +sec('המלצות מעשיות','💡',a.tips,'tip')
+    +'</div>';
+}
+
+const WELCOME_TIPS=[
+  {icon:'💸',title:'הוספת תנועות',text:'בטאב "תנועות" מוסיפים הכנסה או הוצאה עם קטגוריה, תאריך וסכום — זה הבסיס לכל השאר.'},
+  {icon:'🗂️',title:'קטגוריות צבעוניות',text:'כל קטגוריה מקבלת צבע קבוע שחוזר בכל המערכת — בתנועות, בגרפים, בכל מקום. אפשר להוסיף/לערוך בטאב "קטגוריות".'},
+  {icon:'💰',title:'תקציב חודשי',text:'בטאב "קטגוריות" קבעו סכום מקסימלי לחודש לכל קטגוריית הוצאה, ותראו התקדמות בזמן אמת בדשבורד.'},
+  {icon:'🎯',title:'יעדים עם תוכנית',text:'לחיצה כפולה על כרטיס יעד פותחת חלון תכנון מפורט — סעיפי תקציב, הערות, ומעקב התקדמות.'},
+  {icon:'🧠',title:'יועץ AI',text:'בטאב "יועץ AI" מקבלים ניתוח אישי של ההרגלים הכספיים שלכם, מבוסס על הנתונים האמיתיים שלכם.'}
+];
+window.showWelcomeGuide=()=>{
+  const html='<h3>👋 ברוכים הבאים!</h3><p>כמה דברים שכדאי לדעת לפני שמתחילים:</p>'
+    +WELCOME_TIPS.map(t=>'<div class="welcome-tip"><span class="wicon">'+t.icon+'</span><div><b>'+t.title+'</b><span class="d">'+t.text+'</span></div></div>').join('')
+    +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn" id="welcomeOk">הבנתי, בואו נתחיל 🚀</button></div>';
+  const{ov,close}=UI._open(html,{large:true});
+  ov.querySelector('#welcomeOk').onclick=()=>{localStorage.setItem('welcomeSeen_v1','1');close();};
+};
 
 const PM_LABELS={standing_order:'↻ הוראת קבע',credit:'💳 אשראי',check:'🖊 צ׳ק',cash:'💵 מזומן'};
 function txPmTag(t){

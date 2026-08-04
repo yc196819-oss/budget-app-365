@@ -784,6 +784,55 @@ app.post('/api/ai/import', async (req, res) => {
   }
 });
 
+app.post('/api/ai/advice', async (req, res) => {
+  try {
+    if (!GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
+    }
+
+    const { summary } = req.body || {};
+    if (!summary) {
+      return res.status(400).json({ error: 'summary is required' });
+    }
+
+    const prompt = `אתה יועץ פיננסי מקצועי שמנתח נתוני תקציב משפחתי אמיתיים בעברית. קיבלת סיכום נתונים (JSON) של הכנסות/הוצאות לפי חודש, פילוח לפי קטגוריות, תקציבים מול בפועל, ויעדי חיסכון. תן ניתוח קצר, כן וממוקד — לא כללי, מבוסס על המספרים בפועל.
+
+חשוב: ענה אך ורק בפורמט JSON תקני (בלי markdown, בלי טקסט מסביב), במבנה הבא בדיוק:
+{"healthLevel":"good|watch|risk","headline":"משפט אחד קצר שמסכם את המצב","strengths":["..."],"concerns":["..."],"tips":["..."]}
+
+כללים: strengths/concerns/tips - כל אחד 2-4 פריטים, משפט קצר וברור, מבוסס על נתונים ספציפיים (ציין מספרים/קטגוריות בפועל). healthLevel="risk" אם יש חריגה משמעותית מתקציב או מאזן שלילי חוזר, "watch" אם יש נקודות לשיפור לא דרמטיות, "good" אם המצב יציב.`;
+
+    const aiResult = await generateWithFallback({ prompt, text: JSON.stringify(summary) });
+    const output = aiResult.output || '{}';
+    let parsed = null;
+    try {
+      parsed = JSON.parse(extractJsonText(output));
+    } catch (_err) {
+      const candidate = String(output).match(/\{[\s\S]*\}/);
+      if (candidate && candidate[0]) {
+        try {
+          parsed = JSON.parse(candidate[0]);
+        } catch (_err2) {
+          parsed = null;
+        }
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return res.status(502).json({ error: 'AI response could not be parsed', rawOutput: output });
+    }
+
+    return res.json({
+      advice: parsed,
+      aiProvider: aiResult.provider,
+      aiModel: aiResult.model
+    });
+  } catch (err) {
+    const statusCode = err.statusCode || 502;
+    return res.status(statusCode).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
 app.post('/api/chat/parse', async (req, res) => {
   try {
     const { text } = req.body || {};
