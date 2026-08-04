@@ -152,6 +152,10 @@ tr:last-child td{border-bottom:none}
 .advisor-chat-msg.user{align-self:flex-start;background:var(--accent);color:#fff}
 .advisor-chat-msg.ai{align-self:flex-end;background:var(--surface2);border:1px solid var(--line)}
 .advisor-chat-empty{text-align:center;color:var(--muted);padding:20px;font-size:.85rem}
+.advisor-history-item{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;margin-bottom:8px;cursor:pointer;transition:border-color .12s}
+.advisor-history-item:hover{border-color:var(--accent)}
+.advisor-history-item .t{font-weight:700;font-size:.85rem}
+.advisor-history-item .d{color:var(--muted);font-size:.72rem;margin-top:2px}
 .advisor-spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:advisorspin .8s linear infinite;margin:0 auto 14px}
 @keyframes advisorspin{to{transform:rotate(360deg)}}
 
@@ -403,6 +407,14 @@ tr:last-child td{border-bottom:none}
 
   <section id="tab-expenses" class="hidden">
     <div class="panel">
+      <h2>✨ הוספה מהירה עם AI</h2>
+      <p class="muted" style="margin-bottom:10px">כתבו בשפה חופשית — למשל "שילמתי 80 שקל בסופר" — וה-AI ימלא את הטופס למטה לאישור.</p>
+      <div class="row">
+        <input id="quickAddText" placeholder='למשל: "שילמתי 80 שקל בסופר" או "קיבלתי 500 שקל מתנה"' style="flex:1" onkeydown="if(event.key==='Enter')aiQuickAdd()">
+        <button type="button" class="btn" id="quickAddBtn" onclick="aiQuickAdd()">✨ מלא עם AI</button>
+      </div>
+    </div>
+    <div class="panel">
       <h2>הוספת תנועה</h2>
       <div class="row">
         <select id="exType" onchange="onTypeChange()"><option value="expense">הוצאה</option><option value="income">הכנסה</option></select>
@@ -466,19 +478,24 @@ tr:last-child td{border-bottom:none}
       <div class="advisor-hero-top">
         <div>
           <h2 style="margin-bottom:4px">🧠 יועץ התקציב האישי שלכם</h2>
-          <p class="muted">ניתוח מבוסס על הנתונים שלכם בפועל — לא טיפים כלליים.</p>
+          <p class="muted">ניתוח אישי, מבוסס על הנתונים שלכם בפועל — לא טיפים כלליים.</p>
         </div>
-        <button type="button" class="btn sec" id="advisorRefreshBtn" onclick="loadAdvice(true)">🔄 רענון ניתוח</button>
+        <button type="button" class="btn" id="advisorStartBtn" onclick="startNewConsultation()">🚀 התחל ייעוץ</button>
       </div>
-      <div id="advisorContent"><div class="advisor-loading"><div class="advisor-spinner"></div>לחצו על הטאב כדי לקבל ניתוח</div></div>
-    </div>
-    <div class="panel">
-      <h2>💬 שיחה עם היועץ</h2>
-      <p class="muted" style="margin-bottom:12px">שאלות המשך על הניתוח — למשל "איך אני יכול לצמצם את ההוצאה על אוכל?"</p>
-      <div id="advisorChatLog" class="advisor-chat-log"><div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div></div>
-      <div class="row" style="margin-top:10px">
-        <input id="advisorChatInput" placeholder="שאלו את היועץ..." style="flex:1" onkeydown="if(event.key==='Enter')sendAdvisorChat()">
-        <button type="button" class="btn" onclick="sendAdvisorChat()">שליחה</button>
+      <div id="advisorHistoryWrap">
+        <div class="row" style="margin-bottom:10px"><b style="font-size:.85rem">שיחות קודמות</b></div>
+        <div id="advisorHistoryList"></div>
+      </div>
+      <div id="advisorConvo" class="hidden">
+        <div id="advisorContent"></div>
+        <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--line)">
+          <h3 style="font-size:.9rem;font-weight:800;margin-bottom:10px">💬 שיחה עם היועץ</h3>
+          <div id="advisorChatLog" class="advisor-chat-log"><div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div></div>
+          <div class="row" style="margin-top:10px">
+            <input id="advisorChatInput" placeholder="שאלו את היועץ..." style="flex:1" onkeydown="if(event.key==='Enter')sendAdvisorChat()">
+            <button type="button" class="btn" onclick="sendAdvisorChat()">שליחה</button>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -1131,7 +1148,7 @@ async function loadAll(){
 }
 
 const TABS=['dash','expenses','charts','advisor','categories','accounts','loans','installments','investments','planning','import','sharing','settings'];
-function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');if(b.dataset.tab==='dash')syncDashboard(true);if(b.dataset.tab==='charts')renderCharts();if(b.dataset.tab==='advisor'){loadAdvice(false);renderAdvisorChat();}if(b.dataset.tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}});
+function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');TABS.forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');if(b.dataset.tab==='dash')syncDashboard(true);if(b.dataset.tab==='charts')renderCharts();if(b.dataset.tab==='advisor'){showAdvisorConvoView(false);loadAdvisorConversationsList();}if(b.dataset.tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}});
   const collapseBtn=$('#railCollapseBtn');
   if(collapseBtn)collapseBtn.onclick=()=>{
     const rail=$('#rail');rail.classList.toggle('collapsed');
@@ -1865,6 +1882,40 @@ function findCategoryByHint(type,hint){
   return null;
 }
 
+async function aiQuickAdd(){
+  const inp=$('#quickAddText');if(!inp)return;
+  const text=inp.value.trim();if(!text)return;
+  const btn=$('#quickAddBtn');const origLabel=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='מנתח...';}
+  try{
+    const expCats=rootCats('expense'),incCats=rootCats('income');
+    const catList=expCats.map(c=>{const subs=subCats(c.id).map(s=>s.name+'(id:'+s.id+')').join(',');return '- '+c.name+'(id:'+c.id+',הוצאה)'+(subs?' תתי:'+subs:'');}).join('\n')+'\n'+incCats.map(c=>'- '+c.name+'(id:'+c.id+',הכנסה)').join('\n');
+    const prompt='המשתמש תיאר תנועה כספית אחת בשפה חופשית. חלץ ממנה תנועה מובנית. תאריך היום: '+todayStr()+' (אם לא צוין תאריך אחר בטקסט, השתמש בהיום). קטגוריות זמינות:\n'+catList+'\n\nהחזר JSON בלבד (ללא markdown) — מערך עם תנועה אחת:\n[{"date":"YYYY-MM-DD","description":"תיאור קצר וברור","amount":מספר חיובי,"type":"expense"|"income","category_id":"uuid מהרשימה או null","subcategory_id":"uuid מהרשימה או null"}]';
+    const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,text})});
+    const data=await res.json();
+    if(data.error||!Array.isArray(data.transactions)||!data.transactions.length){
+      UI.alert('לא הצלחתי להבין את התנועה. נסו לנסח מחדש — למשל: "שילמתי 50 שקל בסופר".',{type:'error'});
+      return;
+    }
+    const t=normalizeImportedTransactions(data.transactions)[0];
+    if(!t){UI.alert('לא זוהתה תנועה תקינה בטקסט.',{type:'error'});return;}
+    $('#exType').value=t.type;fillCatSel();
+    $('#exDesc').value=t.description;
+    $('#exAmount').value=t.amount;
+    if($('#exDate'))$('#exDate').value=t.date||todayStr();
+    if(t.category_id)$('#exCat').value=t.category_id;
+    updateSubSel();
+    if(t.subcategory_id)$('#exSub').value=t.subcategory_id;
+    inp.value='';
+    UI.alert('התנועה מולאה בטופס למטה — בדקו ולחצו "הוסף" לאישור.',{type:'success'});
+  }catch(err){
+    UI.alert('שגיאה: '+err.message,{type:'error'});
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=origLabel;}
+  }
+}
+window.aiQuickAdd=aiQuickAdd;
+
 function normalizeImportedTransactions(items){
   if(!Array.isArray(items))return [];
   return items.map((t)=>{
@@ -2404,7 +2455,6 @@ function renderCharts(){
   charts.catTrend=new Chart(document.getElementById('catTrend'),{type:'line',data:{labels:MONTHS_SHORT,datasets:[{label:'הוצאה חודשית',data:trend,borderColor:trendColor,backgroundColor:c=>vGradient(c.chart.ctx,c.chart.chartArea,hexA(trendColor,.4),hexA(trendColor,0)),fill:true,tension:.4,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:trendColor,pointBorderColor:cssVar('--surface'),pointBorderWidth:2,borderWidth:2.5}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
 }
 
-let lastAdvice=null;
 function buildAdviceSummary(){
   const monthKeys=[];
   for(let i=5;i>=0;i--){
@@ -2433,6 +2483,13 @@ function buildAdviceSummary(){
     }).filter(x=>x.amount>0);
     return{category:c.name,monthlyAmounts,total6Months,avgMonthly:Math.round(total6Months/6),subcategoriesThisMonth};
   }).filter(Boolean).sort((a,b)=>b.total6Months-a.total6Months);
+  // personal breakdown — only this logged-in user's own entered transactions,
+  // so the advice/chat can speak to "your" spending, not just the household total
+  const personalCategoryBreakdown=rootCats('expense').map(c=>{
+    let v=DB.transactions.filter(t=>t.type==='expense'&&t.category_id===c.id&&t.created_by===CU.id).reduce((s,t)=>s+moAmt(t,VY,VM),0);
+    v+=DB.installments.filter(p=>p.category_id===c.id&&p.created_by===CU.id).reduce((s,p)=>s+instMo(p,VY,VM),0);
+    return{category:c.name,amountThisMonth:Math.round(v)};
+  }).filter(x=>x.amountThisMonth>0).sort((a,b)=>b.amountThisMonth-a.amountThisMonth);
   const budgetsVsActual=DB.categoryBudgets.map(b=>{
     const c=DB.categories.find(x=>x.id===b.category_id);
     if(!c)return null;
@@ -2441,26 +2498,9 @@ function buildAdviceSummary(){
     return{category:c.name,monthlyBudget:+b.monthly_amount,spentSoFarThisMonth:Math.round(spent)};
   }).filter(Boolean);
   const savingsGoals=DB.goals.map(g=>({name:g.name,target:+g.target_amount,saved:+g.saved_amount}));
-  return{currentMonth:MONTHS[VM]+' '+VY,last6Months,categorySpendingHistory,budgetsVsActual,savingsGoals};
+  return{userName:MNAME,currentMonth:MONTHS[VM]+' '+VY,last6Months,categorySpendingHistory,personalCategoryBreakdown,budgetsVsActual,savingsGoals};
 }
-async function loadAdvice(force){
-  const box=$('#advisorContent');if(!box)return;
-  if(lastAdvice&&!force){renderAdvice(lastAdvice);return;}
-  box.innerHTML='<div class="advisor-loading"><div class="advisor-spinner"></div>מנתח את הנתונים שלכם...</div>';
-  const btn=$('#advisorRefreshBtn');if(btn)btn.disabled=true;
-  try{
-    const summary=buildAdviceSummary();
-    const res=await fetch(API_BASE+'/api/ai/advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary})});
-    const data=await res.json();
-    if(data.error){box.innerHTML='<p class="empty">שגיאה בקבלת ניתוח: '+data.error+'</p>';return;}
-    lastAdvice=data.advice;
-    renderAdvice(lastAdvice);
-  }catch(err){
-    box.innerHTML='<p class="empty">שגיאה בטעינת הניתוח: '+err.message+'</p>';
-  }finally{
-    if(btn)btn.disabled=false;
-  }
-}
+
 function renderAdvice(a){
   const box=$('#advisorContent');if(!box||!a)return;
   const level=['good','watch','risk'].includes(a.healthLevel)?a.healthLevel:'watch';
@@ -2475,31 +2515,92 @@ function renderAdvice(a){
     +'</div>';
 }
 
-let advisorChatHistory=[];
-function renderAdvisorChat(){
-  const log=$('#advisorChatLog');if(!log)return;
-  const esc=s=>String(s).replace(/</g,'&lt;');
-  log.innerHTML=advisorChatHistory.length?advisorChatHistory.map(m=>'<div class="advisor-chat-msg '+m.role+'">'+esc(m.text)+'</div>').join(''):'<div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div>';
-  log.scrollTop=log.scrollHeight;
+// ═══ AI advisor: saved conversations (per logged-in user) ═══
+let currentConversation=null; // {id,title,messages:[{role:'advice',data}|{role:'user'|'ai',text}]}
+
+function showAdvisorConvoView(show){
+  const convo=$('#advisorConvo'),hist=$('#advisorHistoryWrap');
+  if(convo)convo.classList.toggle('hidden',!show);
+  if(hist)hist.classList.toggle('hidden',show);
 }
-window.sendAdvisorChat=async()=>{
-  const inp=$('#advisorChatInput');if(!inp)return;
-  const msg=inp.value.trim();if(!msg)return;
-  inp.value='';
-  advisorChatHistory.push({role:'user',text:msg});
-  advisorChatHistory.push({role:'ai',text:'...'});
+
+async function loadAdvisorConversationsList(){
+  const box=$('#advisorHistoryList');if(!box||!CU)return;
+  const{data,error}=await sb.from('advisor_conversations').select('id,title,updated_at').eq('user_id',CU.id).eq('household_id',HID).order('updated_at',{ascending:false});
+  if(error||!data||!data.length){box.innerHTML='<p class="empty">אין עדיין שיחות שמורות — לחצו "התחל ייעוץ" כדי להתחיל</p>';return;}
+  box.innerHTML=data.map(c=>'<div class="advisor-history-item" onclick="openConversation(\''+c.id+'\')"><div><div class="t">'+c.title+'</div><div class="d">'+new Date(c.updated_at).toLocaleString('he-IL')+'</div></div><span class="muted">פתח ←</span></div>').join('');
+}
+
+async function saveCurrentConversation(){
+  if(!currentConversation||!CU)return;
+  const payload={household_id:HID,user_id:CU.id,title:currentConversation.title,messages:currentConversation.messages,updated_at:new Date().toISOString()};
+  if(currentConversation.id){
+    await sb.from('advisor_conversations').update(payload).eq('id',currentConversation.id);
+  }else{
+    const{data,error}=await sb.from('advisor_conversations').insert(payload).select().single();
+    if(!error&&data)currentConversation.id=data.id;
+  }
+}
+
+window.startNewConsultation=async()=>{
+  currentConversation={id:null,title:'ייעוץ מ-'+new Date().toLocaleDateString('he-IL'),messages:[]};
+  showAdvisorConvoView(true);
+  $('#advisorContent').innerHTML='<div class="advisor-loading"><div class="advisor-spinner"></div>מנתח את הנתונים שלכם...</div>';
   renderAdvisorChat();
   try{
     const summary=buildAdviceSummary();
-    const res=await fetch(API_BASE+'/api/ai/advice-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary,history:advisorChatHistory.slice(0,-2),message:msg})});
+    const res=await fetch(API_BASE+'/api/ai/advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary})});
     const data=await res.json();
-    advisorChatHistory.pop();
-    advisorChatHistory.push({role:'ai',text:data.error?('שגיאה: '+data.error):(data.reply||'לא התקבלה תשובה')});
+    if(data.error){$('#advisorContent').innerHTML='<p class="empty">שגיאה בקבלת ניתוח: '+data.error+'</p>';return;}
+    currentConversation.messages.push({role:'advice',data:data.advice});
+    renderAdvice(data.advice);
+    await saveCurrentConversation();
+    await loadAdvisorConversationsList();
   }catch(err){
-    advisorChatHistory.pop();
-    advisorChatHistory.push({role:'ai',text:'שגיאה: '+err.message});
+    $('#advisorContent').innerHTML='<p class="empty">שגיאה: '+err.message+'</p>';
+  }
+};
+
+window.openConversation=async(id)=>{
+  const{data,error}=await sb.from('advisor_conversations').select('*').eq('id',id).single();
+  if(error||!data){UI.alert('שגיאה בטעינת השיחה',{type:'error'});return;}
+  currentConversation={id:data.id,title:data.title,messages:Array.isArray(data.messages)?data.messages:[]};
+  showAdvisorConvoView(true);
+  const adviceMsg=currentConversation.messages.find(m=>m.role==='advice');
+  if(adviceMsg)renderAdvice(adviceMsg.data);
+  else $('#advisorContent').innerHTML='<p class="empty">אין ניתוח שמור בשיחה זו</p>';
+  renderAdvisorChat();
+};
+
+function renderAdvisorChat(){
+  const log=$('#advisorChatLog');if(!log)return;
+  const esc=s=>String(s).replace(/</g,'&lt;');
+  const chatMsgs=(currentConversation?.messages||[]).filter(m=>m.role==='user'||m.role==='ai');
+  log.innerHTML=chatMsgs.length?chatMsgs.map(m=>'<div class="advisor-chat-msg '+m.role+'">'+esc(m.text)+'</div>').join(''):'<div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div>';
+  log.scrollTop=log.scrollHeight;
+}
+window.sendAdvisorChat=async()=>{
+  if(!currentConversation)return;
+  const inp=$('#advisorChatInput');if(!inp)return;
+  const msg=inp.value.trim();if(!msg)return;
+  inp.value='';
+  currentConversation.messages.push({role:'user',text:msg});
+  currentConversation.messages.push({role:'ai',text:'...'});
+  renderAdvisorChat();
+  try{
+    const summary=buildAdviceSummary();
+    const history=currentConversation.messages.filter(m=>m.role==='user'||m.role==='ai').slice(0,-2);
+    const res=await fetch(API_BASE+'/api/ai/advice-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary,history,message:msg})});
+    const data=await res.json();
+    currentConversation.messages.pop();
+    currentConversation.messages.push({role:'ai',text:data.error?('שגיאה: '+data.error):(data.reply||'לא התקבלה תשובה')});
+  }catch(err){
+    currentConversation.messages.pop();
+    currentConversation.messages.push({role:'ai',text:'שגיאה: '+err.message});
   }
   renderAdvisorChat();
+  await saveCurrentConversation();
+  await loadAdvisorConversationsList();
 };
 
 const WELCOME_TIPS=[
