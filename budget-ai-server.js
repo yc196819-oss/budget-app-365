@@ -860,6 +860,59 @@ ${historyText ? '\nהיסטוריית שיחה קודמת:\n' + historyText + '\
   }
 });
 
+app.post('/api/ai/onboarding', async (req, res) => {
+  try {
+    if (!GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
+    }
+
+    const { qaText } = req.body || {};
+    if (!qaText) {
+      return res.status(400).json({ error: 'qaText is required' });
+    }
+
+    const prompt = `אתה עוזר שמקים חשבון תקציב משפחתי חדש עבור משתמש, על סמך ראיון שאלות-ותשובות בעברית שצורף. חלץ מהתשובות נתונים מובנים כדי להקים את המערכת עבורו. אם משהו לא צוין או לא רלוונטי, השמט אותו (אל תמציא נתונים).
+
+החזר JSON בלבד (ללא markdown), במבנה הבא בדיוק:
+{
+  "bankAccounts": [{"name":"שם תיאורי, למשל 'חשבון קובי'"}],
+  "creditCards": [{"name":"שם הכרטיס","billingDay":מספר 1-28,"accountIndex":אינדקס בתוך bankAccounts (0 אם לא ברור)}],
+  "recurringIncome": [{"description":"למשל 'משכורת קובי'","amount":מספר חודשי}],
+  "recurringExpenses": [{"description":"למשל 'משכנתא' או 'שכירות' או 'חינוך ילדים'","amount":מספר חודשי}],
+  "debts": [{"counterparty":"למי חייבים","amount":מספר,"note":"הערה חופשית כולל מועד פירעון אם צוין"}],
+  "goals": [{"name":"שם היעד, למשל 'חיסכון חודשי' או 'חיסכון לילדים'","targetAmount":מספר או null אם לא צוין}]
+}
+
+ראיון השאלות-תשובות:
+${qaText}`;
+
+    const aiResult = await generateWithFallback({ prompt, text: qaText });
+    const output = aiResult.output || '{}';
+    let parsed = null;
+    try {
+      parsed = JSON.parse(extractJsonText(output));
+    } catch (_err) {
+      const candidate = String(output).match(/\{[\s\S]*\}/);
+      if (candidate && candidate[0]) {
+        try {
+          parsed = JSON.parse(candidate[0]);
+        } catch (_err2) {
+          parsed = null;
+        }
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return res.status(502).json({ error: 'AI response could not be parsed', rawOutput: output });
+    }
+
+    return res.json({ setup: parsed, aiProvider: aiResult.provider, aiModel: aiResult.model });
+  } catch (err) {
+    const statusCode = err.statusCode || 502;
+    return res.status(statusCode).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
 app.post('/api/chat/parse', async (req, res) => {
   try {
     const { text } = req.body || {};

@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ניהול תקציב משפחתי</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#6c8cff">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="תקציב">
 <script src="/app-config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -738,6 +745,11 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="panel">
+      <h2>🧙 אשף הקמה מהירה עם AI</h2>
+      <p class="muted" style="margin-bottom:12px">כמה שאלות קצרות (משכורת, חשבונות, כרטיסי אשראי, הלוואות, יעדים) — וה-AI יקים לכם את הבסיס אוטומטית, לאישור לפני שמירה.</p>
+      <button type="button" class="btn" onclick="startOnboardingWizard()">🚀 התחל אשף הקמה</button>
+    </div>
+    <div class="panel">
       <h2>גיבוי נתונים</h2>
       <div class="row">
         <button class="btn" onclick="exportData()">ייצוא גיבוי JSON</button>
@@ -813,6 +825,7 @@ tr:last-child td{border-bottom:none}
 <script>
 const _url='https://bwwupwbakefjhwropdin.supabase.co', _key='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3d3Vwd2Jha2Vmamh3cm9wZGluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MjgyNzYsImV4cCI6MjA5ODIwNDI3Nn0.-x9BYvkn-21jCr6CIrnh15m9gAUfIS3GMVNbrPuznBE';
 const sb=supabase.createClient(_url,_key);
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});}
 const $=s=>document.querySelector(s);
 const fmt=n=>(n<0?'-':'')+'₪'+Math.abs(Math.round(n)).toLocaleString('he-IL');
 
@@ -2629,6 +2642,154 @@ window.sendAdvisorChat=async()=>{
   await saveCurrentConversation();
   await loadAdvisorConversationsList();
 };
+
+// ═══ AI onboarding wizard ═══
+const ONBOARDING_QUESTIONS=[
+  {key:'salary',q:'כדי שנתחיל לנהל את התקציב שלכם יחד — מה המשכורת החודשית שלך?'},
+  {key:'spouseSalary',q:'יש לך בן/בת זוג? אם כן, מה המשכורת שלו/ה?'},
+  {key:'bankAccounts',q:'כמה חשבונות בנק יש לכם (כולל של בן/בת הזוג)? אפשר גם לתת שם לכל אחד.'},
+  {key:'creditCards',q:'כמה כרטיסי אשראי יש לכם, ומתי יורד החיוב של כל אחד (יום בחודש)?'},
+  {key:'mortgage',q:'יש לכם משכנתא? כמה בחודש?'},
+  {key:'rent',q:'אתם משלמים שכירות? כמה בחודש?'},
+  {key:'sideIncome',q:'יש הכנסה נוספת מהצד? כמה?'},
+  {key:'debts',q:'אילו חובות יש לכם כרגע? למי, על סך כמה, ומתי צריך לפרוע?'},
+  {key:'savingsTarget',q:'כמה הייתם רוצים לחסוך בכל חודש?'},
+  {key:'kids',q:'יש לכם ילדים? אם כן, כמה עולה החינוך שלהם בחודש?'},
+  {key:'kidsSavings',q:'רוצים לחסוך עבור הילדים לעתיד? כמה?'},
+  {key:'otherGoals',q:'יש עוד יעדים שהייתם רוצים לחסוך אליהם? (למשל טיול, רכב, דירה)'}
+];
+let onbState=null;
+function onbRenderLog(){
+  const log=onbState.ov.querySelector('#onbLog');if(!log)return;
+  const esc=s=>String(s).replace(/</g,'&lt;');
+  log.innerHTML=onbState.log.map(m=>'<div class="advisor-chat-msg '+m.role+'">'+(m.pending?AI_DOTS:esc(m.text))+'</div>').join('');
+  log.scrollTop=log.scrollHeight;
+}
+function onbAskCurrent(){
+  const q=ONBOARDING_QUESTIONS[onbState.idx];
+  if(!q){onbFinish();return;}
+  onbState.log.push({role:'ai',text:q.q});
+  onbRenderLog();
+}
+window.onbAnswer=()=>{
+  const inp=onbState.ov.querySelector('#onbInput');
+  const val=inp.value.trim();if(!val)return;
+  inp.value='';
+  onbState.log.push({role:'user',text:val});
+  const q=ONBOARDING_QUESTIONS[onbState.idx];
+  onbState.answers[q.key]=val;
+  onbState.idx++;
+  onbRenderLog();
+  onbAskCurrent();
+};
+window.onbSkip=()=>{onbState.idx++;onbAskCurrent();};
+window.startOnboardingWizard=()=>{
+  const html='<div class="plan-head"><div class="plan-head-icon">🧙</div><div><h3>הקמת תקציב עם AI</h3><p>כמה שאלות קצרות כדי להקים הכל בשבילכם</p></div></div>'
+    +'<div id="onbLog" class="advisor-chat-log" style="max-height:320px"></div>'
+    +'<div class="row" style="margin-top:10px"><input id="onbInput" placeholder="הקלידו תשובה..." style="flex:1"><button type="button" class="btn" onclick="onbAnswer()">שליחה</button></div>'
+    +'<div class="row" style="margin-top:8px;justify-content:space-between"><button type="button" class="smallbtn" onclick="onbSkip()">דלג על שאלה זו</button><button type="button" class="smallbtn" onclick="onbFinish()">סיימתי, המשך לסיכום</button></div>';
+  const {ov,close}=UI._open(html,{large:true});
+  onbState={idx:0,answers:{},log:[],ov,close};
+  ov.querySelector('#onbInput').onkeydown=e=>{if(e.key==='Enter')onbAnswer();};
+  onbAskCurrent();
+  ov.querySelector('#onbInput').focus();
+};
+async function onbFinish(){
+  onbState.log.push({role:'ai',text:'',pending:true});
+  onbRenderLog();
+  const inp=onbState.ov.querySelector('#onbInput');if(inp)inp.disabled=true;
+  const qaText=ONBOARDING_QUESTIONS.map(q=>q.q+'\nתשובה: '+(onbState.answers[q.key]||'(לא צוין / לא רלוונטי)')).join('\n\n');
+  try{
+    const res=await fetch(API_BASE+'/api/ai/onboarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({qaText})});
+    const data=await res.json();
+    if(data.error){UI.alert('שגיאה בעיבוד הנתונים: '+data.error,{type:'error'});onbState.close();return;}
+    onbState.close();
+    showOnboardingReview(data.setup||{});
+  }catch(err){
+    UI.alert('שגיאה: '+err.message,{type:'error'});
+    onbState.close();
+  }
+}
+function onbRow(icon,color,grp,i,fields){
+  const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
+  const inputs=fields.map(fd=>'<input type="'+fd.type+'" data-grp="'+grp+'" data-i="'+i+'" data-f="'+fd.f+'" value="'+esc(fd.value)+'" style="'+(fd.width?('width:'+fd.width+';flex-shrink:0;'):'flex:1;')+'">').join('');
+  return '<div class="budget-row"><div class="bicon" style="background:'+hexA(color,.16)+';color:'+color+'">'+icon+'</div>'+inputs+'</div>';
+}
+function showOnboardingReview(setup){
+  const bankAccounts=Array.isArray(setup.bankAccounts)?setup.bankAccounts:[];
+  const creditCards=Array.isArray(setup.creditCards)?setup.creditCards:[];
+  const recurringIncome=Array.isArray(setup.recurringIncome)?setup.recurringIncome:[];
+  const recurringExpenses=Array.isArray(setup.recurringExpenses)?setup.recurringExpenses:[];
+  const debts=Array.isArray(setup.debts)?setup.debts:[];
+  const goals=Array.isArray(setup.goals)?setup.goals:[];
+  let body='';
+  const sec=(title,rows)=>{if(!rows)return;body+='<div class="advisor-section"><h3>'+title+'</h3>'+rows+'</div>';};
+  if(bankAccounts.length)sec('🏦 חשבונות בנק',bankAccounts.map((a,i)=>onbRow('🏦','#6c8cff','bank',i,[{f:'name',type:'text',value:a.name||('חשבון '+(i+1))}])).join(''));
+  if(creditCards.length)sec('💳 כרטיסי אשראי',creditCards.map((c,i)=>onbRow('💳','#5ab4ff','card',i,[{f:'name',type:'text',value:c.name||('כרטיס '+(i+1))},{f:'billingDay',type:'number',value:c.billingDay||10,width:'80px'}])).join(''));
+  if(recurringIncome.length)sec('💰 הכנסות קבועות',recurringIncome.map((r,i)=>onbRow('💰','#52d6a4','inc',i,[{f:'description',type:'text',value:r.description||''},{f:'amount',type:'number',value:r.amount||0,width:'110px'}])).join(''));
+  if(recurringExpenses.length)sec('📤 הוצאות קבועות',recurringExpenses.map((r,i)=>onbRow('📤','#ff6b6b','exp',i,[{f:'description',type:'text',value:r.description||''},{f:'amount',type:'number',value:r.amount||0,width:'110px'}])).join(''));
+  if(debts.length)sec('🤝 חובות',debts.map((d,i)=>onbRow('🤝','#f2c14e','debt',i,[{f:'counterparty',type:'text',value:d.counterparty||''},{f:'amount',type:'number',value:d.amount||0,width:'110px'},{f:'note',type:'text',value:d.note||''}])).join(''));
+  if(goals.length)sec('🎯 יעדי חיסכון',goals.map((g,i)=>onbRow('🎯','#8b7cff','goal',i,[{f:'name',type:'text',value:g.name||''},{f:'targetAmount',type:'number',value:g.targetAmount||0,width:'110px'}])).join(''));
+  if(!body)body='<p class="empty">לא זוהו נתונים מספיקים. אפשר לנסות שוב או להזין הכל ידנית.</p>';
+  const html='<h3>📋 סיכום — לפני שיוצרים הכל</h3><p>בדקו ותקנו לפי הצורך, ואז אשרו.</p><div id="onbReviewBody">'+body+'</div>'
+    +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn sec" id="onbCancel">ביטול</button><button class="btn" id="onbConfirm">✅ צור הכל במערכת</button></div>';
+  const{ov,close}=UI._open(html,{large:true});
+  ov.querySelector('#onbCancel').onclick=close;
+  ov.querySelector('#onbConfirm').onclick=async()=>{
+    const btn=ov.querySelector('#onbConfirm');btn.disabled=true;btn.innerHTML='יוצר '+AI_DOTS;
+    const read=(grp,i,f)=>{const el=ov.querySelector('[data-grp="'+grp+'"][data-i="'+i+'"][data-f="'+f+'"]');return el?el.value:'';};
+    try{
+      const newAccounts=[];
+      for(let i=0;i<bankAccounts.length;i++){
+        const name=read('bank',i,'name')||('חשבון '+(i+1));
+        const{data,error}=await sb.from('bank_accounts').insert({household_id:HID,created_by:CU.id,name}).select().single();
+        if(!error&&data)newAccounts.push(data);
+      }
+      if(creditCards.length&&!newAccounts.length){
+        const{data}=await sb.from('bank_accounts').insert({household_id:HID,created_by:CU.id,name:'חשבון ראשי'}).select().single();
+        if(data)newAccounts.push(data);
+      }
+      for(let i=0;i<creditCards.length;i++){
+        const name=read('card',i,'name')||('כרטיס '+(i+1));
+        const billingDay=Math.min(28,Math.max(1,parseInt(read('card',i,'billingDay'),10)||10));
+        const acctIdx=Math.min(newAccounts.length-1,Math.max(0,+creditCards[i].accountIndex||0));
+        const acct=newAccounts[acctIdx];
+        if(acct)await sb.from('credit_cards').insert({household_id:HID,created_by:CU.id,bank_account_id:acct.id,name,billing_day:billingDay});
+      }
+      const miscExp=rootCats('expense').find(c=>c.name==='שונות')||rootCats('expense')[0];
+      const otherInc=rootCats('income').find(c=>c.name==='הכנסה אחרת')||rootCats('income')[0];
+      const salaryCat=rootCats('income').find(c=>c.name==='משכורת')||otherInc;
+      const acctId=newAccounts[0]?newAccounts[0].id:null;
+      for(let i=0;i<recurringIncome.length;i++){
+        const description=read('inc',i,'description')||'הכנסה';
+        const amount=parseFloat(read('inc',i,'amount'))||0;
+        if(amount>0)await sb.from('transactions').insert({household_id:HID,created_by:CU.id,account_id:acctId,type:'income',description,amount,tx_date:todayStr().slice(0,8)+'01',category_id:salaryCat?salaryCat.id:null,nature:'fixed',spread:'month',source:'manual',payment_method:'standing_order'});
+      }
+      for(let i=0;i<recurringExpenses.length;i++){
+        const description=read('exp',i,'description')||'הוצאה';
+        const amount=parseFloat(read('exp',i,'amount'))||0;
+        if(amount>0)await sb.from('transactions').insert({household_id:HID,created_by:CU.id,account_id:acctId,type:'expense',description,amount,tx_date:todayStr().slice(0,8)+'01',category_id:miscExp?miscExp.id:null,nature:'fixed',spread:'month',source:'manual',payment_method:'standing_order'});
+      }
+      for(let i=0;i<debts.length;i++){
+        const counterparty=read('debt',i,'counterparty')||'(ללא שם)';
+        const amount=parseFloat(read('debt',i,'amount'))||0;
+        const note=read('debt',i,'note')||'';
+        if(amount>0)await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:'iowe',counterparty,amount,loan_date:todayStr(),note,settled:false});
+      }
+      for(let i=0;i<goals.length;i++){
+        const name=read('goal',i,'name')||'יעד';
+        const targetAmount=parseFloat(read('goal',i,'targetAmount'))||0;
+        if(targetAmount>0)await sb.from('goals').insert({household_id:HID,created_by:CU.id,icon:'🎯',name,target_amount:targetAmount,saved_amount:0});
+      }
+      close();
+      await loadAll();render();
+      UI.alert('הבסיס הוקם בהצלחה! אפשר להמשיך לערוך ולהוסיף תנועות כרגיל.',{type:'success'});
+    }catch(err){
+      UI.alert('שגיאה בהקמה: '+err.message,{type:'error'});
+      btn.disabled=false;btn.textContent='✅ צור הכל במערכת';
+    }
+  };
+}
 
 const WELCOME_TIPS=[
   {icon:'✨',title:'הוספה מהירה עם AI',text:'בראש טאב "תנועות" כתבו בשפה חופשית — "שילמתי 80 שקל בסופר" — או צלמו קבלה עם כפתור 📷, וה-AI ימלא את הטופס לאישור.'},
