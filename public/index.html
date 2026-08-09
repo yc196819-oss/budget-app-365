@@ -423,9 +423,9 @@ tr:last-child td{border-bottom:none}
   <section id="tab-expenses" class="hidden">
     <div class="panel">
       <h2>✨ הוספה מהירה עם AI</h2>
-      <p class="muted" style="margin-bottom:10px">כתבו בשפה חופשית או צלמו קבלה — וה-AI ימלא את הטופס למטה לאישור.</p>
-      <div class="row">
-        <input id="quickAddText" placeholder='למשל: "שילמתי 80 שקל בסופר" או "קיבלתי 500 שקל מתנה"' style="flex:1" onkeydown="if(event.key==='Enter')aiQuickAdd()">
+      <p class="muted" style="margin-bottom:10px">כתבו בשפה חופשית — תנועה אחת או כמה תנועות בבת אחת (גם טקסט ארוך) — או צלמו קבלה. Enter לשליחה, Shift+Enter לשורה חדשה.</p>
+      <div class="row" style="align-items:flex-start">
+        <textarea id="quickAddText" rows="2" placeholder='למשל: "שילמתי 80 שקל בסופר, ואתמול קיבלתי 500 שקל מתנה מסבתא"' style="flex:1;resize:vertical;min-height:44px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiQuickAdd();}"></textarea>
         <input type="file" id="quickAddPhoto" accept="image/*" capture="environment" class="hidden" onchange="aiQuickAddPhoto(this.files[0])">
         <button type="button" class="btn sec" onclick="document.getElementById('quickAddPhoto').click()" title="צלם/העלה קבלה">📷 קבלה</button>
         <button type="button" class="btn" id="quickAddBtn" onclick="aiQuickAdd()">✨ מלא עם AI</button>
@@ -631,6 +631,15 @@ tr:last-child td{border-bottom:none}
   </section>
 
   <section id="tab-planning" class="hidden">
+    <div class="panel">
+      <h2>🔮 תכנון החודש הבא — <span class="muted" id="nextMonthLabel"></span></h2>
+      <p class="muted" style="margin-bottom:12px">תחזית מבוססת על הכנסות/הוצאות קבועות, תשלומים ידועים, וממוצע ההוצאות המשתנות שלכם.</p>
+      <div class="grid cards" id="nextMonthCards"></div>
+      <div style="margin-top:16px">
+        <button type="button" class="btn" onclick="loadNextMonthAdvice()">🤖 קבל ייעוץ AI לתכנון החודש</button>
+      </div>
+      <div id="nextMonthAdvice" style="margin-top:16px"></div>
+    </div>
     <div class="grid cards">
       <div class="card"><div class="label">יעדים פעילים</div><div class="value" id="pCount">0</div></div>
       <div class="card"><div class="label">סך יעד</div><div class="value neu" id="pTarget">₪0</div></div>
@@ -1909,7 +1918,7 @@ function quickAddCategoryList(){
   const expCats=rootCats('expense'),incCats=rootCats('income');
   return expCats.map(c=>{const subs=subCats(c.id).map(s=>s.name+'(id:'+s.id+')').join(',');return '- '+c.name+'(id:'+c.id+',הוצאה)'+(subs?' תתי:'+subs:'');}).join('\n')+'\n'+incCats.map(c=>'- '+c.name+'(id:'+c.id+',הכנסה)').join('\n');
 }
-async function submitQuickAdd(prompt,extra,btn){
+async function submitQuickAdd(prompt,extra,btn,allowMulti){
   const origLabel=btn?btn.textContent:'';
   if(btn){btn.disabled=true;btn.innerHTML='מנתח '+AI_DOTS;}
   try{
@@ -1919,8 +1928,16 @@ async function submitQuickAdd(prompt,extra,btn){
       UI.alert('לא הצלחתי לזהות תנועה. נסו שוב או מלאו ידנית.',{type:'error'});
       return;
     }
-    const t=normalizeImportedTransactions(data.transactions)[0];
-    if(!t){UI.alert('לא זוהתה תנועה תקינה.',{type:'error'});return;}
+    const normalized=flagPossibleDuplicates(normalizeImportedTransactions(data.transactions));
+    if(!normalized.length){UI.alert('לא זוהתה תנועה תקינה.',{type:'error'});return;}
+    if(allowMulti&&normalized.length>1){
+      pendingImport=normalized;
+      document.querySelector('#nav button[data-tab="import"]')?.click();
+      renderReview();
+      UI.alert('זוהו '+normalized.length+' תנועות — סקרו ואשרו למטה בטאב "ייבוא AI".',{type:'success'});
+      return;
+    }
+    const t=normalized[0];
     $('#exType').value=t.type;fillCatSel();
     $('#exDesc').value=t.description;
     $('#exAmount').value=t.amount;
@@ -1938,8 +1955,8 @@ async function submitQuickAdd(prompt,extra,btn){
 window.aiQuickAdd=async()=>{
   const inp=$('#quickAddText');if(!inp)return;
   const text=inp.value.trim();if(!text)return;
-  const prompt='המשתמש תיאר תנועה כספית אחת בשפה חופשית. חלץ ממנה תנועה מובנית. תאריך היום: '+todayStr()+' (אם לא צוין תאריך אחר בטקסט, השתמש בהיום). קטגוריות זמינות:\n'+quickAddCategoryList()+'\n\nהחזר JSON בלבד (ללא markdown) — מערך עם תנועה אחת:\n[{"date":"YYYY-MM-DD","description":"תיאור קצר וברור","amount":מספר חיובי,"type":"expense"|"income","category_id":"uuid מהרשימה או null","subcategory_id":"uuid מהרשימה או null"}]';
-  await submitQuickAdd(prompt,{text},$('#quickAddBtn'));
+  const prompt='המשתמש תיאר תנועה כספית אחת, או כמה תנועות שונות (יכול להיות טקסט ארוך שמתאר כמה דברים בבת אחת), בשפה חופשית. חלץ את כל התנועות שמופיעות. תאריך היום: '+todayStr()+' (אם לא צוין תאריך אחר בטקסט לתנועה מסוימת, השתמש בהיום). קטגוריות זמינות:\n'+quickAddCategoryList()+'\n\nהחזר JSON בלבד (ללא markdown) — מערך של תנועה אחת או יותר:\n[{"date":"YYYY-MM-DD","description":"תיאור קצר וברור","amount":מספר חיובי,"type":"expense"|"income","category_id":"uuid מהרשימה או null","subcategory_id":"uuid מהרשימה או null"}]';
+  await submitQuickAdd(prompt,{text},$('#quickAddBtn'),true);
   inp.value='';
 };
 window.aiQuickAddPhoto=async(file)=>{
@@ -2420,6 +2437,7 @@ function render(){
 
   renderExpenses();renderCatSummary();renderCatManage();renderBudgetManage();renderBudgetProgress();renderLoans();renderInstallments();renderInvestments();renderGoals();
   renderAccounts();renderCreditCards();fillImportSourceSel();
+  renderNextMonthCards(buildNextMonthProjection());
   computeFlow();
   fillDelMonthSelectors&&fillDelMonthSelectors();
   if(typeof calcLoanPlan==='function' && $('#planResult'))calcLoanPlan();
@@ -2495,6 +2513,54 @@ function renderCharts(){
   charts.catTrend=new Chart(document.getElementById('catTrend'),{type:'line',data:{labels:MONTHS_SHORT,datasets:[{label:'הוצאה חודשית',data:trend,borderColor:trendColor,backgroundColor:c=>vGradient(c.chart.ctx,c.chart.chartArea,hexA(trendColor,.4),hexA(trendColor,0)),fill:true,tension:.4,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:trendColor,pointBorderColor:cssVar('--surface'),pointBorderWidth:2,borderWidth:2.5}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Heebo'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
 }
 
+function buildNextMonthProjection(){
+  let nm=VM+1,ny=VY;if(nm>11){nm=0;ny++;}
+  const fixedIncome=DB.transactions.filter(t=>t.type==='income'&&t.nature==='fixed').reduce((s,t)=>s+moAmt(t,VY,VM),0);
+  const fixedExpense=DB.transactions.filter(t=>t.type==='expense'&&t.nature==='fixed').reduce((s,t)=>s+moAmt(t,VY,VM),0);
+  const instDue=DB.installments.reduce((s,p)=>s+instMo(p,ny,nm),0);
+  let varSum=0,varMonths=0;
+  for(let i=1;i<=3;i++){
+    let mo=VM-i,yr=VY;while(mo<0){mo+=12;yr--;}
+    const v=DB.transactions.filter(t=>t.type==='expense'&&t.nature==='variable').reduce((s,t)=>s+moAmt(t,yr,mo),0);
+    if(v>0){varSum+=v;varMonths++;}
+  }
+  const estVariable=varMonths?varSum/varMonths:0;
+  const projectedBalance=fixedIncome-(fixedExpense+instDue+estVariable);
+  return{
+    month:MONTHS[nm]+' '+ny,
+    expectedFixedIncome:Math.round(fixedIncome),
+    expectedFixedExpenses:Math.round(fixedExpense),
+    installmentsDue:Math.round(instDue),
+    estimatedVariableExpenses:Math.round(estVariable),
+    projectedBalance:Math.round(projectedBalance)
+  };
+}
+function renderNextMonthCards(p){
+  const lbl=$('#nextMonthLabel');if(lbl)lbl.textContent=p.month;
+  const box=$('#nextMonthCards');if(!box)return;
+  box.innerHTML=
+    '<div class="card"><div class="label">הכנסה קבועה צפויה</div><div class="value pos">'+fmt(p.expectedFixedIncome)+'</div></div>'
+    +'<div class="card"><div class="label">הוצאות קבועות צפויות</div><div class="value neg">'+fmt(p.expectedFixedExpenses)+'</div></div>'
+    +'<div class="card"><div class="label">תשלומים שיורדים</div><div class="value neg">'+fmt(p.installmentsDue)+'</div></div>'
+    +'<div class="card"><div class="label">הוצאות משתנות (הערכה)</div><div class="value neg">'+fmt(p.estimatedVariableExpenses)+'</div></div>'
+    +'<div class="card"><div class="label">מאזן צפוי</div><div class="value '+(p.projectedBalance>=0?'pos':'neg')+'">'+fmt(p.projectedBalance)+'</div></div>';
+}
+async function loadNextMonthAdvice(){
+  const box=$('#nextMonthAdvice');if(!box)return;
+  box.innerHTML='<div class="advisor-loading"><div class="advisor-spinner"></div>מכין תחזית וייעוץ...</div>';
+  try{
+    const projection=buildNextMonthProjection();
+    const summary=buildAdviceSummary();
+    const res=await fetch(API_BASE+'/api/ai/next-month-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary,projection})});
+    const data=await res.json();
+    if(data.error){box.innerHTML='<p class="empty">שגיאה: '+data.error+'</p>';return;}
+    renderAdvice(data.advice,'#nextMonthAdvice');
+  }catch(err){
+    box.innerHTML='<p class="empty">שגיאה: '+err.message+'</p>';
+  }
+}
+window.loadNextMonthAdvice=loadNextMonthAdvice;
+
 function buildAdviceSummary(){
   const monthKeys=[];
   for(let i=5;i>=0;i--){
@@ -2541,8 +2607,8 @@ function buildAdviceSummary(){
   return{userName:MNAME,currentMonth:MONTHS[VM]+' '+VY,last6Months,categorySpendingHistory,personalCategoryBreakdown,budgetsVsActual,savingsGoals};
 }
 
-function renderAdvice(a){
-  const box=$('#advisorContent');if(!box||!a)return;
+function renderAdvice(a,targetSel){
+  const box=$(targetSel||'#advisorContent');if(!box||!a)return;
   const level=['good','watch','risk'].includes(a.healthLevel)?a.healthLevel:'watch';
   const icon=level==='good'?'✅':level==='risk'?'🚨':'⚠️';
   const label=level==='good'?'מצב תקציבי יציב':level==='risk'?'דורש טיפול':'יש נקודות לשים לב';

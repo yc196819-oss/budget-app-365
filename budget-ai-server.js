@@ -913,6 +913,56 @@ ${qaText}`;
   }
 });
 
+app.post('/api/ai/next-month-advice', async (req, res) => {
+  try {
+    if (!GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
+    }
+
+    const { summary, projection } = req.body || {};
+    if (!projection) {
+      return res.status(400).json({ error: 'projection is required' });
+    }
+
+    const prompt = `אתה יועץ פיננסי מקצועי שעוזר למשתמש בשם "${(summary && summary.userName) || ''}" לתכנן ולהתכונן לחודש הבא (${projection.month}), על סמך תחזית מבוססת נתונים אמיתיים (שדה projection) והיסטוריית ההוצאות שלו (שדה summary, כולל categorySpendingHistory ברמת משק הבית ו-personalCategoryBreakdown האישי).
+
+חשוב:
+- אם יש חשש לגירעון (projectedBalance שלילי או נמוך) — תן עצות מעשיות וישירות: אילו הוצאות משתנות אפשר לצמצם (לפי הנתונים בפועל, לא באופן כללי), והאם כדאי לשקול הלוואה קצרה ואיזה סוג, בלי להמעיט בחומרת המצב.
+- אם המצב תקין — עודד המשך/תוספת הפרשה קבועה לחיסכון או השקעה מדי חודש (הצע סכום קונקרטי וריאלי לפי המספרים), והצבע על בזבוזים מיותרים אם ניכרים בנתונים.
+- תמיד תן לפחות המלצה מעשית אחת שקשורה ליעדי החיסכון של המשתמש (savingsGoals) אם יש כאלה.
+
+ענה אך ורק בפורמט JSON תקני (בלי markdown, בלי טקסט מסביב), במבנה הבא בדיוק:
+{"healthLevel":"good|watch|risk","headline":"משפט אחד שמסכם את התחזית לחודש הבא","strengths":["..."],"concerns":["..."],"tips":["..."]}
+
+כללים: strengths/concerns/tips - כל אחד 2-4 פריטים קצרים וברורים.`;
+
+    const aiResult = await generateWithFallback({ prompt, text: JSON.stringify({ summary: summary || {}, projection }) });
+    const output = aiResult.output || '{}';
+    let parsed = null;
+    try {
+      parsed = JSON.parse(extractJsonText(output));
+    } catch (_err) {
+      const candidate = String(output).match(/\{[\s\S]*\}/);
+      if (candidate && candidate[0]) {
+        try {
+          parsed = JSON.parse(candidate[0]);
+        } catch (_err2) {
+          parsed = null;
+        }
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return res.status(502).json({ error: 'AI response could not be parsed', rawOutput: output });
+    }
+
+    return res.json({ advice: parsed, aiProvider: aiResult.provider, aiModel: aiResult.model });
+  } catch (err) {
+    const statusCode = err.statusCode || 502;
+    return res.status(statusCode).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
 app.post('/api/chat/parse', async (req, res) => {
   try {
     const { text } = req.body || {};
