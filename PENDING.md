@@ -1,5 +1,17 @@
 # Pending items (updated 2026-08-04)
 
+## Latest additions (same day, later session) — no new SQL needed
+- PWA support: `public/manifest.json`, `public/icon.svg`, `public/sw.js` — users can
+  "Add to Home Screen" on mobile.
+- AI onboarding wizard: Settings → "🧙 אשף הקמה מהירה עם AI" — chat-style interview
+  (salary, accounts, cards, debts, goals) → editable review → writes to existing
+  tables only (bank_accounts/credit_cards/transactions/loans/goals). No migration.
+- Quick-add (תנועות tab) now handles a whole paragraph describing several
+  transactions at once, routing to the existing bulk-import review panel when more
+  than one transaction is detected.
+- New "🔮 תכנון החודש הבא" panel in the Planning tab — projects next month from real
+  data and offers AI advice (new backend endpoint `/api/ai/next-month-advice`).
+
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
 ## 🔴 Critical — unresolved bug under active investigation
