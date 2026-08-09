@@ -1,6 +1,19 @@
 # Pending items (updated 2026-08-09)
 
-## Latest additions (2026-08-09 session) — no new SQL needed
+## Latest additions (2026-08-09 session, part 2) — no new SQL needed
+- Fixed a real bug found via code review after the user reported the
+  installed Android PWA "looks like a shrunk desktop site, letters are
+  really small": several mobile `@media` breakpoints were setting font
+  sizes SMALLER than the desktop values (nav labels, dashboard card
+  numbers, table cells, the tx-summary hero number) — backwards for a
+  touch screen. Brought those back to/above desktop size, bumped form
+  input font-size to 16px on mobile (stops iOS auto-zoom-on-focus),
+  hardened the viewport meta tag, and bumped the service worker's shell
+  cache name (v1→v2) so any already-installed PWA repaints with a fresh
+  shell. Not yet re-confirmed visually by the user on their phone — ask
+  if it looks right now.
+
+## Latest additions (2026-08-09 session, part 1) — no new SQL needed
 - Onboarding wizard relocated out of Settings into its own permanent nav tab
   ("🧙 הקמה"), which also hosts install-app instructions. It now auto-triggers
   for brand-new households (0 bank accounts AND 0 transactions) on first login
