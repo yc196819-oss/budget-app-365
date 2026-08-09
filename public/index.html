@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>ניהול תקציב משפחתי</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#6c8cff">
@@ -28,7 +28,8 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body.light{--bg:#f4f6fb;--surface:#ffffff;--surface2:#eef1f8;--surface3:#e4e8f4;--line:#d5dae8;--line2:#c3cae0;--text:#1a1d29;--muted:#5a6178;--faint:#8f96ad;--shadow:0 8px 30px rgba(60,70,120,.12)}
 body.light .auth-tab.active{color:#fff}
-body{font-family:'Rubik','Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden}
+html{overflow-x:hidden;width:100%}
+body{font-family:'Rubik','Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden;width:100%}
 .app{max-width:none;margin:0;padding:0;display:flex;align-items:stretch;min-height:100vh}
 .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .auth-box{background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:40px;width:100%;max-width:440px;box-shadow:var(--shadow)}
@@ -87,9 +88,9 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
   .user-info.rail-foot span:not(.avatar){display:none}
   .user-info.rail-foot .btn{padding:6px 8px!important}
   .panel{padding:16px;margin-top:12px}
-  .grid.cards{grid-template-columns:repeat(auto-fit,minmax(135px,1fr))}
+  .grid.cards{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
   .card{padding:14px}
-  .card .value{font-size:1.25rem}
+  .card .value{font-size:1.4rem}
   .modal{padding:20px;width:94%}
   .modal-lg{padding:20px}
   .plan-head{gap:10px}
@@ -101,7 +102,10 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
   .tx-amt{margin-right:auto}
   .goalcard-hint{display:none}
   .tx-summary{padding:14px 16px}
-  .tx-summary .hero-num{font-size:1.6rem}
+  .tx-summary .hero-num{font-size:1.9rem}
+  body{font-size:1.02rem}
+  .btn{padding:11px 18px;font-size:.92rem}
+  input,select,textarea{font-size:16px}
 }
 .grid{display:grid;gap:16px}
 .cards{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
@@ -316,7 +320,7 @@ tr:last-child td{border-bottom:none}
 .review-grid{min-width:920px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 #reviewList{overflow-x:auto}
 @media(max-width:650px){.review-grid{min-width:0}}
-@media(max-width:650px){nav button{padding:7px 8px;font-size:.76rem}.card .value{font-size:1.3rem}th,td{padding:8px 5px;font-size:.78rem}.review-row{grid-template-columns:1fr;gap:4px}}
+@media(max-width:650px){nav button{padding:10px 12px;font-size:.9rem}.card .value{font-size:1.45rem}th,td{padding:10px 7px;font-size:.86rem}.review-row{grid-template-columns:1fr;gap:4px}}
 </style>
 </head>
 <body>

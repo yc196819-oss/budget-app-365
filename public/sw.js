@@ -1,7 +1,7 @@
 // Minimal service worker: exists so the browser offers "add to home screen",
 // but does NOT cache dynamic data — this is a live financial app, showing a
 // stale balance offline would be actively misleading.
-const SHELL_CACHE = 'budget-app-shell-v1';
+const SHELL_CACHE = 'budget-app-shell-v2';
 const SHELL_FILES = ['/', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
