@@ -1,5 +1,53 @@
 # Pending items (updated 2026-08-09)
 
+## 💡 Ideas for next session (brainstormed 2026-08-09, not started)
+Start here next time — nothing below is implemented yet, just a prioritized punch list.
+
+**Carried over / still真 open:**
+1. 🔴 The dashboard-₪0 bug is still unconfirmed — still waiting on a DevTools
+   Console screenshot from the user. Ask again at the start of next session;
+   this stays the top blocker.
+2. Ask the user to confirm the mobile text-size fix from today actually looks
+   right on their phone (close + reopen the installed icon, or delete and
+   reinstall it if it still looks stale).
+3. Google OAuth redirect URI still stale (see full scan below) — confirm
+   whether Google sign-in is even used before touching it.
+4. Email reminders still unverified (Resend not configured, SMTP untested).
+
+**New ideas from today's PWA/mobile work:**
+5. **Real PNG icons instead of SVG-only.** `apple-touch-icon` doesn't render
+   reliably from SVG on iOS (Apple's own spec wants PNG) — the home screen
+   icon on iPhone may be falling back to a screenshot-of-the-page icon
+   instead of our actual logo. Needs a PNG conversion (no local tool found
+   yet — try an online converter or ask if ImageMagick can be installed) in a
+   few sizes (180x180 for apple-touch-icon, 192/512 maskable for Android).
+6. **Push notifications.** Now that it's an installable PWA, real push
+   notifications become possible (budget overrun alerts, bill due dates,
+   month-end summary) via the Web Push API + service worker — bigger effort
+   (needs VAPID keys, a subscription table, a backend trigger), but it's the
+   natural next step after today's PWA work and ties directly into the
+   existing budget-vs-actual and reminders features.
+7. **Splash screen / update banner.** Add proper `apple-touch-startup-image`
+   or at least verify the manifest's `background_color`/`theme_color` produce
+   a decent splash on Android; also consider a small "גרסה חדשה זמינה, לחצו
+   לרענון" banner using the SW's `updatefound` event so users on stale
+   cached shells get prompted instead of silently seeing an old version.
+8. **PIN/biometric app-lock.** Since this now lives as an icon on the phone's
+   home screen next to other apps, consider an optional PIN or WebAuthn
+   unlock screen before showing financial data — low effort (a localStorage
+   flag + a lock screen component), meaningful privacy win for a shared
+   family phone.
+
+**Product ideas (bigger, discuss before starting):**
+9. Weekly/monthly AI digest — a short proactive AI summary (not on-demand)
+   delivered via email or in-app, using the same `buildAdviceSummary()` data
+   already built for the advisor.
+10. Household activity feed — "מי הוסיף מה" recent-activity list, useful now
+    that there are multiple real members (קובי + נעמי) sharing one household.
+11. Data export/backup — confirm whether a full CSV/Excel export of all
+    tables already exists anywhere in the app; if not, worth adding as a
+    safety net independent of Supabase.
+
 ## Latest additions (2026-08-09 session, part 2) — no new SQL needed
 - Fixed a real bug found via code review after the user reported the
   installed Android PWA "looks like a shrunk desktop site, letters are
