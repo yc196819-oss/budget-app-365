@@ -1,6 +1,26 @@
-# Pending items (updated 2026-08-04)
+# Pending items (updated 2026-08-09)
 
-## Latest additions (same day, later session) — no new SQL needed
+## Latest additions (2026-08-09 session) — no new SQL needed
+- Onboarding wizard relocated out of Settings into its own permanent nav tab
+  ("🧙 הקמה"), which also hosts install-app instructions. It now auto-triggers
+  for brand-new households (0 bank accounts AND 0 transactions) on first login
+  instead of the generic welcome guide; returning users still get the welcome
+  guide as before.
+- Real PWA install button (`installAppBtn`, the 📱 icon in the sidebar footer):
+  wired to the actual `beforeinstallprompt` event so a real "Add to Home
+  Screen" prompt fires on supported browsers (mostly Android Chrome). Falls
+  back to a manual instructions modal (`showInstallInstructions()`, also
+  reachable from the הקמה tab) with separate steps for iOS Safari, Android
+  Chrome, and desktop — iOS never fires `beforeinstallprompt`, so it always
+  needs the manual path.
+- Advisor chat input upgraded from a single-line `<input>` to a resizable
+  `<textarea>` (Enter to send, Shift+Enter for a newline), so users can send
+  the advisor a long free-form message instead of one short line.
+- Primary typeface switched from Heebo to Rubik (CSS + all Chart.js font
+  configs) for a more modern/premium look; Suez One kept for the hero numbers
+  only.
+
+## Previous additions (2026-08-04 session) — no new SQL needed
 - PWA support: `public/manifest.json`, `public/icon.svg`, `public/sw.js` — users can
   "Add to Home Screen" on mobile.
 - AI onboarding wizard: Settings → "🧙 אשף הקמה מהירה עם AI" — chat-style interview
