@@ -2,6 +2,21 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-10 — transactions tab form pushed the actual list too far down
+After the desktop-site-mode fix let the user actually see the real mobile
+redesign, next feedback: the long manual add-transaction form (9+ stacked
+full-width fields) sat between the AI quick-add box and the transaction
+list, pushing what people actually look at (their transactions) far below
+the fold on every visit. Fixed: wrapped the form body in `#manualAddBody`,
+made the "הוספת תנועה" header a tap-to-expand toggle on mobile only
+(`toggleManualAdd()`, gated on `window.innerWidth`), collapsed by default
+under 820px. Desktop completely unaffected (verified with real screenshots
+at both viewport sizes before shipping, both collapsed and expanded mobile
+states). User also asked generally to "modernize the whole system's design,
+without breaking daily workflow" — treat that as ongoing direction for
+future polish passes, not a single task; keep using the verified
+screenshot-before-shipping approach from today rather than guessing.
+
 ## 🟢 Resolved 2026-08-10 — "phone still shows old desktop layout" mystery
 After the real mobile redesign shipped (bottom tab bar etc.) and was
 verified live via curl, the user kept reporting the phone still showed the
