@@ -2,6 +2,11 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 📍 Production URL
+`https://budget-web-u0iy.onrender.com` — confirmed 2026-08-10 via
+`/api/health`. Use this for WebFetch health checks instead of guessing at
+`budget-web.onrender.com` (that guess 404s — wrong domain).
+
 ## 🔴 User is frustrated — pushed back hard 2026-08-10 that "mobile still
 feels shocking/small, like a shrunk desktop site" DESPITE the font-size fix
 shipped 2026-08-09, and demanded a real fix "even if it means a lot of work
@@ -11,20 +16,13 @@ again, wait for the actual screenshots and diagnose from real evidence**.
 This is now the top-priority item; everything else in this file is
 secondary until these are resolved and the user feels heard.
 
-## ⚙️ Needs a deploy-environment action (Render Dashboard, no API access)
-**Push notifications (shipped 2026-08-10) need env vars added on Render
-before they'll work in production**, and the SQL migration run:
-1. Run `supabase_push_subscriptions.sql` in the Supabase SQL Editor.
-2. Add these three env vars to the `budget-web` Render service (values are
-   in the local `.env` file, generated via `web-push generateVAPIDKeys()`
-   on 2026-08-10 — do NOT regenerate, reuse the same ones or existing
-   subscriptions break): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
-   `VAPID_SUBJECT` (a `mailto:` address).
-3. Redeploy `budget-web` after adding them.
-Until this is done, `/api/health` will show `pushConfigured:false` in
-production even though the code is live. Walk the user through this the
-same concrete step-by-step way as the Supabase email toggle (confirm each
-step before moving on).
+## ✅ Push notifications — fully deployed 2026-08-10
+`supabase_push_subscriptions.sql` run in Supabase (confirmed via
+service-role check), VAPID env vars added to `budget-web` on Render, and
+`/api/health` confirmed `pushConfigured:true` in production. Not yet
+confirmed that a real test push actually arrives on the user's phone —
+they were about to test via Settings → 🔔 התראות Push → הפעל + שלח התראת
+ניסיון when this note was written. Ask how it went.
 
 ## 🔴 Still waiting on the user — nothing to do until this info arrives
 1. **Dashboard-₪0 bug** — still unconfirmed. Waiting on a DevTools Console
