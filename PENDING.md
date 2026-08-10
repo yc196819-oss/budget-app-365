@@ -2,6 +2,20 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-10 — "phone still shows old desktop layout" mystery
+After the real mobile redesign shipped (bottom tab bar etc.) and was
+verified live via curl, the user kept reporting the phone still showed the
+old full desktop sidebar with zero changes, even after force-close/reopen
+and an SW cache bump. Turned out to be **nothing on our end**: Chrome on
+their phone had **"אתר מחשב" (Request Desktop Site)** enabled for this
+origin, which forces the desktop viewport regardless of the page's own
+responsive CSS/media queries — explains why literally nothing looked
+different no matter what was shipped or how many times they reloaded.
+Fix: Chrome (regular tab) → ⋮ menu → uncheck "אתר מחשב" for the site. This
+is a good thing to check FIRST next time "nothing updates" on a specific
+user's device despite server-side fixes being verified live — before
+assuming it's a caching or deploy issue.
+
 ## 📍 Production URL
 `https://budget-web-u0iy.onrender.com` — confirmed via `/api/health`. Use
 this instead of guessing at `budget-web.onrender.com` (404s — wrong domain).
