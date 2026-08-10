@@ -2,6 +2,30 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🔴 User is frustrated — pushed back hard 2026-08-10 that "mobile still
+feels shocking/small, like a shrunk desktop site" DESPITE the font-size fix
+shipped 2026-08-09, and demanded a real fix "even if it means a lot of work
+or a dedicated app," plus reported a NEW Gemini AI error. Explicitly asked
+for screenshots of both (not yet received as of this note) — **do not guess
+again, wait for the actual screenshots and diagnose from real evidence**.
+This is now the top-priority item; everything else in this file is
+secondary until these are resolved and the user feels heard.
+
+## ⚙️ Needs a deploy-environment action (Render Dashboard, no API access)
+**Push notifications (shipped 2026-08-10) need env vars added on Render
+before they'll work in production**, and the SQL migration run:
+1. Run `supabase_push_subscriptions.sql` in the Supabase SQL Editor.
+2. Add these three env vars to the `budget-web` Render service (values are
+   in the local `.env` file, generated via `web-push generateVAPIDKeys()`
+   on 2026-08-10 — do NOT regenerate, reuse the same ones or existing
+   subscriptions break): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+   `VAPID_SUBJECT` (a `mailto:` address).
+3. Redeploy `budget-web` after adding them.
+Until this is done, `/api/health` will show `pushConfigured:false` in
+production even though the code is live. Walk the user through this the
+same concrete step-by-step way as the Supabase email toggle (confirm each
+step before moving on).
+
 ## 🔴 Still waiting on the user — nothing to do until this info arrives
 1. **Dashboard-₪0 bug** — still unconfirmed. Waiting on a DevTools Console
    screenshot (F12 → Console tab) taken while it's happening. Leading theory:
@@ -11,11 +35,26 @@ Read this first in any new session — it captures open threads so context isn't
    zeros. If confirmed, fix is prompting a fresh sign-out/sign-in when a
    "signed in but RLS returns nothing" state is detected. This is the
    longest-standing open item — keep asking for the screenshot.
-2. **Mobile text-size fix (shipped 2026-08-09)** — not yet confirmed by the
-   user on their actual phone. Several `@media` breakpoints were shrinking
-   text below desktop size (nav labels, dashboard numbers, table cells) —
-   fixed, but ask them to check the installed PWA now looks right.
-3. **Grok fallback decision** — x.ai account behind `GROK_API_KEY` has zero
+2. **Mobile text-size fix (shipped 2026-08-09)** — user says it's still bad
+   as of 2026-08-10 ("שוקינג/קטן, כמו מחשב מוקטן" — shocking/small, like a
+   shrunk desktop) despite the fix. The 2026-08-09 fix corrected several
+   `@media` breakpoints that were shrinking text below desktop size (nav
+   labels, dashboard numbers, table cells), which was real and verified in
+   code — but clearly isn't what's bothering the user, or isn't the whole
+   picture. Waiting on an actual screenshot to diagnose further with real
+   evidence instead of guessing again. Given how strongly they reacted,
+   consider that this may need a bigger structural mobile-layout rethink,
+   not another small CSS patch — ask what specifically looks/feels wrong
+   once the screenshot arrives before deciding scope.
+3. **New Gemini AI error (reported 2026-08-10)** — user says they got
+   another AI import error, this time FROM GEMINI ITSELF (not Grok), and
+   is sending a screenshot. This is notable: it validates their earlier
+   pushback that "Gemini itself has failed before too" (see below) — the
+   retry-once mitigation shipped 2026-08-10 may not be enough, or this may
+   be a different failure mode entirely (e.g. malformed AI JSON output,
+   image size/format issue, rate limiting). Wait for the screenshot, do not
+   assume the retry fix covers this.
+4. **Grok fallback decision** — x.ai account behind `GROK_API_KEY` has zero
    credits (`403 permission-denied`), so the AI fallback path is dead. User
    is hesitant to rely on Gemini alone (says Gemini itself has failed on
    them before too), but hasn't committed to adding billing at console.x.ai.
@@ -48,8 +87,16 @@ Read this first in any new session — it captures open threads so context isn't
   **zero verified domains** (checked directly via `api.resend.com/domains`),
   so the sandbox sender `onboarding@resend.dev` can only deliver to the
   Resend account owner's own email — reminders almost certainly don't reach
-  anyone else. Real fix is verifying a real domain in Resend (see Naomi item
-  below, same underlying blocker); not started, low urgency.
+  anyone else. **User confirmed 2026-08-10 they still want real email
+  sending to work eventually** (not just accept the confirm-email-off
+  workaround) — real fix is verifying a real domain in Resend (DNS records,
+  needs a domain); not started. Separately discovered while building push
+  notifications: **there is no scheduler/cron in this app at all** — the
+  "reminders" feature has only ever been a manual "send test" button
+  (`/api/reminders/test`), never an actual daily-triggered send. Fixing
+  email deliverability alone won't make reminders "real" — a scheduler is
+  also needed (see push notification follow-up below, same gap applies to
+  email reminders too).
 - **PNG app icons** — added. `icon-180/192/512.png` (regular) and
   `icon-maskable-192/512.png` (extra-padded variant so Android's
   circular/squircle mask doesn't clip the ₪ symbol) generated from the
@@ -70,6 +117,16 @@ Read this first in any new session — it captures open threads so context isn't
   clears the local PIN and forces sign-out/sign-in. Not yet tested by the
   user on a real phone — ask if fingerprint/Face ID actually triggers
   correctly on their device.
+- **Push notifications — core infrastructure shipped (2026-08-10, user
+  explicitly demanded this).** `web-push` + VAPID keys, subscribe/test-send/
+  service-worker handlers all live in code (Settings → "🔔 התראות Push").
+  **NOT fully working in production yet** — needs the env vars added to
+  Render and the SQL migration run (see the ⚙️ section above, top of file).
+  Also: this only covers manual test pushes right now, not automated
+  triggers — see the "no scheduler exists" note above. Real automated
+  alerts (budget overrun, etc.) are a separate follow-up once a scheduler
+  exists (Render Cron Job service, or an external trigger like a GitHub
+  Action hitting an endpoint on a schedule).
 
 ## 🟡 Needs a Supabase Dashboard change — I have no programmatic access
 **Naomi's registration failure** — confirmed via `auth.users` (service-role
@@ -82,30 +139,23 @@ credentials into Supabase's SMTP settings was considered, but **Resend has
 zero verified domains** so that wouldn't actually have fixed delivery to her
 either (see above).
 
-**Decision made:** turn off "Confirm email" in Supabase now (free,
-immediate); deal with verifying a real domain in Resend later if reminder
-emails to other people matter enough to justify the DNS work.
+**STATUS: DONE (2026-08-10)** — walked the user through this live, one
+screenshot per step (Authentication → Sign In / Providers → Email → the
+"Confirm email" toggle), confirmed each step before moving to the next
+(this worked much better than the earlier all-at-once instructions, which
+the user said weren't clear). User toggled "Confirm email" OFF and clicked
+Save changes.
 
-**Next step — user said the previous instructions weren't clear enough
-(2026-08-10), so re-walk through it MUCH more concretely next time, step by
-literal step, confirming each screen before moving to the next one** (same
-approach as the Render walkthrough, which worked well for them):
-1. Go to https://supabase.com/dashboard and log in.
-2. Click on this project (the budget app's project) to open it.
-3. In the left sidebar, find the icon/label "Authentication" and click it.
-4. Inside Authentication, look for a sub-tab/section called "Sign In / Up"
-   or "Providers" (wording varies by Supabase UI version — look for
-   something with "Email" in it).
-5. Find the "Email" provider entry and open/expand it.
-6. Look for a toggle switch labeled "Confirm email" (or "Enable email
-   confirmations") and turn it OFF.
-7. Click "Save" if there's a save button.
-Confirm each of these steps landed correctly with the user one at a time
-rather than dumping all 7 steps at once — that's likely why it didn't land
-last time. Afterward, ask Naomi to retry the same WhatsApp invite link —
-should work immediately, no email step. Confirm by checking `auth.users`
-for her email via the service-role admin API (same script pattern used to
-diagnose this).
+**Still needs verification**: ask Naomi to retry the same WhatsApp invite
+link — should work immediately now, no email step. Confirm success by
+checking `auth.users` for her email via the service-role admin API (same
+script pattern used to diagnose the original failure) — haven't confirmed
+this yet, just that the toggle was saved.
+
+User also confirmed (2026-08-10) they still want real email sending to work
+eventually — this toggle-off was the free/immediate fix for the blocking
+issue, not a replacement for actually fixing deliverability. See the Resend
+domain-verification note above; not started.
 
 ## SQL migrations written but not yet confirmed run
 - `supabase_category_budgets.sql` — `category_budgets` table (monthly
