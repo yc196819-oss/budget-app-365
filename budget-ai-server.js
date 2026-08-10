@@ -5,6 +5,7 @@ const cors = require('cors');
 const nodemailer = require('nodemailer');
 const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
+const webpush = require('web-push');
 
 const app = express();
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -36,6 +37,48 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
   : null;
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+const PUSH_CONFIGURED = !!(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+if (PUSH_CONFIGURED) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+async function sendPushToUser(userId, { title, body, url }) {
+  if (!PUSH_CONFIGURED) throw new Error('Push notifications not configured (missing VAPID keys)');
+  if (!supabaseAdmin) throw new Error('Supabase admin client not configured');
+
+  const { data: subs, error } = await supabaseAdmin
+    .from('push_subscriptions')
+    .select('id,endpoint,p256dh,auth')
+    .eq('user_id', String(userId));
+  if (error) throw new Error(error.message);
+  if (!subs || !subs.length) {
+    const err = new Error('No push subscriptions found for this user');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const payload = JSON.stringify({ title: title || 'ניהול תקציב', body: body || '', url: url || APP_URL });
+  const results = await Promise.allSettled(subs.map((s) => webpush.sendNotification(
+    { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+    payload
+  )));
+
+  const expiredIds = [];
+  let sent = 0;
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') { sent += 1; return; }
+    const statusCode = r.reason && r.reason.statusCode;
+    if (statusCode === 404 || statusCode === 410) expiredIds.push(subs[i].id);
+  });
+  if (expiredIds.length) {
+    await supabaseAdmin.from('push_subscriptions').delete().in('id', expiredIds);
+  }
+  return { sent, total: subs.length, removedExpired: expiredIds.length };
+}
 
 const SMTP_HOST = process.env.SMTP_HOST || '';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
@@ -743,6 +786,7 @@ app.get('/api/health', async (_req, res) => {
     supabaseConfigured: !!supabaseAdmin,
     smtpConfigured: !!mailer,
     resendConfigured: !!RESEND_API_KEY,
+    pushConfigured: PUSH_CONFIGURED,
     devResetFallback: ALLOW_DEV_RESET_FALLBACK
   });
 });
@@ -1013,6 +1057,27 @@ app.post('/api/chat/parse', async (req, res) => {
     });
   } catch (err) {
     return res.status(502).json({ error: err.message || 'Unexpected error', attemptedProviders: err.attempted || [] });
+  }
+});
+
+app.get('/api/push/vapid-public-key', (req, res) => {
+  if (!PUSH_CONFIGURED) return res.status(503).json({ error: 'Push not configured' });
+  return res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/test', async (req, res) => {
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  try {
+    const result = await sendPushToUser(userId, {
+      title: 'התראת ניסיון 🔔',
+      body: 'זו התראה לדוגמה ממערכת התקציב. אם אתה רואה אותה — ההתראות עובדות!',
+      url: APP_URL
+    });
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ ok: false, error: err.message || 'Push send failed' });
   }
 });
 

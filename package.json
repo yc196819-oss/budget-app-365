@@ -20,6 +20,7 @@
     "googleapis": "^173.0.0",
     "mongoose": "^9.7.2",
     "nodemailer": "^6.10.1",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "web-push": "^3.6.7"
   }
 }
