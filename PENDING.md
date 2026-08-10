@@ -60,6 +60,16 @@ Read this first in any new session — it captures open threads so context isn't
   an active SW controller at load time; if a new SW takes over afterward
   (genuine update, not first install), shows a small "גרסה חדשה זמינה" /
   refresh banner instead of silently leaving users on stale cached code.
+- **PIN + fingerprint/Face ID app-lock** — shipped (2026-08-10, user
+  explicitly asked for this). Settings → "🔒 נעילת אפליקציה": set a 4-6
+  digit PIN (salted SHA-256 hash in localStorage, per-device — a privacy
+  layer, NOT a real auth boundary, Supabase RLS/login stay the real
+  security), full-screen lock overlay on load, quick "🔒 נעל עכשיו" button in
+  the sidebar footer, plus an optional WebAuthn platform-authenticator
+  (fingerprint/Face ID) fast path once a PIN exists. "שכחתי את הקוד" recovery
+  clears the local PIN and forces sign-out/sign-in. Not yet tested by the
+  user on a real phone — ask if fingerprint/Face ID actually triggers
+  correctly on their device.
 
 ## 🟡 Needs a Supabase Dashboard change — I have no programmatic access
 **Naomi's registration failure** — confirmed via `auth.users` (service-role
@@ -76,13 +86,26 @@ either (see above).
 immediate); deal with verifying a real domain in Resend later if reminder
 emails to other people matter enough to justify the DNS work.
 
-**Next step — ask if this was done yet, or walk through it:**
-Supabase Dashboard → this project → Authentication (left sidebar) →
-Sign In / Providers → Email provider → toggle OFF "Confirm email" → Save.
-(Label may vary slightly by Supabase UI version.) Afterward, ask Naomi to
-retry the same WhatsApp invite link — should work immediately, no email
-step. Confirm by checking `auth.users` for her email via the service-role
-admin API (same script pattern used to diagnose this).
+**Next step — user said the previous instructions weren't clear enough
+(2026-08-10), so re-walk through it MUCH more concretely next time, step by
+literal step, confirming each screen before moving to the next one** (same
+approach as the Render walkthrough, which worked well for them):
+1. Go to https://supabase.com/dashboard and log in.
+2. Click on this project (the budget app's project) to open it.
+3. In the left sidebar, find the icon/label "Authentication" and click it.
+4. Inside Authentication, look for a sub-tab/section called "Sign In / Up"
+   or "Providers" (wording varies by Supabase UI version — look for
+   something with "Email" in it).
+5. Find the "Email" provider entry and open/expand it.
+6. Look for a toggle switch labeled "Confirm email" (or "Enable email
+   confirmations") and turn it OFF.
+7. Click "Save" if there's a save button.
+Confirm each of these steps landed correctly with the user one at a time
+rather than dumping all 7 steps at once — that's likely why it didn't land
+last time. Afterward, ask Naomi to retry the same WhatsApp invite link —
+should work immediately, no email step. Confirm by checking `auth.users`
+for her email via the service-role admin API (same script pattern used to
+diagnose this).
 
 ## SQL migrations written but not yet confirmed run
 - `supabase_category_budgets.sql` — `category_budgets` table (monthly
@@ -96,12 +119,7 @@ admin API (same script pattern used to diagnose this).
    via Web Push API + service worker. Bigger effort: needs VAPID keys, a
    subscription table, a backend trigger. Natural next step after the PWA
    work, ties into the existing budget-vs-actual and reminders features.
-2. **PIN/biometric app-lock** — now that it's an icon on the phone's home
-   screen next to other apps, an optional PIN or WebAuthn unlock screen
-   before showing financial data could be worth it. Low effort (localStorage
-   flag + lock screen component), meaningful privacy win for a shared family
-   phone.
-3. **Weekly/monthly AI digest** — proactive AI summary (not on-demand),
+2. **Weekly/monthly AI digest** — proactive AI summary (not on-demand),
    delivered via email or in-app, reusing `buildAdviceSummary()`.
 4. **Household activity feed** — "מי הוסיף מה" recent-activity list, useful
    now that there are multiple real members (קובי + נעמי) sharing a
