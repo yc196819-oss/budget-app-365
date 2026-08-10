@@ -182,6 +182,10 @@ async function callGrok({ prompt, text, fileData, mimeType }) {
   };
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function generateWithFallback(payload) {
   const attempted = [];
 
@@ -191,6 +195,16 @@ async function generateWithFallback(payload) {
       return { ...result, attempted };
     } catch (err) {
       attempted.push({ provider: 'gemini', error: err.message || 'Unknown Gemini error' });
+      // one retry after a short delay — most Gemini failures are transient
+      // (rate limit blips, momentary 5xx), and the Grok fallback below may
+      // not always be available, so it's worth not giving up on Gemini too fast.
+      try {
+        await delay(1200);
+        const retryResult = await callGemini(payload);
+        return { ...retryResult, attempted };
+      } catch (retryErr) {
+        attempted.push({ provider: 'gemini (retry)', error: retryErr.message || 'Unknown Gemini error' });
+      }
     }
   }
 
