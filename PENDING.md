@@ -2,6 +2,33 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-10 — systematic mobile design survey (all 14 tabs)
+Per the user's "modernize the whole system" direction, screenshotted every
+tab at a real phone viewport (390×844, demo account, playwright-core + the
+system's local Chrome) and reviewed each for real issues:
+- **Investment names truncating to 1-2 characters** ("קרן מחקה S&P 500" →
+  "ק") — fixed, `.tx-mid` min-width + narrower value input on mobile. Note:
+  the first attempt at this fix silently did nothing because it landed in
+  an early `@media` block that appears BEFORE the base `.tx-mid` rule in
+  source order — CSS cascade picks the LATER rule on a specificity tie
+  regardless of which media query "sounds" more specific. Lesson for next
+  time: mobile overrides must be placed after the base rule they override,
+  not just inside a `max-width` block anywhere in the file.
+- Dashboard, charts, advisor, categories, accounts, loans, installments,
+  planning, sharing, settings, onboarding tabs: reviewed, all look
+  reasonably good already — no other real issues found. (The dashboard pie
+  chart looked broken in one screenshot; turned out to be a `fullPage`
+  Playwright screenshot artifact with the fixed-position bottom nav bar and
+  a canvas resize timing quirk, not a real bug — confirmed fine with a
+  normal, non-full-page screenshot. Same fixed-bar-appears-mid-page thing
+  showed up in several other full-page survey shots — always a capture
+  artifact, not a real overlap; only trust normal-viewport screenshots for
+  that.)
+- Categories tab is very long/dense on mobile (budget-per-category +
+  category editor) — legitimately a lot of content, not misrendering, just
+  a lot of scrolling. Not fixed — flag if the user specifically complains
+  about it, don't preemptively chop up a working data-management screen.
+
 ## 🟢 Resolved 2026-08-10 — transactions tab form pushed the actual list too far down
 After the desktop-site-mode fix let the user actually see the real mobile
 redesign, next feedback: the long manual add-transaction form (9+ stacked
