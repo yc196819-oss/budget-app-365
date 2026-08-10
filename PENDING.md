@@ -1,4 +1,52 @@
-# Pending items (updated 2026-08-09)
+# Pending items (updated 2026-08-10)
+
+## 🟠 Two issues diagnosed 2026-08-10 (one fixed, one needs a user decision)
+
+**1. AI import error — root cause found, partially fixed.**
+Tested both providers directly against the live keys in `.env`:
+- Gemini (`gemini-2.5-flash`) works fine.
+- Grok (`grok-2-latest`) returns `403 permission-denied: "Your newly created
+  team doesn't have any credits or licenses yet"` — the x.ai account behind
+  `GROK_API_KEY` has never been funded, so the fallback is completely dead.
+  Since `generateWithFallback()` tries Gemini then falls to Grok on any
+  error, a single transient Gemini hiccup was turning into a hard failure
+  for the user with no working fallback.
+- Fix shipped: `generateWithFallback()` now retries Gemini once (after a
+  1.2s delay) before giving up, so momentary Gemini errors self-heal instead
+  of hitting the broken Grok path. This does NOT fix Grok itself.
+- **Needs a decision from the user**: either add billing at
+  console.x.ai (their team currently has zero credits), or just accept
+  Gemini-only (it has a generous free tier and worked fine in testing) and
+  leave `GROK_API_KEY` unset/ignore it. Ask next session if not already
+  decided.
+
+**2. Wife (נעמי) couldn't register via the WhatsApp invite link — root cause
+found, needs a Supabase Dashboard change (can't be done from code/CLI).**
+Checked `auth.users` directly via the service-role admin API — no account
+record exists for her signup attempt at all, meaning Supabase's own signup
+call itself failed (not just "email didn't arrive after signup succeeded").
+This is a **known recurring issue** — the app already has dedicated error
+handling for it (`authErrMsg()` in `public/index.html` specifically catches
+`"Error sending confirmation email"`). Root cause: Supabase Auth's own
+confirmation/reset emails are sent via Supabase's default built-in mailer
+(separate system from this app's own Resend/SMTP setup used for the
+reminders feature) — Supabase's default mailer is free-tier rate-limited
+and unreliable. Two possible fixes, needs the user to pick one (both require
+the Supabase Dashboard, which I don't have programmatic access to):
+- **(a) Turn off "Confirm email"** — Supabase Dashboard → Authentication →
+  Sign In / Providers → Email → toggle off "Confirm email". Fastest, removes
+  the friction entirely, appropriate for a small trusted-family app. Slight
+  security tradeoff (anyone with the invite link + an email address can sign
+  in immediately without proving they own that inbox).
+- **(b) Point Supabase's own auth email at the Resend SMTP the app already
+  has** — Supabase Dashboard → Project Settings → Authentication → SMTP
+  Settings → enable custom SMTP, reuse the same `SMTP_HOST`/`SMTP_USER`/
+  `SMTP_PASS` values already sitting in `.env` (Resend). Keeps email
+  verification, fixes reliability, but is a few more clicks.
+Ask the user which they'd rather do next session, then walk them through it
+step by step (same pattern as the Render env var walkthrough).
+
+## Previously updated 2026-08-09
 
 ## 💡 Ideas for next session (brainstormed 2026-08-09, not started)
 Start here next time — nothing below is implemented yet, just a prioritized punch list.
