@@ -2,7 +2,7 @@
 // but does NOT cache dynamic data — this is a live financial app, showing a
 // stale balance offline would be actively misleading.
 const SHELL_CACHE = 'budget-app-shell-v2';
-const SHELL_FILES = ['/', '/manifest.json', '/icon.svg'];
+const SHELL_FILES = ['/', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL_FILES)).catch(() => {}));

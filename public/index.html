@@ -6,8 +6,9 @@
 <title>ניהול תקציב משפחתי</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#6c8cff">
-<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="תקציב">
@@ -849,7 +850,22 @@ tr:last-child td{border-bottom:none}
 <script>
 const _url='https://bwwupwbakefjhwropdin.supabase.co', _key='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3d3Vwd2Jha2Vmamh3cm9wZGluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MjgyNzYsImV4cCI6MjA5ODIwNDI3Nn0.-x9BYvkn-21jCr6CIrnh15m9gAUfIS3GMVNbrPuznBE';
 const sb=supabase.createClient(_url,_key);
-if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});}
+if('serviceWorker' in navigator){
+  const hadControllerAtLoad=!!navigator.serviceWorker.controller;
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!hadControllerAtLoad)return; // first-ever install claiming control, not a real update
+    showUpdateBanner();
+  });
+}
+function showUpdateBanner(){
+  if(document.getElementById('updateBanner'))return;
+  const b=document.createElement('div');
+  b.id='updateBanner';
+  b.style.cssText='position:fixed;bottom:16px;left:16px;right:16px;max-width:420px;margin:0 auto;background:var(--surface2);border:1px solid var(--line2);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow);z-index:9999;display:flex;align-items:center;gap:12px;color:var(--text);font-size:.88rem';
+  b.innerHTML='<span style="flex:1">🔄 גרסה חדשה של האפליקציה זמינה</span><button class="btn" style="flex-shrink:0" onclick="location.reload()">רענון</button>';
+  document.body.appendChild(b);
+}
 let deferredInstallPrompt=null;
 const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
 window.addEventListener('beforeinstallprompt',(e)=>{
