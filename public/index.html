@@ -327,6 +327,20 @@ tr:last-child td{border-bottom:none}
 <body>
 <div class="timeout-bar" id="timeoutBar" style="width:100%"></div>
 
+<div id="lockScreen" class="auth-wrap hidden" style="position:fixed;inset:0;z-index:99999;background:var(--bg)">
+  <div class="auth-box">
+    <div class="auth-logo">🔒</div>
+    <h1>נעול</h1>
+    <p class="sub">הזן קוד לפתיחה</p>
+    <input id="lockPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••" style="text-align:center;font-size:1.6rem;letter-spacing:.3em" onkeydown="if(event.key==='Enter')submitPinUnlock()">
+    <button class="auth-btn" onclick="submitPinUnlock()">פתיחה</button>
+    <button class="btn sec hidden" id="bioUnlockBtn" style="width:100%;margin-top:10px" onclick="tryBioUnlock()">🔓 טביעת אצבע / פנים</button>
+    <p class="auth-err hidden" id="lockErr"></p>
+    <div style="margin-top:10px;text-align:center">
+      <button class="link-btn" onclick="forgotAppPin()">שכחתי את הקוד</button>
+    </div>
+  </div>
+</div>
 <div id="authWrap" class="auth-wrap">
   <div class="auth-box">
     <div class="auth-logo">₪</div>
@@ -392,6 +406,7 @@ tr:last-child td{border-bottom:none}
       <span id="userName" class="navlbl"></span>
       <button class="btn sec" onclick="showWelcomeGuide()" title="מדריך שימוש" style="padding:6px 10px;font-size:.8rem">❓</button>
       <button class="btn sec hidden" id="installAppBtn" onclick="triggerInstallApp()" title="התקן כאפליקציה" style="padding:6px 10px;font-size:.8rem">📱</button>
+      <button class="btn sec hidden" id="quickLockBtn" onclick="lockAppNow()" title="נעל עכשיו" style="padding:6px 10px;font-size:.8rem">🔒</button>
       <button class="btn sec" id="themeBtn" style="padding:6px 12px;font-size:.8rem" onclick="toggleTheme()" title="החלף מצב תצוגה">🌙</button>
       <button class="btn sec navlbl" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">יציאה</button>
     </div>
@@ -775,6 +790,29 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="panel">
+      <h2>🔒 נעילת אפליקציה</h2>
+      <p class="muted" style="margin-bottom:10px">קוד PIN מקומי למכשיר הזה בלבד — שכבת פרטיות נוספת כשהאפליקציה מותקנת על הטלפון, כדי שמי שמעיף מבט על המסך לא יראה נתונים פיננסיים. זה לא מחליף את ההתחברות/הסיסמה, רק חוסם צפייה מהירה במכשיר הזה.</p>
+      <div id="pinLockOff">
+        <div class="row">
+          <input id="newPin1" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="קוד חדש (4-6 ספרות)" style="width:180px">
+          <input id="newPin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="אימות קוד" style="width:180px">
+          <button class="btn" onclick="activateAppPin()">הפעל נעילה</button>
+        </div>
+      </div>
+      <div id="pinLockOn" class="hidden">
+        <p style="color:var(--accent2);font-weight:700;margin-bottom:10px">✅ נעילה פעילה במכשיר הזה</p>
+        <div class="row">
+          <button class="btn sec" onclick="lockAppNow()">🔒 נעל עכשיו</button>
+          <button class="btn danger" onclick="deactivateAppPin()">בטל נעילה</button>
+        </div>
+        <div id="bioSetupRow" class="row hidden" style="margin-top:10px">
+          <button class="btn sec" id="bioEnableBtn" onclick="registerBioUnlock()">🔓 הפעל טביעת אצבע/פנים</button>
+          <button class="btn danger hidden" id="bioDisableBtn" onclick="removeBioUnlock()">בטל טביעת אצבע/פנים</button>
+        </div>
+      </div>
+      <p class="auth-err hidden" id="pinSetErr" style="margin-top:8px"></p>
+    </div>
+    <div class="panel">
       <h2>גיבוי נתונים</h2>
       <div class="row">
         <button class="btn" onclick="exportData()">ייצוא גיבוי JSON</button>
@@ -850,6 +888,127 @@ tr:last-child td{border-bottom:none}
 <script>
 const _url='https://bwwupwbakefjhwropdin.supabase.co', _key='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3d3Vwd2Jha2Vmamh3cm9wZGluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MjgyNzYsImV4cCI6MjA5ODIwNDI3Nn0.-x9BYvkn-21jCr6CIrnh15m9gAUfIS3GMVNbrPuznBE';
 const sb=supabase.createClient(_url,_key);
+const $=s=>document.querySelector(s);
+
+// ═══ local app-lock (PIN) — a device-level privacy layer, NOT a real auth
+// boundary (Supabase RLS + login remain the actual security). Hash+salt are
+// stored in localStorage per-device, so this only guards a shared phone's
+// lock screen from casual glances, not a determined attacker with device access.
+const PIN_SALT_KEY='appPinSalt_v1', PIN_HASH_KEY='appPinHash_v1';
+let appUnlockedThisSession=false;
+async function sha256Hex(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function hasAppPin(){return !!localStorage.getItem(PIN_HASH_KEY);}
+async function setAppPin(pin){
+  const salt=crypto.randomUUID();
+  const hash=await sha256Hex(salt+':'+pin);
+  localStorage.setItem(PIN_SALT_KEY,salt);
+  localStorage.setItem(PIN_HASH_KEY,hash);
+}
+async function verifyAppPin(pin){
+  const salt=localStorage.getItem(PIN_SALT_KEY)||'';
+  const hash=await sha256Hex(salt+':'+pin);
+  return hash===localStorage.getItem(PIN_HASH_KEY);
+}
+function removeAppPin(){
+  localStorage.removeItem(PIN_SALT_KEY);
+  localStorage.removeItem(PIN_HASH_KEY);
+}
+const BIO_CRED_KEY='appBioCredId_v1';
+function hasBioCred(){return !!localStorage.getItem(BIO_CRED_KEY);}
+async function bioSupported(){
+  try{return !!(window.PublicKeyCredential&&await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());}catch(_){return false;}
+}
+function randBytes(len){const a=new Uint8Array(len);crypto.getRandomValues(a);return a;}
+function bytesToB64(bytes){return btoa(String.fromCharCode(...new Uint8Array(bytes)));}
+function b64ToBytes(str){return Uint8Array.from(atob(str),c=>c.charCodeAt(0));}
+window.registerBioUnlock=async()=>{
+  try{
+    const cred=await navigator.credentials.create({publicKey:{
+      challenge:randBytes(32),
+      rp:{name:'ניהול תקציב'},
+      user:{id:randBytes(16),name:(CU&&CU.email)||'user',displayName:MNAME||'user'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required'},
+      timeout:60000
+    }});
+    if(!cred)throw new Error('לא נוצר');
+    localStorage.setItem(BIO_CRED_KEY,bytesToB64(cred.rawId));
+    refreshPinPanel();
+    UI.alert('טביעת אצבע/פנים הופעלה בהצלחה ✅');
+  }catch(err){
+    UI.alert('לא ניתן להפעיל: '+(err.message||'שגיאה'),{type:'error'});
+  }
+};
+window.removeBioUnlock=()=>{localStorage.removeItem(BIO_CRED_KEY);refreshPinPanel();};
+window.tryBioUnlock=async()=>{
+  const credId=localStorage.getItem(BIO_CRED_KEY);
+  if(!credId)return;
+  try{
+    await navigator.credentials.get({publicKey:{
+      challenge:randBytes(32),
+      allowCredentials:[{id:b64ToBytes(credId),type:'public-key'}],
+      userVerification:'required',
+      timeout:60000
+    }});
+    hideLockScreen();
+  }catch(_err){/* user cancelled or verification failed — stay locked */}
+};
+function showLockScreen(){
+  $('#lockScreen')?.classList.remove('hidden');
+  $('#bioUnlockBtn')?.classList.toggle('hidden',!hasBioCred());
+  setTimeout(()=>$('#lockPinInput')?.focus(),50);
+}
+function hideLockScreen(){
+  appUnlockedThisSession=true;
+  $('#lockScreen')?.classList.add('hidden');
+}
+window.submitPinUnlock=async()=>{
+  const inp=$('#lockPinInput');const pin=(inp?.value||'').trim();
+  const ok=pin&&await verifyAppPin(pin);
+  const err=$('#lockErr');
+  if(ok){if(err)err.classList.add('hidden');if(inp)inp.value='';hideLockScreen();}
+  else{if(err){err.textContent='קוד שגוי, נסה שוב';err.classList.remove('hidden');}if(inp){inp.value='';inp.focus();}}
+};
+window.forgotAppPin=async()=>{
+  const sure=await UI.confirm('שכחת את הקוד? הדרך היחידה לאפס היא להתנתק ולהתחבר מחדש. להמשיך?');
+  if(!sure)return;
+  removeAppPin();
+  await doLogout();
+  location.reload();
+};
+window.lockAppNow=()=>{appUnlockedThisSession=false;showLockScreen();};
+async function refreshPinPanel(){
+  const on=hasAppPin();
+  $('#pinLockOn')?.classList.toggle('hidden',!on);
+  $('#pinLockOff')?.classList.toggle('hidden',on);
+  $('#quickLockBtn')?.classList.toggle('hidden',!on);
+  const bioOn=hasBioCred();
+  $('#bioSetupRow')?.classList.toggle('hidden',!(on&&await bioSupported()));
+  $('#bioEnableBtn')?.classList.toggle('hidden',bioOn);
+  $('#bioDisableBtn')?.classList.toggle('hidden',!bioOn);
+}
+window.activateAppPin=async()=>{
+  const p1=($('#newPin1').value||'').trim(),p2=($('#newPin2').value||'').trim();
+  const err=$('#pinSetErr');
+  const showLocalErr=m=>{if(err){err.textContent=m;err.classList.remove('hidden');}};
+  if(err)err.classList.add('hidden');
+  if(!/^\d{4,6}$/.test(p1)){showLocalErr('קוד חייב להיות 4-6 ספרות בלבד');return;}
+  if(p1!==p2){showLocalErr('הקודים לא תואמים');return;}
+  await setAppPin(p1);
+  $('#newPin1').value='';$('#newPin2').value='';
+  refreshPinPanel();
+};
+window.deactivateAppPin=async()=>{
+  const sure=await UI.confirm('לבטל את נעילת ה-PIN במכשיר הזה?');
+  if(!sure)return;
+  removeAppPin();
+  refreshPinPanel();
+};
+if(hasAppPin())showLockScreen();
+
 if('serviceWorker' in navigator){
   const hadControllerAtLoad=!!navigator.serviceWorker.controller;
   window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});
@@ -909,7 +1068,6 @@ window.showInstallInstructions=()=>{
   const {ov,close}=UI._open(html);
   ov.querySelector('#instClose').onclick=close;
 };
-const $=s=>document.querySelector(s);
 const fmt=n=>(n<0?'-':'')+'₪'+Math.abs(Math.round(n)).toLocaleString('he-IL');
 
 // ═══ styled modal kit — replaces native alert()/confirm()/prompt() ═══
@@ -1112,6 +1270,7 @@ async function boot(){
   // Bind navigation immediately so UI stays responsive even if boot data fetch fails.
   setupNav();
   fillPeriod();
+  refreshPinPanel();
   try{
     await ensureHousehold();
     const gk=localStorage.getItem('geminiKey');if(gk){$('#geminiKey').value=gk;$('#keyStatus').textContent='✅ מפתח שמור';}
