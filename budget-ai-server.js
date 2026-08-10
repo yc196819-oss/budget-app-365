@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const GROK_KEY = process.env.GROK_API_KEY || process.env.XAI_API_KEY || '';
 const GROK_MODEL = process.env.GROK_MODEL || 'grok-2-latest';
 const GROK_BASE_URL = process.env.GROK_BASE_URL || 'https://api.x.ai/v1';
