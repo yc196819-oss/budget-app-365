@@ -17,8 +17,11 @@ Tested both providers directly against the live keys in `.env`:
 - **Needs a decision from the user**: either add billing at
   console.x.ai (their team currently has zero credits), or just accept
   Gemini-only (it has a generous free tier and worked fine in testing) and
-  leave `GROK_API_KEY` unset/ignore it. Ask next session if not already
-  decided.
+  leave `GROK_API_KEY` unset/ignore it. **Not yet decided** — user pushed
+  back that Gemini itself has also failed on them before (not just Grok),
+  so they're leaning toward wanting a real working fallback rather than
+  trusting Gemini alone, but didn't commit to adding x.ai credit yet. Raise
+  this again next session.
 
 **2. Wife (נעמי) couldn't register via the WhatsApp invite link — root cause
 found, needs a Supabase Dashboard change (can't be done from code/CLI).**
@@ -45,6 +48,27 @@ the Supabase Dashboard, which I don't have programmatic access to):
   verification, fixes reliability, but is a few more clicks.
 Ask the user which they'd rather do next session, then walk them through it
 step by step (same pattern as the Render env var walkthrough).
+
+**UPDATE (later same day):** checked the Resend account directly
+(`api.resend.com/domains`) — **zero verified domains**. This means the
+`onboarding@resend.dev` sandbox sender can currently only deliver to the
+Resend account owner's own email, not to Naomi or anyone else — so wiring
+Resend into Supabase's SMTP settings would NOT actually have fixed her
+signup (and likely explains why the app's own reminder-email feature has
+never worked for anyone but the account owner either). User decided: **turn
+off "Confirm email" in Supabase now (free, immediate)**, and deal with
+verifying a real domain in Resend later if they want reminder emails to
+reach other people too.
+
+**Next step (needs the Supabase Dashboard, no CLI/API access available):**
+Supabase Dashboard → select this project → Authentication (left sidebar) →
+Sign In / Providers → Email provider → toggle OFF "Confirm email" → Save.
+(Exact label may vary slightly by Supabase UI version — look for the
+"Confirm email" / "Enable email confirmations" toggle under the Email auth
+provider settings.) Once done, ask Naomi to try registering again via the
+same WhatsApp invite link — she should get in immediately with no email
+step. Confirm success afterward by checking `auth.users` for her email via
+the service-role admin API (same script pattern used to diagnose this).
 
 ## Previously updated 2026-08-09
 
