@@ -2,6 +2,45 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-11 — real household data audit + root-caused duplicate-import bug
+User uploaded two real MAX credit card PDF statements (Kobi's card ...1928,
+Naomi's card ...2928) and asked to cross-check for duplicates and "put
+things in order." Real household is `4198b313-7ebf-413e-a0ac-a0ae65853d7c`
+(owner קובי = yc196819@gmail.com, member נעמי = neomivolftson@gmail.com —
+note: `kobi.grinboim@mail.huji.ac.il` and `ng6904432@gmail.com` are
+DIFFERENT accounts in DIFFERENT, unrelated households — don't confuse them
+with the real active household again).
+- Kobi's June statement: all 6 line items already existed in the DB,
+  verified exact date+amount+description match (2 of them — Netflix,
+  Vuicom mobile — are legit recurring monthly charges appearing once/month
+  since January, not duplicates). Zero action needed.
+- Naomi's July statement: **the entire month of July was missing** from her
+  card in the system. Added all 14 missing transactions (₪1,912.35, exactly
+  matching the statement total minus the installment portion already
+  tracked separately), categorized consistently with how the household
+  already tags the same merchants (e.g. ארומה/קיווי → אוכל/מסעדות ואוכל
+  בחוץ, רמי לוי → אוכל/רמי לוי subcategory).
+- **Found and deleted 11 genuine duplicate transactions** already sitting
+  in the DB (unrelated to the two PDFs) — 10 groups where the exact same
+  date+description+amount+type appeared 2-3 times. Confirmed these were
+  real data-entry duplicates (not coincidental repeat purchases) because
+  every row within each group shared the identical `created_at` timestamp
+  down to the millisecond — proof of a single bad bulk-insert, not separate
+  real purchases. Verified zero duplicate groups remain after cleanup.
+- **Root-caused and fixed the actual bug**: `flagPossibleDuplicates()` in
+  `public/index.html` only ever compared new AI-parsed items against
+  already-saved DB transactions — it never checked whether the same line
+  appeared twice WITHIN the same import batch. If Gemini's parse of a
+  PDF/image emitted a line twice (which is apparently what happened,
+  explaining the identical-timestamp duplicate groups), nothing caught it.
+  Fixed to also check against earlier non-duplicate items in the same
+  batch; verified with a synthetic two-identical-items test before
+  shipping. This should prevent the same class of bug going forward.
+- User also asked to make the AI-import screen "look more normal" —
+  partially already addressed earlier today (mobile dead-space fix, styled
+  error/success banners instead of raw colored text). No further visual
+  work done on this screen in this pass; ask if it still feels off.
+
 ## 🟢 Resolved 2026-08-10 — systematic mobile design survey (all 14 tabs)
 Per the user's "modernize the whole system" direction, screenshotted every
 tab at a real phone viewport (390×844, demo account, playwright-core + the
