@@ -2413,17 +2413,25 @@ function normalizeImportedTransactions(items){
 }
 
 function flagPossibleDuplicates(items){
+  // checks each new item against BOTH existing DB transactions AND earlier
+  // non-duplicate items in this same batch — an AI parse can (and has)
+  // produced the exact same line twice in one response, which a
+  // DB-only check would never catch since nothing like it existed before.
+  const seenInBatch=[];
   items.forEach(t=>{
     const tDate=parseLocalDate(t.date);
-    const match=DB.transactions.find(ex=>{
+    const isMatch=(ex,getDate)=>{
       if(ex.type!==t.type)return false;
       if(Math.abs(+ex.amount-t.amount)>0.01)return false;
-      const exDate=parseLocalDate(ex.tx_date||ex.date);
-      const dayDiff=Math.abs((exDate-tDate)/86400000);
+      const dayDiff=Math.abs((getDate(ex)-tDate)/86400000);
       return dayDiff<=3;
-    });
+    };
+    const matchExisting=DB.transactions.find(ex=>isMatch(ex,e=>parseLocalDate(e.tx_date||e.date)));
+    const matchInBatch=matchExisting?null:seenInBatch.find(ex=>isMatch(ex,e=>parseLocalDate(e.date)));
+    const match=matchExisting||matchInBatch;
     t._dupe=!!match;
     t._dupeInfo=match?((match.tx_date||match.date)+' · '+match.description):null;
+    if(!t._dupe)seenInBatch.push(t);
   });
   return items;
 }
