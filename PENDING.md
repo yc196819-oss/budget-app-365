@@ -2,6 +2,16 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-11 — Charts tab: replaced a redundant chart with Income vs Expenses
+User asked for more logical/sensible charts. Found the 2nd chart in the
+Charts tab was pure redundancy: "סך הוצאות כללי לפי חודש" just re-plotted
+the same total already visible as the stacked chart's column heights, same
+average badge value, no new info. Replaced with a green/red income-vs-
+expenses grouped-bar comparison per month — genuinely new information (the
+dashboard only has a current-month snapshot, no trend view existed before).
+Average badge now shows average monthly net balance, colored by sign.
+Verified visually on desktop + mobile with real screenshots.
+
 ## 🟢 Resolved 2026-08-11 — duplicate detection tightened to merchant+exact-date
 Follow-up to the fix below: the old matching logic never checked the
 merchant/description at all — it only compared amount + a fuzzy 3-day date
