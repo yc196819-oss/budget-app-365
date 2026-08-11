@@ -530,7 +530,8 @@ tr:last-child td{border-bottom:none}
       <div class="chart-legend" id="monthlyStackLegend"></div>
     </div>
     <div class="panel">
-      <h2>סך הוצאות כללי לפי חודש<span class="avg-badge" id="totalAvg"></span></h2>
+      <h2>הכנסות מול הוצאות — חודש אחר חודש<span class="avg-badge" id="totalAvg"></span></h2>
+      <p class="muted" style="margin-bottom:12px">האם אתם נשארים ביתרה חיובית כל חודש?</p>
       <div class="chart-box small"><canvas id="monthlyTotal"></canvas></div>
     </div>
     <div class="panel">
@@ -2905,14 +2906,25 @@ function renderCharts(){
     });
   }
 
-  // total per month
+  // total per month (used for the stacked-chart average badge)
   const totals=[];for(let m=0;m<12;m++){let v=exp.reduce((s,t)=>s+moAmt(t,VY,m),0);v+=DB.installments.reduce((s,p)=>s+instMo(p,VY,m),0);totals.push(Math.round(v));}
   const stackAvg=totals.slice(0,months).reduce((s,v)=>s+v,0)/months;
   $('#stackAvg').textContent='ממוצע חודשי: '+fmt(stackAvg);
-  $('#totalAvg').textContent='ממוצע חודשי: '+fmt(stackAvg);
+
+  // income vs expenses per month — a genuinely new view (not a repeat of the
+  // stacked chart's total), answers the real question: in the black or red?
+  const incomeTotals=[];for(let m=0;m<12;m++){incomeTotals.push(Math.round(DB.transactions.filter(t=>t.type==='income').reduce((s,t)=>s+moAmt(t,VY,m),0)));}
+  const netByMonth=totals.map((v,i)=>incomeTotals[i]-v);
+  const netAvg=netByMonth.slice(0,months).reduce((s,v)=>s+v,0)/months;
+  const totalAvgEl=$('#totalAvg');
+  totalAvgEl.textContent='מאזן ממוצע: '+fmt(netAvg);
+  totalAvgEl.style.color=netAvg>=0?'var(--accent2)':'var(--danger)';
   if(charts.monthlyTotal)charts.monthlyTotal.destroy();
-  const accentHex=cssVar('--accent')||'#6c8cff';
-  charts.monthlyTotal=new Chart(document.getElementById('monthlyTotal'),{type:'bar',data:{labels:MONTHS_SHORT,datasets:[{label:'סך הוצאות',data:totals,backgroundColor:c=>vGradient(c.chart.ctx,c.chart.chartArea,accentHex,hexA(accentHex,.55)),hoverBackgroundColor:accentHex,borderRadius:10,borderSkipped:false,maxBarThickness:42}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Rubik'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Rubik'}},grid:{color:gridColor}}},plugins:{legend:{display:false},tooltip:{...tipBase,callbacks:{label:c=>'₪'+c.raw.toLocaleString('he-IL')}}}}});
+  const accent2Hex=cssVar('--accent2')||'#52d6a4',dangerHex=cssVar('--danger')||'#ff6b6b';
+  charts.monthlyTotal=new Chart(document.getElementById('monthlyTotal'),{type:'bar',data:{labels:MONTHS_SHORT,datasets:[
+    {label:'הכנסות',data:incomeTotals,backgroundColor:hexA(accent2Hex,.75),hoverBackgroundColor:accent2Hex,borderRadius:8,borderSkipped:false,maxBarThickness:24},
+    {label:'הוצאות',data:totals,backgroundColor:hexA(dangerHex,.75),hoverBackgroundColor:dangerHex,borderRadius:8,borderSkipped:false,maxBarThickness:24}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:tickColor,font:{family:'Rubik'}},grid:{display:false}},y:{ticks:{color:tickColor,font:{family:'Rubik'}},grid:{color:gridColor}}},plugins:{legend:{display:true,position:'top',labels:{color:textColor,font:{family:'Rubik'},usePointStyle:true,pointStyle:'circle'}},tooltip:{...tipBase,callbacks:{label:c=>c.dataset.label+': ₪'+c.raw.toLocaleString('he-IL')}}}}});
 
   // category trend line
   const ts=$('#trendCat');
