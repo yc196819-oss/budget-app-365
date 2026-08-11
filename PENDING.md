@@ -2,6 +2,41 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-11 — English UI toggle (nav, headers, auth) — Hebrew stays the data language
+User asked for advice on consolidating scattered AI touchpoints (see the
+advisor/planning merge below) AND separately for an English toggle. Shipped
+both, verified with real screenshots.
+
+**Scope, on purpose — read this before assuming something's untranslated
+by mistake:** the toggle translates static app CHROME only, via
+`[data-i18n]` attributes + the `I18N_EN` dictionary + `applyLanguage()`/
+`toggleLanguage()` in `public/index.html`. Covered: sidebar nav (desktop +
+mobile bottom bar + more-sheet), every panel `<h2>` header across all 14
+tabs, the auth screen (login/register/labels), and the 6 manual "הוסף" add
+buttons. **NOT covered, deliberately**: form field labels/placeholders
+inside panels, action buttons other than the 6 "add" ones, dynamically
+JS-rendered content (transaction/category/loan lists, chat messages), and
+— most importantly — anything that's actual DATA rather than UI text
+(transaction descriptions, category names, AI replies, user-entered text)
+stays in Hebrew always, on purpose, regardless of language mode. Layout
+stays RTL in both languages.
+- 🌐 button in the sidebar footer + on the auth screen (so it's reachable
+  before login too). Preference persists in `localStorage`.
+- Real bug found and fixed before shipping: the sidebar's rail-word span
+  originally had `data-i18n` on a parent that also contained a live nested
+  child (`#syncDot`) — `textContent` replacement on translate would have
+  silently destroyed that indicator permanently. Fixed by moving the tag to
+  wrap only the static text; verified no other tagged element has this
+  shape, and confirmed the sync-dot survives a full He→En→He round trip.
+- Also fixed: the sidebar title ("Budget Manager") clipped in the
+  fixed-width rail — added a separate shorter `app.title.short` ("Budget")
+  key for that spot, kept the full name for the auth screen's `<h1>`.
+- **Next step if the user wants deeper coverage**: extend `data-i18n`
+  tagging to form labels/placeholders and remaining static buttons across
+  panels — same pattern, just more of it. A full translation of dynamic
+  content or AI replies would be a separate, bigger, different feature
+  (machine-translating live data vs. static UI text).
+
 ## 🟢 Resolved 2026-08-11 — dashboard onboarding banner + natural chat animation
 - Dismissible banner at the top of the main Dashboard tab (shown only when
   the household looks incomplete — no bank accounts/transactions) linking
