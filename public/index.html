@@ -380,32 +380,33 @@ tr:last-child td{border-bottom:none}
 <div id="authWrap" class="auth-wrap">
   <div class="auth-box">
     <div class="auth-logo">₪</div>
-    <h1>ניהול תקציב</h1>
-    <p class="sub">נהל את הכסף שלך בחכמה</p>
+    <h1 data-i18n="app.title">ניהול תקציב</h1>
+    <p class="sub" data-i18n="auth.tagline">נהל את הכסף שלך בחכמה</p>
     <div class="auth-tabs">
-      <button class="auth-tab active" id="tabLogin" onclick="setAuthMode('login')">כניסה</button>
-      <button class="auth-tab" id="tabRegister" onclick="setAuthMode('register')">הרשמה</button>
+      <button class="auth-tab active" id="tabLogin" onclick="setAuthMode('login')" data-i18n="auth.login">כניסה</button>
+      <button class="auth-tab" id="tabRegister" onclick="setAuthMode('register')" data-i18n="auth.register">הרשמה</button>
     </div>
+    <button class="btn sec" id="langToggleBtnAuth" onclick="toggleLanguage()" style="width:100%;margin-bottom:14px" title="Switch language / החלף שפה">🌐 <span data-i18n="auth.langSwitch">English</span></button>
     <div id="loginForm">
-      <label>אימייל</label>
+      <label data-i18n="auth.email">אימייל</label>
       <input id="authEmail" type="email" placeholder="you@example.com">
-      <label>סיסמה</label>
+      <label data-i18n="auth.password">סיסמה</label>
       <input id="authPass" type="password" placeholder="••••••••">
-      <button class="auth-btn" id="authBtn" onclick="doAuth()">כניסה</button>
-      <button class="btn sec" id="authGoogleBtn" style="width:100%;margin-top:10px" onclick="doAuthGoogle()">התחברות עם Google</button>
+      <button class="auth-btn" id="authBtn" onclick="doAuth()" data-i18n="auth.login">כניסה</button>
+      <button class="btn sec" id="authGoogleBtn" style="width:100%;margin-top:10px" onclick="doAuthGoogle()" data-i18n="auth.google">התחברות עם Google</button>
       <div style="margin-top:10px;text-align:center">
-        <button class="link-btn" onclick="forgotPassword()">שכחתי סיסמה</button>
+        <button class="link-btn" onclick="forgotPassword()" data-i18n="auth.forgotPass">שכחתי סיסמה</button>
       </div>
     </div>
     <div id="registerForm" class="hidden">
-      <label>אימייל</label>
+      <label data-i18n="auth.email">אימייל</label>
       <input id="regEmail" type="email" placeholder="you@example.com">
-      <label>סיסמה (לפחות 6 תווים)</label>
+      <label data-i18n="auth.passwordMin">סיסמה (לפחות 6 תווים)</label>
       <input id="regPass" type="password" placeholder="••••••••">
-      <label>שם תצוגה</label>
+      <label data-i18n="auth.displayName">שם תצוגה</label>
       <input id="regName" placeholder='למשל "דן" או "נעמי"'>
-      <p class="muted" style="margin-top:14px">📧 לאחר ההרשמה יישלח מייל אימות לכתובת שלך. לחץ על הקישור בו כדי להפעיל את החשבון.</p>
-      <button class="auth-btn" onclick="doRegister()">צור חשבון</button>
+      <p class="muted" style="margin-top:14px" data-i18n="auth.verifyNote">📧 לאחר ההרשמה יישלח מייל אימות לכתובת שלך. לחץ על הקישור בו כדי להפעיל את החשבון.</p>
+      <button class="auth-btn" onclick="doRegister()" data-i18n="auth.createAccount">צור חשבון</button>
     </div>
     <p class="auth-err hidden" id="authErr"></p>
   </div>
@@ -415,7 +416,7 @@ tr:last-child td{border-bottom:none}
   <aside class="rail" id="rail">
     <div class="rail-head">
       <span class="logo">₪</span>
-      <span class="rail-word" data-i18n="app.title">ניהול תקציב <span class="sync-dot" id="syncDot"></span></span>
+      <span class="rail-word"><span data-i18n="app.title.short">ניהול תקציב</span> <span class="sync-dot" id="syncDot"></span></span>
       <button class="rail-collapse" id="railCollapseBtn" title="כווץ/הרחב תפריט" aria-label="כווץ תפריט">◂</button>
     </div>
     <nav id="nav">
@@ -478,7 +479,7 @@ tr:last-child td{border-bottom:none}
       <div class="card"><div class="label">שווי השקעות</div><div class="value pos" id="kInv">₪0</div></div>
     </div>
     <div class="panel" id="flowPanel" style="border:1px solid var(--accent)">
-      <h2>💳 בקרת תזרים ואשראי — כמה באמת פנוי לי?</h2>
+      <h2 data-i18n="dash.flow.title">💳 בקרת תזרים ואשראי — כמה באמת פנוי לי?</h2>
       <p class="muted" style="margin-bottom:12px">לכל חשבון יש יום חיוב משלו, לפי הכרטיסים המשויכים אליו. הזן את היתרה הנוכחית בכל חשבון.</p>
       <div id="flowAccounts"></div>
       <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:14px">
@@ -487,14 +488,14 @@ tr:last-child td{border-bottom:none}
         <div class="card" id="flowSafeCard" style="background:linear-gradient(135deg,rgba(82,214,164,.12),rgba(108,140,255,.08));border:1px solid var(--accent2)"><div class="label">💰 באמת פנוי להוצאה (סה"כ)</div><div class="value pos" id="flowSafe" style="font-size:1.9rem">₪0</div><div class="muted" id="flowSafeNote" style="font-size:.72rem;margin-top:4px"></div></div>
       </div>
     </div>
-    <div class="panel hidden" id="budgetProgressPanel"><h2>💰 תקציב חודשי</h2><div id="budgetProgress"></div></div>
-    <div class="panel"><h2>פילוח הוצאות <span class="muted" id="dashPeriod"></span></h2><div class="chart-box pie-box"><canvas id="dashPie"></canvas></div><div class="chart-legend" id="dashPieLegend"></div></div>
-    <div class="panel"><h2>שוטף מול קבוע</h2><div id="fixedVar"></div></div>
+    <div class="panel hidden" id="budgetProgressPanel"><h2 data-i18n="dash.budget.title">💰 תקציב חודשי</h2><div id="budgetProgress"></div></div>
+    <div class="panel"><h2><span data-i18n="dash.breakdown.title">פילוח הוצאות</span> <span class="muted" id="dashPeriod"></span></h2><div class="chart-box pie-box"><canvas id="dashPie"></canvas></div><div class="chart-legend" id="dashPieLegend"></div></div>
+    <div class="panel"><h2 data-i18n="dash.fixedvar.title">שוטף מול קבוע</h2><div id="fixedVar"></div></div>
   </section>
 
   <section id="tab-expenses" class="hidden">
     <div class="panel">
-      <h2>✨ הוספה מהירה עם AI</h2>
+      <h2 data-i18n="expenses.quickadd.title">✨ הוספה מהירה עם AI</h2>
       <p class="muted" style="margin-bottom:10px">כתבו בשפה חופשית — תנועה אחת או כמה תנועות בבת אחת (גם טקסט ארוך) — או צלמו קבלה. Enter לשליחה, Shift+Enter לשורה חדשה.</p>
       <div class="row" style="align-items:flex-start">
         <textarea id="quickAddText" rows="2" placeholder='למשל: "שילמתי 80 שקל בסופר, ואתמול קיבלתי 500 שקל מתנה מסבתא"' style="flex:1;resize:vertical;min-height:44px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiQuickAdd();}"></textarea>
@@ -523,13 +524,13 @@ tr:last-child td{border-bottom:none}
         </div>
         <input id="exInstCount" type="number" min="2" placeholder="מס' תשלומים" style="width:120px" class="hidden">
         <input id="exInstFirst" type="date" class="hidden">
-        <button class="btn" onclick="addTransaction()">הוסף</button>
+        <button class="btn" onclick="addTransaction()" data-i18n="action.add">הוסף</button>
       </div>
       <p class="muted" style="margin-top:8px">הקטגוריות מתחלפות אוטומטית בין הוצאה להכנסה · שנתי = מתחלק ל-12 חודשים</p>
       </div>
     </div>
     <div class="panel">
-      <h2>תנועות</h2>
+      <h2 data-i18n="nav.expenses">תנועות</h2>
       <div class="tx-summary hidden" id="txSummary">
         <div><div class="lbl">יתרה בתקופה המסוננת</div><div class="hero-num" id="txHeroNum">₪0</div></div>
         <div class="tx-chips">
@@ -545,18 +546,18 @@ tr:last-child td{border-bottom:none}
 
   <section id="tab-charts" class="hidden">
     <div class="panel">
-      <h2>הוצאות לפי חודש — <span id="chartYearLbl" class="muted"></span><span class="avg-badge" id="stackAvg"></span></h2>
+      <h2><span data-i18n="charts.stack.title">הוצאות לפי חודש</span> — <span id="chartYearLbl" class="muted"></span><span class="avg-badge" id="stackAvg"></span></h2>
       <p class="muted" style="margin-bottom:12px">כל עמודה = חודש, מחולק לפי קטגוריות</p>
       <div class="chart-box"><canvas id="monthlyStack"></canvas></div>
       <div class="chart-legend" id="monthlyStackLegend"></div>
     </div>
     <div class="panel">
-      <h2>הכנסות מול הוצאות — חודש אחר חודש<span class="avg-badge" id="totalAvg"></span></h2>
+      <h2><span data-i18n="charts.incexp.title">הכנסות מול הוצאות — חודש אחר חודש</span><span class="avg-badge" id="totalAvg"></span></h2>
       <p class="muted" style="margin-bottom:12px">האם אתם נשארים ביתרה חיובית כל חודש?</p>
       <div class="chart-box small"><canvas id="monthlyTotal"></canvas></div>
     </div>
     <div class="panel">
-      <h2>מגמת קטגוריה — עלייה וירידה<span class="avg-badge" id="trendAvg"></span></h2>
+      <h2><span data-i18n="charts.trend.title">מגמת קטגוריה — עלייה וירידה</span><span class="avg-badge" id="trendAvg"></span></h2>
       <div class="row" style="margin-bottom:12px">
         <select id="trendCat" onchange="renderCharts()"></select>
         <span class="muted">בחר קטגוריה כדי לראות את המגמה החודשית שלה לאורך השנה</span>
@@ -569,14 +570,14 @@ tr:last-child td{border-bottom:none}
     <div class="panel">
       <div class="advisor-hero-top">
         <div>
-          <h2 style="margin-bottom:4px">🧠 יועץ התקציב האישי שלכם</h2>
-          <p class="muted">ניתוח אישי, מבוסס על הנתונים שלכם בפועל — לא טיפים כלליים.</p>
+          <h2 style="margin-bottom:4px" data-i18n="advisor.title">🧠 יועץ התקציב האישי שלכם</h2>
+          <p class="muted" data-i18n="advisor.subtitle">ניתוח אישי, מבוסס על הנתונים שלכם בפועל — לא טיפים כלליים.</p>
         </div>
       </div>
       <div id="advisorHistoryWrap">
-        <div class="row" style="margin-bottom:10px"><b style="font-size:.85rem">על מה תרצו להתייעץ?</b></div>
+        <div class="row" style="margin-bottom:10px"><b style="font-size:.85rem" data-i18n="advisor.topicsPrompt">על מה תרצו להתייעץ?</b></div>
         <div id="advisorTopicChips" class="advisor-topic-chips"></div>
-        <div class="row" style="margin:20px 0 10px"><b style="font-size:.85rem">שיחות קודמות</b></div>
+        <div class="row" style="margin:20px 0 10px"><b style="font-size:.85rem" data-i18n="advisor.history">שיחות קודמות</b></div>
         <div id="advisorHistoryList"></div>
       </div>
       <div id="advisorConvo" class="hidden">
@@ -595,22 +596,22 @@ tr:last-child td{border-bottom:none}
 
   <section id="tab-categories" class="hidden">
     <div class="panel">
-      <h2>סיכום שנתי <span class="muted" id="catYearLbl"></span></h2>
+      <h2><span data-i18n="cat.summary.title">סיכום שנתי</span> <span class="muted" id="catYearLbl"></span></h2>
       <div class="filters" id="catFilters"></div>
       <div id="catSummary"></div>
       <div id="catSumFooter" class="hidden" style="margin-top:14px;padding-top:14px;border-top:2px solid var(--accent);display:flex;justify-content:space-between;font-weight:800;font-size:1.05rem"><span id="catSumLabel">סה"כ</span><span id="catSumTotal" style="color:var(--accent)">₪0</span></div>
     </div>
     <div class="panel">
-      <h2>💰 תקציב חודשי לפי קטגוריה</h2>
+      <h2 data-i18n="cat.budget.title">💰 תקציב חודשי לפי קטגוריה</h2>
       <p class="muted" style="margin-bottom:12px">קבעו סכום מקסימלי לחודש לכל קטגוריית הוצאה — זה יופיע בדשבורד עם התקדמות בזמן אמת. השאירו ריק כדי לבטל.</p>
       <div id="budgetManage"></div>
     </div>
     <div class="panel">
-      <h2>ניהול קטגוריות</h2>
+      <h2 data-i18n="cat.manage.title">ניהול קטגוריות</h2>
       <div class="row">
         <select id="catKind"><option value="expense">קטגוריות הוצאה</option><option value="income">קטגוריות הכנסה</option></select>
         <input id="newCat" placeholder="קטגוריה חדשה">
-        <button class="btn" onclick="addCat()">הוסף</button>
+        <button class="btn" onclick="addCat()" data-i18n="action.add">הוסף</button>
       </div>
       <div class="row" style="margin-top:10px">
         <select id="subParent"></select>
@@ -623,7 +624,7 @@ tr:last-child td{border-bottom:none}
 
   <section id="tab-accounts" class="hidden">
     <div class="panel">
-      <h2>🏦 חשבונות בנק</h2>
+      <h2 data-i18n="accounts.bank.title">🏦 חשבונות בנק</h2>
       <p class="muted" style="margin-bottom:12px">כל תנועה משויכת לחשבון ספציפי — שימושי כשיש כמה חשבונות במשק הבית (למשל שלך ושל בן/בת הזוג).</p>
       <div class="row">
         <input id="newAcctName" placeholder="שם החשבון (למשל: העו״ש שלי)" style="flex:1;min-width:160px">
@@ -633,7 +634,7 @@ tr:last-child td{border-bottom:none}
       <div id="acctManage" style="margin-top:16px"></div>
     </div>
     <div class="panel">
-      <h2>💳 כרטיסי אשראי</h2>
+      <h2 data-i18n="accounts.cards.title">💳 כרטיסי אשראי</h2>
       <p class="muted" style="margin-bottom:12px">לכל כרטיס יום חיוב משלו — קובע לאיזה חודש הוצאה שמשויכת לכרטיס תיפול בפועל במאזן ובגרפים.</p>
       <div class="row">
         <select id="newCardAcct"></select>
@@ -652,17 +653,17 @@ tr:last-child td{border-bottom:none}
       <div class="card"><div class="label">מאזן נטו</div><div class="value neu" id="lNet">₪0</div></div>
     </div>
     <div class="panel">
-      <h2>הוספת הלוואה</h2>
+      <h2 data-i18n="loans.add.title">הוספת הלוואה</h2>
       <div class="row">
         <select id="loanDir"><option value="tome">חייבים לי</option><option value="iowe">אני חייב</option></select>
         <input id="loanWho" placeholder="מי?" style="flex:1;min-width:120px">
         <input id="loanAmt" type="number" placeholder="סכום ₪" style="width:110px">
         <input id="loanDate" type="date">
         <input id="loanNote" placeholder="הערה" style="flex:1;min-width:100px">
-        <button class="btn" onclick="addLoan()">הוסף</button>
+        <button class="btn" onclick="addLoan()" data-i18n="action.add">הוסף</button>
       </div>
     </div>
-    <div class="panel"><h2>הלוואות</h2><div id="loanBody"></div></div>
+    <div class="panel"><h2 data-i18n="nav.loans">הלוואות</h2><div id="loanBody"></div></div>
   </section>
 
   <section id="tab-installments" class="hidden">
@@ -672,17 +673,17 @@ tr:last-child td{border-bottom:none}
       <div class="card"><div class="label">רכישות פעילות</div><div class="value" id="iCount">0</div></div>
     </div>
     <div class="panel">
-      <h2>הוספת רכישה בתשלומים</h2>
+      <h2 data-i18n="inst.add.title">הוספת רכישה בתשלומים</h2>
       <div class="row">
         <input id="instDesc" placeholder="מה רכשת?" style="flex:1;min-width:130px">
         <input id="instTotal" type="number" placeholder="סכום כולל ₪" style="width:125px">
         <input id="instCount" type="number" placeholder="כמה תשלומים" style="width:115px">
         <input id="instFirst" type="date">
         <select id="instCat"></select>
-        <button class="btn" onclick="addInst()">הוסף</button>
+        <button class="btn" onclick="addInst()" data-i18n="action.add">הוסף</button>
       </div>
     </div>
-    <div class="panel"><h2>רכישות בתשלומים</h2><div id="instBody"></div></div>
+    <div class="panel"><h2 data-i18n="nav.installments">רכישות בתשלומים</h2><div id="instBody"></div></div>
   </section>
 
   <section id="tab-investments" class="hidden">
@@ -693,22 +694,22 @@ tr:last-child td{border-bottom:none}
       <div class="card"><div class="label">תשואה</div><div class="value" id="invRoi">0%</div></div>
     </div>
     <div class="panel">
-      <h2>הוספת השקעה</h2>
+      <h2 data-i18n="inv.add.title">הוספת השקעה</h2>
       <div class="row">
         <input id="invName" placeholder="שם ההשקעה" style="flex:1;min-width:140px">
         <select id="invType"><option>מניות</option><option>קרן/ETF</option><option>קריפטו</option><option>נדל״ן</option><option>פנסיה/השתלמות</option><option>אחר</option></select>
         <input id="invCostIn" type="number" placeholder="עלות ₪" style="width:110px">
         <input id="invValIn" type="number" placeholder="שווי נוכחי ₪" style="width:130px">
         <input id="invDate" type="date">
-        <button class="btn" onclick="addInv()">הוסף</button>
+        <button class="btn" onclick="addInv()" data-i18n="action.add">הוסף</button>
       </div>
     </div>
-    <div class="panel"><h2>תיק ההשקעות</h2><div id="invBody"></div></div>
+    <div class="panel"><h2 data-i18n="inv.portfolio.title">תיק ההשקעות</h2><div id="invBody"></div></div>
   </section>
 
   <section id="tab-planning" class="hidden">
     <div class="panel">
-      <h2>🔮 תכנון החודש הבא — <span class="muted" id="nextMonthLabel"></span></h2>
+      <h2><span data-i18n="plan.nextmonth.title">🔮 תכנון החודש הבא</span> — <span class="muted" id="nextMonthLabel"></span></h2>
       <p class="muted" style="margin-bottom:12px">תחזית מבוססת על הכנסות/הוצאות קבועות, תשלומים ידועים, וממוצע ההוצאות המשתנות שלכם.</p>
       <div class="grid cards" id="nextMonthCards"></div>
       <div style="margin-top:16px">
@@ -721,20 +722,20 @@ tr:last-child td{border-bottom:none}
       <div class="card"><div class="label">נחסך עד כה</div><div class="value pos" id="pSaved">₪0</div></div>
     </div>
     <div class="panel">
-      <h2>הוספת יעד / תכנון</h2>
+      <h2 data-i18n="plan.addgoal.title">הוספת יעד / תכנון</h2>
       <div class="row">
         <select id="goalIcon"><option value="✈️">✈️ טיסה / טיול</option><option value="🏠">🏠 רכישת דירה</option><option value="📦">📦 מעבר דירה</option><option value="🚗">🚗 רכב</option><option value="🛋️">🛋️ רכישה גדולה</option><option value="🎓">🎓 חינוך</option><option value="🎯">🎯 כללי</option></select>
         <input id="goalName" placeholder="שם היעד" style="flex:1;min-width:140px">
         <input id="goalTarget" type="number" placeholder="סכום יעד ₪" style="width:125px">
         <input id="goalSaved" type="number" placeholder="כבר נחסך ₪" style="width:125px">
         <input id="goalDate" type="date">
-        <button class="btn" onclick="addGoal()">הוסף</button>
+        <button class="btn" onclick="addGoal()" data-i18n="action.add">הוסף</button>
       </div>
     </div>
-    <div class="panel"><h2>היעדים שלי</h2><div id="goalGrid" class="goalgrid"></div></div>
+    <div class="panel"><h2 data-i18n="plan.mygoals.title">היעדים שלי</h2><div id="goalGrid" class="goalgrid"></div></div>
 
     <div class="panel" style="border:1px solid var(--accent)">
-      <h2>🚗 מתכנן הלוואות ורכישות גדולות</h2>
+      <h2 data-i18n="plan.bigloan.title">🚗 מתכנן הלוואות ורכישות גדולות</h2>
       <p class="muted" style="margin-bottom:14px">הזן את פרטי ההלוואה או הרכישה המתוכננת. המערכת תחשב תשלום חודשי בכל תרחיש ריבית ותשווה לתזרים הפנוי שלך.</p>
       <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
         <div style="flex:1;min-width:150px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">שם התכנון</label><input id="planName" placeholder="למשל: רכב חדש" style="width:100%"></div>
@@ -752,13 +753,13 @@ tr:last-child td{border-bottom:none}
 
   <section id="tab-onboarding" class="hidden">
     <div class="panel">
-      <h2>🧙 אשף הקמה מהירה עם AI</h2>
+      <h2 data-i18n="onb.wizard.title">🧙 אשף הקמה מהירה עם AI</h2>
       <p class="muted" style="margin-bottom:12px">כמה שאלות קצרות — משכורת, בן/בת זוג, חשבונות בנק, כרטיסי אשראי וימי חיוב, משכנתא/שכירות, הכנסה נוספת, חובות, יעד חיסכון, ילדים וחינוך, יעדים נוספים — וה-AI יקים לכם את הבסיס אוטומטית (חשבונות, כרטיסים, תנועות קבועות, הלוואות, יעדים), עם מסך אישור לפני שנשמר משהו.</p>
       <p class="muted" style="margin-bottom:16px">אפשר להריץ את זה כמה פעמים שתרצו — כל הרצה מוסיפה לנתונים הקיימים, לא מוחקת כלום.</p>
       <button type="button" class="btn" onclick="startOnboardingWizard()">🚀 התחל אשף הקמה</button>
     </div>
     <div class="panel">
-      <h2>📱 התקנת האפליקציה בטלפון</h2>
+      <h2 data-i18n="onb.install.title">📱 התקנת האפליקציה בטלפון</h2>
       <p class="muted" style="margin-bottom:12px">אפשר להוסיף את האתר למסך הבית כדי שיפתח כמו אפליקציה אמיתית — במסך מלא, עם אייקון משלו.</p>
       <button type="button" class="btn sec" onclick="showInstallInstructions()">📲 איך מתקינים</button>
     </div>
@@ -766,7 +767,7 @@ tr:last-child td{border-bottom:none}
 
   <section id="tab-import" class="hidden">
     <div class="panel">
-      <h2>🤖 ייבוא אוטומטי מקבצים</h2>
+      <h2 data-i18n="import.title">🤖 ייבוא אוטומטי מקבצים</h2>
       <p class="muted" style="margin-bottom:16px">העלה PDF, תמונה (JPG/PNG/WEBP), TXT, CSV, Excel (XLS/XLSX) או Word (DOCX). המערכת תנסה קודם שירות AI מובנה בצד שרת. אם אינו זמין, ניתן להשתמש במפתח Gemini אישי כגיבוי.</p>
       <div class="row" style="margin-bottom:14px">
         <input id="geminiKey" type="password" placeholder="(אופציונלי) מפתח Gemini API לגיבוי" style="flex:1;min-width:200px">
@@ -787,7 +788,7 @@ tr:last-child td{border-bottom:none}
       <div id="importStatus" style="margin-top:16px"></div>
     </div>
     <div class="panel hidden" id="reviewPanel">
-      <h2>סקירה ואישור — <span id="reviewCount" class="muted"></span></h2>
+      <h2><span data-i18n="import.review.title">סקירה ואישור</span> — <span id="reviewCount" class="muted"></span></h2>
       <div id="reviewList"></div>
       <div class="row" style="margin-top:16px;justify-content:flex-end">
         <button class="btn sec" onclick="cancelReview()">ביטול</button>
@@ -798,14 +799,14 @@ tr:last-child td{border-bottom:none}
 
   <section id="tab-sharing" class="hidden">
     <div class="panel">
-      <h2>👥 שיתוף משק הבית שלך</h2>
+      <h2 data-i18n="sharing.title">👥 שיתוף משק הבית שלך</h2>
       <p class="muted" style="margin-bottom:16px">צור קישור הזמנה יפה ושלח לבן/בת הזוג. הם ייכנסו, יירשמו, ויראו את אותו תקציב.</p>
       <button class="btn" onclick="genInvite()">✨ צור קישור הזמנה</button>
       <div id="inviteResult" style="margin-top:16px"></div>
     </div>
-    <div class="panel"><h2>חברי משק הבית</h2><div id="membersList"></div><div id="pendingInvites"></div></div>
+    <div class="panel"><h2 data-i18n="sharing.members.title">חברי משק הבית</h2><div id="membersList"></div><div id="pendingInvites"></div></div>
     <div class="panel">
-      <h2>🔌 אינטגרציות צ'אט חכם</h2>
+      <h2 data-i18n="sharing.integrations.title">🔌 אינטגרציות צ'אט חכם</h2>
       <p class="muted" style="margin-bottom:10px">הגדר חיבור ל-WhatsApp ול-Google Chat. ההודעות ינותחו ויהפכו לתנועות אוטומטית.</p>
       <div class="row" style="margin-bottom:8px">
         <input id="waWebhook" placeholder="WhatsApp Webhook URL" style="flex:1;min-width:240px">
@@ -822,7 +823,7 @@ tr:last-child td{border-bottom:none}
       <p class="muted" id="integrationStatus" style="margin-top:8px"></p>
     </div>
     <div class="panel">
-      <h2>💬 צ'אט חכם (בדיקת הודעה)</h2>
+      <h2 data-i18n="sharing.chattest.title">💬 צ'אט חכם (בדיקת הודעה)</h2>
       <p class="muted" style="margin-bottom:10px">כתוב הודעה טבעית כמו: "קניתי בסופר ב-240" או "נכנסה משכורת 8000".</p>
       <div class="row">
         <input id="smartMsgInput" placeholder="כתוב הודעה לניתוח" style="flex:1;min-width:260px">
@@ -835,7 +836,7 @@ tr:last-child td{border-bottom:none}
 
   <section id="tab-settings" class="hidden">
     <div class="panel">
-      <h2>פרטי חשבון</h2>
+      <h2 data-i18n="settings.account.title">פרטי חשבון</h2>
       <div class="row" style="gap:24px;flex-wrap:wrap">
         <div><div class="muted" style="font-size:.78rem">אימייל</div><div style="font-weight:600" id="settEmail"></div></div>
         <div><div class="muted" style="font-size:.78rem">שם תצוגה</div><div style="font-weight:600" id="settName"></div></div>
@@ -843,7 +844,7 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="panel">
-      <h2>🔒 נעילת אפליקציה</h2>
+      <h2 data-i18n="settings.applock.title">🔒 נעילת אפליקציה</h2>
       <p class="muted" style="margin-bottom:10px">קוד PIN מקומי למכשיר הזה בלבד — שכבת פרטיות נוספת כשהאפליקציה מותקנת על הטלפון, כדי שמי שמעיף מבט על המסך לא יראה נתונים פיננסיים. זה לא מחליף את ההתחברות/הסיסמה, רק חוסם צפייה מהירה במכשיר הזה.</p>
       <div id="pinLockOff">
         <div class="row">
@@ -866,7 +867,7 @@ tr:last-child td{border-bottom:none}
       <p class="auth-err hidden" id="pinSetErr" style="margin-top:8px"></p>
     </div>
     <div class="panel">
-      <h2>גיבוי נתונים</h2>
+      <h2 data-i18n="settings.backup.title">גיבוי נתונים</h2>
       <div class="row">
         <button class="btn" onclick="exportData()">ייצוא גיבוי JSON</button>
         <button class="btn sec" onclick="exportMonthlyPdf()">ייצוא PDF חודשי</button>
@@ -876,7 +877,7 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="panel">
-      <h2>🙏 מעשרות</h2>
+      <h2 data-i18n="settings.maaser.title">🙏 מעשרות</h2>
       <p class="muted" style="margin-bottom:10px">כשמזינים הכנסה חדשה, המערכת תשאל אם לרשום עליה מעשר/חומש — וזה יתווסף כ"חוב מעשרות" נפרד, לא כמו הלוואה רגילה.</p>
       <div class="checkline" style="margin-bottom:12px">
         <input id="maaserEnabled" type="checkbox" onchange="saveMaaserSettings()">
@@ -894,7 +895,7 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="panel">
-      <h2>תזכורות חכמות</h2>
+      <h2 data-i18n="settings.reminders.title">תזכורות חכמות</h2>
       <p class="muted" style="margin-bottom:10px">תזכורת יומית למילוי הוצאות/הכנסות עם קישור ישיר למערכת.</p>
       <div class="row" style="margin-bottom:8px">
         <div class="checkline">
@@ -915,7 +916,7 @@ tr:last-child td{border-bottom:none}
       <p class="muted" id="reminderStatus" style="margin-top:8px"></p>
     </div>
     <div class="panel">
-      <h2>🔔 התראות Push</h2>
+      <h2 data-i18n="settings.push.title">🔔 התראות Push</h2>
       <p class="muted" style="margin-bottom:10px">התראות אמיתיות שיקפצו על הטלפון גם כשהאפליקציה סגורה (למשל חריגה מתקציב). דורש שהאפליקציה מותקנת (📱 בתפריט הצד).</p>
       <p class="muted hidden" id="pushUnsupported">הדפדפן הזה לא תומך בהתראות Push.</p>
       <div id="pushControls" class="row">
@@ -926,7 +927,7 @@ tr:last-child td{border-bottom:none}
       <p class="muted" id="pushStatus" style="margin-top:8px"></p>
     </div>
     <div class="panel">
-      <h2>🗓️ מחיקת נתוני חודש בודד</h2>
+      <h2 data-i18n="settings.delmonth.title">🗓️ מחיקת נתוני חודש בודד</h2>
       <p class="muted" style="margin-bottom:10px">מוחק את כל התנועות של חודש מסוים בלבד (לא נוגע בשאר החודשים, בקטגוריות או בתשלומים). לאישור, הזן שוב את הסיסמה שלך.</p>
       <div class="row" style="margin-bottom:8px">
         <select id="delMonthSel"></select>
@@ -939,7 +940,7 @@ tr:last-child td{border-bottom:none}
       <p class="muted" id="delMonthStatus" style="margin-top:8px"></p>
     </div>
     <div class="panel">
-      <h2>איפוס מערכת מאובטח</h2>
+      <h2 data-i18n="settings.reset.title">איפוס מערכת מאובטח</h2>
       <p class="muted" style="margin-bottom:10px">האיפוס מוחק את כל נתוני משק הבית (תנועות, תשלומים, הלוואות, השקעות, יעדים, קטגוריות). חשבונות בנק וכרטיסי אשראי לא נמחקים. לאישור, הזן שוב את הסיסמה שלך.</p>
       <div class="row">
         <input id="resetPass" type="password" placeholder="הסיסמה שלך" style="min-width:220px">
@@ -951,28 +952,28 @@ tr:last-child td{border-bottom:none}
   </main>
 
   <nav id="mobileTabBar" class="mobile-tab-bar">
-    <button class="mtab-btn active" data-tab="dash" onclick="goToTab('dash')"><span class="mtab-icon">📊</span><span class="mtab-lbl">סקירה</span></button>
-    <button class="mtab-btn" data-tab="expenses" onclick="goToTab('expenses')"><span class="mtab-icon">💸</span><span class="mtab-lbl">תנועות</span></button>
-    <button class="mtab-btn" data-tab="charts" onclick="goToTab('charts')"><span class="mtab-icon">📉</span><span class="mtab-lbl">גרפים</span></button>
-    <button class="mtab-btn" data-tab="advisor" onclick="goToTab('advisor')"><span class="mtab-icon">🧠</span><span class="mtab-lbl">יועץ</span></button>
-    <button class="mtab-btn" onclick="openMoreSheet()"><span class="mtab-icon">☰</span><span class="mtab-lbl">עוד</span></button>
+    <button class="mtab-btn active" data-tab="dash" onclick="goToTab('dash')"><span class="mtab-icon">📊</span><span class="mtab-lbl" data-i18n="nav.dash">סקירה</span></button>
+    <button class="mtab-btn" data-tab="expenses" onclick="goToTab('expenses')"><span class="mtab-icon">💸</span><span class="mtab-lbl" data-i18n="nav.expenses">תנועות</span></button>
+    <button class="mtab-btn" data-tab="charts" onclick="goToTab('charts')"><span class="mtab-icon">📉</span><span class="mtab-lbl" data-i18n="nav.charts">גרפים</span></button>
+    <button class="mtab-btn" data-tab="advisor" onclick="goToTab('advisor')"><span class="mtab-icon">🧠</span><span class="mtab-lbl" data-i18n="nav.advisor.short">יועץ</span></button>
+    <button class="mtab-btn" onclick="openMoreSheet()"><span class="mtab-icon">☰</span><span class="mtab-lbl" data-i18n="nav.more">עוד</span></button>
   </nav>
   <div id="moreSheetOverlay" class="more-sheet-overlay hidden" onclick="if(event.target===this)closeMoreSheet()">
     <div class="more-sheet">
       <div class="more-sheet-handle"></div>
       <div class="more-sheet-grid">
-        <button data-tab="categories" onclick="goToTab('categories')"><span class="ms-icon">🗂️</span><span>קטגוריות</span></button>
-        <button data-tab="accounts" onclick="goToTab('accounts')"><span class="ms-icon">🏦</span><span>חשבונות</span></button>
-        <button data-tab="loans" onclick="goToTab('loans')"><span class="ms-icon">🤝</span><span>הלוואות</span></button>
-        <button data-tab="installments" onclick="goToTab('installments')"><span class="ms-icon">🧾</span><span>תשלומים</span></button>
-        <button data-tab="investments" onclick="goToTab('investments')"><span class="ms-icon">📈</span><span>השקעות</span></button>
-        <button data-tab="planning" onclick="goToTab('planning')"><span class="ms-icon">🎯</span><span>יעדים</span></button>
-        <button data-tab="onboarding" onclick="goToTab('onboarding')"><span class="ms-icon">🧙</span><span>הקמה</span></button>
-        <button data-tab="import" onclick="goToTab('import')"><span class="ms-icon">🤖</span><span>ייבוא AI</span></button>
-        <button data-tab="sharing" onclick="goToTab('sharing')"><span class="ms-icon">👥</span><span>שיתוף</span></button>
-        <button data-tab="settings" onclick="goToTab('settings')"><span class="ms-icon">⚙️</span><span>ניהול</span></button>
+        <button data-tab="categories" onclick="goToTab('categories')"><span class="ms-icon">🗂️</span><span data-i18n="nav.categories">קטגוריות</span></button>
+        <button data-tab="accounts" onclick="goToTab('accounts')"><span class="ms-icon">🏦</span><span data-i18n="nav.accounts.short">חשבונות</span></button>
+        <button data-tab="loans" onclick="goToTab('loans')"><span class="ms-icon">🤝</span><span data-i18n="nav.loans">הלוואות</span></button>
+        <button data-tab="installments" onclick="goToTab('installments')"><span class="ms-icon">🧾</span><span data-i18n="nav.installments">תשלומים</span></button>
+        <button data-tab="investments" onclick="goToTab('investments')"><span class="ms-icon">📈</span><span data-i18n="nav.investments">השקעות</span></button>
+        <button data-tab="planning" onclick="goToTab('planning')"><span class="ms-icon">🎯</span><span data-i18n="nav.planning">יעדים</span></button>
+        <button data-tab="onboarding" onclick="goToTab('onboarding')"><span class="ms-icon">🧙</span><span data-i18n="nav.onboarding">הקמה</span></button>
+        <button data-tab="import" onclick="goToTab('import')"><span class="ms-icon">🤖</span><span data-i18n="nav.import">ייבוא AI</span></button>
+        <button data-tab="sharing" onclick="goToTab('sharing')"><span class="ms-icon">👥</span><span data-i18n="nav.sharing">שיתוף</span></button>
+        <button data-tab="settings" onclick="goToTab('settings')"><span class="ms-icon">⚙️</span><span data-i18n="nav.settings">ניהול</span></button>
       </div>
-      <button class="btn sec" style="width:100%;margin-top:14px" onclick="closeMoreSheet()">סגור</button>
+      <button class="btn sec" style="width:100%;margin-top:14px" onclick="closeMoreSheet()" data-i18n="action.close">סגור</button>
     </div>
   </div>
 </div>
@@ -1234,6 +1235,77 @@ const todayStr=()=>new Date().toISOString().slice(0,10);
 const MONTHS=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 const MONTHS_SHORT=['ינ','פב','מרץ','אפר','מאי','יונ','יול','אוג','ספט','אוק','נוב','דצמ'];
 const PALETTE=['#8b7cff','#5ab4ff','#f2c14e','#4fd0c5','#ff8f6b','#52d6a4','#f2a65a','#ff8fc7','#6ec5ff','#c792ea'];
+
+// ═══ language toggle (English UI chrome, Hebrew stays the data language) ═══
+// Scope on purpose: this translates static app CHROME (nav, headers, common
+// buttons, auth screen) via [data-i18n] lookup. It does NOT translate
+// dynamic content — transaction descriptions, category names, AI replies,
+// anything the user typed or the AI generated stays in Hebrew, since that's
+// real data, not UI text, and machine-translating someone's own financial
+// records would be a different (and much riskier) feature. Layout direction
+// stays RTL either way — English words simply render LTR inline, same as
+// any bilingual RTL page.
+const I18N_EN={
+  'app.title':'Budget Manager','app.title.short':'Budget',
+  'auth.tagline':'Manage your money smartly',
+  'auth.login':'Sign In','auth.register':'Sign Up','auth.langSwitch':'English',
+  'auth.email':'Email','auth.password':'Password','auth.google':'Sign in with Google',
+  'auth.forgotPass':'Forgot password','auth.passwordMin':'Password (min. 6 characters)',
+  'auth.displayName':'Display name','auth.verifyNote':'📧 After signing up, a verification email will be sent to your address. Click the link in it to activate your account.',
+  'auth.createAccount':'Create account',
+  'nav.group.main':'Main','nav.dash':'Overview','nav.expenses':'Transactions','nav.charts':'Charts',
+  'nav.advisor':'AI Advisor','nav.advisor.short':'Advisor',
+  'nav.group.finance':'Finance','nav.installments':'Installments','nav.categories':'Categories',
+  'nav.accounts':'Accounts & Cards','nav.accounts.short':'Accounts','nav.loans':'Loans',
+  'nav.investments':'Investments','nav.planning':'Goals',
+  'nav.group.system':'System','nav.onboarding':'Setup','nav.import':'AI Import','nav.sharing':'Sharing',
+  'nav.settings':'Settings','nav.logout':'Log out','nav.more':'More',
+  'action.close':'Close','action.add':'Add',
+  'dash.flow.title':'💳 Cash Flow & Credit — how much do I really have free?',
+  'dash.budget.title':'💰 Monthly Budget','dash.breakdown.title':'Expense Breakdown','dash.fixedvar.title':'Fixed vs. Variable',
+  'expenses.quickadd.title':'✨ Quick Add with AI',
+  'charts.stack.title':'Expenses by Month','charts.incexp.title':'Income vs. Expenses — Month by Month',
+  'charts.trend.title':'Category Trend — Rise & Fall',
+  'cat.summary.title':'Annual Summary','cat.budget.title':'💰 Monthly Budget by Category','cat.manage.title':'Manage Categories',
+  'accounts.bank.title':'🏦 Bank Accounts','accounts.cards.title':'💳 Credit Cards',
+  'loans.add.title':'Add Loan',
+  'inst.add.title':'Add Installment Purchase',
+  'inv.add.title':'Add Investment','inv.portfolio.title':'Investment Portfolio',
+  'plan.nextmonth.title':'🔮 Next Month Planning','plan.addgoal.title':'Add Goal / Plan',
+  'plan.mygoals.title':'My Goals','plan.bigloan.title':'🚗 Big Loan & Purchase Planner',
+  'onb.wizard.title':'🧙 Quick AI Setup Wizard','onb.install.title':'📱 Install the App on Your Phone',
+  'import.title':'🤖 Automatic File Import','import.review.title':'Review & Confirm',
+  'sharing.title':'👥 Share Your Household','sharing.members.title':'Household Members',
+  'sharing.integrations.title':"🔌 Smart Chat Integrations",'sharing.chattest.title':'💬 Smart Chat (Test Message)',
+  'settings.account.title':'Account Details','settings.applock.title':'🔒 App Lock',
+  'settings.backup.title':'Data Backup','settings.maaser.title':'🙏 Tithe (Ma\'aser)',
+  'settings.reminders.title':'Smart Reminders','settings.push.title':'🔔 Push Notifications',
+  'settings.delmonth.title':"🗓️ Delete a Single Month's Data",'settings.reset.title':'Secure System Reset',
+  'advisor.title':'🧠 Your Personal Budget Advisor',
+  'advisor.subtitle':'Personal analysis, based on your actual data — not generic tips.',
+  'advisor.topicsPrompt':'What would you like advice on?','advisor.history':'Previous conversations'
+};
+let APP_LANG=localStorage.getItem('appLang')||'he';
+function applyLanguage(lang){
+  APP_LANG=lang;
+  localStorage.setItem('appLang',lang);
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key=el.getAttribute('data-i18n');
+    if(lang==='en'&&I18N_EN[key])el.textContent=I18N_EN[key];
+    else if(lang==='he'&&el.dataset.heOrig)el.textContent=el.dataset.heOrig;
+  });
+  const btns=[$('#langToggleBtn'),$('#langToggleBtnAuth')];
+  btns.forEach(b=>{if(b)b.title=lang==='en'?'עברית':'English';});
+  const authLangSpan=document.querySelector('#langToggleBtnAuth [data-i18n="auth.langSwitch"]');
+  if(authLangSpan)authLangSpan.textContent=lang==='en'?'עברית':'English';
+}
+window.toggleLanguage=()=>applyLanguage(APP_LANG==='en'?'he':'en');
+(function initI18n(){
+  // capture the original Hebrew text once, before any toggle, so switching
+  // back to Hebrew is a clean restore rather than a second dictionary.
+  document.querySelectorAll('[data-i18n]').forEach(el=>{el.dataset.heOrig=el.textContent;});
+  if(APP_LANG==='en')applyLanguage('en');
+})();
 function catColor(id){
   if(!id)return '#8d93ac';
   let h=0;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))>>>0;
