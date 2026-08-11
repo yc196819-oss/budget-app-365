@@ -2,6 +2,57 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-11 — dashboard onboarding banner + natural chat animation
+- Dismissible banner at the top of the main Dashboard tab (shown only when
+  the household looks incomplete — no bank accounts/transactions) linking
+  straight to the onboarding wizard, per user request that it be more
+  central/visible than only living in its own nav tab.
+- Advisor chat replies now fade+rise in instead of snapping into view
+  (CSS animation on the newest message bubble only, not replayed on older
+  messages each re-render).
+
+## 🔵 New research/feature requests from the user (2026-08-11), not started
+1. **Accessibility (נגישות) compliance check** — user explicitly flagged
+   this as a real legal risk: Israel has a well-known pattern of lawsuits
+   against websites lacking accessibility compliance (Equal Rights for
+   Persons with Disabilities Law / תקנות נגישות השירות). This needs an
+   actual audit against Israeli accessibility requirements (likely aligned
+   with WCAG 2.0 AA, per Israeli Standard 5568), not just a vague "polish"
+   pass — check things like: keyboard navigation, screen-reader labels/aria
+   attributes, color contrast, focus indicators, alt text, form labels.
+   Treat this as a real compliance task next session, not a nice-to-have.
+2. **English language toggle** — user wants the option to switch the whole
+   app to English while keeping Hebrew as the base/default. This is a real
+   i18n undertaking (extracting every hardcoded Hebrew string into a
+   translatable layer) — scope and discuss approach before starting, this
+   is not a small task given the app is one big single-file HTML with all
+   text inline.
+
+## 🟢 Resolved 2026-08-11 — ma'aser (tithe) tracking feature, fully verified + a real bug it uncovered
+Built per explicit user request: Settings → "🙏 מעשרות" (enable, rate
+10%/20%/custom, exclude specific income categories from the calculation).
+Adding any income transaction (manual form or AI quick-add — both funnel
+through `addTransaction()`) now prompts to log a ma'aser obligation at the
+configured rate; confirmed obligations become `loans` rows with a new
+`is_maaser` flag, shown in their own "🙏 חובות מעשרות" section at the top
+of the Loans tab (separate running total), above regular loans. Migration
+`supabase_maaser.sql` run and confirmed (`user_settings.maaser` jsonb,
+`loans.is_maaser` boolean). Verified fully end-to-end with real headless-
+browser interaction: settings persist across reload, the prompt fires with
+the correct computed amount, the loan lands in the right grouped section.
+
+**Found and fixed a real, significant pre-existing bug while testing this**:
+adding ANY transaction without selecting a credit card — via the manual
+"הוסף" button, the client-side AI-import fallback, or the server-side bulk-
+import endpoint — set `payment_method:'other'`, a value the DB check
+constraint has never actually allowed (confirmed by trial-inserting
+candidates: only `cash`, `standing_order`, `check`, `credit` pass). Every
+card-less manual entry was silently failing with a bare native `alert()`.
+The real household's card-less transactions only worked because they came
+through the onboarding wizard or admin scripts, which already used
+`standing_order`. Fixed all three call sites to use `'cash'` as the
+card-less default (`public/index.html` ×2, `budget-ai-server.js` ×1).
+
 ## 🟢 Resolved 2026-08-11 — Charts tab: replaced a redundant chart with Income vs Expenses
 User asked for more logical/sensible charts. Found the 2nd chart in the
 Charts tab was pure redundancy: "סך הוצאות כללי לפי חודש" just re-plotted
