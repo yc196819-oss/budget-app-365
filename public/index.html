@@ -167,6 +167,10 @@ tr:last-child td{border-bottom:none}
 
 /* ===== AI advisor ===== */
 .advisor-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.advisor-topic-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.advisor-topic-chip{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;cursor:pointer;text-align:right;font-weight:700;font-size:.85rem;color:var(--text);transition:border-color .15s,transform .15s;font-family:inherit}
+.advisor-topic-chip:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow)}
+.advisor-topic-chip .ic{font-size:1.35rem;flex-shrink:0}
 .advisor-health{display:flex;align-items:center;gap:16px;padding:20px 24px;border-radius:16px;margin-bottom:22px}
 .advisor-health.good{background:linear-gradient(135deg,rgba(82,214,164,.16),rgba(82,214,164,.03));border:1px solid rgba(82,214,164,.4)}
 .advisor-health.watch{background:linear-gradient(135deg,rgba(255,180,84,.16),rgba(255,180,84,.03));border:1px solid rgba(255,180,84,.4)}
@@ -411,36 +415,37 @@ tr:last-child td{border-bottom:none}
   <aside class="rail" id="rail">
     <div class="rail-head">
       <span class="logo">₪</span>
-      <span class="rail-word">ניהול תקציב <span class="sync-dot" id="syncDot"></span></span>
+      <span class="rail-word" data-i18n="app.title">ניהול תקציב <span class="sync-dot" id="syncDot"></span></span>
       <button class="rail-collapse" id="railCollapseBtn" title="כווץ/הרחב תפריט" aria-label="כווץ תפריט">◂</button>
     </div>
     <nav id="nav">
-      <div class="rail-group-label">ראשי</div>
-      <button data-tab="dash" class="active">📊 <span class="navlbl">סקירה</span></button>
-      <button data-tab="expenses">💸 <span class="navlbl">תנועות</span></button>
-      <button data-tab="charts">📉 <span class="navlbl">גרפים</span></button>
-      <button data-tab="advisor">🧠 <span class="navlbl">יועץ AI</span></button>
-      <div class="rail-group-label">ניהול כספי</div>
-      <button data-tab="installments">🧾 <span class="navlbl">תשלומים</span></button>
-      <button data-tab="categories">🗂️ <span class="navlbl">קטגוריות</span></button>
-      <button data-tab="accounts">🏦 <span class="navlbl">חשבונות וכרטיסים</span></button>
-      <button data-tab="loans">🤝 <span class="navlbl">הלוואות</span></button>
-      <button data-tab="investments">📈 <span class="navlbl">השקעות</span></button>
-      <button data-tab="planning">🎯 <span class="navlbl">יעדים</span></button>
-      <div class="rail-group-label">מערכת</div>
-      <button data-tab="onboarding">🧙 <span class="navlbl">הקמה</span></button>
-      <button data-tab="import">🤖 <span class="navlbl">ייבוא AI</span></button>
-      <button data-tab="sharing">👥 <span class="navlbl">שיתוף</span></button>
-      <button data-tab="settings">⚙️ <span class="navlbl">ניהול</span></button>
+      <div class="rail-group-label" data-i18n="nav.group.main">ראשי</div>
+      <button data-tab="dash" class="active">📊 <span class="navlbl" data-i18n="nav.dash">סקירה</span></button>
+      <button data-tab="expenses">💸 <span class="navlbl" data-i18n="nav.expenses">תנועות</span></button>
+      <button data-tab="charts">📉 <span class="navlbl" data-i18n="nav.charts">גרפים</span></button>
+      <button data-tab="advisor">🧠 <span class="navlbl" data-i18n="nav.advisor">יועץ AI</span></button>
+      <div class="rail-group-label" data-i18n="nav.group.finance">ניהול כספי</div>
+      <button data-tab="installments">🧾 <span class="navlbl" data-i18n="nav.installments">תשלומים</span></button>
+      <button data-tab="categories">🗂️ <span class="navlbl" data-i18n="nav.categories">קטגוריות</span></button>
+      <button data-tab="accounts">🏦 <span class="navlbl" data-i18n="nav.accounts">חשבונות וכרטיסים</span></button>
+      <button data-tab="loans">🤝 <span class="navlbl" data-i18n="nav.loans">הלוואות</span></button>
+      <button data-tab="investments">📈 <span class="navlbl" data-i18n="nav.investments">השקעות</span></button>
+      <button data-tab="planning">🎯 <span class="navlbl" data-i18n="nav.planning">יעדים</span></button>
+      <div class="rail-group-label" data-i18n="nav.group.system">מערכת</div>
+      <button data-tab="onboarding">🧙 <span class="navlbl" data-i18n="nav.onboarding">הקמה</span></button>
+      <button data-tab="import">🤖 <span class="navlbl" data-i18n="nav.import">ייבוא AI</span></button>
+      <button data-tab="sharing">👥 <span class="navlbl" data-i18n="nav.sharing">שיתוף</span></button>
+      <button data-tab="settings">⚙️ <span class="navlbl" data-i18n="nav.settings">ניהול</span></button>
     </nav>
     <div class="user-info rail-foot">
       <div class="avatar" id="userAvatar">?</div>
       <span id="userName" class="navlbl"></span>
+      <button class="btn sec" id="langToggleBtn" onclick="toggleLanguage()" title="Switch language / החלף שפה" style="padding:6px 10px;font-size:.8rem">🌐</button>
       <button class="btn sec" onclick="showWelcomeGuide()" title="מדריך שימוש" style="padding:6px 10px;font-size:.8rem">❓</button>
       <button class="btn sec hidden" id="installAppBtn" onclick="triggerInstallApp()" title="התקן כאפליקציה" style="padding:6px 10px;font-size:.8rem">📱</button>
       <button class="btn sec hidden" id="quickLockBtn" onclick="lockAppNow()" title="נעל עכשיו" style="padding:6px 10px;font-size:.8rem">🔒</button>
       <button class="btn sec" id="themeBtn" style="padding:6px 12px;font-size:.8rem" onclick="toggleTheme()" title="החלף מצב תצוגה">🌙</button>
-      <button class="btn sec navlbl" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">יציאה</button>
+      <button class="btn sec navlbl" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()" data-i18n="nav.logout">יציאה</button>
     </div>
   </aside>
 
@@ -567,10 +572,11 @@ tr:last-child td{border-bottom:none}
           <h2 style="margin-bottom:4px">🧠 יועץ התקציב האישי שלכם</h2>
           <p class="muted">ניתוח אישי, מבוסס על הנתונים שלכם בפועל — לא טיפים כלליים.</p>
         </div>
-        <button type="button" class="btn" id="advisorStartBtn" onclick="startNewConsultation()">🚀 התחל ייעוץ</button>
       </div>
       <div id="advisorHistoryWrap">
-        <div class="row" style="margin-bottom:10px"><b style="font-size:.85rem">שיחות קודמות</b></div>
+        <div class="row" style="margin-bottom:10px"><b style="font-size:.85rem">על מה תרצו להתייעץ?</b></div>
+        <div id="advisorTopicChips" class="advisor-topic-chips"></div>
+        <div class="row" style="margin:20px 0 10px"><b style="font-size:.85rem">שיחות קודמות</b></div>
         <div id="advisorHistoryList"></div>
       </div>
       <div id="advisorConvo" class="hidden">
@@ -706,9 +712,8 @@ tr:last-child td{border-bottom:none}
       <p class="muted" style="margin-bottom:12px">תחזית מבוססת על הכנסות/הוצאות קבועות, תשלומים ידועים, וממוצע ההוצאות המשתנות שלכם.</p>
       <div class="grid cards" id="nextMonthCards"></div>
       <div style="margin-top:16px">
-        <button type="button" class="btn" onclick="loadNextMonthAdvice()">🤖 קבל ייעוץ AI לתכנון החודש</button>
+        <button type="button" class="btn" onclick="startNextMonthConsult()">💬 דבר עם היועץ על החודש הבא</button>
       </div>
-      <div id="nextMonthAdvice" style="margin-top:16px"></div>
     </div>
     <div class="grid cards">
       <div class="card"><div class="label">יעדים פעילים</div><div class="value" id="pCount">0</div></div>
@@ -1534,7 +1539,7 @@ function goToTab(tab){
   document.getElementById('tab-'+tab).classList.remove('hidden');
   if(tab==='dash')syncDashboard(true);
   if(tab==='charts')renderCharts();
-  if(tab==='advisor'){showAdvisorConvoView(false);loadAdvisorConversationsList();}
+  if(tab==='advisor'){showAdvisorConvoView(false);loadAdvisorConversationsList();renderAdvisorTopics();}
   if(tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}
   closeMoreSheet();
 }
@@ -3067,21 +3072,14 @@ function renderNextMonthCards(p){
     +'<div class="card"><div class="label">הוצאות משתנות (הערכה)</div><div class="value neg">'+fmt(p.estimatedVariableExpenses)+'</div></div>'
     +'<div class="card"><div class="label">מאזן צפוי</div><div class="value '+(p.projectedBalance>=0?'pos':'neg')+'">'+fmt(p.projectedBalance)+'</div></div>';
 }
-async function loadNextMonthAdvice(){
-  const box=$('#nextMonthAdvice');if(!box)return;
-  box.innerHTML='<div class="advisor-loading"><div class="advisor-spinner"></div>מכין תחזית וייעוץ...</div>';
-  try{
-    const projection=buildNextMonthProjection();
-    const summary=buildAdviceSummary();
-    const res=await fetch(API_BASE+'/api/ai/next-month-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary,projection})});
-    const data=await res.json();
-    if(data.error){box.innerHTML='<p class="empty">שגיאה: '+data.error+'</p>';return;}
-    renderAdvice(data.advice,'#nextMonthAdvice');
-  }catch(err){
-    box.innerHTML='<p class="empty">שגיאה: '+err.message+'</p>';
-  }
-}
-window.loadNextMonthAdvice=loadNextMonthAdvice;
+window.startNextMonthConsult=()=>{
+  goToTab('advisor');
+  setTimeout(()=>{
+    const topics=buildPersonalizedTopics();
+    const nm=topics.find(t=>t.isNextMonth)||topics[0];
+    startNewConsultation(nm);
+  },60);
+};
 
 function buildAdviceSummary(){
   const monthKeys=[];
@@ -3146,6 +3144,54 @@ function renderAdvice(a,targetSel){
 // ═══ AI advisor: saved conversations (per logged-in user) ═══
 let currentConversation=null; // {id,title,messages:[{role:'advice',data}|{role:'user'|'ai',text}]}
 
+function buildPersonalizedTopics(){
+  const summary=buildAdviceSummary();
+  const topics=[];
+
+  const proj=buildNextMonthProjection();
+  topics.push({
+    icon:'🔮',label:'תכנון '+proj.month,isNextMonth:true,
+    seed:'בוא נתכנן ביחד את '+proj.month+'. התחזית הנוכחית: הכנסה קבועה צפויה '+fmt(proj.expectedFixedIncome)+', הוצאות קבועות צפויות '+fmt(proj.expectedFixedExpenses)+', תשלומים שיורדים '+fmt(proj.installmentsDue)+', הערכת הוצאות משתנות '+fmt(proj.estimatedVariableExpenses)+', מאזן צפוי '+fmt(proj.projectedBalance)+'. אם יש לי הכנסה או הוצאה חדשה שנכנסת או יורדת החודש, אני אעדכן אותך כאן בשיחה — עזור לי לתכנן את החודש בהתאם ותן לי משוב על התחזית.'
+  });
+
+  const trending=(summary.categorySpendingHistory||[]).map(c=>{
+    const months=c.monthlyAmounts||[];
+    const last=months.length?months[months.length-1].amount:0;
+    const delta=c.avgMonthly?(last-c.avgMonthly)/c.avgMonthly:0;
+    return {...c,last,delta};
+  }).filter(c=>c.last>150&&c.delta>0.3).sort((a,b)=>b.delta-a.delta)[0];
+  if(trending){
+    topics.push({icon:'📈',label:'למה '+trending.category+' עלה?',
+      seed:'שמתי לב שההוצאה שלי החודש בקטגוריית '+trending.category+' ('+fmt(trending.last)+') גבוהה משמעותית מהממוצע החודשי הרגיל שלי ('+fmt(trending.avgMonthly)+'). תסביר לי מה יכול להסביר את זה ומה אפשר לעשות בנידון.'});
+  }
+
+  const overBudget=(summary.budgetsVsActual||[]).find(b=>b.spentSoFarThisMonth>b.monthlyBudget);
+  if(overBudget){
+    topics.push({icon:'⚠️',label:'חריגה בתקציב '+overBudget.category,
+      seed:'חרגתי החודש מהתקציב שקבעתי לקטגוריית '+overBudget.category+' — התקציב היה '+fmt(overBudget.monthlyBudget)+' ובפועל הוצאתי '+fmt(overBudget.spentSoFarThisMonth)+'. מה עדיף שאעשה עכשיו, ואיך אמנע מזה בהמשך?'});
+  }
+
+  if((summary.savingsGoals||[]).length){
+    const g=[...summary.savingsGoals].filter(g=>g.target>0).sort((a,b)=>(a.saved/a.target)-(b.saved/b.target))[0];
+    if(g){
+      topics.push({icon:'🎯',label:'התקדמות ליעד '+g.name,
+        seed:'איך ההתקדמות שלי ליעד החיסכון "'+g.name+'"? חסכתי עד כה '+fmt(g.saved)+' מתוך '+fmt(g.target)+'. אני בקצב טוב? מה כדאי לשפר כדי להגיע ליעד?'});
+    }
+  }
+
+  if(topics.length<4){
+    topics.push({icon:'💡',label:'טיפים לחיסכון החודש',
+      seed:'תן לי 2-3 טיפים קונקרטיים ומעשיים לחיסכון, בהתבסס על ההוצאות בפועל שלי החודש.'});
+  }
+  return topics.slice(0,4);
+}
+function renderAdvisorTopics(){
+  const box=$('#advisorTopicChips');if(!box)return;
+  const topics=buildPersonalizedTopics();
+  window.ADVISOR_TOPICS=topics;
+  box.innerHTML=topics.map((t,i)=>'<button type="button" class="advisor-topic-chip" onclick="startNewConsultation(ADVISOR_TOPICS['+i+'])"><span class="ic">'+t.icon+'</span><span>'+t.label+'</span></button>').join('')
+    +'<button type="button" class="advisor-topic-chip" onclick="startNewConsultation()"><span class="ic">💬</span><span>שאלה חופשית / ניתוח כללי</span></button>';
+}
 function showAdvisorConvoView(show){
   const convo=$('#advisorConvo'),hist=$('#advisorHistoryWrap');
   if(convo)convo.classList.toggle('hidden',!show);
@@ -3170,8 +3216,8 @@ async function saveCurrentConversation(){
   }
 }
 
-window.startNewConsultation=async()=>{
-  currentConversation={id:null,title:'ייעוץ מ-'+new Date().toLocaleDateString('he-IL'),messages:[]};
+window.startNewConsultation=async(topic)=>{
+  currentConversation={id:null,title:(topic?topic.label:'ייעוץ')+' — '+new Date().toLocaleDateString('he-IL'),messages:[]};
   showAdvisorConvoView(true);
   $('#advisorContent').innerHTML='<div class="advisor-loading"><div class="advisor-spinner"></div>מנתח את הנתונים שלכם...</div>';
   renderAdvisorChat();
@@ -3184,6 +3230,9 @@ window.startNewConsultation=async()=>{
     renderAdvice(data.advice);
     await saveCurrentConversation();
     await loadAdvisorConversationsList();
+    if(topic&&topic.seed){
+      await sendAdvisorChat(topic.seed);
+    }
   }catch(err){
     $('#advisorContent').innerHTML='<p class="empty">שגיאה: '+err.message+'</p>';
   }
@@ -3207,11 +3256,13 @@ function renderAdvisorChat(){
   log.innerHTML=chatMsgs.length?chatMsgs.map((m,i)=>'<div class="advisor-chat-msg '+m.role+(i===chatMsgs.length-1?' msg-in':'')+'">'+(m.pending?AI_DOTS:esc(m.text))+'</div>').join(''):'<div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div>';
   log.scrollTop=log.scrollHeight;
 }
-window.sendAdvisorChat=async()=>{
+window.sendAdvisorChat=async(presetMsg)=>{
   if(!currentConversation)return;
-  const inp=$('#advisorChatInput');if(!inp)return;
-  const msg=inp.value.trim();if(!msg)return;
-  inp.value='';
+  const inp=$('#advisorChatInput');
+  const usingPreset=typeof presetMsg==='string';
+  const msg=usingPreset?presetMsg.trim():(inp?inp.value.trim():'');
+  if(!msg)return;
+  if(!usingPreset&&inp)inp.value='';
   currentConversation.messages.push({role:'user',text:msg});
   currentConversation.messages.push({role:'ai',text:'',pending:true});
   renderAdvisorChat();
