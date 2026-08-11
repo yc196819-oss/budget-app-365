@@ -2413,21 +2413,27 @@ function normalizeImportedTransactions(items){
 }
 
 function flagPossibleDuplicates(items){
-  // checks each new item against BOTH existing DB transactions AND earlier
+  // Precise match on purpose: same type + same amount + same merchant
+  // (description, exact) + same calendar date (exact, not a fuzzy window).
+  // A looser date/amount-only match used to flag unrelated transactions
+  // from different businesses that just happened to land near each other —
+  // real duplicates are the same business on the same day, full stop.
+  // Checks each new item against BOTH existing DB transactions AND earlier
   // non-duplicate items in this same batch — an AI parse can (and has)
   // produced the exact same line twice in one response, which a
   // DB-only check would never catch since nothing like it existed before.
   const seenInBatch=[];
   items.forEach(t=>{
     const tDate=parseLocalDate(t.date);
-    const isMatch=(ex,getDate)=>{
+    const tDesc=(t.description||'').trim();
+    const isMatch=(ex,getDate,getDesc)=>{
       if(ex.type!==t.type)return false;
       if(Math.abs(+ex.amount-t.amount)>0.01)return false;
-      const dayDiff=Math.abs((getDate(ex)-tDate)/86400000);
-      return dayDiff<=3;
+      if((getDesc(ex)||'').trim()!==tDesc)return false;
+      return getDate(ex).getTime()===tDate.getTime();
     };
-    const matchExisting=DB.transactions.find(ex=>isMatch(ex,e=>parseLocalDate(e.tx_date||e.date)));
-    const matchInBatch=matchExisting?null:seenInBatch.find(ex=>isMatch(ex,e=>parseLocalDate(e.date)));
+    const matchExisting=DB.transactions.find(ex=>isMatch(ex,e=>parseLocalDate(e.tx_date||e.date),e=>e.description));
+    const matchInBatch=matchExisting?null:seenInBatch.find(ex=>isMatch(ex,e=>parseLocalDate(e.date),e=>e.description));
     const match=matchExisting||matchInBatch;
     t._dupe=!!match;
     t._dupeInfo=match?((match.tx_date||match.date)+' · '+match.description):null;
