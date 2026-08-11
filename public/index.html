@@ -151,6 +151,7 @@ input::placeholder{color:var(--muted)}
 .btn{background:var(--accent);color:#fff;border:0;padding:10px 18px;border-radius:10px;cursor:pointer;font-weight:700;font-size:.88rem}
 .btn:hover{filter:brightness(1.12)}
 .btn.sec{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+.btn.sec.active-choice{background:var(--accent);color:#fff;border-color:var(--accent)}
 .btn.green{background:var(--accent2);color:#0f1117}
 .btn.danger{background:transparent;color:var(--danger);border:1px solid transparent;padding:6px 10px}
 .btn.danger:hover{background:rgba(255,107,107,.12)}
@@ -870,6 +871,24 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="panel">
+      <h2>🙏 מעשרות</h2>
+      <p class="muted" style="margin-bottom:10px">כשמזינים הכנסה חדשה, המערכת תשאל אם לרשום עליה מעשר/חומש — וזה יתווסף כ"חוב מעשרות" נפרד, לא כמו הלוואה רגילה.</p>
+      <div class="checkline" style="margin-bottom:12px">
+        <input id="maaserEnabled" type="checkbox" onchange="saveMaaserSettings()">
+        <label for="maaserEnabled" style="margin:0;color:var(--text);font-size:.85rem">הפעל מעקב מעשרות</label>
+      </div>
+      <div id="maaserOptions" class="hidden">
+        <div class="row" style="margin-bottom:12px;align-items:center">
+          <span class="muted" style="font-size:.85rem">אחוז:</span>
+          <button type="button" class="btn sec" id="maaserRate10" onclick="setMaaserRate(10)">מעשר (10%)</button>
+          <button type="button" class="btn sec" id="maaserRate20" onclick="setMaaserRate(20)">חומש (20%)</button>
+          <input id="maaserRateCustom" type="number" min="0" max="100" step="0.1" placeholder="אחוז מותאם אישית" style="width:170px" onchange="setMaaserRate(this.value)">
+        </div>
+        <div class="muted" style="font-size:.8rem;margin-bottom:6px">קטגוריות הכנסה שלא ייכללו בחישוב המעשרות (למשל: לא רוצה לעשר על החזרים או מתנות מסוימות):</div>
+        <div id="maaserExcludeList" class="row" style="margin-bottom:6px"></div>
+      </div>
+    </div>
+    <div class="panel">
       <h2>תזכורות חכמות</h2>
       <p class="muted" style="margin-bottom:10px">תזכורת יומית למילוי הוצאות/הכנסות עם קישור ישיר למערכת.</p>
       <div class="row" style="margin-bottom:8px">
@@ -1235,7 +1254,8 @@ function vGradient(ctx,chartArea,colorTop,colorBottom){
 let syncTimer=null, syncInFlight=false;
 const APP_SETTINGS={
   reminders:{enabled:false,time:'20:30',channel:'email'},
-  integrations:{waWebhook:'',waVerifyToken:'',gcWebhook:'',gcSpace:''}
+  integrations:{waWebhook:'',waVerifyToken:'',gcWebhook:'',gcSpace:''},
+  maaser:{enabled:false,rate:10,excludedCategoryIds:[]}
 };
 
 // TIMEOUT
@@ -1384,15 +1404,17 @@ async function loadUserSettings(){
       const parsed=JSON.parse(raw);
       Object.assign(APP_SETTINGS.reminders,parsed.reminders||{});
       Object.assign(APP_SETTINGS.integrations,parsed.integrations||{});
+      Object.assign(APP_SETTINGS.maaser,parsed.maaser||{});
     }catch(_){/* ignore */}
   };
 
   try{
-    const {data,error}=await sb.from('user_settings').select('reminders,integrations').eq('user_id',CU.id).maybeSingle();
+    const {data,error}=await sb.from('user_settings').select('reminders,integrations,maaser').eq('user_id',CU.id).maybeSingle();
     if(error||!data){fromLocal();}
     else{
       Object.assign(APP_SETTINGS.reminders,data.reminders||{});
       Object.assign(APP_SETTINGS.integrations,data.integrations||{});
+      Object.assign(APP_SETTINGS.maaser,data.maaser||{});
     }
   }catch(_){fromLocal();}
 
@@ -1403,6 +1425,7 @@ async function loadUserSettings(){
   if($('#waVerifyToken'))$('#waVerifyToken').value=APP_SETTINGS.integrations.waVerifyToken||'';
   if($('#gcWebhook'))$('#gcWebhook').value=APP_SETTINGS.integrations.gcWebhook||'';
   if($('#gcSpace'))$('#gcSpace').value=APP_SETTINGS.integrations.gcSpace||'';
+  refreshMaaserPanel();
 }
 
 async function persistUserSettings(){
@@ -1413,6 +1436,7 @@ async function persistUserSettings(){
       household_id:HID,
       reminders:APP_SETTINGS.reminders,
       integrations:APP_SETTINGS.integrations,
+      maaser:APP_SETTINGS.maaser,
       updated_at:new Date().toISOString()
     };
     const {error}=await sb.from('user_settings').upsert(payload,{onConflict:'user_id'});
@@ -1695,6 +1719,23 @@ async function addTransaction(){
   const{data,error}=await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type,description:$('#exDesc').value||'(ללא תיאור)',amount,tx_date:$('#exDate').value||todayStr(),category_id:$('#exCat').value||null,subcategory_id:$('#exSub').value||null,nature:$('#exNature').value,spread:$('#exSpread').value,source:'manual',account_id:accountId,card_id:cardId,payment_method:cardId?'credit':'other'}).select().single();
   if(error){alert('שגיאה: '+error.message);return;}
   memberCache[CU.id]=MNAME;DB.transactions.unshift(data);$('#exDesc').value='';$('#exAmount').value='';render();
+  await maybePromptMaaser(data);
+}
+async function maybePromptMaaser(tx){
+  if(tx.type!=='income')return;
+  const m=APP_SETTINGS.maaser;
+  if(!m||!m.enabled)return;
+  if(tx.category_id&&(m.excludedCategoryIds||[]).includes(tx.category_id))return;
+  const rate=+m.rate||10;
+  const amount=Math.round((+tx.amount)*rate/100*100)/100;
+  if(amount<=0)return;
+  const ok=await UI.confirm('התקבלה הכנסה: <b>'+(tx.description||'')+'</b> בסך '+fmt(+tx.amount)+'.<br>לרשום חוב מעשרות ('+rate+'%) בסך <b>'+fmt(amount)+'</b>?',{title:'🙏 מעשרות'});
+  if(!ok)return;
+  const{data,error}=await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:'iowe',counterparty:'מעשרות',amount,loan_date:tx.tx_date||todayStr(),note:'מעשר על: '+(tx.description||''),is_maaser:true}).select().single();
+  if(error){UI.alert('שגיאה ביצירת חוב מעשרות: '+error.message,{type:'error'});return;}
+  DB.loans.push(data);
+  UI.alert('✅ נוסף חוב מעשרות בסך '+fmt(amount),{type:'success'});
+  render();
 }
 async function addCat(){const n=$('#newCat').value.trim();if(!n)return;const{data,error}=await sb.from('categories').insert({household_id:HID,name:n,kind:$('#catKind').value}).select().single();if(error){alert('שגיאה: '+error.message);return;}DB.categories.push(data);$('#newCat').value='';render();}
 async function addSub(){const n=$('#newSub').value.trim();if(!n)return;const pid=$('#subParent').value;if(!pid){alert('בחר קטגוריית אב תחילה');return;}const pk=DB.categories.find(x=>x.id===pid)?.kind||'expense';const{data,error}=await sb.from('categories').insert({household_id:HID,name:n,parent_id:pid,kind:pk}).select().single();if(error){alert('שגיאה: '+error.message);return;}DB.categories.push(data);$('#newSub').value='';render();}
@@ -1871,6 +1912,39 @@ async function applyParsedMessage(){
   $('#smartMsgResult').textContent='✅ התנועה נוספה בהצלחה.';
   render();
 }
+
+function refreshMaaserPanel(){
+  const on=!!APP_SETTINGS.maaser.enabled;
+  if($('#maaserEnabled'))$('#maaserEnabled').checked=on;
+  $('#maaserOptions')?.classList.toggle('hidden',!on);
+  const rate=+APP_SETTINGS.maaser.rate||10;
+  $('#maaserRate10')?.classList.toggle('active-choice',rate===10);
+  $('#maaserRate20')?.classList.toggle('active-choice',rate===20);
+  const customInp=$('#maaserRateCustom');
+  if(customInp&&rate!==10&&rate!==20)customInp.value=rate;
+  const list=$('#maaserExcludeList');
+  if(list){
+    const incomeCats=rootCats('income');
+    const excluded=new Set(APP_SETTINGS.maaser.excludedCategoryIds||[]);
+    list.innerHTML=incomeCats.map(c=>'<label class="checkline" style="cursor:pointer"><input type="checkbox" '+(excluded.has(c.id)?'checked':'')+' onchange="toggleMaaserExcludeCategory(\''+c.id+'\')"><span style="margin-right:4px">'+c.name+'</span></label>').join('');
+  }
+}
+window.setMaaserRate=(rate)=>{
+  const r=+rate;if(!r||r<0||r>100)return;
+  APP_SETTINGS.maaser.rate=r;
+  saveMaaserSettings();
+};
+window.toggleMaaserExcludeCategory=(catId)=>{
+  const list=new Set(APP_SETTINGS.maaser.excludedCategoryIds||[]);
+  if(list.has(catId))list.delete(catId);else list.add(catId);
+  APP_SETTINGS.maaser.excludedCategoryIds=[...list];
+  saveMaaserSettings();
+};
+window.saveMaaserSettings=async()=>{
+  APP_SETTINGS.maaser.enabled=!!$('#maaserEnabled').checked;
+  await persistUserSettings();
+  refreshMaaserPanel();
+};
 
 async function saveReminderSettings(){
   APP_SETTINGS.reminders={
@@ -3655,11 +3729,12 @@ function renderLoans(){
   $('#lNet').textContent=fmt(net);$('#lNet').className='value '+(net>=0?'pos':'neg');
   const box=$('#loanBody');
   if(!DB.loans.length){box.innerHTML='<p class="empty">אין הלוואות</p>';return;}
-  box.innerHTML=[...DB.loans].map(l=>{
-    const color=l.direction==='tome'?'#52d6a4':'#ff6b6b';
-    const dirLabel=l.direction==='tome'?'חייבים לי':'אני חייב';
+  const card=l=>{
+    const isMaaser=!!l.is_maaser;
+    const color=isMaaser?'#ffb454':(l.direction==='tome'?'#52d6a4':'#ff6b6b');
+    const dirLabel=isMaaser?'חוב מעשרות':(l.direction==='tome'?'חייבים לי':'אני חייב');
     return '<div class="tx-card'+(l.settled?' settled':'')+'">'
-      +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">🤝</div>'
+      +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+(isMaaser?'🙏':'🤝')+'</div>'
       +'<div class="tx-mid"><div class="tx-desc">'+l.counterparty+(l.settled?' · <span class="muted">סולק ✅</span>':'')+'</div>'
       +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+dirLabel+'</span>'
       +(l.note?'<span class="tx-pmtag">'+l.note+'</span>':'')+'<span class="tx-pmtag">'+(l.loan_date||l.date||'')+'</span></div></div>'
@@ -3668,7 +3743,18 @@ function renderLoans(){
       +(!l.settled?'<button type="button" class="smallbtn" onclick="settleLoan(\''+l.id+'\')" title="סמן כסולק">✔️</button>':'')
       +'<button type="button" class="icon-btn danger" onclick="delLoan(\''+l.id+'\')" title="מחיקה">🗑️</button></div>'
       +'</div>';
-  }).join('');
+  };
+  const maaserLoans=DB.loans.filter(l=>l.is_maaser);
+  const regularLoans=DB.loans.filter(l=>!l.is_maaser);
+  let html='';
+  if(maaserLoans.length){
+    const owedMaaser=maaserLoans.filter(l=>!l.settled).reduce((s,l)=>s+ +l.amount,0);
+    html+='<div style="margin-bottom:6px;font-weight:800;font-size:.85rem;display:flex;align-items:center;gap:8px">🙏 חובות מעשרות<span class="muted" style="font-weight:600;font-size:.78rem">— טרם שולם: '+fmt(owedMaaser)+'</span></div>'
+      +[...maaserLoans].map(card).join('')
+      +(regularLoans.length?'<div style="height:1px;background:var(--line);margin:16px 0"></div><div style="margin-bottom:6px;font-weight:800;font-size:.85rem">🤝 הלוואות רגילות</div>':'');
+  }
+  html+=[...regularLoans].map(card).join('');
+  box.innerHTML=html;
 }
 
 function renderInstallments(){
