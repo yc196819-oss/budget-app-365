@@ -2,6 +2,16 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-11 — duplicate detection tightened to merchant+exact-date
+Follow-up to the fix below: the old matching logic never checked the
+merchant/description at all — it only compared amount + a fuzzy 3-day date
+window, so two unrelated purchases from different businesses on nearby
+days could get wrongly flagged as duplicates. Per explicit user request,
+`flagPossibleDuplicates()` now requires ALL of: same type, same amount,
+same description (exact match), same calendar date (exact, no window).
+Verified with 4 scenarios (true dupe, same-amount-different-merchant,
+same-merchant-different-date) before shipping.
+
 ## 🟢 Resolved 2026-08-11 — real household data audit + root-caused duplicate-import bug
 User uploaded two real MAX credit card PDF statements (Kobi's card ...1928,
 Naomi's card ...2928) and asked to cross-check for duplicates and "put
