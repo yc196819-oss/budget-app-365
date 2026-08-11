@@ -1716,7 +1716,7 @@ async function addTransaction(){
 
   const accountId=$('#exAccount')?.value||null;
   const cardId=$('#exCard')?.value||null;
-  const{data,error}=await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type,description:$('#exDesc').value||'(ללא תיאור)',amount,tx_date:$('#exDate').value||todayStr(),category_id:$('#exCat').value||null,subcategory_id:$('#exSub').value||null,nature:$('#exNature').value,spread:$('#exSpread').value,source:'manual',account_id:accountId,card_id:cardId,payment_method:cardId?'credit':'other'}).select().single();
+  const{data,error}=await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type,description:$('#exDesc').value||'(ללא תיאור)',amount,tx_date:$('#exDate').value||todayStr(),category_id:$('#exCat').value||null,subcategory_id:$('#exSub').value||null,nature:$('#exNature').value,spread:$('#exSpread').value,source:'manual',account_id:accountId,card_id:cardId,payment_method:cardId?'credit':'cash'}).select().single();
   if(error){alert('שגיאה: '+error.message);return;}
   memberCache[CU.id]=MNAME;DB.transactions.unshift(data);$('#exDesc').value='';$('#exAmount').value='';render();
   await maybePromptMaaser(data);
@@ -2625,7 +2625,7 @@ async function confirmImport(){
   }catch(_){/* fallback to direct client insert below */}
 
   for(const t of toInsert){
-    await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type:t.type||'expense',description:t.description||'ייבוא',amount:Math.abs(t.amount),tx_date:t.date||todayStr(),category_id:t.category_id||null,subcategory_id:t.subcategory_id||null,nature:'variable',spread:'month',source:'pdf',account_id:t.account_id||null,card_id:t.card_id||null,payment_method:t.card_id?'credit':'other'});
+    await sb.from('transactions').insert({household_id:HID,created_by:CU.id,type:t.type||'expense',description:t.description||'ייבוא',amount:Math.abs(t.amount),tx_date:t.date||todayStr(),category_id:t.category_id||null,subcategory_id:t.subcategory_id||null,nature:'variable',spread:'month',source:'pdf',account_id:t.account_id||null,card_id:t.card_id||null,payment_method:t.card_id?'credit':'cash'});
   }
   alert('נוספו '+toInsert.length+' תנועות!');
   pendingImport=[];$('#reviewPanel').classList.add('hidden');$('#importStatus').innerHTML='';

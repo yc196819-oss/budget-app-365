@@ -1289,7 +1289,7 @@ app.post('/api/import/commit', async (req, res) => {
         source: 'ai-file',
         account_id: t?.account_id || null,
         card_id: t?.card_id || null,
-        payment_method: t?.card_id ? 'credit' : 'other'
+        payment_method: t?.card_id ? 'credit' : 'cash'
       }))
       .filter((r) => r.amount > 0);
 
