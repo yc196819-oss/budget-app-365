@@ -187,6 +187,8 @@ tr:last-child td{border-bottom:none}
 .advisor-chat-msg{max-width:78%;padding:10px 14px;border-radius:14px;font-size:.85rem;line-height:1.55;white-space:pre-line}
 .advisor-chat-msg.user{align-self:flex-start;background:var(--accent);color:#fff}
 .advisor-chat-msg.ai{align-self:flex-end;background:var(--surface2);border:1px solid var(--line)}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.advisor-chat-msg.msg-in{animation:msgIn .38s cubic-bezier(.2,.8,.3,1)}
 .advisor-chat-empty{text-align:center;color:var(--muted);padding:20px;font-size:.85rem}
 .advisor-history-item{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;margin-bottom:8px;cursor:pointer;transition:border-color .12s}
 .advisor-history-item:hover{border-color:var(--accent)}
@@ -449,6 +451,19 @@ tr:last-child td{border-bottom:none}
   </div>
 
   <section id="tab-dash">
+    <div class="panel hidden" id="onbBanner" style="border:1px solid var(--accent);background:linear-gradient(135deg,rgba(108,140,255,.1),rgba(82,214,164,.06));display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:1.8rem">🧙</span>
+        <div>
+          <div style="font-weight:800">עדיין לא סיימת להגדיר את הנתונים שלך?</div>
+          <div class="muted" style="font-size:.85rem">אשף ההקמה עם AI ימלא עבורך חשבונות, כרטיסים, הכנסות והוצאות קבועות תוך כמה דקות.</div>
+        </div>
+      </div>
+      <div class="row" style="flex-shrink:0">
+        <button class="btn" onclick="goToTab('onboarding')">🚀 פתח את האשף</button>
+        <button class="btn sec" onclick="dismissOnbBanner()">סגור</button>
+      </div>
+    </div>
     <div class="grid cards">
       <div class="card"><div class="label">הכנסות החודש</div><div class="value pos" id="kIncome">₪0</div><span class="trend flat" id="kIncomeTrend"></span></div>
       <div class="card"><div class="label">הוצאות החודש</div><div class="value neg" id="kExpense">₪0</div><span class="trend flat" id="kExpenseTrend"></span></div>
@@ -2820,7 +2835,15 @@ function renderTrend(id,cur,prev,invert){
 }
 
 // RENDER
+function refreshOnbBanner(){
+  const banner=$('#onbBanner');if(!banner)return;
+  const dismissed=localStorage.getItem('onbBannerDismissed_v1');
+  const incomplete=!DB.bankAccounts.length||!DB.transactions.length;
+  banner.classList.toggle('hidden',dismissed==='1'||!incomplete);
+}
+window.dismissOnbBanner=()=>{localStorage.setItem('onbBannerDismissed_v1','1');$('#onbBanner')?.classList.add('hidden');};
 function render(){
+  refreshOnbBanner();
   fillCatSel();
   const y=VY,m=VM;
   const exp=DB.transactions.filter(t=>t.type==='expense'),inc=DB.transactions.filter(t=>t.type==='income');
@@ -3107,7 +3130,7 @@ function renderAdvisorChat(){
   const log=$('#advisorChatLog');if(!log)return;
   const esc=s=>String(s).replace(/</g,'&lt;');
   const chatMsgs=(currentConversation?.messages||[]).filter(m=>m.role==='user'||m.role==='ai');
-  log.innerHTML=chatMsgs.length?chatMsgs.map(m=>'<div class="advisor-chat-msg '+m.role+'">'+(m.pending?AI_DOTS:esc(m.text))+'</div>').join(''):'<div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div>';
+  log.innerHTML=chatMsgs.length?chatMsgs.map((m,i)=>'<div class="advisor-chat-msg '+m.role+(i===chatMsgs.length-1?' msg-in':'')+'">'+(m.pending?AI_DOTS:esc(m.text))+'</div>').join(''):'<div class="advisor-chat-empty">שאלו כל דבר על התקציב שלכם 💬</div>';
   log.scrollTop=log.scrollHeight;
 }
 window.sendAdvisorChat=async()=>{
