@@ -15,14 +15,15 @@ from the transaction's top-level `category_id` (i.e. whenever the picked
 node is actually a grandchild). Verified with a simulated 3-level chain —
 label now reads the full "אוכל · סופר · רמי לוי".
 
-**Related, not fixed (lower priority, flag if it comes up)**: the annual
-category-summary panel (`renderCatSummary()`) groups by `subCats(c.id)`
-(direct children only), so a transaction whose `subcategory_id` is a
-grandchild (like "רמי לוי" under "סופר") won't roll up into any subcategory
-row there — it'd only count toward the root "אוכל" total, not appear broken
-out under "סופר". Same root cause as the labels, different fix (aggregation
-logic, not display), scoped out of this pass since the user didn't flag
-this specific screen.
+**🟢 Resolved 2026-08-12** — same root cause, the annual category-summary
+panel (`renderCatSummary()`) also only rendered `subCats(c.id)` (direct
+children), so a transaction tagged at a grandchild level (e.g. "רמי לוי"
+under "סופר") rolled into the root "אוכל" total with no visible breakdown
+row. Now walks one level deeper and renders nested "↳ leaf" rows under
+their actual parent subcategory, each with its own computed total. Verified
+via headless Chrome: injected a real 3-level chain + tagged transaction,
+called `renderCatSummary()`, confirmed both the middle ("סופר (בדיקה)")
+and leaf ("רמי לוי (בדיקה)") rows render with the correct amount.
 
 ## 🟢 Resolved 2026-08-11 — batch of category-picker bugs (3rd level, stay-open, contrast, installments)
 User reported 4 real issues after actually using the category picker. All
