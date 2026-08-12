@@ -3703,7 +3703,26 @@ function renderCatSummary(){
   if(catFilter!=='all'){const sc=subCats(catFilter);sc.forEach(s=>{const sp=document.createElement('span');sp.className='pill'+(catSubFilter===s.id?' on':'');sp.textContent=s.name;sp.onclick=()=>{catSubFilter=catSubFilter===s.id?null:s.id;renderCatSummary();};cf.appendChild(sp);});}
   const show=catFilter==='all'?roots:roots.filter(c=>c.id===catFilter);
   let grand=0;
-  const html=show.map(c=>{let tot=exp.filter(t=>t.category_id===c.id).reduce((s,t)=>s+yrAmt(t,VY),0);for(let mo=0;mo<12;mo++)tot+=DB.installments.filter(p=>p.category_id===c.id).reduce((a,p)=>a+instMo(p,VY,mo),0);if(tot===0&&catFilter==='all')return '';grand+=tot;const subs=subCats(c.id);const ss=catSubFilter?subs.filter(s=>s.id===catSubFilter):subs;const sh=ss.map(s=>{let st=exp.filter(t=>t.category_id===c.id&&t.subcategory_id===s.id).reduce((a,t)=>a+yrAmt(t,VY),0);return '<div class="subcat"><span>'+s.name+'</span><span>'+fmt(st)+'</span></div>';}).join('');return '<div class="catrow"><div class="catname"><span>'+(c.icon||'')+' '+c.name+'</span><span>'+fmt(tot)+'</span></div>'+sh+'</div>';}).filter(Boolean).join('');
+  const subTotal=(catId,subId)=>exp.filter(t=>t.category_id===catId&&t.subcategory_id===subId).reduce((a,t)=>a+yrAmt(t,VY),0);
+  const html=show.map(c=>{
+    let tot=exp.filter(t=>t.category_id===c.id).reduce((s,t)=>s+yrAmt(t,VY),0);
+    for(let mo=0;mo<12;mo++)tot+=DB.installments.filter(p=>p.category_id===c.id).reduce((a,p)=>a+instMo(p,VY,mo),0);
+    if(tot===0&&catFilter==='all')return '';
+    grand+=tot;
+    const subs=subCats(c.id);
+    const ss=catSubFilter?subs.filter(s=>s.id===catSubFilter):subs;
+    // a transaction can be tagged directly at a subcategory OR at one of
+    // its own children (a real 3-level pick, e.g. אוכל > סופר > רמי לוי) —
+    // show those nested underneath instead of them silently vanishing.
+    const sh=ss.map(s=>{
+      const st=subTotal(c.id,s.id);
+      const subsubs=subCats(s.id).map(ss2=>({ss2,sst:subTotal(c.id,ss2.id)})).filter(x=>x.sst>0);
+      if(st===0&&!subsubs.length)return '';
+      const ssh=subsubs.map(({ss2,sst})=>'<div class="subcat" style="margin-right:16px"><span>↳ '+ss2.name+'</span><span>'+fmt(sst)+'</span></div>').join('');
+      return '<div class="subcat"><span>'+s.name+'</span><span>'+fmt(st)+'</span></div>'+ssh;
+    }).join('');
+    return '<div class="catrow"><div class="catname"><span>'+(c.icon||'')+' '+c.name+'</span><span>'+fmt(tot)+'</span></div>'+sh+'</div>';
+  }).filter(Boolean).join('');
   $('#catSummary').innerHTML=html||'<div class="empty">אין נתונים לשנה זו</div>';
   const footer=$('#catSumFooter');
   if(catFilter!=='all'){footer.classList.remove('hidden');footer.style.display='flex';const cat=DB.categories.find(x=>x.id===catFilter);const sub=catSubFilter?DB.categories.find(x=>x.id===catSubFilter):null;$('#catSumLabel').textContent='סה"כ '+(sub?sub.name:cat?cat.name:'');$('#catSumTotal').textContent=fmt(grand);}else footer.classList.add('hidden');
