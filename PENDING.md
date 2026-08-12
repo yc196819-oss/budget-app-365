@@ -2,6 +2,44 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-12 — DB write errors were silently ignored in several places
+Follow-up to the security pass below. Several delete/update handlers
+(`delTx`, `delCat`, `delSub`, `delLoan`, `delInst`, `updInv`, `delInv`,
+`addToGoal`, `delGoal`) fired the Supabase write and updated local state
++ re-rendered unconditionally, so a failed write (RLS denial, network
+blip) still looked like it succeeded in the UI — the row stayed in the
+DB and reappeared on next reload with no explanation. All 9 now check
+`error` and show `UI.alert` instead of mutating local state on failure.
+
+Also fixed two real crash risks (not just silent-fail): `addLoan()`
+pushed `data` into `DB.loans` without checking `error` first (a failed
+insert would `unshift(undefined)`, breaking `renderLoans()`), and
+`ensureHousehold()`'s household-creation path used `hh.id` on a
+possibly-undefined `hh` — if that insert ever failed, a brand new user's
+onboarding would crash outright with no household created. `seedCategories()`
+had the same shape; now skips a category's subs and logs a warning
+instead of throwing if the root insert fails.
+
+The PDF/AI-import client-side fallback loop (used when the server-side
+`/api/import/commit` call fails) inserted transactions one at a time
+without checking each result, then always claimed "N added" regardless
+of actual outcome — now tracks per-row failures and reports the real
+count.
+
+**Deliberately left alone** (fire-and-forget writes where the gap
+doesn't mislead anyone): the onboarding wizard's bulk inserts (bank
+accounts/cards/recurring items during first-time setup) — the wizard
+ends with `loadAll()` + a full re-render, so the true saved state is
+what the user sees next, not a false success claim. Also `genInvite`,
+push-subscription cleanup, and the advisor chat autosave — none of
+these are financial data and a rare failure there is genuinely low
+stakes.
+
+Verified via headless Chrome: stubbed a failing `transactions.delete()`
+through `sb.from`, called `delTx()`, confirmed the transaction stays in
+`DB.transactions` with an error modal shown instead of silently
+disappearing from the UI.
+
 ## 🟢 Resolved 2026-08-12 — security hardening pass (external review response)
 User pasted a third-party code review flagging several issues. Verified each
 claim against the actual code before acting (not all were accurate — see
