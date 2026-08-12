@@ -2,6 +2,28 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-11 — category labels were skipping the middle level for 3-level chains
+Follow-up to the batch below. User clarified their supermarket-subcategory
+concern more precisely: "רמי לוי" IS correctly nested (confirmed directly:
+`parent_id` chain is רמי לוי → סופר → אוכל, a real 3-level hierarchy), but
+every place that renders "category · subcategory" only ever showed the root
++ leaf ("אוכל · רמי לוי"), silently dropping "סופר" — not a data bug, a
+display bug, in two spots: the transaction picker's trigger label
+(`txCategoryCell()`) and the grouped daily list's category tag. Both now
+look up the subcategory's real parent and insert it whenever it differs
+from the transaction's top-level `category_id` (i.e. whenever the picked
+node is actually a grandchild). Verified with a simulated 3-level chain —
+label now reads the full "אוכל · סופר · רמי לוי".
+
+**Related, not fixed (lower priority, flag if it comes up)**: the annual
+category-summary panel (`renderCatSummary()`) groups by `subCats(c.id)`
+(direct children only), so a transaction whose `subcategory_id` is a
+grandchild (like "רמי לוי" under "סופר") won't roll up into any subcategory
+row there — it'd only count toward the root "אוכל" total, not appear broken
+out under "סופר". Same root cause as the labels, different fix (aggregation
+logic, not display), scoped out of this pass since the user didn't flag
+this specific screen.
+
 ## 🟢 Resolved 2026-08-11 — batch of category-picker bugs (3rd level, stay-open, contrast, installments)
 User reported 4 real issues after actually using the category picker. All
 fixed and verified end-to-end in `public/index.html`:
