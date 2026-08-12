@@ -2734,8 +2734,12 @@ function txCategoryCell(t){
   const roots=rootCats(kind);
   const cur=DB.categories.find(c=>c.id===t.category_id);
   const curSub=t.subcategory_id?DB.categories.find(c=>c.id===t.subcategory_id):null;
+  // curSub can be a direct child of cur (2 levels) OR a grandchild (3 levels,
+  // a sub-subcategory) — show the middle level too when it's skipped,
+  // otherwise "אוכל · רמי לוי" silently hides that רמי לוי is really under סופר.
+  const curMid=(curSub&&curSub.parent_id&&curSub.parent_id!==t.category_id)?DB.categories.find(c=>c.id===curSub.parent_id):null;
   const triggerColor=cur?catColor(cur.id):'var(--faint)';
-  const label=cur?((cur.icon||'')+' '+cur.name+(curSub?' · '+curSub.name:'')):'בחר קטגוריה';
+  const label=cur?((cur.icon||'')+' '+cur.name+(curMid?' · '+curMid.name:'')+(curSub?' · '+curSub.name:'')):'בחר קטגוריה';
   const panelId='catp-'+t.id;
   const rows=roots.map(c=>{
     const isSel=c.id===t.category_id;
@@ -3667,8 +3671,9 @@ function renderExpenses(){
       const c=DB.categories.find(x=>x.id===t.category_id);
       const color=catColor(t.category_id);
       const icon=c?(c.icon||'📌'):'❔';
-      const subName=t.subcategory_id?(DB.categories.find(x=>x.id===t.subcategory_id)||{}).name:null;
-      const catLabel=(c?c.name:'ללא קטגוריה')+(subName?' · '+subName:'');
+      const subCat=t.subcategory_id?DB.categories.find(x=>x.id===t.subcategory_id):null;
+      const midCat=(subCat&&subCat.parent_id&&subCat.parent_id!==t.category_id)?DB.categories.find(x=>x.id===subCat.parent_id):null;
+      const catLabel=(c?c.name:'ללא קטגוריה')+(midCat?' · '+midCat.name:'')+(subCat?' · '+subCat.name:'');
       const catEditor=t._isInst?'':'<div style="margin-top:5px">'+txCategoryCell(t)+'</div>';
       const btns=t._isInst
         ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
