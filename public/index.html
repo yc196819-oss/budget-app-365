@@ -1179,6 +1179,7 @@ window.showInstallInstructions=()=>{
   ov.querySelector('#instClose').onclick=close;
 };
 const fmt=n=>(n<0?'-':'')+'₪'+Math.abs(Math.round(n)).toLocaleString('he-IL');
+const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 
 // ═══ styled modal kit — replaces native alert()/confirm()/prompt() ═══
 const UI={};
@@ -1209,7 +1210,6 @@ UI.confirm=(message,opts={})=>new Promise(resolve=>{
   okBtn.focus();
 });
 UI.prompt=(title,fields)=>new Promise(resolve=>{
-  const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
   const fieldsHtml=fields.map((f,i)=>{
     const val=esc(f.value);
     const input=f.type==='textarea'
@@ -1315,6 +1315,11 @@ function catColor(id){
 function hexA(hex,a){const n=parseInt(hex.slice(1),16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
 function cssVar(name){return getComputedStyle(document.body).getPropertyValue(name).trim();}
 const API_BASE=(window.__APP_CONFIG?.API_BASE||localStorage.getItem('aiApiBase')||((location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8787':location.origin)).replace(/\/$/, '');
+async function authHeaders(){
+  const{data}=await sb.auth.getSession();
+  const token=data?.session?.access_token;
+  return token?{'Content-Type':'application/json','Authorization':'Bearer '+token}:{'Content-Type':'application/json'};
+}
 
 let CU=null,HID=null,MNAME='',MROLE='owner'; let VM=new Date().getMonth(),VY=new Date().getFullYear();
 let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[],bankAccounts:[],creditCards:[],categoryBudgets:[]};
@@ -1726,11 +1731,11 @@ function toggleExpenseInstallments(){
 function fillCatSel(){
   const kind=$('#exType')?$('#exType').value:'expense';
   const roots=rootCats(kind);
-  $('#exCat').innerHTML=roots.map(c=>'<option value="'+c.id+'">'+(c.icon||'')+' '+c.name+'</option>').join('');
+  $('#exCat').innerHTML=roots.map(c=>'<option value="'+c.id+'">'+(c.icon||'')+' '+esc(c.name)+'</option>').join('');
   const instRoots=rootCats('expense');
-  if($('#instCat'))$('#instCat').innerHTML=instRoots.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  if($('#instCat'))$('#instCat').innerHTML=instRoots.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   const catKind=$('#catKind')?$('#catKind').value:'expense';
-  if($('#subParent'))$('#subParent').innerHTML=rootCats(catKind).map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  if($('#subParent'))$('#subParent').innerHTML=rootCats(catKind).map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   fillAccountSel();
   updateSubSel();
   const isExpense=kind==='expense';
@@ -1741,7 +1746,7 @@ function fillAccountSel(){
   const sel=$('#exAccount'); if(!sel)return;
   const cur=sel.value;
   sel.innerHTML=(DB.bankAccounts||[]).length
-    ? DB.bankAccounts.map(a=>'<option value="'+a.id+'">🏦 '+a.name+'</option>').join('')
+    ? DB.bankAccounts.map(a=>'<option value="'+a.id+'">🏦 '+esc(a.name)+'</option>').join('')
     : '<option value="">— אין חשבון, הוסף בטאב חשבונות וכרטיסים —</option>';
   if(cur&&(DB.bankAccounts||[]).some(a=>a.id===cur))sel.value=cur;
   fillCardSel();
@@ -1750,12 +1755,12 @@ function fillCardSel(){
   const accSel=$('#exAccount'),cardSel=$('#exCard'); if(!cardSel)return;
   const accId=accSel?accSel.value:'';
   const cards=(DB.creditCards||[]).filter(c=>c.bank_account_id===accId);
-  cardSel.innerHTML='<option value="">ללא כרטיס (מזומן/הו״ק/צ׳ק)</option>'+cards.map(c=>'<option value="'+c.id+'">💳 '+c.name+' (חיוב ה-'+c.billing_day+')</option>').join('');
+  cardSel.innerHTML='<option value="">ללא כרטיס (מזומן/הו״ק/צ׳ק)</option>'+cards.map(c=>'<option value="'+c.id+'">💳 '+esc(c.name)+' (חיוב ה-'+c.billing_day+')</option>').join('');
 }
 function updateSubSel(){
   const c=DB.categories.find(x=>x.id===$('#exCat').value);
   const subs=c?subCats(c.id):[];
-  $('#exSub').innerHTML='<option value="">— ללא תת —</option>'+subs.map(s=>'<option value="'+s.id+'">'+s.name+'</option>').join('');
+  $('#exSub').innerHTML='<option value="">— ללא תת —</option>'+subs.map(s=>'<option value="'+s.id+'">'+esc(s.name)+'</option>').join('');
   if(c){
     const accSel=$('#exAccount');
     if(c.default_account_id&&accSel&&(DB.bankAccounts||[]).some(a=>a.id===c.default_account_id)){accSel.value=c.default_account_id;}
@@ -1764,7 +1769,7 @@ function updateSubSel(){
     if(c.default_card_id&&cardSel&&[...cardSel.options].some(o=>o.value===c.default_card_id))cardSel.value=c.default_card_id;
   }
 }
-$('#catKind')&&($('#catKind').onchange=function(){const kind=$('#catKind').value;if($('#subParent'))$('#subParent').innerHTML=rootCats(kind).map(c=>'<option value="'+c.id+'">'+(c.icon||'')+' '+c.name+'</option>').join('');renderCatManage();});
+$('#catKind')&&($('#catKind').onchange=function(){const kind=$('#catKind').value;if($('#subParent'))$('#subParent').innerHTML=rootCats(kind).map(c=>'<option value="'+c.id+'">'+(c.icon||'')+' '+esc(c.name)+'</option>').join('');renderCatManage();});
 
 async function addTransaction(){
   const amount=parseFloat($('#exAmount').value);if(!amount||amount<=0){alert('הכנס סכום תקין');return;}
@@ -1859,7 +1864,7 @@ async function loadMembers(){
     const removeBtn=canRemove?'<button type="button" class="icon-btn danger" onclick="removeMember(\''+m.user_id+'\',\''+(m.display_name||'').replace(/'/g,"")+'\')" title="הסרה">🗑️</button>':'';
     return '<div class="tx-card">'
       +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+';border-radius:50%;font-weight:800;font-size:.85rem">'+m.display_name.slice(0,2)+'</div>'
-      +'<div class="tx-mid"><div class="tx-desc">'+m.display_name+'</div><div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(m.role==='owner'?'👑 בעלים':'חבר')+'</span><span class="tx-pmtag">הצטרפ/ה '+new Date(m.created_at).toLocaleDateString('he-IL')+'</span></div></div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+esc(m.display_name)+'</div><div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(m.role==='owner'?'👑 בעלים':'חבר')+'</span><span class="tx-pmtag">הצטרפ/ה '+new Date(m.created_at).toLocaleDateString('he-IL')+'</span></div></div>'
       +'<div class="tx-actions">'+removeBtn+'</div>'
       +'</div>';
   }).join('');
@@ -1923,7 +1928,7 @@ async function testIntegrations(){
       },
       message:'✅ בדיקת חיבור ממערכת התקציב המשפחתי'
     };
-    const r=await fetch(API_BASE+'/api/channels/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const r=await fetch(API_BASE+'/api/channels/test',{method:'POST',headers:await authHeaders(),body:JSON.stringify(payload)});
     const data=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(data?.error||'endpoint not available');
     const gcOk=!!data?.results?.google_chat?.ok;
@@ -1954,7 +1959,7 @@ async function analyzeSmartMessage(){
 
   let parsed=null;
   try{
-    const r=await fetch(API_BASE+'/api/chat/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,channel,householdId:HID})});
+    const r=await fetch(API_BASE+'/api/chat/parse',{method:'POST',headers:await authHeaders(),body:JSON.stringify({text,channel,householdId:HID})});
     if(r.ok){parsed=await r.json();}
   }catch(_){/* fallback below */}
 
@@ -2004,7 +2009,7 @@ function refreshMaaserPanel(){
   if(list){
     const incomeCats=rootCats('income');
     const excluded=new Set(APP_SETTINGS.maaser.excludedCategoryIds||[]);
-    list.innerHTML=incomeCats.map(c=>'<label class="checkline" style="cursor:pointer"><input type="checkbox" '+(excluded.has(c.id)?'checked':'')+' onchange="toggleMaaserExcludeCategory(\''+c.id+'\')"><span style="margin-right:4px">'+c.name+'</span></label>').join('');
+    list.innerHTML=incomeCats.map(c=>'<label class="checkline" style="cursor:pointer"><input type="checkbox" '+(excluded.has(c.id)?'checked':'')+' onchange="toggleMaaserExcludeCategory(\''+c.id+'\')"><span style="margin-right:4px">'+esc(c.name)+'</span></label>').join('');
   }
 }
 window.setMaaserRate=(rate)=>{
@@ -2044,7 +2049,7 @@ async function sendReminderTest(){
       channel:$('#reminderChannel').value||'email',
       appLink:location.origin+location.pathname
     };
-    const r=await fetch(API_BASE+'/api/reminders/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const r=await fetch(API_BASE+'/api/reminders/test',{method:'POST',headers:await authHeaders(),body:JSON.stringify(payload)});
     if(!r.ok)throw new Error('test endpoint unavailable');
     $('#reminderStatus').textContent='✅ תזכורת ניסיון נשלחה.';
   }catch(_){
@@ -2115,7 +2120,7 @@ window.sendPushTest=async()=>{
   const status=$('#pushStatus');
   if(status)status.textContent='שולח התראת ניסיון...';
   try{
-    const r=await fetch(API_BASE+'/api/push/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:CU.id})});
+    const r=await fetch(API_BASE+'/api/push/test',{method:'POST',headers:await authHeaders(),body:JSON.stringify({})});
     const data=await r.json();
     if(!r.ok)throw new Error(data.error||'שליחה נכשלה');
     if(status)status.textContent='✅ נשלחה התראת ניסיון — אמור להופיע התראה על המכשיר תוך כמה שניות.';
@@ -2359,7 +2364,7 @@ async function analyzeImportedContent(input,key){
       const body=JSON.stringify({prompt,text:input?.text?String(input.text).slice(0,12000):'',fileData:input?.fileData||null,mimeType:input?.mimeType||null,fileName:input?.fileName||null,householdId:HID});
       for(let attempt=1;attempt<=2&&!raw;attempt++){
         try{
-          const srv=await fetchWithTimeout(base+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body},70000);
+          const srv=await fetchWithTimeout(base+'/api/ai/import',{method:'POST',headers:await authHeaders(),body},70000);
           if(srv.ok){
             const sData=await srv.json();
             raw=typeof sData==='string'?sData:(sData.output||JSON.stringify(sData.transactions||[]));
@@ -2489,7 +2494,7 @@ async function submitQuickAdd(prompt,extra,btn,allowMulti){
   const origLabel=btn?btn.textContent:'';
   if(btn){btn.disabled=true;btn.innerHTML='מנתח '+AI_DOTS;}
   try{
-    const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,text:'',...extra})});
+    const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:await authHeaders(),body:JSON.stringify({prompt,text:'',...extra})});
     const data=await res.json();
     if(data.error||!Array.isArray(data.transactions)||!data.transactions.length){
       UI.alert('לא הצלחתי לזהות תנועה. נסו שוב או מלאו ידנית.',{type:'error'});
@@ -2620,9 +2625,9 @@ function fillImportSourceSel(){
   const cur=sel.value;
   const cardOpts=(DB.creditCards||[]).map(c=>{
     const acct=(DB.bankAccounts||[]).find(a=>a.id===c.bank_account_id);
-    return '<option value="card:'+c.id+'">💳 '+c.name+(acct?' ('+acct.name+')':'')+'</option>';
+    return '<option value="card:'+c.id+'">💳 '+esc(c.name)+(acct?' ('+esc(acct.name)+')':'')+'</option>';
   }).join('');
-  const acctOpts=(DB.bankAccounts||[]).map(a=>'<option value="account:'+a.id+'">🏦 '+a.name+' (ללא כרטיס)</option>').join('');
+  const acctOpts=(DB.bankAccounts||[]).map(a=>'<option value="account:'+a.id+'">🏦 '+esc(a.name)+' (ללא כרטיס)</option>').join('');
   sel.innerHTML='<option value="">— לא לשייך אוטומטית —</option>'+cardOpts+acctOpts;
   if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
 }
@@ -2648,7 +2653,7 @@ function renderReview(){
   const warning=!allCats.length?'<div class="empty" style="margin-bottom:10px">אין קטגוריות זמינות כרגע. אפשר עדיין לאשר הוספה, או לעבור לקטגוריות וליצור לפחות קטגוריה אחת.</div>':'';
   const dupeWarning=dupeCount?'<div class="row" style="background:rgba(255,180,84,.12);border:1px solid var(--warn);border-radius:12px;padding:10px 14px;margin-bottom:10px;justify-content:space-between"><span>⚠️ '+dupeCount+' תנועות נראות כמו כפילות של תנועות שכבר קיימות במערכת (מסומנות למטה בכתום)</span><button type="button" class="smallbtn" onclick="removeFlaggedDuplicates()">הסר את כל הכפילויות המסומנות</button></div>':'';
   const rows=pendingImport.map((t,i)=>{
-    const catOpts=['<option value="">— ללא קטגוריה —</option>'].concat(allCats.map(c=>'<option value="'+c.id+'" '+(c.id===t.category_id?'selected':'')+'>'+c.name+'</option>')).join('');
+    const catOpts=['<option value="">— ללא קטגוריה —</option>'].concat(allCats.map(c=>'<option value="'+c.id+'" '+(c.id===t.category_id?'selected':'')+'>'+esc(c.name)+'</option>')).join('');
     const subOpts=getReviewSubcategoryOptions(i);
     const dupeTitle=t._dupe?'⚠️ כנראה כפילות של תנועה קיימת: '+t._dupeInfo:'';
     return '<div class="review-row'+(t._dupe?' review-dupe':'')+'" title="'+dupeTitle+'"><input value="'+(t.description||'')+'" onchange="pendingImport['+i+'].description=this.value"><input type="number" value="'+t.amount+'" onchange="pendingImport['+i+'].amount=+this.value"><select onchange="onReviewCategoryChange('+i+',this.value)">'+catOpts+'</select><div style="display:flex;gap:6px;align-items:center"><select style="flex:1" onchange="pendingImport['+i+'].subcategory_id=this.value||null">'+subOpts+'</select><button class="smallbtn" type="button" onclick="createReviewSubcategory('+i+')">+ תת</button></div><select onchange="pendingImport['+i+'].type=this.value"><option value="expense" '+(t.type==='expense'?'selected':'')+'>הוצאה</option><option value="income" '+(t.type==='income'?'selected':'')+'>הכנסה</option></select><button type="button" class="icon-btn danger" onclick="pendingImport.splice('+i+',1);renderReview()" title="הסר">✕</button></div>';
@@ -2660,7 +2665,7 @@ function getReviewSubcategoryOptions(i){
   const t=pendingImport[i]||{};
   const subs=t.category_id?subCats(t.category_id):[];
   const base=['<option value="">— ללא תת —</option>'];
-  return base.concat(subs.map(s=>'<option value="'+s.id+'" '+(s.id===t.subcategory_id?'selected':'')+'>'+s.name+'</option>')).join('');
+  return base.concat(subs.map(s=>'<option value="'+s.id+'" '+(s.id===t.subcategory_id?'selected':'')+'>'+esc(s.name)+'</option>')).join('');
 }
 
 function onReviewCategoryChange(i,categoryId){
@@ -2687,7 +2692,7 @@ function cancelReview(){pendingImport=[];$('#reviewPanel').classList.add('hidden
 async function confirmImport(){
   const toInsert=[...pendingImport];
   try{
-    const r=await fetchWithTimeout(API_BASE+'/api/import/commit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({householdId:HID,userId:CU.id,transactions:toInsert})},30000);
+    const r=await fetchWithTimeout(API_BASE+'/api/import/commit',{method:'POST',headers:await authHeaders(),body:JSON.stringify({householdId:HID,transactions:toInsert})},30000);
     if(r.ok){
       const data=await r.json();
       const rows=Array.isArray(data?.rows)?data.rows:[];
@@ -2739,7 +2744,7 @@ function txCategoryCell(t){
   // otherwise "אוכל · רמי לוי" silently hides that רמי לוי is really under סופר.
   const curMid=(curSub&&curSub.parent_id&&curSub.parent_id!==t.category_id)?DB.categories.find(c=>c.id===curSub.parent_id):null;
   const triggerColor=cur?catColor(cur.id):'var(--faint)';
-  const label=cur?((cur.icon||'')+' '+cur.name+(curMid?' · '+curMid.name:'')+(curSub?' · '+curSub.name:'')):'בחר קטגוריה';
+  const label=cur?((cur.icon||'')+' '+esc(cur.name)+(curMid?' · '+esc(curMid.name):'')+(curSub?' · '+esc(curSub.name):'')):'בחר קטגוריה';
   const panelId='catp-'+t.id;
   const rows=roots.map(c=>{
     const isSel=c.id===t.category_id;
@@ -2747,10 +2752,10 @@ function txCategoryCell(t){
     const subRows=subs.length?'<div class="cat-picker-sub">'+subs.map(s=>{
       const subSel=s.id===t.subcategory_id;
       const subsubs=subCats(s.id);
-      const subsubRows=subsubs.length?'<div class="cat-picker-subsub">'+subsubs.map(ss=>'<div class="cat-picker-opt'+(ss.id===t.subcategory_id?' sel':'')+'" onclick="event.stopPropagation();selectTxSub(\''+t.id+'\',\''+ss.id+'\',false)"><span class="sw" style="background:'+catColor(ss.id)+'"></span>↳ '+ss.name+'</div>').join('')+'</div>':'';
-      return '<div class="cat-picker-opt'+(subSel?' sel':'')+'" onclick="event.stopPropagation();selectTxSub(\''+t.id+'\',\''+s.id+'\','+(subsubs.length>0)+')"><span class="sw" style="background:'+catColor(s.id)+'"></span>'+s.name+'</div>'+subsubRows;
+      const subsubRows=subsubs.length?'<div class="cat-picker-subsub">'+subsubs.map(ss=>'<div class="cat-picker-opt'+(ss.id===t.subcategory_id?' sel':'')+'" onclick="event.stopPropagation();selectTxSub(\''+t.id+'\',\''+ss.id+'\',false)"><span class="sw" style="background:'+catColor(ss.id)+'"></span>↳ '+esc(ss.name)+'</div>').join('')+'</div>':'';
+      return '<div class="cat-picker-opt'+(subSel?' sel':'')+'" onclick="event.stopPropagation();selectTxSub(\''+t.id+'\',\''+s.id+'\','+(subsubs.length>0)+')"><span class="sw" style="background:'+catColor(s.id)+'"></span>'+esc(s.name)+'</div>'+subsubRows;
     }).join('')+'</div>':'';
-    return '<div class="cat-picker-opt'+(isSel?' sel':'')+'" onclick="event.stopPropagation();selectTxCat(\''+t.id+'\',\''+c.id+'\','+(subs.length>0)+')"><span class="sw" style="background:'+catColor(c.id)+'"></span>'+(c.icon||'')+' '+c.name+'</div>'+subRows;
+    return '<div class="cat-picker-opt'+(isSel?' sel':'')+'" onclick="event.stopPropagation();selectTxCat(\''+t.id+'\',\''+c.id+'\','+(subs.length>0)+')"><span class="sw" style="background:'+catColor(c.id)+'"></span>'+(c.icon||'')+' '+esc(c.name)+'</div>'+subRows;
   }).join('');
   return '<div class="cat-picker">'
     +'<button type="button" class="cat-picker-trigger" style="color:'+triggerColor+'" onclick="event.stopPropagation();toggleCatPicker(\''+panelId+'\')">'+label+' <span class="car">▾</span></button>'
@@ -2796,7 +2801,7 @@ function instCategoryCell(p){
   const triggerColor=cur?catColor(cur.id):'var(--faint)';
   const label=cur?((cur.icon||'')+' '+cur.name):'בחר קטגוריה';
   const panelId='instcatp-'+p.id;
-  const rows=roots.map(c=>'<div class="cat-picker-opt'+(c.id===p.category_id?' sel':'')+'" onclick="event.stopPropagation();selectInstCat(\''+p.id+'\',\''+c.id+'\')"><span class="sw" style="background:'+catColor(c.id)+'"></span>'+(c.icon||'')+' '+c.name+'</div>').join('');
+  const rows=roots.map(c=>'<div class="cat-picker-opt'+(c.id===p.category_id?' sel':'')+'" onclick="event.stopPropagation();selectInstCat(\''+p.id+'\',\''+c.id+'\')"><span class="sw" style="background:'+catColor(c.id)+'"></span>'+(c.icon||'')+' '+esc(c.name)+'</div>').join('');
   return '<div class="cat-picker">'
     +'<button type="button" class="cat-picker-trigger" style="color:'+triggerColor+'" onclick="event.stopPropagation();toggleCatPicker(\''+panelId+'\')">'+label+' <span class="car">▾</span></button>'
     +'<div class="cat-picker-panel hidden" id="'+panelId+'" onclick="event.stopPropagation()">'+(rows||'<p class="empty" style="padding:8px">אין קטגוריות</p>')+'</div>'
@@ -2953,12 +2958,12 @@ function computeFlow(){
         return s+(eff.y===VY&&eff.m===VM?+t.amount:0);
       },0);
       acctBilling+=amt;
-      return '<div class="row" style="justify-content:space-between;font-size:.82rem;padding:3px 0"><span class="muted">💳 '+c.name+' (חיוב ה-'+c.billing_day+')</span><span>'+fmt(amt)+'</span></div>';
+      return '<div class="row" style="justify-content:space-between;font-size:.82rem;padding:3px 0"><span class="muted">💳 '+esc(c.name)+' (חיוב ה-'+c.billing_day+')</span><span>'+fmt(amt)+'</span></div>';
     }).join('')||'<div class="muted" style="font-size:.8rem">אין כרטיסי אשראי מקושרים לחשבון זה</div>';
     _flowBillingByAccount[acc.id]=acctBilling;
     return '<div class="card" style="background:var(--surface2);margin-bottom:10px;text-align:right">'
       +'<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
-      +'<div style="font-weight:700">🏦 '+acc.name+'</div>'
+      +'<div style="font-weight:700">🏦 '+esc(acc.name)+'</div>'
       +'<input id="acctBalInput_'+acc.id+'" type="number" placeholder="יתרת עו״ש נוכחית" value="'+(bal||'')+'" oninput="onAccountBalanceChange(\''+acc.id+'\',this.value)" style="width:160px">'
       +'</div>'
       +'<div style="margin-top:8px">'+cardLines+'</div>'
@@ -3143,7 +3148,7 @@ function renderCharts(){
 
   // category trend line
   const ts=$('#trendCat');
-  if(ts.options.length!==cats.length){ts.innerHTML=cats.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');}
+  if(ts.options.length!==cats.length){ts.innerHTML=cats.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');}
   const selId=ts.value||cats[0]?.id;
   const trend=[];for(let m=0;m<12;m++){let v=exp.filter(t=>t.category_id===selId).reduce((s,t)=>s+moAmt(t,VY,m),0);v+=DB.installments.filter(p=>p.category_id===selId).reduce((s,p)=>s+instMo(p,VY,m),0);trend.push(Math.round(v));}
   const trendAvg=trend.slice(0,months).reduce((s,v)=>s+v,0)/months;
@@ -3302,7 +3307,7 @@ function renderAdvisorTopics(){
   const box=$('#advisorTopicChips');if(!box)return;
   const topics=buildPersonalizedTopics();
   window.ADVISOR_TOPICS=topics;
-  box.innerHTML=topics.map((t,i)=>'<button type="button" class="advisor-topic-chip" onclick="startNewConsultation(ADVISOR_TOPICS['+i+'])"><span class="ic">'+t.icon+'</span><span>'+t.label+'</span></button>').join('')
+  box.innerHTML=topics.map((t,i)=>'<button type="button" class="advisor-topic-chip" onclick="startNewConsultation(ADVISOR_TOPICS['+i+'])"><span class="ic">'+t.icon+'</span><span>'+esc(t.label)+'</span></button>').join('')
     +'<button type="button" class="advisor-topic-chip" onclick="startNewConsultation()"><span class="ic">💬</span><span>שאלה חופשית / ניתוח כללי</span></button>';
 }
 function showAdvisorConvoView(show){
@@ -3315,7 +3320,7 @@ async function loadAdvisorConversationsList(){
   const box=$('#advisorHistoryList');if(!box||!CU)return;
   const{data,error}=await sb.from('advisor_conversations').select('id,title,updated_at').eq('user_id',CU.id).eq('household_id',HID).order('updated_at',{ascending:false});
   if(error||!data||!data.length){box.innerHTML='<p class="empty">אין עדיין שיחות שמורות — לחצו "התחל ייעוץ" כדי להתחיל</p>';return;}
-  box.innerHTML=data.map(c=>'<div class="advisor-history-item" onclick="openConversation(\''+c.id+'\')"><div><div class="t">'+c.title+'</div><div class="d">'+new Date(c.updated_at).toLocaleString('he-IL')+'</div></div><span class="muted">פתח ←</span></div>').join('');
+  box.innerHTML=data.map(c=>'<div class="advisor-history-item" onclick="openConversation(\''+c.id+'\')"><div><div class="t">'+esc(c.title)+'</div><div class="d">'+new Date(c.updated_at).toLocaleString('he-IL')+'</div></div><span class="muted">פתח ←</span></div>').join('');
 }
 
 async function saveCurrentConversation(){
@@ -3336,7 +3341,7 @@ window.startNewConsultation=async(topic)=>{
   renderAdvisorChat();
   try{
     const summary=buildAdviceSummary();
-    const res=await fetch(API_BASE+'/api/ai/advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary})});
+    const res=await fetch(API_BASE+'/api/ai/advice',{method:'POST',headers:await authHeaders(),body:JSON.stringify({summary})});
     const data=await res.json();
     if(data.error){$('#advisorContent').innerHTML='<p class="empty">שגיאה בקבלת ניתוח: '+data.error+'</p>';return;}
     currentConversation.messages.push({role:'advice',data:data.advice});
@@ -3382,7 +3387,7 @@ window.sendAdvisorChat=async(presetMsg)=>{
   try{
     const summary=buildAdviceSummary();
     const history=currentConversation.messages.filter(m=>m.role==='user'||m.role==='ai').slice(0,-2);
-    const res=await fetch(API_BASE+'/api/ai/advice-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({summary,history,message:msg})});
+    const res=await fetch(API_BASE+'/api/ai/advice-chat',{method:'POST',headers:await authHeaders(),body:JSON.stringify({summary,history,message:msg})});
     const data=await res.json();
     currentConversation.messages.pop();
     currentConversation.messages.push({role:'ai',text:data.error?('שגיאה: '+data.error):(data.reply||'לא התקבלה תשובה')});
@@ -3452,7 +3457,7 @@ async function onbFinish(){
   const inp=onbState.ov.querySelector('#onbInput');if(inp)inp.disabled=true;
   const qaText=ONBOARDING_QUESTIONS.map(q=>q.q+'\nתשובה: '+(onbState.answers[q.key]||'(לא צוין / לא רלוונטי)')).join('\n\n');
   try{
-    const res=await fetch(API_BASE+'/api/ai/onboarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({qaText})});
+    const res=await fetch(API_BASE+'/api/ai/onboarding',{method:'POST',headers:await authHeaders(),body:JSON.stringify({qaText})});
     const data=await res.json();
     if(data.error){UI.alert('שגיאה בעיבוד הנתונים: '+data.error,{type:'error'});onbState.close();return;}
     onbState.close();
@@ -3580,7 +3585,7 @@ function renderExpenses(){
     :('background:'+hexA(color,.13)+';color:'+color+';border-color:'+hexA(color,.32));
   const pill=c=>{
     const active=exFilter===c.id,color=catColor(c.id);
-    return '<button type="button" class="pill'+(active?' on':'')+'" data-f="'+c.id+'" style="'+pillStyle(active,color)+'">'+(c.icon||'')+' '+c.name+'</button>';
+    return '<button type="button" class="pill'+(active?' on':'')+'" data-f="'+c.id+'" style="'+pillStyle(active,color)+'">'+(c.icon||'')+' '+esc(c.name)+'</button>';
   };
   const groupPill=(key,label,color)=>{
     const active=exFilter===key;
@@ -3673,7 +3678,7 @@ function renderExpenses(){
       const icon=c?(c.icon||'📌'):'❔';
       const subCat=t.subcategory_id?DB.categories.find(x=>x.id===t.subcategory_id):null;
       const midCat=(subCat&&subCat.parent_id&&subCat.parent_id!==t.category_id)?DB.categories.find(x=>x.id===subCat.parent_id):null;
-      const catLabel=(c?c.name:'ללא קטגוריה')+(midCat?' · '+midCat.name:'')+(subCat?' · '+subCat.name:'');
+      const catLabel=esc((c?c.name:'ללא קטגוריה')+(midCat?' · '+midCat.name:'')+(subCat?' · '+subCat.name:''));
       const catEditor=t._isInst?'':'<div style="margin-top:5px">'+txCategoryCell(t)+'</div>';
       const btns=t._isInst
         ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
@@ -3681,7 +3686,7 @@ function renderExpenses(){
       return '<div class="tx-card">'
         +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+icon+'</div>'
         +'<div class="tx-mid">'
-          +'<div class="tx-desc">'+t.description+'</div>'
+          +'<div class="tx-desc">'+esc(t.description)+'</div>'
           +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+catLabel+'</span>'+txPmTag(t)+'</div>'
           +catEditor
         +'</div>'
@@ -3698,7 +3703,7 @@ function renderCatSummary(){
   const exp=DB.transactions.filter(t=>t.type==='expense');
   const roots=rootCats('expense');
   const cf=$('#catFilters');
-  cf.innerHTML='<span class="pill '+(catFilter==='all'?'on':'')+'" data-f="all">הכל</span>'+roots.map(c=>'<span class="pill '+(catFilter===c.id?'on':'')+'" data-f="'+c.id+'">'+(c.icon||'')+' '+c.name+'</span>').join('');
+  cf.innerHTML='<span class="pill '+(catFilter==='all'?'on':'')+'" data-f="all">הכל</span>'+roots.map(c=>'<span class="pill '+(catFilter===c.id?'on':'')+'" data-f="'+c.id+'">'+(c.icon||'')+' '+esc(c.name)+'</span>').join('');
   cf.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{catFilter=p.dataset.f;catSubFilter=null;renderCatSummary();});
   if(catFilter!=='all'){const sc=subCats(catFilter);sc.forEach(s=>{const sp=document.createElement('span');sp.className='pill'+(catSubFilter===s.id?' on':'');sp.textContent=s.name;sp.onclick=()=>{catSubFilter=catSubFilter===s.id?null:s.id;renderCatSummary();};cf.appendChild(sp);});}
   const show=catFilter==='all'?roots:roots.filter(c=>c.id===catFilter);
@@ -3718,10 +3723,10 @@ function renderCatSummary(){
       const st=subTotal(c.id,s.id);
       const subsubs=subCats(s.id).map(ss2=>({ss2,sst:subTotal(c.id,ss2.id)})).filter(x=>x.sst>0);
       if(st===0&&!subsubs.length)return '';
-      const ssh=subsubs.map(({ss2,sst})=>'<div class="subcat" style="margin-right:16px"><span>↳ '+ss2.name+'</span><span>'+fmt(sst)+'</span></div>').join('');
-      return '<div class="subcat"><span>'+s.name+'</span><span>'+fmt(st)+'</span></div>'+ssh;
+      const ssh=subsubs.map(({ss2,sst})=>'<div class="subcat" style="margin-right:16px"><span>↳ '+esc(ss2.name)+'</span><span>'+fmt(sst)+'</span></div>').join('');
+      return '<div class="subcat"><span>'+esc(s.name)+'</span><span>'+fmt(st)+'</span></div>'+ssh;
     }).join('');
-    return '<div class="catrow"><div class="catname"><span>'+(c.icon||'')+' '+c.name+'</span><span>'+fmt(tot)+'</span></div>'+sh+'</div>';
+    return '<div class="catrow"><div class="catname"><span>'+(c.icon||'')+' '+esc(c.name)+'</span><span>'+fmt(tot)+'</span></div>'+sh+'</div>';
   }).filter(Boolean).join('');
   $('#catSummary').innerHTML=html||'<div class="empty">אין נתונים לשנה זו</div>';
   const footer=$('#catSumFooter');
@@ -3737,7 +3742,7 @@ function renderBudgetManage(){
     const b=DB.categoryBudgets.find(x=>x.category_id===c.id);
     return '<div class="budget-row">'
       +'<div class="bicon" style="background:'+hexA(color,.16)+';color:'+color+'">'+(c.icon||'📌')+'</div>'
-      +'<div class="bname">'+c.name+'</div>'
+      +'<div class="bname">'+esc(c.name)+'</div>'
       +'<input type="number" placeholder="ללא הגבלה" value="'+(b?b.monthly_amount:'')+'" onchange="updateCategoryBudget(\''+c.id+'\',this.value)">'
       +'</div>';
   }).join('');
@@ -3778,7 +3783,7 @@ function renderBudgetProgress(){
     const color=pct>=100?'var(--danger)':pct>=70?'var(--warn)':'var(--accent2)';
     const remaining=it.budget-it.spent;
     return '<div class="budget-progress-item">'
-      +'<div class="budget-progress-head"><b>'+(it.c.icon||'')+' '+it.c.name+'</b><span style="color:'+color+'">'+fmt(it.spent)+' מתוך '+fmt(it.budget)+(remaining>=0?' · נותרו '+fmt(remaining):' · חריגה של '+fmt(-remaining))+'</span></div>'
+      +'<div class="budget-progress-head"><b>'+(it.c.icon||'')+' '+esc(it.c.name)+'</b><span style="color:'+color+'">'+fmt(it.spent)+' מתוך '+fmt(it.budget)+(remaining>=0?' · נותרו '+fmt(remaining):' · חריגה של '+fmt(-remaining))+'</span></div>'
       +'<div class="budget-bar"><span style="width:'+Math.min(100,pct)+'%;background:'+color+'"></span></div>'
       +'</div>';
   }).join('');
@@ -3790,14 +3795,14 @@ function renderCatManage(){
   const renderSub=s=>{
     const color=catColor(s.id);
     const subsubs=subCats(s.id);
-    const ssHtml=subsubs.map(ss=>'<div class="subcat" style="margin-right:36px"><span><span class="sw" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+catColor(ss.id)+';margin-left:8px"></span>↳ '+ss.name+'</span><span>'+iconBtn('renameCat',ss.id,'✏️','שנה שם')+iconBtn('delSub',ss.id,'🗑️','מחיקה',true)+'</span></div>').join('');
-    return '<div class="subcat"><span><span class="sw" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';margin-left:8px"></span>'+s.name+'</span><span>'+iconBtn('renameCat',s.id,'✏️','שנה שם')+'<button type="button" class="icon-btn" onclick="addSubSub(\''+s.id+'\')" title="הוסף תת-תת קטגוריה">➕</button>'+iconBtn('delSub',s.id,'🗑️','מחיקה',true)+'</span></div>'+ssHtml;
+    const ssHtml=subsubs.map(ss=>'<div class="subcat" style="margin-right:36px"><span><span class="sw" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+catColor(ss.id)+';margin-left:8px"></span>↳ '+esc(ss.name)+'</span><span>'+iconBtn('renameCat',ss.id,'✏️','שנה שם')+iconBtn('delSub',ss.id,'🗑️','מחיקה',true)+'</span></div>').join('');
+    return '<div class="subcat"><span><span class="sw" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';margin-left:8px"></span>'+esc(s.name)+'</span><span>'+iconBtn('renameCat',s.id,'✏️','שנה שם')+'<button type="button" class="icon-btn" onclick="addSubSub(\''+s.id+'\')" title="הוסף תת-תת קטגוריה">➕</button>'+iconBtn('delSub',s.id,'🗑️','מחיקה',true)+'</span></div>'+ssHtml;
   };
   const cat=c=>{
     const color=catColor(c.id);
     return '<div class="tx-card" style="flex-wrap:wrap;align-items:flex-start">'
       +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+(c.icon||'📌')+'</div>'
-      +'<div class="tx-mid"><div class="tx-desc">'+c.name+'</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+esc(c.name)+'</div>'
       +(subCats(c.id).length?'<div style="margin-top:8px">'+subCats(c.id).map(renderSub).join('')+'</div>':'')
       +'</div>'
       +'<div class="tx-actions">'+iconBtn('renameCat',c.id,'✏️','שנה שם')+iconBtn('delCat',c.id,'🗑️','מחיקה',true)+'</div>'
@@ -3838,7 +3843,7 @@ function renderAccounts(){
         const color=catColor(a.id);
         return '<div class="tx-card">'
           +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">🏦</div>'
-          +'<div class="tx-mid"><div class="tx-desc">'+a.name+'</div>'+(a.bank_name?'<div class="tx-meta"><span class="tx-pmtag">'+a.bank_name+'</span></div>':'')+'</div>'
+          +'<div class="tx-mid"><div class="tx-desc">'+esc(a.name)+'</div>'+(a.bank_name?'<div class="tx-meta"><span class="tx-pmtag">'+esc(a.bank_name)+'</span></div>':'')+'</div>'
           +'<div class="tx-actions"><button type="button" class="smallbtn" onclick="renameBankAccount(\''+a.id+'\')" title="שנה שם">✏️</button><button type="button" class="icon-btn danger" onclick="delBankAccount(\''+a.id+'\')" title="מחיקה">🗑️</button></div>'
           +'</div>';
       }).join('')
@@ -3846,7 +3851,7 @@ function renderAccounts(){
   const sel=$('#newCardAcct');
   if(sel){
     const cur=sel.value;
-    sel.innerHTML=DB.bankAccounts.map(a=>'<option value="'+a.id+'">'+a.name+'</option>').join('');
+    sel.innerHTML=DB.bankAccounts.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join('');
     if(cur&&DB.bankAccounts.some(a=>a.id===cur))sel.value=cur;
   }
   const bdSel=$('#newCardBillingDay');
@@ -3893,8 +3898,8 @@ function renderCreditCards(){
         const color=catColor(c.id);
         return '<div class="tx-card">'
           +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">💳</div>'
-          +'<div class="tx-mid"><div class="tx-desc">'+c.name+'</div>'
-          +'<div class="tx-meta"><span class="tx-pmtag">'+(acct?acct.name:'—')+'</span></div></div>'
+          +'<div class="tx-mid"><div class="tx-desc">'+esc(c.name)+'</div>'
+          +'<div class="tx-meta"><span class="tx-pmtag">'+(acct?esc(acct.name):'—')+'</span></div></div>'
           +'<div class="row" style="gap:6px;flex-shrink:0">'
           +'<label class="muted" style="font-size:.74rem;white-space:nowrap">יום חיוב</label>'
           +'<select onchange="updateCardBillingDay(\''+c.id+'\',this.value)" style="width:auto;padding:6px 8px;font-size:.8rem">'+dayOpts.replace('value="'+c.billing_day+'"','value="'+c.billing_day+'" selected')+'</select>'
@@ -3919,9 +3924,9 @@ function renderLoans(){
     const dirLabel=isMaaser?'חוב מעשרות':(l.direction==='tome'?'חייבים לי':'אני חייב');
     return '<div class="tx-card'+(l.settled?' settled':'')+'">'
       +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+(isMaaser?'🙏':'🤝')+'</div>'
-      +'<div class="tx-mid"><div class="tx-desc">'+l.counterparty+(l.settled?' · <span class="muted">סולק ✅</span>':'')+'</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+esc(l.counterparty)+(l.settled?' · <span class="muted">סולק ✅</span>':'')+'</div>'
       +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+dirLabel+'</span>'
-      +(l.note?'<span class="tx-pmtag">'+l.note+'</span>':'')+'<span class="tx-pmtag">'+(l.loan_date||l.date||'')+'</span></div></div>'
+      +(l.note?'<span class="tx-pmtag">'+esc(l.note)+'</span>':'')+'<span class="tx-pmtag">'+(l.loan_date||l.date||'')+'</span></div></div>'
       +'<div class="tx-amt" style="color:'+color+'">'+fmt(l.amount)+'</div>'
       +'<div class="tx-actions"><button type="button" class="smallbtn" onclick="editLoan(\''+l.id+'\')" title="עריכה">✏️</button>'
       +(!l.settled?'<button type="button" class="smallbtn" onclick="settleLoan(\''+l.id+'\')" title="סמן כסולק">✔️</button>':'')
@@ -3954,7 +3959,7 @@ function renderInstallments(){
     const n=p.payments_count||p.count;const paid=instPaid(p);const rem=n-paid;const pct=Math.min(100,paid/n*100);
     return '<div class="tx-card">'
       +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">🧾</div>'
-      +'<div class="tx-mid"><div class="tx-desc">'+p.description+'</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+esc(p.description)+'</div>'
       +'<div class="tx-meta">'+instCategoryCell(p)+
       '<span class="tx-pmtag">'+paid+'/'+n+' תשלומים · סה"כ '+fmt(+p.total_amount)+'</span></div>'
       +'<div class="bar" style="margin-top:6px"><span style="width:'+pct+'%"></span></div></div>'
@@ -3978,7 +3983,7 @@ function renderInvestments(){
     const color=catColor(i.id);
     return '<div class="tx-card">'
       +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">📈</div>'
-      +'<div class="tx-mid"><div class="tx-desc">'+i.name+'</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+esc(i.name)+'</div>'
       +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(i.asset_type||'—')+'</span>'
       +'<span class="tx-pmtag">עלות '+fmt(+i.cost)+'</span></div></div>'
       +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">'
@@ -4030,7 +4035,7 @@ function renderGoals(){$('#pCount').textContent=DB.goals.length;$('#pTarget').te
   const planItems=Array.isArray(g.plan_items)?g.plan_items:[];
   const planNote=planItems.length?'<div class="meta" style="margin-top:-4px;margin-bottom:8px">📋 '+planItems.length+' סעיפים מתוכננים · '+fmt(planItems.reduce((s,it)=>s+(+it.amount||0),0))+'</div>':'';
   return '<div class="goalcard" ondblclick="openGoalPlan(\''+g.id+'\')">'
-    +'<div class="goalcard-top"><div class="goalcard-icon">'+g.icon+'</div><div class="goalcard-name">'+g.name+'</div>'
+    +'<div class="goalcard-top"><div class="goalcard-icon">'+g.icon+'</div><div class="goalcard-name">'+esc(g.name)+'</div>'
     +'<div class="goalcard-menu"><button type="button" class="icon-btn" onclick="event.stopPropagation();editGoal(\''+g.id+'\')" title="עריכה">✏️</button><button type="button" class="icon-btn danger" onclick="event.stopPropagation();delGoal(\''+g.id+'\')" title="מחיקה">🗑️</button></div>'
     +'</div>'
     +'<div class="meta">'+fmt(+g.saved_amount)+' מתוך '+fmt(+g.target_amount)+' · '+pct.toFixed(0)+'%'+(left>0?' · נותר '+fmt(left):' · הושג! 🎉')+'</div>'
@@ -4041,9 +4046,8 @@ function renderGoals(){$('#pCount').textContent=DB.goals.length;$('#pTarget').te
 
 window.openGoalPlan=id=>{
   const g=DB.goals.find(x=>x.id===id);if(!g)return;
-  const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
   const items=(Array.isArray(g.plan_items)?g.plan_items:[]).map(x=>({name:x.name||'',amount:+x.amount||0}));
-  const html='<div class="plan-head"><div class="plan-head-icon">'+(g.icon||'🎯')+'</div><div><h3>תוכנית — '+g.name+'</h3><p>סכום יעד כולל: '+fmt(g.target_amount)+'</p></div></div>'
+  const html='<div class="plan-head"><div class="plan-head-icon">'+(g.icon||'🎯')+'</div><div><h3>תוכנית — '+esc(g.name)+'</h3><p>סכום יעד כולל: '+fmt(g.target_amount)+'</p></div></div>'
     +'<label style="margin-top:0">סעיפי תקציב</label>'
     +'<div id="planRows"></div>'
     +'<div class="row" style="margin-top:2px"><button type="button" class="smallbtn" id="planAddRow">➕ הוסף סעיף</button><button type="button" class="smallbtn" id="planAiSuggest">🤖 הצע תוכנית עם AI</button></div>'
@@ -4079,7 +4083,7 @@ window.openGoalPlan=id=>{
     btn.disabled=true;btn.innerHTML='חושב '+AI_DOTS;
     try{
       const prompt='הצע תוכנית תקציב לסעיפי הוצאה עבור היעד "'+g.name+'" (סוג: '+(g.icon||'')+'), עם סכום יעד כולל של '+Math.round(+g.target_amount||0)+' ₪. הצע 4-7 סעיפים ריאליים עם סכומים משוערים שמסתכמים בערך לסכום היעד. החזר JSON בלבד (ללא markdown) — מערך:\n[{"name":"שם הסעיף","amount":מספר}]';
-      const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,text:g.name})});
+      const res=await fetch(API_BASE+'/api/ai/import',{method:'POST',headers:await authHeaders(),body:JSON.stringify({prompt,text:g.name})});
       const data=await res.json();
       if(data.error||!Array.isArray(data.transactions)||!data.transactions.length){
         UI.alert('לא הצלחתי להציע תוכנית כרגע. נסו שוב או הוסיפו סעיפים ידנית.',{type:'error'});

@@ -2,15 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
 const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
 
 const app = express();
+app.set('trust proxy', 1);
 const PUBLIC_DIR = path.join(__dirname, 'public');
-app.use(cors());
-app.use(express.json({ limit: '2mb' }));
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
@@ -20,14 +20,8 @@ const GROK_BASE_URL = process.env.GROK_BASE_URL || 'https://api.x.ai/v1';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_OAUTH_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || '';
-const GOOGLE_OAUTH_SCOPES = String(
-  process.env.GOOGLE_OAUTH_SCOPES || 'openid,email,https://www.googleapis.com/auth/gmail.send'
-).split(',').map((s) => s.trim()).filter(Boolean);
 const PORT = process.env.PORT || 8787;
 const APP_URL = process.env.APP_URL || 'http://127.0.0.1:5500/budget-final%20(2).html';
-const ALLOW_DEV_RESET_FALLBACK = String(
-  process.env.ALLOW_DEV_RESET_FALLBACK || (process.env.NODE_ENV !== 'production' ? 'true' : 'false')
-) === 'true';
 
 const SUPABASE_URL = String(process.env.SUPABASE_URL || '')
   .trim()
@@ -37,6 +31,87 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
   : null;
+
+// Frontend and API are served from the same Render service (see the
+// express.static registration near the bottom), so real browser traffic is
+// same-origin and doesn't need CORS at all. This allowlist only matters for
+// the handful of cases where it isn't (local dev on a different port/host).
+// Requests with no Origin header (curl, server-to-server) are left to the
+// route-level auth checks below, not CORS.
+function originHost(u) {
+  try { return new URL(u).host; } catch (_err) { return null; }
+}
+const ALLOWED_CORS_HOSTS = new Set([
+  '127.0.0.1:8787', 'localhost:8787',
+  '127.0.0.1:5500', 'localhost:5500',
+  originHost(process.env.RENDER_EXTERNAL_URL || ''),
+  originHost(APP_URL)
+].filter(Boolean));
+app.use(cors((req, callback) => {
+  const origin = req.header('Origin');
+  let allow = true;
+  if (origin) {
+    const host = originHost(origin);
+    allow = host === req.headers.host || ALLOWED_CORS_HOSTS.has(host);
+  }
+  callback(null, { origin: allow });
+}));
+app.use(express.json({ limit: '2mb' }));
+
+// ═══ auth: every route that touches a user's or household's data must
+// verify the caller's Supabase session token server-side instead of
+// trusting a userId/householdId sent in the request body — otherwise
+// anyone who finds this server's URL can act as any user. ═══
+async function requireAuth(req, res, next) {
+  if (!supabaseAdmin) {
+    return res.status(503).json({ error: 'Supabase server credentials are not configured' });
+  }
+  const authHeader = String(req.headers.authorization || '');
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) {
+    return res.status(401).json({ error: 'Missing Authorization bearer token' });
+  }
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data?.user?.id) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+    req.authUserId = data.user.id;
+    return next();
+  } catch (_err) {
+    return res.status(401).json({ error: 'Authentication failed' });
+  }
+}
+
+async function isHouseholdMember(userId, householdId) {
+  if (!supabaseAdmin || !userId || !householdId) return false;
+  const { data, error } = await supabaseAdmin
+    .from('memberships')
+    .select('user_id')
+    .eq('user_id', userId)
+    .eq('household_id', householdId)
+    .limit(1)
+    .maybeSingle();
+  if (error) return false;
+  return !!data?.user_id;
+}
+
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.authUserId || req.ip,
+  message: { error: 'יותר מדי בקשות AI, נסה שוב בעוד דקה' }
+});
+const notifyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.authUserId || req.ip,
+  message: { error: 'יותר מדי בקשות, נסה שוב בעוד דקה' }
+});
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
@@ -92,22 +167,6 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 // app. Once/if a real domain is verified on the Resend account, set
 // RESEND_FROM to an address on that domain instead.
 const RESEND_FROM = process.env.RESEND_FROM || 'Budget App <onboarding@resend.dev>';
-
-const DEFAULT_CATEGORIES = [
-  { name: 'אוכל', icon: '🍽️', kind: 'expense', subs: ['סופר', 'מסעדות ואוכל בחוץ'] },
-  { name: 'רכב', icon: '🚗', kind: 'expense', subs: ['דלק', 'אגרה', 'מוסך', 'ביטוח רכב'] },
-  { name: 'בית ודיור', icon: '🏠', kind: 'expense', subs: ['שכירות / משכנתא', 'חשבונות', 'ריהוט ותחזוקה'] },
-  { name: 'בריאות', icon: '💊', kind: 'expense', subs: ['רופאים', 'תרופות', 'ביטוח בריאות'] },
-  { name: 'פנאי ובידור', icon: '🎭', kind: 'expense', subs: ['ספורט', 'תרבות', 'נסיעות'] },
-  { name: 'שונות', icon: '📦', kind: 'expense', subs: [] },
-  { name: 'משכורת', icon: '💼', kind: 'income', subs: [] },
-  { name: 'עזרה מההורים', icon: '👨‍👩‍👧', kind: 'income', subs: [] },
-  { name: 'עבודה צדדית / פרילנס', icon: '💻', kind: 'income', subs: [] },
-  { name: 'החזרים והטבות', icon: '🧾', kind: 'income', subs: [] },
-  { name: 'רווחי השקעות', icon: '📈', kind: 'income', subs: [] },
-  { name: 'מתנות', icon: '🎁', kind: 'income', subs: [] },
-  { name: 'הכנסה אחרת', icon: '💰', kind: 'income', subs: [] }
-];
 
 const mailer = SMTP_HOST && SMTP_USER && SMTP_PASS
   ? nodemailer.createTransport({
@@ -285,33 +344,6 @@ function getGoogleOAuthClient() {
   );
 }
 
-function encodeState(payload) {
-  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
-}
-
-function decodeState(state) {
-  return JSON.parse(Buffer.from(String(state || ''), 'base64url').toString('utf8'));
-}
-
-function safeAppUrl(inputUrl) {
-  const fallback = APP_URL;
-  try {
-    const u = new URL(String(inputUrl || '').trim());
-    if (u.protocol === 'http:' || u.protocol === 'https:') return u.toString();
-    return fallback;
-  } catch (_err) {
-    return fallback;
-  }
-}
-
-function withQuery(url, params) {
-  const u = new URL(safeAppUrl(url));
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && String(v) !== '') u.searchParams.set(k, String(v));
-  });
-  return u.toString();
-}
-
 function encodeMimeHeader(value) {
   return `=?UTF-8?B?${Buffer.from(String(value || ''), 'utf8').toString('base64')}?=`;
 }
@@ -439,88 +471,6 @@ async function getUserSettings(userId) {
   return data || null;
 }
 
-async function upsertGoogleMailSettings({ userId, householdId, patch }) {
-  if (!supabaseAdmin) throw new Error('Supabase server credentials are not configured');
-  const existing = await getUserSettings(userId);
-  const existingIntegrations = existing?.integrations && typeof existing.integrations === 'object' ? existing.integrations : {};
-  const currentGoogle = existingIntegrations.googleMail && typeof existingIntegrations.googleMail === 'object'
-    ? existingIntegrations.googleMail
-    : {};
-
-  const merged = {
-    ...existingIntegrations,
-    googleMail: {
-      ...currentGoogle,
-      ...patch
-    }
-  };
-
-  const payload = {
-    user_id: userId,
-    household_id: householdId || existing?.household_id || null,
-    reminders: existing?.reminders && typeof existing.reminders === 'object' ? existing.reminders : {},
-    integrations: merged,
-    updated_at: new Date().toISOString()
-  };
-
-  const { error } = await supabaseAdmin
-    .from('user_settings')
-    .upsert(payload, { onConflict: 'user_id' });
-
-  if (error) throw new Error(error.message || 'Failed to save Google integration');
-  return merged.googleMail;
-}
-
-async function ensureDefaultCategoriesForHousehold(householdId) {
-  if (!supabaseAdmin) throw new Error('Supabase server credentials are not configured');
-  const hid = String(householdId || '').trim();
-  if (!hid) throw new Error('householdId is required');
-
-  const { data: current, error: readError } = await supabaseAdmin
-    .from('categories')
-    .select('id,name,parent_id,kind,icon')
-    .eq('household_id', hid);
-
-  if (readError) throw new Error(readError.message || 'Failed to read categories');
-  const all = Array.isArray(current) ? current : [];
-  const roots = all.filter((c) => !c.parent_id);
-  if (roots.length > 0) return all;
-
-  for (const cat of DEFAULT_CATEGORIES) {
-    const { data: root, error: rootError } = await supabaseAdmin
-      .from('categories')
-      .insert({
-        household_id: hid,
-        name: cat.name,
-        icon: cat.icon,
-        kind: cat.kind
-      })
-      .select('id,name,parent_id,kind,icon')
-      .single();
-
-    if (rootError) throw new Error(rootError.message || `Failed to insert root category ${cat.name}`);
-
-    for (const subName of cat.subs) {
-      const { error: subError } = await supabaseAdmin
-        .from('categories')
-        .insert({
-          household_id: hid,
-          name: subName,
-          parent_id: root.id,
-          kind: cat.kind
-        });
-      if (subError) throw new Error(subError.message || `Failed to insert subcategory ${subName}`);
-    }
-  }
-
-  const { data: rebuilt, error: rebuiltError } = await supabaseAdmin
-    .from('categories')
-    .select('*')
-    .eq('household_id', hid);
-  if (rebuiltError) throw new Error(rebuiltError.message || 'Failed to fetch rebuilt categories');
-  return rebuilt || [];
-}
-
 async function sendViaGoogleMail({ userId, to, subject, html, text }) {
   if (!isGoogleOAuthConfigured()) {
     throw new Error('Google OAuth is not configured');
@@ -625,155 +575,6 @@ async function sendMailWithFallback({ userId, to, subject, html, text }) {
   throw new Error(errors.length ? errors.join(' | ') : 'No email provider is configured');
 }
 
-function sixDigitCode() {
-  return String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
-}
-
-async function sendResetEmail({ email, code, userId }) {
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px">
-      <h2 style="margin:0 0 10px">קוד איפוס מערכת</h2>
-      <p style="margin:0 0 12px">התקבלה בקשה לאיפוס מלא של נתוני התקציב.</p>
-      <p style="margin:0 0 12px">קוד האימות שלך:</p>
-      <div style="font-size:34px;font-weight:700;letter-spacing:6px;background:#f2f5ff;padding:14px 18px;border-radius:10px;display:inline-block">${code}</div>
-      <p style="margin:16px 0 0;color:#555">הקוד תקף ל-15 דקות. אם לא ביקשת איפוס, אפשר להתעלם מהמייל.</p>
-      <p style="margin:10px 0 0"><a href="${APP_URL}">מעבר למערכת</a></p>
-    </div>
-  `;
-
-  return sendMailWithFallback({
-    userId,
-    to: email,
-    subject: 'קוד איפוס למערכת התקציב',
-    text: `קוד איפוס למערכת התקציב: ${code}`,
-    html
-  });
-}
-
-app.post('/api/google/connect-url', async (req, res) => {
-  try {
-    if (!isGoogleOAuthConfigured()) {
-      return res.status(503).json({ error: 'Google OAuth is not configured on server' });
-    }
-
-    const { userId, householdId, returnTo } = req.body || {};
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    const state = encodeState({
-      userId: String(userId),
-      householdId: String(householdId || ''),
-      returnTo: safeAppUrl(returnTo || APP_URL),
-      ts: Date.now()
-    });
-
-    const oauthClient = getGoogleOAuthClient();
-    const authUrl = oauthClient.generateAuthUrl({
-      access_type: 'offline',
-      prompt: 'consent',
-      include_granted_scopes: true,
-      scope: GOOGLE_OAUTH_SCOPES,
-      state
-    });
-
-    return res.json({ ok: true, authUrl });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Unexpected error' });
-  }
-});
-
-app.get('/api/google/callback', async (req, res) => {
-  const fallbackRedirect = APP_URL;
-  try {
-    if (!isGoogleOAuthConfigured()) {
-      return res.redirect(withQuery(fallbackRedirect, { google_mail: 'error', google_msg: 'Google OAuth is not configured on server' }));
-    }
-
-    const { code, state, error } = req.query || {};
-    const stateData = decodeState(state);
-    const redirectTarget = safeAppUrl(stateData?.returnTo || fallbackRedirect);
-
-    if (error) {
-      return res.redirect(withQuery(redirectTarget, { google_mail: 'error', google_msg: String(error) }));
-    }
-    if (!code || !stateData?.userId) {
-      return res.redirect(withQuery(redirectTarget, { google_mail: 'error', google_msg: 'Missing code or state' }));
-    }
-
-    const oauthClient = getGoogleOAuthClient();
-    const tokenResult = await oauthClient.getToken(String(code));
-    const tokens = tokenResult?.tokens || {};
-    oauthClient.setCredentials(tokens);
-
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauthClient });
-    const me = await oauth2.userinfo.get();
-    const googleEmail = normalizeEmail(me?.data?.email || '');
-
-    const existing = await getUserSettings(stateData.userId);
-    const prevRefresh = existing?.integrations?.googleMail?.refreshToken || '';
-    const refreshToken = tokens.refresh_token || prevRefresh;
-    if (!refreshToken) {
-      return res.redirect(withQuery(redirectTarget, {
-        google_mail: 'error',
-        google_msg: 'Google did not return a refresh token. Revoke access and connect again.'
-      }));
-    }
-
-    await upsertGoogleMailSettings({
-      userId: stateData.userId,
-      householdId: stateData.householdId,
-      patch: {
-        connected: true,
-        provider: 'google',
-        email: googleEmail,
-        refreshToken,
-        accessToken: tokens.access_token || existing?.integrations?.googleMail?.accessToken || '',
-        expiryDate: tokens.expiry_date || null,
-        scope: tokens.scope || '',
-        connectedAt: new Date().toISOString()
-      }
-    });
-
-    return res.redirect(withQuery(redirectTarget, {
-      google_mail: 'connected',
-      google_email: googleEmail
-    }));
-  } catch (err) {
-    return res.redirect(withQuery(fallbackRedirect, {
-      google_mail: 'error',
-      google_msg: err.message || 'Google connect failed'
-    }));
-  }
-});
-
-app.post('/api/google/disconnect', async (req, res) => {
-  try {
-    if (!supabaseAdmin) {
-      return res.status(503).json({ error: 'Supabase server credentials are not configured' });
-    }
-    const { userId, householdId } = req.body || {};
-    if (!userId) return res.status(400).json({ error: 'userId is required' });
-
-    await upsertGoogleMailSettings({
-      userId: String(userId),
-      householdId: String(householdId || ''),
-      patch: {
-        connected: false,
-        disconnectedAt: new Date().toISOString(),
-        refreshToken: '',
-        accessToken: '',
-        expiryDate: null,
-        scope: ''
-      }
-    });
-
-    return res.json({ ok: true });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Unexpected error' });
-  }
-});
-
 app.get('/api/health', async (_req, res) => {
   const availableAiProviders = getAvailableAiProviders();
   return res.json({
@@ -786,12 +587,11 @@ app.get('/api/health', async (_req, res) => {
     supabaseConfigured: !!supabaseAdmin,
     smtpConfigured: !!mailer,
     resendConfigured: !!RESEND_API_KEY,
-    pushConfigured: PUSH_CONFIGURED,
-    devResetFallback: ALLOW_DEV_RESET_FALLBACK
+    pushConfigured: PUSH_CONFIGURED
   });
 });
 
-app.post('/api/ai/import', async (req, res) => {
+app.post('/api/ai/import', requireAuth, aiLimiter, async (req, res) => {
   try {
     if (!GEMINI_KEY && !GROK_KEY) {
       return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
@@ -842,7 +642,7 @@ app.post('/api/ai/import', async (req, res) => {
   }
 });
 
-app.post('/api/ai/advice', async (req, res) => {
+app.post('/api/ai/advice', requireAuth, aiLimiter, async (req, res) => {
   try {
     if (!GEMINI_KEY && !GROK_KEY) {
       return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
@@ -891,7 +691,7 @@ app.post('/api/ai/advice', async (req, res) => {
   }
 });
 
-app.post('/api/ai/advice-chat', async (req, res) => {
+app.post('/api/ai/advice-chat', requireAuth, aiLimiter, async (req, res) => {
   try {
     if (!GEMINI_KEY && !GROK_KEY) {
       return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
@@ -918,7 +718,7 @@ ${historyText ? '\nהיסטוריית שיחה קודמת:\n' + historyText + '\
   }
 });
 
-app.post('/api/ai/onboarding', async (req, res) => {
+app.post('/api/ai/onboarding', requireAuth, aiLimiter, async (req, res) => {
   try {
     if (!GEMINI_KEY && !GROK_KEY) {
       return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
@@ -971,57 +771,7 @@ ${qaText}`;
   }
 });
 
-app.post('/api/ai/next-month-advice', async (req, res) => {
-  try {
-    if (!GEMINI_KEY && !GROK_KEY) {
-      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
-    }
-
-    const { summary, projection } = req.body || {};
-    if (!projection) {
-      return res.status(400).json({ error: 'projection is required' });
-    }
-
-    const prompt = `אתה יועץ פיננסי מקצועי שעוזר למשתמש בשם "${(summary && summary.userName) || ''}" לתכנן ולהתכונן לחודש הבא (${projection.month}), על סמך תחזית מבוססת נתונים אמיתיים (שדה projection) והיסטוריית ההוצאות שלו (שדה summary, כולל categorySpendingHistory ברמת משק הבית ו-personalCategoryBreakdown האישי).
-
-חשוב:
-- אם יש חשש לגירעון (projectedBalance שלילי או נמוך) — תן עצות מעשיות וישירות: אילו הוצאות משתנות אפשר לצמצם (לפי הנתונים בפועל, לא באופן כללי), והאם כדאי לשקול הלוואה קצרה ואיזה סוג, בלי להמעיט בחומרת המצב.
-- אם המצב תקין — עודד המשך/תוספת הפרשה קבועה לחיסכון או השקעה מדי חודש (הצע סכום קונקרטי וריאלי לפי המספרים), והצבע על בזבוזים מיותרים אם ניכרים בנתונים.
-- תמיד תן לפחות המלצה מעשית אחת שקשורה ליעדי החיסכון של המשתמש (savingsGoals) אם יש כאלה.
-
-ענה אך ורק בפורמט JSON תקני (בלי markdown, בלי טקסט מסביב), במבנה הבא בדיוק:
-{"healthLevel":"good|watch|risk","headline":"משפט אחד שמסכם את התחזית לחודש הבא","strengths":["..."],"concerns":["..."],"tips":["..."]}
-
-כללים: strengths/concerns/tips - כל אחד 2-4 פריטים קצרים וברורים.`;
-
-    const aiResult = await generateWithFallback({ prompt, text: JSON.stringify({ summary: summary || {}, projection }) });
-    const output = aiResult.output || '{}';
-    let parsed = null;
-    try {
-      parsed = JSON.parse(extractJsonText(output));
-    } catch (_err) {
-      const candidate = String(output).match(/\{[\s\S]*\}/);
-      if (candidate && candidate[0]) {
-        try {
-          parsed = JSON.parse(candidate[0]);
-        } catch (_err2) {
-          parsed = null;
-        }
-      }
-    }
-
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return res.status(502).json({ error: 'AI response could not be parsed', rawOutput: output });
-    }
-
-    return res.json({ advice: parsed, aiProvider: aiResult.provider, aiModel: aiResult.model });
-  } catch (err) {
-    const statusCode = err.statusCode || 502;
-    return res.status(statusCode).json({ error: err.message || 'Unexpected error' });
-  }
-});
-
-app.post('/api/chat/parse', async (req, res) => {
+app.post('/api/chat/parse', requireAuth, aiLimiter, async (req, res) => {
   try {
     const { text } = req.body || {};
     if (!text) return res.status(400).json({ error: 'text is required' });
@@ -1065,11 +815,9 @@ app.get('/api/push/vapid-public-key', (req, res) => {
   return res.json({ publicKey: VAPID_PUBLIC_KEY });
 });
 
-app.post('/api/push/test', async (req, res) => {
-  const { userId } = req.body || {};
-  if (!userId) return res.status(400).json({ error: 'userId is required' });
+app.post('/api/push/test', requireAuth, notifyLimiter, async (req, res) => {
   try {
-    const result = await sendPushToUser(userId, {
+    const result = await sendPushToUser(req.authUserId, {
       title: 'התראת ניסיון 🔔',
       body: 'זו התראה לדוגמה ממערכת התקציב. אם אתה רואה אותה — ההתראות עובדות!',
       url: APP_URL
@@ -1081,8 +829,9 @@ app.post('/api/push/test', async (req, res) => {
   }
 });
 
-app.post('/api/reminders/test', async (req, res) => {
-  const { channel, email, appLink, userId, householdId, integrations } = req.body || {};
+app.post('/api/reminders/test', requireAuth, notifyLimiter, async (req, res) => {
+  const { channel, email, appLink, integrations } = req.body || {};
+  const userId = req.authUserId;
   const msg = `תזכורת ניסיון: אל תשכח לעדכן הוצאות והכנסות היום. ${appLink || ''}`.trim();
   const selected = String(channel || 'email').trim().toLowerCase();
   if (selected === 'email' && email) {
@@ -1102,7 +851,7 @@ app.post('/api/reminders/test', async (req, res) => {
 
   if (selected === 'google_chat') {
     try {
-      const mergedIntegrations = await resolveIntegrationsForChannelTest({ userId, householdId, integrations });
+      const mergedIntegrations = await resolveIntegrationsForChannelTest({ userId, integrations });
       const gcWebhook = String(mergedIntegrations.gcWebhook || '').trim();
       if (!gcWebhook) return res.status(400).json({ ok: false, error: 'Google Chat webhook is not configured' });
       const sent = await sendGoogleChatMessage({ webhookUrl: gcWebhook, text: msg });
@@ -1114,7 +863,7 @@ app.post('/api/reminders/test', async (req, res) => {
 
   if (selected === 'whatsapp') {
     try {
-      const mergedIntegrations = await resolveIntegrationsForChannelTest({ userId, householdId, integrations });
+      const mergedIntegrations = await resolveIntegrationsForChannelTest({ userId, integrations });
       const waPhone = String(mergedIntegrations.waPhone || '').trim();
       const waApiKey = String(mergedIntegrations.waApiKey || '').trim();
       if (!waPhone || !waApiKey) {
@@ -1130,15 +879,14 @@ app.post('/api/reminders/test', async (req, res) => {
   return res.json({ ok: true, channel: channel || 'email', sent: false, email: email || null, message: msg });
 });
 
-app.post('/api/channels/test', async (req, res) => {
+app.post('/api/channels/test', requireAuth, notifyLimiter, async (req, res) => {
   try {
     const {
       channel = 'all',
-      userId,
-      householdId,
       integrations,
       message
     } = req.body || {};
+    const userId = req.authUserId;
 
     const selected = String(channel || 'all').trim().toLowerCase();
     const wantsGoogleChat = selected === 'all' || selected === 'google_chat';
@@ -1148,7 +896,7 @@ app.post('/api/channels/test', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Invalid channel. Use all, google_chat, or whatsapp.' });
     }
 
-    const mergedIntegrations = await resolveIntegrationsForChannelTest({ userId, householdId, integrations });
+    const mergedIntegrations = await resolveIntegrationsForChannelTest({ userId, integrations });
     const results = {};
     const sampleText = String(message || '✅ בדיקת חיבור ממערכת התקציב הצליחה.').trim();
 
@@ -1201,96 +949,57 @@ app.post('/api/channels/test', async (req, res) => {
   }
 });
 
-app.get('/api/user/household/:userId', async (req, res) => {
-  try {
-    if (!supabaseAdmin) {
-      return res.status(503).json({ error: 'Supabase server credentials are not configured' });
-    }
-    const userId = String(req.params.userId || '').trim();
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('memberships')
-      .select('household_id')
-      .eq('user_id', userId)
-      .limit(1)
-      .single();
-
-    if (error || !data?.household_id) {
-      return res.status(404).json({ error: error?.message || 'No household found for user' });
-    }
-
-    return res.json({ ok: true, householdId: data.household_id, userId });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Unexpected error' });
-  }
-});
-
-app.post('/api/categories/bootstrap', async (req, res) => {
-  try {
-    if (!supabaseAdmin) {
-      return res.status(503).json({ ok: false, error: 'Supabase server credentials are not configured' });
-    }
-
-    const { householdId, userId } = req.body || {};
-    const hid = String(householdId || '').trim();
-    const uid = String(userId || '').trim();
-    if (!hid || !uid) {
-      return res.status(400).json({ ok: false, error: 'householdId and userId are required' });
-    }
-
-    const { data: membership, error: membershipError } = await supabaseAdmin
-      .from('memberships')
-      .select('user_id')
-      .eq('household_id', hid)
-      .eq('user_id', uid)
-      .limit(1)
-      .maybeSingle();
-
-    if (membershipError) {
-      return res.status(500).json({ ok: false, error: membershipError.message || 'Failed membership check' });
-    }
-    if (!membership?.user_id) {
-      return res.status(403).json({ ok: false, error: 'User is not a member of this household' });
-    }
-
-    const categories = await ensureDefaultCategoriesForHousehold(hid);
-    return res.json({ ok: true, categories, count: categories.length });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message || 'Unexpected error' });
-  }
-});
-
-app.post('/api/import/commit', async (req, res) => {
+app.post('/api/import/commit', requireAuth, aiLimiter, async (req, res) => {
   try {
     if (!supabaseAdmin) {
       return res.status(503).json({ error: 'Supabase server credentials are not configured' });
     }
 
-    const { householdId, userId, transactions } = req.body || {};
-    if (!householdId || !userId || !Array.isArray(transactions) || !transactions.length) {
-      return res.status(400).json({ error: 'householdId, userId and non-empty transactions are required' });
+    const { householdId, transactions } = req.body || {};
+    const userId = req.authUserId;
+    if (!householdId || !Array.isArray(transactions) || !transactions.length) {
+      return res.status(400).json({ error: 'householdId and non-empty transactions are required' });
     }
+    if (!(await isHouseholdMember(userId, householdId))) {
+      return res.status(403).json({ error: 'User is not a member of this household' });
+    }
+
+    // category/account/card ids come from the client's AI-import UI --
+    // trust that they belong to THIS household rather than inserting
+    // whatever id was sent (would otherwise let one household's import
+    // silently reference another household's category/account/card rows).
+    const [{ data: validCats }, { data: validAccts }, { data: validCards }] = await Promise.all([
+      supabaseAdmin.from('categories').select('id').eq('household_id', householdId),
+      supabaseAdmin.from('bank_accounts').select('id').eq('household_id', householdId),
+      supabaseAdmin.from('credit_cards').select('id').eq('household_id', householdId)
+    ]);
+    const catIds = new Set((validCats || []).map((c) => c.id));
+    const acctIds = new Set((validAccts || []).map((a) => a.id));
+    const cardIds = new Set((validCards || []).map((c) => c.id));
 
     const rows = transactions
-      .map((t) => ({
-        household_id: householdId,
-        created_by: userId,
-        type: t?.type === 'income' ? 'income' : 'expense',
-        description: String(t?.description || 'ייבוא'),
-        amount: Math.abs(Number(t?.amount) || 0),
-        tx_date: String(t?.date || new Date().toISOString().slice(0, 10)),
-        category_id: t?.category_id || null,
-        subcategory_id: t?.subcategory_id || null,
-        nature: 'variable',
-        spread: 'month',
-        source: 'ai-file',
-        account_id: t?.account_id || null,
-        card_id: t?.card_id || null,
-        payment_method: t?.card_id ? 'credit' : 'cash'
-      }))
+      .map((t) => {
+        const categoryId = t?.category_id && catIds.has(t.category_id) ? t.category_id : null;
+        const subcategoryId = t?.subcategory_id && catIds.has(t.subcategory_id) ? t.subcategory_id : null;
+        const accountId = t?.account_id && acctIds.has(t.account_id) ? t.account_id : null;
+        const cardId = t?.card_id && cardIds.has(t.card_id) ? t.card_id : null;
+        return {
+          household_id: householdId,
+          created_by: userId,
+          type: t?.type === 'income' ? 'income' : 'expense',
+          description: String(t?.description || 'ייבוא'),
+          amount: Math.abs(Number(t?.amount) || 0),
+          tx_date: String(t?.date || new Date().toISOString().slice(0, 10)),
+          category_id: categoryId,
+          subcategory_id: subcategoryId,
+          nature: 'variable',
+          spread: 'month',
+          source: 'ai-file',
+          account_id: accountId,
+          card_id: cardId,
+          payment_method: cardId ? 'credit' : 'cash'
+        };
+      })
       .filter((r) => r.amount > 0);
 
     if (!rows.length) {
@@ -1303,116 +1012,6 @@ app.post('/api/import/commit', async (req, res) => {
     }
 
     return res.json({ ok: true, inserted: data?.length || 0, rows: data || [] });
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Unexpected error' });
-  }
-});
-
-app.post('/api/reset/request', async (req, res) => {
-  try {
-    if (!supabaseAdmin) {
-      return res.status(503).json({ error: 'Supabase server credentials are not configured' });
-    }
-
-    const { householdId, userId, email } = req.body || {};
-    if (!householdId || !userId || !email) {
-      return res.status(400).json({ error: 'householdId, userId and email are required' });
-    }
-
-    const code = sixDigitCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    const normalized = normalizeEmail(email);
-
-    const { error: insertError } = await supabaseAdmin
-      .from('household_reset_codes')
-      .insert({
-        household_id: householdId,
-        user_id: userId,
-        email: normalized,
-        code,
-        expires_at: expiresAt,
-        used: false
-      });
-
-    if (insertError) {
-      return res.status(500).json({ error: insertError.message });
-    }
-
-    try {
-      const sent = await sendResetEmail({ email: normalized, code, userId });
-      return res.json({ ok: true, expiresAt, sent: true, provider: sent.provider });
-    } catch (emailErr) {
-      if (!ALLOW_DEV_RESET_FALLBACK) {
-        return res.status(500).json({ error: emailErr.message || 'Failed to send reset email' });
-      }
-
-      console.warn('Reset email delivery failed, returning dev fallback code:', emailErr.message || emailErr);
-      return res.json({
-        ok: true,
-        expiresAt,
-        sent: false,
-        fallback: 'manual_code',
-        devCode: code,
-        message: 'Email delivery is blocked by provider test-mode. Use devCode to continue reset flow.'
-      });
-    }
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Unexpected error' });
-  }
-});
-
-app.post('/api/reset/confirm', async (req, res) => {
-  try {
-    if (!supabaseAdmin) {
-      return res.status(503).json({ error: 'Supabase server credentials are not configured' });
-    }
-
-    const { householdId, userId, code } = req.body || {};
-    if (!householdId || !userId || !code) {
-      return res.status(400).json({ error: 'householdId, userId and code are required' });
-    }
-
-    const { data: resetRow, error: resetError } = await supabaseAdmin
-      .from('household_reset_codes')
-      .select('*')
-      .eq('household_id', householdId)
-      .eq('user_id', userId)
-      .eq('code', String(code).trim())
-      .eq('used', false)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (resetError) {
-      return res.status(500).json({ error: resetError.message });
-    }
-
-    if (!resetRow) {
-      return res.status(400).json({ error: 'Invalid or expired reset code' });
-    }
-
-    const { error: markUsedError } = await supabaseAdmin
-      .from('household_reset_codes')
-      .update({ used: true })
-      .eq('id', resetRow.id);
-
-    if (markUsedError) {
-      return res.status(500).json({ error: markUsedError.message });
-    }
-
-    const tables = ['transactions', 'installments', 'loans', 'investments', 'goals', 'categories'];
-    for (const table of tables) {
-      const { error: delError } = await supabaseAdmin
-        .from(table)
-        .delete()
-        .eq('household_id', householdId);
-      if (delError) {
-        return res.status(500).json({ error: `Failed to delete from ${table}: ${delError.message}` });
-      }
-    }
-
-    return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Unexpected error' });
   }
