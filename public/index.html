@@ -227,12 +227,13 @@ tr:last-child td{border-bottom:none}
 .cat-picker-trigger{display:flex;align-items:center;gap:6px;cursor:pointer;border:1px dashed var(--line2);border-radius:9px;padding:3px 10px;background:none;font-family:inherit}
 .cat-picker-trigger:hover{border-color:var(--accent)}
 .cat-picker-trigger .car{font-size:.65rem;color:var(--faint)}
-.cat-picker-panel{position:absolute;z-index:60;top:calc(100% + 6px);right:0;min-width:230px;max-height:280px;overflow-y:auto;background:var(--surface2);border:1px solid var(--line2);border-radius:14px;box-shadow:var(--shadow);padding:8px}
+.cat-picker-panel{position:absolute;z-index:60;top:calc(100% + 6px);right:0;min-width:230px;max-height:320px;overflow-y:auto;background:var(--surface3);border:1.5px solid var(--line2);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.35);padding:8px}
 .cat-picker-panel.hidden{display:none}
 .cat-picker-opt{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;cursor:pointer;font-size:.82rem;font-weight:600}
-.cat-picker-opt:hover{background:var(--surface3)}
-.cat-picker-opt.sel{background:var(--surface3);outline:1px solid var(--line2)}
+.cat-picker-opt:hover{background:var(--surface2)}
+.cat-picker-opt.sel{background:var(--surface2);outline:1px solid var(--accent)}
 .cat-picker-opt .sw{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.cat-picker-subsub{padding-right:14px;border-top:1px solid var(--line);margin-top:4px;padding-top:4px}
 .cat-picker-sub{padding-right:14px;border-top:1px solid var(--line);margin-top:6px;padding-top:6px}
 
 /* ===== transactions: summary hero + day-grouped cards ===== */
@@ -2739,8 +2740,13 @@ function txCategoryCell(t){
   const rows=roots.map(c=>{
     const isSel=c.id===t.category_id;
     const subs=isSel?subCats(c.id):[];
-    const subRows=subs.length?'<div class="cat-picker-sub">'+subs.map(s=>'<div class="cat-picker-opt'+(s.id===t.subcategory_id?' sel':'')+'" onclick="event.stopPropagation();selectTxSub(\''+t.id+'\',\''+s.id+'\')"><span class="sw" style="background:'+catColor(s.id)+'"></span>'+s.name+'</div>').join('')+'</div>':'';
-    return '<div class="cat-picker-opt'+(isSel?' sel':'')+'" onclick="selectTxCat(\''+t.id+'\',\''+c.id+'\')"><span class="sw" style="background:'+catColor(c.id)+'"></span>'+(c.icon||'')+' '+c.name+'</div>'+subRows;
+    const subRows=subs.length?'<div class="cat-picker-sub">'+subs.map(s=>{
+      const subSel=s.id===t.subcategory_id;
+      const subsubs=subCats(s.id);
+      const subsubRows=subsubs.length?'<div class="cat-picker-subsub">'+subsubs.map(ss=>'<div class="cat-picker-opt'+(ss.id===t.subcategory_id?' sel':'')+'" onclick="event.stopPropagation();selectTxSub(\''+t.id+'\',\''+ss.id+'\',false)"><span class="sw" style="background:'+catColor(ss.id)+'"></span>↳ '+ss.name+'</div>').join('')+'</div>':'';
+      return '<div class="cat-picker-opt'+(subSel?' sel':'')+'" onclick="event.stopPropagation();selectTxSub(\''+t.id+'\',\''+s.id+'\','+(subsubs.length>0)+')"><span class="sw" style="background:'+catColor(s.id)+'"></span>'+s.name+'</div>'+subsubRows;
+    }).join('')+'</div>':'';
+    return '<div class="cat-picker-opt'+(isSel?' sel':'')+'" onclick="event.stopPropagation();selectTxCat(\''+t.id+'\',\''+c.id+'\','+(subs.length>0)+')"><span class="sw" style="background:'+catColor(c.id)+'"></span>'+(c.icon||'')+' '+c.name+'</div>'+subRows;
   }).join('');
   return '<div class="cat-picker">'
     +'<button type="button" class="cat-picker-trigger" style="color:'+triggerColor+'" onclick="event.stopPropagation();toggleCatPicker(\''+panelId+'\')">'+label+' <span class="car">▾</span></button>'
@@ -2754,19 +2760,50 @@ window.toggleCatPicker=id=>{
   if(!wasOpen)panel.classList.remove('hidden');
 };
 document.addEventListener('click',()=>{document.querySelectorAll('.cat-picker-panel').forEach(p=>p.classList.add('hidden'));});
-window.selectTxCat=(id,categoryId)=>updateTxCategory(id,categoryId);
-window.selectTxSub=(id,subcategoryId)=>updateTxSubcategory(id,subcategoryId);
-window.updateTxCategory=async(id,categoryId)=>{
+function reopenCatPicker(panelId){
+  document.querySelectorAll('.cat-picker-panel').forEach(p=>p.classList.add('hidden'));
+  const panel=document.getElementById(panelId);
+  if(panel)panel.classList.remove('hidden');
+}
+window.selectTxCat=(id,categoryId,keepOpen)=>updateTxCategory(id,categoryId,keepOpen);
+window.selectTxSub=(id,subcategoryId,keepOpen)=>updateTxSubcategory(id,subcategoryId,keepOpen);
+window.updateTxCategory=async(id,categoryId,keepOpen)=>{
   const t=DB.transactions.find(x=>x.id===id);if(!t)return;
   const {error}=await sb.from('transactions').update({category_id:categoryId||null,subcategory_id:null}).eq('id',id);
   if(error){alert('שגיאה בעדכון קטגוריה: '+error.message);return;}
-  t.category_id=categoryId||null;t.subcategory_id=null;render();
+  t.category_id=categoryId||null;t.subcategory_id=null;
+  render();
+  if(keepOpen)reopenCatPicker('catp-'+id);
 };
-window.updateTxSubcategory=async(id,subcategoryId)=>{
+window.updateTxSubcategory=async(id,subcategoryId,keepOpen)=>{
   const t=DB.transactions.find(x=>x.id===id);if(!t)return;
   const {error}=await sb.from('transactions').update({subcategory_id:subcategoryId||null}).eq('id',id);
   if(error){alert('שגיאה בעדכון תת-קטגוריה: '+error.message);return;}
-  t.subcategory_id=subcategoryId||null;render();
+  t.subcategory_id=subcategoryId||null;
+  render();
+  if(keepOpen)reopenCatPicker('catp-'+id);
+};
+// installments only have a single category_id (no subcategory column), so
+// this picker is one level — still lets the category itself be edited,
+// which regular transactions could already do and installments couldn't.
+function instCategoryCell(p){
+  const roots=rootCats('expense');
+  const cur=DB.categories.find(c=>c.id===p.category_id);
+  const triggerColor=cur?catColor(cur.id):'var(--faint)';
+  const label=cur?((cur.icon||'')+' '+cur.name):'בחר קטגוריה';
+  const panelId='instcatp-'+p.id;
+  const rows=roots.map(c=>'<div class="cat-picker-opt'+(c.id===p.category_id?' sel':'')+'" onclick="event.stopPropagation();selectInstCat(\''+p.id+'\',\''+c.id+'\')"><span class="sw" style="background:'+catColor(c.id)+'"></span>'+(c.icon||'')+' '+c.name+'</div>').join('');
+  return '<div class="cat-picker">'
+    +'<button type="button" class="cat-picker-trigger" style="color:'+triggerColor+'" onclick="event.stopPropagation();toggleCatPicker(\''+panelId+'\')">'+label+' <span class="car">▾</span></button>'
+    +'<div class="cat-picker-panel hidden" id="'+panelId+'" onclick="event.stopPropagation()">'+(rows||'<p class="empty" style="padding:8px">אין קטגוריות</p>')+'</div>'
+    +'</div>';
+}
+window.selectInstCat=(id,categoryId)=>updateInstCategory(id,categoryId);
+window.updateInstCategory=async(id,categoryId)=>{
+  const p=DB.installments.find(x=>x.id===id);if(!p)return;
+  const {error}=await sb.from('installments').update({category_id:categoryId||null}).eq('id',id);
+  if(error){alert('שגיאה בעדכון קטגוריה: '+error.message);return;}
+  p.category_id=categoryId||null;render();
 };
 window.editLoan=async id=>{
   const l=DB.loans.find(x=>x.id===id);if(!l)return;
@@ -3894,8 +3931,8 @@ function renderInstallments(){
     return '<div class="tx-card">'
       +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">🧾</div>'
       +'<div class="tx-mid"><div class="tx-desc">'+p.description+'</div>'
-      +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(c?(c.icon||'')+' '+c.name:'ללא קטגוריה')+'</span>'
-      +'<span class="tx-pmtag">'+paid+'/'+n+' תשלומים · סה"כ '+fmt(+p.total_amount)+'</span></div>'
+      +'<div class="tx-meta">'+instCategoryCell(p)+
+      '<span class="tx-pmtag">'+paid+'/'+n+' תשלומים · סה"כ '+fmt(+p.total_amount)+'</span></div>'
       +'<div class="bar" style="margin-top:6px"><span style="width:'+pct+'%"></span></div></div>'
       +'<div class="tx-amt neg">'+fmt(+p.total_amount/n)+'<div class="muted" style="font-size:.68rem;font-weight:600;margin-top:2px">'+(rem>0?'נותר '+fmt(rem*(+p.total_amount/n)):'שולם ✅')+'</div></div>'
       +'<div class="tx-actions"><button type="button" class="smallbtn" onclick="editInst(\''+p.id+'\')" title="עריכה">✏️</button><button type="button" class="icon-btn danger" onclick="delInst(\''+p.id+'\')" title="מחיקה">🗑️</button></div>'
