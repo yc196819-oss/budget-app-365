@@ -2,6 +2,39 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-08-11 — batch of category-picker bugs (3rd level, stay-open, contrast, installments)
+User reported 4 real issues after actually using the category picker. All
+fixed and verified end-to-end in `public/index.html`:
+1. **No way to select a 3rd-level sub-subcategory on a transaction** —
+   category management already supported creating one, but
+   `txCategoryCell()` only ever rendered 2 levels. Now a subcategory's own
+   children render nested underneath it when present.
+2. **Picker auto-closed** after picking a category/subcategory that had
+   children. Two compounding causes: missing `event.stopPropagation()` on
+   the category option (letting the click bubble to the document-level
+   close-all-pickers handler), and the post-selection full `render()`
+   rebuilding the panel fresh/hidden with nothing to reopen it. Fixed both;
+   added `reopenCatPicker()` called after render() when relevant.
+3. **Looked "transparent"** — confirmed via computed styles + `elementFromPoint`
+   this wasn't literal transparency or a z-index bug (solid bg, correctly
+   on top). Real cause: too little contrast against the page, especially in
+   **light theme** where panel/card/page are all near-white. Fixed with
+   `var(--surface3)`, a heavier border, and an explicit stronger shadow.
+4. **Installment cards had no category editing at all** — was a static
+   badge; other transaction types already had an editable picker. Added
+   `instCategoryCell()` (one-level, installments have no subcategory
+   column) wired to a new `updateInstCategory()`.
+
+Also investigated the user's data-quality concern (supermarket purchases
+allegedly missing subcategories) directly against real data: **doesn't
+hold up** — every recognized chain (רמי לוי, שופרסל, קואופ, יוחננוף,
+ויקטורי, אושר עד, etc.) is already correctly subcategorized. The ~23
+food-category transactions without one are small specialty shops (candy
+stores, bakeries, delis) that don't cleanly fit an existing subcategory —
+not a bug, just an edge case. Worth asking the user if they want new
+subcategories added for those (e.g. "ממתקים/דוכן", "מאפייה"), or leave as
+general אוכל.
+
 ## 🟢 Resolved 2026-08-11 — English UI toggle (nav, headers, auth) — Hebrew stays the data language
 User asked for advice on consolidating scattered AI touchpoints (see the
 advisor/planning merge below) AND separately for an English toggle. Shipped
