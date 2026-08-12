@@ -1,6 +1,75 @@
-# Pending items (updated 2026-08-10, end of session)
+# Pending items (updated 2026-08-12, end of session)
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
+
+## 🟢 Resolved 2026-08-12 — security hardening pass (external review response)
+User pasted a third-party code review flagging several issues. Verified each
+claim against the actual code before acting (not all were accurate — see
+below) and fixed what was real:
+
+1. **No server-side auth on `budget-ai-server.js`** — every sensitive
+   endpoint (`/api/import/commit`, `/api/ai/*`, `/api/push/test`,
+   `/api/reminders/test`, `/api/channels/test`) trusted a `userId`/
+   `householdId` sent in the request body, then acted via the Supabase
+   service-role key. Anyone who found the Render URL could act as any
+   user with zero login, including burning the Gemini quota through the
+   unauthenticated AI routes. Added `requireAuth` middleware — verifies
+   the real Supabase access token (`Authorization: Bearer <token>` via
+   `supabaseAdmin.auth.getUser`) and derives the user id server-side.
+   `/api/import/commit` also now verifies household membership and that
+   any category/account/card id in the import actually belongs to that
+   household before inserting.
+2. **Stored XSS, confirmed and worse than the review claimed** — the
+   review said an `esc()` helper "already exists in some places"; it
+   didn't exist anywhere. ~30 `innerHTML` sites interpolated raw user
+   data (transaction description, category/account/card names, loan
+   counterparty/note, investment/goal names, household member display
+   name, advisor conversation titles). One household member could plant
+   a payload that fires in another member's browser on a normal screen.
+   Added a global `esc()`, applied at every real render site. Also found
+   and fixed a real gap in `UI.prompt()`'s own narrow local escaper —
+   quote-only escaping isn't sufficient for its `<textarea>` field
+   (renders as HTML text content, not an attribute).
+3. **CORS wide open** (`cors()`, no origin restriction) — replaced with
+   an allowlist; harmless in practice since frontend+API are same-origin
+   on Render, but real hardening for local/other-origin cases.
+4. **No rate limiting anywhere**, including the Gemini-backed AI routes —
+   added `express-rate-limit` (20/min/user on AI+import, 5/min on
+   notification-test endpoints).
+5. **Deleted 8 endpoints with zero frontend callers** (confirmed via grep
+   first): the Google OAuth connect/callback/disconnect flow (never
+   wired to any UI), `/api/user/household/:userId`,
+   `/api/categories/bootstrap`, `/api/ai/next-month-advice`, and the
+   legacy `/api/reset/request`+`confirm` email-code flow — already
+   superseded by the `reset_household_full/month` RPCs (see below).
+   Removed their now-orphaned helper functions and the unused
+   `mongoose`/`uuid` deps.
+
+**Review claims that were checked and found inaccurate — not applied:**
+the review said `reset_household_full/month` risk a partial failure
+(some tables deleted, then an error leaves the rest). Checked
+`supabase_password_reset.sql`: those are single Postgres functions —
+atomic by default, no partial-failure window — and they derive the
+household from `auth.uid()` server-side rather than trusting a
+client-supplied id. That's already the correct pattern. The JS
+delete-loop the review was describing was the *old* `/api/reset/confirm`
+endpoint, dead code the current frontend doesn't call — removed in this
+pass as dead code, not because the RPC path has the bug.
+
+Verified via headless Chrome against the live server: unauthenticated
+and invalid-token requests to protected endpoints return 401; an
+authenticated request goes through end-to-end (real Gemini advice
+response returned); a malicious category name renders as literal escaped
+text in both the category summary and category management panels with
+no script execution; deleted routes fall through cleanly to the SPA
+shell.
+
+**Not done in this pass (lower priority / bigger scope, flag if it comes
+up again)**: `index.html` is a single ~5,000-line file and could use a
+module split; account balances still live in `localStorage` per-device
+rather than Supabase; `nodemailer` has an unpatched high-severity
+advisory (`npm audit`) but upgrading is a breaking change not yet
+tested against the reminder-email flow.
 
 ## 🟢 Resolved 2026-08-11 — category labels were skipping the middle level for 3-level chains
 Follow-up to the batch below. User clarified their supermarket-subcategory
