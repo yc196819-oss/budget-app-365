@@ -1,6 +1,33 @@
-# Pending items (updated 2026-08-12, end of session)
+# Pending items (updated 2026-08-13, end of session)
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
+
+## 🟢 Resolved 2026-08-13 — mobile transaction list looked cluttered/broken
+User: "ברשימת התנועות במובייל אני חושב שזה ממש לא יפה ונראה מסורבל" — the
+generic `.tx-card` flex row (badge/desc+meta/amount/actions all side by
+side) has no room at phone width, so it wrapped into 4 stacked lines per
+transaction with the category shown twice (a static colored pill *and* a
+separate dashed-border picker trigger below it).
+
+Rebuilt as a compact CSS grid, scoped to `#exBody .tx-card` inside the
+existing `@media(max-width:600px)` block only — loans/installments/
+investments/accounts share the `.tx-card` class but have different
+internal structure, so they're deliberately untouched by this pass (not
+verified to look good on mobile, just confirmed unaffected/unchanged).
+New layout is 3 tight rows: `[icon] description — amount` /
+`[icon] payment · ▾category` / `[edit][delete]`. Also merged the meta
+row and the category-picker trigger onto one line and dropped the now-
+redundant static category pill (the picker trigger already shows the
+same category name+icon and is the interactive one).
+
+Verified via headless Chrome at 390×844: clean 3-row cards, picker still
+opens correctly and stays in-viewport, loans tab (other `.tx-card`
+usage) renders unchanged, desktop (1440px) pixel-identical to before.
+
+**If this comes up again**: the same 4-line wrapping problem likely
+exists on the loans/installments/investments/accounts cards too (they
+share `.tx-card` and weren't in scope this time) — worth the same
+grid treatment if a user flags them.
 
 ## 🟢 Resolved 2026-08-12 — DB write errors were silently ignored in several places
 Follow-up to the security pass below. Several delete/update handlers
