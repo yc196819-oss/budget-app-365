@@ -123,14 +123,40 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
   .plan-row{flex-wrap:nowrap}
   .plan-row input[type="text"]{min-width:0}
   .plan-row input[type="number"]{width:78px}
-  .tx-card{flex-wrap:wrap;gap:8px 10px}
-  .tx-amt{margin-right:auto}
   .goalcard-hint{display:none}
   .tx-summary{padding:14px 16px}
   .tx-summary .hero-num{font-size:1.9rem}
   body{font-size:1.02rem}
   .btn{padding:11px 18px;font-size:.92rem}
   input,select,textarea{font-size:16px}
+
+  /* transaction list: the generic .tx-card flex row (badge/mid/amount/actions
+     side by side) has no room on a phone width, so it wraps into 3-4 messy
+     stacked lines with the category shown twice (static tag + picker
+     trigger). Rebuild it as a compact 2-row grid, scoped to the transaction
+     list only (#exBody) so loans/installments/investments/accounts, which
+     share the .tx-card class but have different internal structure, are
+     untouched. */
+  #exBody .tx-card{
+    display:grid;
+    grid-template-columns:38px 1fr auto;
+    grid-template-rows:auto auto;
+    align-items:center;
+    column-gap:10px;
+    row-gap:0;
+    padding:12px 14px;
+    flex-wrap:unset;
+  }
+  #exBody .tx-badge{grid-column:1;grid-row:1/3}
+  #exBody .tx-mid{grid-column:2;grid-row:1/3;display:flex;flex-flow:row wrap;align-items:center;column-gap:8px;row-gap:5px;min-width:0}
+  #exBody .tx-desc{flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #exBody .tx-meta{margin-top:0}
+  #exBody .tx-cattag{display:none}
+  #exBody .tx-mid>div:last-child{margin-top:0!important}
+  #exBody .cat-picker-trigger{padding:2px 9px}
+  #exBody .tx-amt{grid-column:3;grid-row:1;justify-self:start;align-self:end}
+  #exBody .tx-actions{grid-column:3;grid-row:2;justify-self:start;align-self:start}
+  #exBody .tx-actions .smallbtn,#exBody .tx-actions .btn.danger{padding:4px 9px;font-size:.72rem}
 }
 .grid{display:grid;gap:16px}
 .cards{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
