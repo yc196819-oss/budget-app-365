@@ -2,6 +2,20 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟡 Needs a manual step before it's live — Claude added as AI provider
+Added `callClaude()` in `budget-ai-server.js`, wired as the new
+**primary** provider ahead of Gemini/Grok (`generateWithFallback()`
+tries Claude first, same one-retry-on-blip pattern as the existing
+Gemini branch, falls through cleanly if unconfigured). New env vars
+`ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` (default `claude-sonnet-5`),
+added to `.env.example` and `render.yaml` as `sync:false`.
+
+**This does nothing yet in production** — `sync:false` means Render
+won't auto-populate the key; the user has to add `ANTHROPIC_API_KEY`
+in the Render dashboard (Environment tab) themselves. Until then the
+app behaves exactly as before (falls straight to Gemini, verified
+locally with no key set — no regression).
+
 ## 🟡 In progress 2026-09-23 — visual redesign, v1 shipped (bold/vivid direction)
 User asked for a full visual refresh ("everything looks outdated"), picked
 "bold and lively dashboard" over neutral/minimal/light-airy alternatives
