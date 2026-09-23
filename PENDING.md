@@ -1,6 +1,60 @@
-# Pending items (updated 2026-08-13, end of session)
+# Pending items (updated 2026-09-23, end of session)
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
+
+## 🟡 In progress 2026-09-23 — visual redesign, v1 shipped (bold/vivid direction)
+User asked for a full visual refresh ("everything looks outdated"), picked
+"bold and lively dashboard" over neutral/minimal/light-airy alternatives
+(offered via AskUserQuestion). Shipped a design-token-level pass: new
+--accent3 + --grad-hero/--grad-warm/--glow-accent tokens, gradient top-
+stripe + hover lift + entrance animation on `.card`, gradient-filled
+`.btn`/`.pill.on`/nav-active, and every hardcoded rgba(108,140,255/…)
+or rgba(82,214,164/…) glow color across the file swapped to match the
+new accent RGB so nothing looks mismatched. Deliberately did NOT touch
+`.card .value`'s pos/neg/neu color classes (no background-clip:text
+gradient trick) — income/expense red/green coding matters more than
+the effect. Verified via headless Chrome, dark+light, desktop+mobile,
+no console errors, no regression to the mobile tx-card layout or
+category picker from the previous session.
+
+**Not yet touched, still the old flat style** — this was a token-level
+pass that cascades broadly but wasn't an exhaustive per-component
+rewrite: modals, charts/legend, the advisor chat bubbles, the category
+picker panel, and the loans/installments/investments/accounts cards
+(same ones flagged un-redesigned back on 2026-08-13) haven't gotten the
+gradient/glow treatment specifically. If the user wants the bold look
+carried further, that's the next chunk.
+
+## 🟢 Also this session — investment auto-tracking, scoped not started
+User wants investments to update themselves (S&P 500 index, USD/ILS
+rate) instead of manual value entry, since "it's all transparent
+online." Pushed back on that assumption before starting anything:
+**SPY + USD/ILS** — yes, real free APIs exist, straightforward to add
+as a small server endpoint. **The Israeli קרן כספית (money-market fund)
+NAV** — not actually transparent via any standard free API the way a
+US-listed ETF is; would need research into what data source (Israel
+Securities Authority / the fund company's own site) is actually usable
+before promising it. Nothing built yet — next step if the user wants to
+proceed is to start with SPY/currency and investigate the fund-NAV
+question separately.
+
+## 📋 Not code — real financial data reconciliation for the live household
+Same session, unrelated to the two items above: walked the real
+household (קובי + נעמי, household id `4198b313-…`) through several
+rounds of reconciling actual bank/credit-card statements (MAX ×7,
+Isracard/Leumi JSON, income statements, treatment-payment transfer
+lists, investment holdings) against what was in Supabase. Net effect:
+~160 transactions added/fixed, 2 stale installment records replaced
+with correctly-anchored ones (see `first_payment` = purchase date,
+`payments_count` months auto-project going forward — don't log
+individual per-payment transactions for installment purchases, that
+double-counts), investments table replaced with the real current
+holdings, several data-entry naming inconsistencies found and fixed
+(e.g. recurring income mislabeled differently every month). This is
+**data, not a code change** — nothing here needs re-doing, but if a
+future session sees the household's July-September numbers looking
+different from an old memory/summary, this is why: the numbers now are
+the corrected ones.
 
 ## 🟢 Resolved 2026-08-13 — mobile transaction list looked cluttered/broken
 User: "ברשימת התנועות במובייל אני חושב שזה ממש לא יפה ונראה מסורבל" — the
