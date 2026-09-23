@@ -12,6 +12,8 @@ const app = express();
 app.set('trust proxy', 1);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const GROK_KEY = process.env.GROK_API_KEY || process.env.XAI_API_KEY || '';
@@ -195,9 +197,56 @@ function toDataUrl(fileData, mimeType) {
 
 function getAvailableAiProviders() {
   const providers = [];
+  if (ANTHROPIC_KEY) providers.push('claude');
   if (GEMINI_KEY) providers.push('gemini');
   if (GROK_KEY) providers.push('grok');
   return providers;
+}
+
+async function callClaude({ prompt, text, fileData, mimeType }) {
+  const content = [
+    { type: 'text', text: `${prompt}\n\n${String(text || '').slice(0, 12000)}` }
+  ];
+
+  if (fileData) {
+    const normalizedMime = String(mimeType || '').toLowerCase().trim().replace('image/jpg', 'image/jpeg');
+    const supportedImage = /^(image\/png|image\/jpeg|image\/webp)$/.test(normalizedMime);
+    if (!supportedImage) {
+      const err = new Error('Unsupported image mimeType. Use PNG/JPEG/WEBP.');
+      err.statusCode = 400;
+      throw err;
+    }
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: normalizedMime, data: String(fileData) }
+    });
+  }
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 4096,
+      temperature: 0.1,
+      messages: [{ role: 'user', content }]
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok || data.type === 'error') {
+    throw new Error(data.error?.message || 'Claude provider error');
+  }
+
+  return {
+    provider: 'claude',
+    model: ANTHROPIC_MODEL,
+    output: (data?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n')
+  };
 }
 
 async function callGemini({ prompt, text, fileData, mimeType }) {
@@ -290,6 +339,24 @@ function delay(ms) {
 
 async function generateWithFallback(payload) {
   const attempted = [];
+
+  if (ANTHROPIC_KEY) {
+    try {
+      const result = await callClaude(payload);
+      return { ...result, attempted };
+    } catch (err) {
+      attempted.push({ provider: 'claude', error: err.message || 'Unknown Claude error' });
+      // one retry after a short delay, same reasoning as the Gemini retry below --
+      // most failures at this stage are transient (rate limit, momentary 5xx).
+      try {
+        await delay(1200);
+        const retryResult = await callClaude(payload);
+        return { ...retryResult, attempted };
+      } catch (retryErr) {
+        attempted.push({ provider: 'claude (retry)', error: retryErr.message || 'Unknown Claude error' });
+      }
+    }
+  }
 
   if (GEMINI_KEY) {
     try {
@@ -593,8 +660,8 @@ app.get('/api/health', async (_req, res) => {
 
 app.post('/api/ai/import', requireAuth, aiLimiter, async (req, res) => {
   try {
-    if (!GEMINI_KEY && !GROK_KEY) {
-      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
+    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
     }
 
     const { prompt, text, fileData, mimeType } = req.body || {};
@@ -644,8 +711,8 @@ app.post('/api/ai/import', requireAuth, aiLimiter, async (req, res) => {
 
 app.post('/api/ai/advice', requireAuth, aiLimiter, async (req, res) => {
   try {
-    if (!GEMINI_KEY && !GROK_KEY) {
-      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
+    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
     }
 
     const { summary } = req.body || {};
@@ -693,8 +760,8 @@ app.post('/api/ai/advice', requireAuth, aiLimiter, async (req, res) => {
 
 app.post('/api/ai/advice-chat', requireAuth, aiLimiter, async (req, res) => {
   try {
-    if (!GEMINI_KEY && !GROK_KEY) {
-      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
+    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
     }
 
     const { summary, history, message } = req.body || {};
@@ -720,8 +787,8 @@ ${historyText ? '\nהיסטוריית שיחה קודמת:\n' + historyText + '\
 
 app.post('/api/ai/onboarding', requireAuth, aiLimiter, async (req, res) => {
   try {
-    if (!GEMINI_KEY && !GROK_KEY) {
-      return res.status(503).json({ error: 'No AI key configured. Set GEMINI_API_KEY and/or GROK_API_KEY' });
+    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
     }
 
     const { qaText } = req.body || {};
@@ -776,7 +843,7 @@ app.post('/api/chat/parse', requireAuth, aiLimiter, async (req, res) => {
     const { text } = req.body || {};
     if (!text) return res.status(400).json({ error: 'text is required' });
 
-    if (!GEMINI_KEY && !GROK_KEY) {
+    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
       const amountMatch = String(text).match(/(\d+[\.,]?\d*)/);
       const amount = amountMatch ? Number(amountMatch[1].replace(',', '.')) : 0;
       const isIncome = /משכורת|הכנסה|נכנס|קיבלתי/i.test(String(text));

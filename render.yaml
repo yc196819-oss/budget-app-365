@@ -8,6 +8,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
@@ -32,8 +36,6 @@ services:
         sync: false
       - key: GOOGLE_OAUTH_SCOPES
         value: openid,email,https://www.googleapis.com/auth/gmail.send
-      - key: ALLOW_DEV_RESET_FALLBACK
-        value: false
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM
