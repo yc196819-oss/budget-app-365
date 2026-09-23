@@ -28,7 +28,56 @@ computed current_value, which doesn't exist yet. The Israeli קרן כספית
 API the way SPY has; flagged to the user as a harder problem, not
 started.
 
-## 🟢 Resolved 2026-09-23 — transactions tab manual-add form rebuilt
+## 🟢 Resolved 2026-09-23 (round 2) — manual-add moved to a modal, real regressions found and fixed
+The round-1 fix below (collapse by default) wasn't what the user meant
+by "rebuild from the ground up" — they clarified: delete the old
+approach entirely, AI quick-add should be the one obvious primary
+action, no permanent form on the page at all. Moved manual-add into a
+modal (`openManualAddModal()`, reuses the existing `UI._open()` system)
+opened by a small "+ הוספה ידנית" link.
+
+**This surfaced real bugs**, all from code that assumed the manual-add
+fields (`#exType`/`#exCat`/`#exDate`/etc.) were always present on the
+page — true before this change, not true once they only exist inside a
+modal:
+- A top-level page-load line set `#exDate`/`#loanDate`/`#instFirst`/
+  `#invDate` in one unguarded statement — once `#exDate` stopped
+  existing at load time, it threw immediately and silently killed the
+  rest of the line, so the loans/installments/investments tabs stopped
+  getting their default "today" date on every single page load. Not
+  something the round-1 verification caught because that test never
+  did a **fresh** page load.
+- `fillCatSel()`/`updateSubSel()`, called from the main `render()` on
+  *every* render (not just once), threw for the same reason. Now
+  guarded to no-op when the modal isn't open.
+- The AI-quick-add "found exactly one transaction" path directly
+  poked `$('#exType').value=...` etc., assuming the inline form —
+  this is a real, load-bearing feature (recognizing a single
+  transaction from free text or a receipt photo) and it was fully
+  broken by the modal move until fixed to call
+  `openManualAddModal(prefill)` instead.
+
+Also: bumped the service worker's `SHELL_CACHE` version (v3→v4) — the
+user reported not seeing UI changes on their phone at all (even the
+round-1 fix). Cause not confirmed (device-side, most likely browser/PWA
+cache or an already-open stale tab — the server was verified serving
+the new HTML correctly with `Cache-Control: max-age=0` both times), but
+bumping the SW cache version is a safe, standard way to force a clean
+break regardless of the exact mechanism.
+
+**Real mistake made and fixed during cleanup**: after testing, ran a
+too-broad `description ilike '%בדיקת%'` delete to remove test
+transactions from the *demo* account, without scoping to household —
+it also matched and deleted a genuine transaction from the real
+household ("בדיקת מזוזות", ₪60, 14/7 — "בדיקת" is just the ordinary
+Hebrew word for "checking of", not unique to test data). Caught
+immediately, restored with the correct date/amount/account, but
+**category_id is null** on the restored row since that wasn't known —
+flagged to the user to set it if they want it categorized. Lesson: any
+cleanup delete against real data needs to filter by household_id (or
+just get the exact id(s) first), never a bare content pattern match.
+
+## 🟢 Resolved 2026-09-23 (round 1, superseded above) — transactions tab manual-add form rebuilt
 Follow-up to the item below — asked the user what specifically was bad
 ("everything — rebuild from the ground up"). Real diagnosis: the
 manual-add form's collapse/expand toggle (`toggleManualAdd`) only
