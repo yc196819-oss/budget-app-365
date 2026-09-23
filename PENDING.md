@@ -2,6 +2,52 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-23 — push notifications diagnosed, investments cleaned up, live market data added
+User: push notifications on phone don't work. Checked `push_subscriptions`
+for the real household — zero rows ever created, so the subscribe flow
+was failing client-side, not a server/delivery issue (VAPID keys are
+already correctly configured on Render). Likely cause: iOS only exposes
+the Push API to an installed (home-screen) PWA — a bare Safari tab was
+showing the generic "browser doesn't support push" message. Added
+iOS-not-installed detection with a specific install prompt. **Not
+confirmed fixed** — depends on whether that was actually his situation;
+ask if push still doesn't work after installing to home screen, since
+there could be a second issue on top.
+
+Also: removed 2 bank account numbers that had leaked into investment
+names during the data-reconciliation work; extended `editInv()` to
+cover asset_type + current_value, not just name/cost (edit button
+already existed, just didn't cover those fields).
+
+New `GET /api/market/quote` (5-min cached) + a "שערי שוק" panel on the
+investments tab — live USD/ILS and SPY price/change%, verified against
+the real APIs. **Does not yet auto-update any specific holding** — that
+needs a share-count field per holding to turn a live price into a
+computed current_value, which doesn't exist yet. The Israeli קרן כספית
+(money-market fund) still has no live-tracking path — no standard free
+API the way SPY has; flagged to the user as a harder problem, not
+started.
+
+## 🔴 Not started — two large asks from the same message, need scoping
+1. **Transactions tab "needs a full rewrite"** — user said the toolbars/
+   filters there are bad enough to drive users away, wants a massive
+   overhaul. Only got the mobile card layout fixed earlier (2026-08-13)
+   and the general color/gradient design-token pass (2026-09-23) — the
+   actual filter pills, manual-add form layout, and AI-quick-add box on
+   that tab haven't had a structural rework. Need to find out from the
+   user specifically what's bad before rebuilding blind.
+2. **"I don't want to carry next month's plan in my head, I want a way
+   to dump it all onto the system"** — user floated voice/voice-messages
+   as a possible capture mechanism, explicitly said "think about a
+   solution," did not ask for immediate implementation. This is really
+   two separate features bundled: (a) a forward-looking/planned-
+   transactions layer (the app currently has no concept of "this hasn't
+   happened yet but I know it's coming"), and (b) a lower-friction
+   capture modality (voice dictation/speech-to-text feeding the
+   existing AI-parse pipeline, similar to how AI-import already turns
+   free text into transactions). Worth pitching back a concrete
+   recommendation before building anything.
+
 ## 🟡 Needs a manual step before it's live — Claude added as AI provider
 Added `callClaude()` in `budget-ai-server.js`, wired as the new
 **primary** provider ahead of Gemini/Grok (`generateWithFallback()`
