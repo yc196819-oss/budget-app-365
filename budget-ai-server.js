@@ -877,6 +877,57 @@ app.post('/api/chat/parse', requireAuth, aiLimiter, async (req, res) => {
   }
 });
 
+let marketQuoteCache = null; // { data, fetchedAt } -- refreshed at most every 5 min
+async function fetchUsdIls() {
+  const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=ILS');
+  const data = await res.json();
+  const rate = data?.rates?.ILS;
+  if (!res.ok || !rate) throw new Error('USD/ILS rate unavailable');
+  return Number(rate);
+}
+async function fetchSpyQuote() {
+  try {
+    const res = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=5d', {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const data = await res.json();
+    const result = data?.chart?.result?.[0];
+    const price = result?.meta?.regularMarketPrice;
+    const prevClose = result?.meta?.previousClose ?? result?.meta?.chartPreviousClose;
+    if (!res.ok || !price) throw new Error('no price');
+    return { price: Number(price), changePct: prevClose ? ((price - prevClose) / prevClose) * 100 : null };
+  } catch (_err) {
+    // fallback: Stooq CSV, no API key needed either -- "s,d,t,o,h,l,c,v" header row + one data row
+    const res = await fetch('https://stooq.com/q/l/?s=spy.us&f=sd2t2ohlcv&h&e=csv');
+    const csv = await res.text();
+    const lines = csv.trim().split('\n');
+    if (lines.length < 2) throw new Error('SPY price unavailable');
+    const cols = lines[1].split(',');
+    const close = Number(cols[6]);
+    const open = Number(cols[3]);
+    if (!close) throw new Error('SPY price unavailable');
+    return { price: close, changePct: open ? ((close - open) / open) * 100 : null };
+  }
+}
+app.get('/api/market/quote', requireAuth, async (req, res) => {
+  try {
+    const force = req.query.force === '1';
+    if (!force && marketQuoteCache && Date.now() - marketQuoteCache.fetchedAt < 5 * 60 * 1000) {
+      return res.json(marketQuoteCache.data);
+    }
+    const [usdIls, spy] = await Promise.all([fetchUsdIls(), fetchSpyQuote()]);
+    const data = {
+      usdIls,
+      spy: { priceUsd: spy.price, priceIls: spy.price * usdIls, changePct: spy.changePct },
+      fetchedAt: new Date().toISOString()
+    };
+    marketQuoteCache = { data, fetchedAt: Date.now() };
+    return res.json(data);
+  } catch (err) {
+    return res.status(502).json({ error: err.message || 'Market data unavailable' });
+  }
+});
+
 app.get('/api/push/vapid-public-key', (req, res) => {
   if (!PUSH_CONFIGURED) return res.status(503).json({ error: 'Push not configured' });
   return res.json({ publicKey: VAPID_PUBLIC_KEY });

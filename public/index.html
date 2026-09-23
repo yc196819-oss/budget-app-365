@@ -729,6 +729,15 @@ tr:last-child td{border-bottom:none}
       <div class="card"><div class="label">תשואה</div><div class="value" id="invRoi">0%</div></div>
     </div>
     <div class="panel">
+      <h2>📊 שערי שוק <button type="button" class="smallbtn" style="margin-right:8px" onclick="loadMarketQuote(true)" title="רענן">🔄</button></h2>
+      <div class="grid cards" id="marketQuoteBox">
+        <div class="card"><div class="label">דולר / שקל</div><div class="value neu" id="mqUsdIls">—</div></div>
+        <div class="card"><div class="label">S&amp;P 500 (SPY)</div><div class="value" id="mqSpyUsd">—</div><div class="muted" id="mqSpyChange" style="font-size:.72rem;margin-top:3px"></div></div>
+        <div class="card"><div class="label">SPY בשקלים</div><div class="value neu" id="mqSpyIls">—</div></div>
+      </div>
+      <p class="muted" id="mqUpdated" style="font-size:.72rem;margin-top:8px"></p>
+    </div>
+    <div class="panel">
       <h2 data-i18n="inv.add.title">הוספת השקעה</h2>
       <div class="row">
         <input id="invName" placeholder="שם ההשקעה" style="flex:1;min-width:140px">
@@ -954,6 +963,10 @@ tr:last-child td{border-bottom:none}
       <h2 data-i18n="settings.push.title">🔔 התראות Push</h2>
       <p class="muted" style="margin-bottom:10px">התראות אמיתיות שיקפצו על הטלפון גם כשהאפליקציה סגורה (למשל חריגה מתקציב). דורש שהאפליקציה מותקנת (📱 בתפריט הצד).</p>
       <p class="muted hidden" id="pushUnsupported">הדפדפן הזה לא תומך בהתראות Push.</p>
+      <div class="row hidden" id="pushNeedsInstall" style="align-items:center;gap:10px;background:rgba(255,180,84,.1);border:1px solid rgba(255,180,84,.35);border-radius:10px;padding:10px 14px;margin-bottom:10px">
+        <span>⚠️ באייפון חייבים קודם <b>להתקין את האפליקציה למסך הבית</b> — בלי זה התראות Push לא יעבדו בכלל, גם אם תלחצו "הפעל".</span>
+        <button type="button" class="btn sec" style="flex-shrink:0" onclick="showInstallInstructions()">📲 איך מתקינים</button>
+      </div>
       <div id="pushControls" class="row">
         <button class="btn" id="pushEnableBtn" onclick="enablePushNotifications()">🔔 הפעל התראות במכשיר הזה</button>
         <button class="btn sec hidden" id="pushTestBtn" onclick="sendPushTest()">שלח התראת ניסיון</button>
@@ -1654,6 +1667,7 @@ function goToTab(tab){
   if(tab==='dash')syncDashboard(true);
   if(tab==='charts')renderCharts();
   if(tab==='advisor'){showAdvisorConvoView(false);loadAdvisorConversationsList();renderAdvisorTopics();}
+  if(tab==='investments')loadMarketQuote();
   if(tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}
   closeMoreSheet();
 }
@@ -2101,7 +2115,10 @@ function urlBase64ToUint8Array(base64String){
 }
 async function refreshPushStatus(){
   const on='serviceWorker' in navigator&&'PushManager' in window;
-  $('#pushUnsupported')?.classList.toggle('hidden',on);
+  const isIOSDevice=/iPhone|iPad|iPod/.test(navigator.userAgent);
+  const needsInstall=!on&&isIOSDevice&&!isStandalone();
+  $('#pushNeedsInstall')?.classList.toggle('hidden',!needsInstall);
+  $('#pushUnsupported')?.classList.toggle('hidden',on||needsInstall);
   $('#pushControls')?.classList.toggle('hidden',!on);
   if(!on)return;
   try{
@@ -2886,14 +2903,17 @@ window.editInv=async id=>{
   const i=DB.investments.find(x=>x.id===id);if(!i)return;
   const v=await UI.prompt('עריכת השקעה',[
     {key:'name',label:'שם השקעה',value:i.name},
-    {key:'cost',label:'עלות',type:'number',step:'0.01',value:i.cost}
+    {key:'asset_type',label:'סוג נכס',value:i.asset_type||''},
+    {key:'cost',label:'עלות',type:'number',step:'0.01',value:i.cost},
+    {key:'current_value',label:'שווי נוכחי',type:'number',step:'0.01',value:i.current_value}
   ]);
   if(!v)return;
   if(!v.cost||v.cost<=0){UI.alert('עלות לא תקינה',{type:'error'});return;}
-  const name=v.name,cost=v.cost;
-  const {error}=await sb.from('investments').update({name:name||'(ללא שם)',cost}).eq('id',id);
+  if(v.current_value===''||v.current_value===null||isNaN(v.current_value)||v.current_value<0){UI.alert('שווי נוכחי לא תקין',{type:'error'});return;}
+  const name=v.name,asset_type=v.asset_type,cost=v.cost,current_value=v.current_value;
+  const {error}=await sb.from('investments').update({name:name||'(ללא שם)',asset_type:asset_type||null,cost,current_value}).eq('id',id);
   if(error){UI.alert(error.message,{type:'error'});return;}
-  i.name=name||'(ללא שם)';i.cost=cost;render();
+  i.name=name||'(ללא שם)';i.asset_type=asset_type;i.cost=cost;i.current_value=current_value;render();
 };
 window.editGoal=async id=>{
   const g=DB.goals.find(x=>x.id===id);if(!g)return;
@@ -4008,6 +4028,31 @@ function renderInstallments(){
   }).join('');
 }
 
+let marketQuoteLoading=false;
+window.loadMarketQuote=async(force)=>{
+  if(marketQuoteLoading)return;
+  marketQuoteLoading=true;
+  const upd=$('#mqUpdated');
+  try{
+    const r=await fetch(API_BASE+'/api/market/quote'+(force?'?force=1':''),{headers:await authHeaders()});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error||'שגיאה בטעינת שערי שוק');
+    $('#mqUsdIls').textContent='₪'+data.usdIls.toFixed(3);
+    $('#mqSpyUsd').textContent='$'+data.spy.priceUsd.toFixed(2);
+    $('#mqSpyIls').textContent=fmt(data.spy.priceIls);
+    const chg=data.spy.changePct;
+    const chgEl=$('#mqSpyChange');
+    if(chgEl){
+      if(chg==null){chgEl.textContent='';}
+      else{chgEl.textContent=(chg>=0?'▲ +':'▼ ')+chg.toFixed(2)+'% היום';chgEl.style.color=chg>=0?'var(--accent2)':'var(--danger)';}
+    }
+    if(upd)upd.textContent='עודכן: '+new Date(data.fetchedAt).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+  }catch(err){
+    if(upd)upd.textContent='⚠ '+(err.message||'שערי השוק לא זמינים כרגע');
+  }finally{
+    marketQuoteLoading=false;
+  }
+};
 function renderInvestments(){
   const cost=DB.investments.reduce((s,i)=>s+(+i.cost),0);
   const value=DB.investments.reduce((s,i)=>s+(+i.current_value),0);
