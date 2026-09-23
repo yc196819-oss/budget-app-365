@@ -28,15 +28,27 @@ computed current_value, which doesn't exist yet. The Israeli קרן כספית
 API the way SPY has; flagged to the user as a harder problem, not
 started.
 
-## 🔴 Not started — two large asks from the same message, need scoping
-1. **Transactions tab "needs a full rewrite"** — user said the toolbars/
-   filters there are bad enough to drive users away, wants a massive
-   overhaul. Only got the mobile card layout fixed earlier (2026-08-13)
-   and the general color/gradient design-token pass (2026-09-23) — the
-   actual filter pills, manual-add form layout, and AI-quick-add box on
-   that tab haven't had a structural rework. Need to find out from the
-   user specifically what's bad before rebuilding blind.
-2. **"I don't want to carry next month's plan in my head, I want a way
+## 🟢 Resolved 2026-09-23 — transactions tab manual-add form rebuilt
+Follow-up to the item below — asked the user what specifically was bad
+("everything — rebuild from the ground up"). Real diagnosis: the
+manual-add form's collapse/expand toggle (`toggleManualAdd`) only
+applied under 820px; on desktop all 13 fields were permanently fully
+open in one flex-wrap row. Fixed: collapses by default on every screen
+size now, split into 6 essential fields (grid-based, reflows 1/2/7
+columns at breakpoints) + a "עוד אפשרויות" toggle hiding the 7 rarer
+fields (nature/spread/account/card/installments). No logic changes —
+`addTransaction()` etc. untouched, same field IDs. Verified the
+restructuring didn't break submission (real end-to-end test: filled
+description+amount, submitted, transaction appeared with the correct
+amount) at 1440/900/390px, dark+light.
+
+**Left alone this pass**: the category filter pills (`.filter-row`) —
+already has `overflow-x:auto` so it doesn't wrap into a wall, judged
+lower-urgency than the form. Worth a search/dropdown treatment later
+if 21+ categories makes scrolling through them tedious.
+
+## 🔴 Not started
+1. **"I don't want to carry next month's plan in my head, I want a way
    to dump it all onto the system"** — user floated voice/voice-messages
    as a possible capture mechanism, explicitly said "think about a
    solution," did not ask for immediate implementation. This is really
