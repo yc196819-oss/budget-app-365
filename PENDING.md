@@ -2,6 +2,57 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 8) — Transactions tab rebuilt as a dashboard, not a list
+User, forcefully: opening Transactions and seeing a long list of rows
+means he scrolls past without even looking — wanted the home screen to
+show a handful of basic buttons instead of raw records, one per
+category showing this month's spend, tapping a category for detail,
+with the actual transaction list available but not the default view.
+Explicitly deprioritized two side ideas he floated (a "where's
+cheapest" price-comparison link for supermarkets, a shopping-list
+feature) in favor of this being done properly first.
+
+Restructured the Transactions tab in `public/index.html`:
+- **New default view**: hero net/in/out (unchanged) + insight chips
+  (unchanged) + a new `.tx-catcards` grid — one big tappable card per
+  expense category with icon, name, amount, and % of the month's
+  spend, sorted highest first (`renderTxCatCards()`). Tapping a card
+  opens the existing category peek modal (breakdown, multi-year
+  report, vendor comparison, transaction list for just that category
+  — all the depth from earlier rounds lives there already).
+- **The actual transaction list — search box, day/category grouping
+  toggle, category filter, and the raw cards — is now hidden by
+  default**, behind an explicit "📋 הצג את כל התנועות (N)" button
+  (`toggleTxListExpanded()`, `txListExpanded` state) that shows the
+  count so it's not a mystery what's behind it. Toggling again
+  collapses it back.
+- The hero/chips/trend/cards/insights now always reflect the **whole
+  month, unfiltered** (`monthRows(VY,VM,'all')`) — previously they
+  respected whatever category filter was active, which stopped making
+  sense once the filter control lives inside the now-collapsed list
+  section. The list itself still respects `exFilter`/`exSearch`/
+  `exGroupBy` as before.
+- Fixed a real interaction gap this surfaced: the peek modal's "🔍 הצג
+  רק את זה ברשימה למטה" button set the filter but the list stayed
+  collapsed, so nothing visibly happened — it now also expands the
+  list section.
+
+Verified via headless Chrome (mobile + desktop): fresh boot shows the
+card grid with the list collapsed by default and the correct count on
+the toggle button, tapping a card opens the peek modal, the toggle
+button correctly shows/hides the list and its controls, toggling
+twice returns to collapsed, the peek modal's "show only this" button
+now expands the list and applies the filter together, manual-add still
+updates the card totals correctly, zero console errors. Test data
+cleaned up from the demo household afterward.
+
+**Not built** (both explicitly deprioritized by the user in favor of
+this): a cross-vendor price-comparison feature ("where's cheapest to
+buy X") — would need external product-pricing data the app has no
+access to; a shopping-list/cart feature — his message describing it
+was cut off mid-sentence, needs him to finish the thought before
+scoping it.
+
 ## 🟢 Resolved 2026-09-24 (round 7) — app-lock friction, faster update detection, multi-year category report
 
 Three separate complaints in one message:

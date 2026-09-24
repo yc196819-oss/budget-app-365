@@ -289,6 +289,14 @@ tr:last-child td{border-bottom:none}
 .tx-insights{display:flex;flex-wrap:wrap;gap:8px}
 .tx-insight-chip{background:var(--surface3);border:1px solid var(--line2);border-radius:10px;padding:7px 12px;font-size:.76rem;color:var(--muted);font-family:inherit}
 button.tx-insight-chip{cursor:pointer;text-align:inherit;transition:border-color .15s,transform .15s}
+.tx-catcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.tx-cat-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;background:var(--surface);border:1.5px solid var(--line2);border-radius:16px;padding:14px;text-align:right;font-family:inherit;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s}
+.tx-cat-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.2)}
+.tx-cat-card-top{display:flex;align-items:center;justify-content:space-between;width:100%}
+.tx-cat-card-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:1rem;flex-shrink:0}
+.tx-cat-card-pct{font-size:.7rem;color:var(--faint);font-weight:700}
+.tx-cat-card-name{font-size:.82rem;font-weight:700;color:var(--text)}
+.tx-cat-card-amt{font-size:1.05rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text)}
 button.tx-insight-chip:hover{border-color:var(--accent);transform:translateY(-1px)}
 .tx-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .tx-search{flex:1;min-width:160px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;color:var(--text);font-size:.85rem}
@@ -568,26 +576,31 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
       <h2 data-i18n="nav.expenses">תנועות</h2>
       <div class="tx-summary hidden" id="txSummary">
         <div class="tx-summary-top">
-          <div><div class="lbl">יתרה בתקופה המסוננת</div><div class="hero-num" id="txHeroNum">₪0</div></div>
+          <div><div class="lbl">יתרה בתקופה</div><div class="hero-num" id="txHeroNum">₪0</div></div>
           <div class="tx-chips">
             <div class="tx-chip"><span class="dot in"></span><div><span class="l">הכנסות</span><b id="txChipIn">₪0</b></div></div>
             <div class="tx-chip"><span class="dot out"></span><div><span class="l">הוצאות</span><b id="txChipOut">₪0</b><span class="trend flat" id="txChipDelta"></span></div></div>
           </div>
         </div>
-        <div class="tx-breakdown" id="txBreakdown"></div>
-        <div class="tx-legend" id="txLegend"></div>
         <div class="tx-insights" id="txInsights"></div>
       </div>
-      <div class="tx-toolbar">
-        <input type="text" id="exSearchInput" class="tx-search" placeholder="🔍 חיפוש בתנועות…" oninput="exSearch=this.value;renderExpenses();">
-        <div class="seg" id="exGroupSeg">
-          <button type="button" data-g="day">לפי יום</button>
-          <button type="button" data-g="category">לפי קטגוריה</button>
-        </div>
+      <div id="txCatCardsWrap">
+        <div class="muted" style="margin-bottom:10px;font-weight:700">כמה הוצאתי החודש — לפי קטגוריה</div>
+        <div id="txCatCards" class="tx-catcards"></div>
       </div>
-      <div class="filters" id="exFilters"></div>
-      <div id="exBody"></div>
-      <p class="empty hidden" id="exEmpty">אין תנועות</p>
+      <button type="button" class="btn sec" id="txShowListBtn" style="width:100%;margin-top:18px" onclick="toggleTxListExpanded()">📋 הצג את כל התנועות</button>
+      <div id="txListSection" class="hidden" style="margin-top:16px">
+        <div class="tx-toolbar">
+          <input type="text" id="exSearchInput" class="tx-search" placeholder="🔍 חיפוש בתנועות…" oninput="exSearch=this.value;renderExpenses();">
+          <div class="seg" id="exGroupSeg">
+            <button type="button" data-g="day">לפי יום</button>
+            <button type="button" data-g="category">לפי קטגוריה</button>
+          </div>
+        </div>
+        <div class="filters" id="exFilters"></div>
+        <div id="exBody"></div>
+        <p class="empty hidden" id="exEmpty">אין תנועות</p>
+      </div>
     </div>
   </section>
 
@@ -1401,7 +1414,7 @@ async function authHeaders(){
 
 let CU=null,HID=null,MNAME='',MROLE='owner'; let VM=new Date().getMonth(),VY=new Date().getFullYear();
 let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[],bankAccounts:[],creditCards:[],categoryBudgets:[]};
-let exFilter='all',exSearch='',exGroupBy='day',catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
+let exFilter='all',exSearch='',exGroupBy='day',txListExpanded=false,catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
 const memberCache={}; let charts={};
 if(window.Chart){
   Chart.defaults.font.family="'Rubik','Segoe UI',sans-serif";
@@ -3935,7 +3948,7 @@ window.openCategoryPeekModal=(cid)=>{
     +'</div>';
   const {ov,close}=UI._open(html,{large:true});
   ov.querySelector('#catPeekClose').onclick=close;
-  ov.querySelector('#catPeekFilterBtn').onclick=()=>{exFilter=cid;close();renderExpenses();};
+  ov.querySelector('#catPeekFilterBtn').onclick=()=>{exFilter=cid;txListExpanded=true;close();renderExpenses();};
   ov.querySelectorAll('#peekYearGrid .pill').forEach(b=>b.onclick=()=>{
     b.classList.toggle('on');
     b.style.cssText=pillStyle(b.classList.contains('on'),color);
@@ -3944,7 +3957,81 @@ window.openCategoryPeekModal=(cid)=>{
     ov.querySelector('#peekYearTotal').textContent='סה"כ לשנים המסומנות: '+fmt(sum);
   });
 };
+// המסך הראשי של "תנועות" הוא לוח בקרה (כרטיסי קטגוריה לחיצים), לא רשימה
+// ארוכה — הרשימה המלאה מוסתרת מאחורי "הצג את כל התנועות" ופתוחה רק
+// כשמבקשים אותה בפירוש. הכרטיסים/הסיכום/התובנות תמיד משקפים את כל
+// החודש (ללא תלות בסינון), כי הם "מסך הבית"; הסינון/חיפוש שייכים רק
+// לרשימה המורחבת.
+function renderTxCatCards(homeRows){
+  const catTotals={};
+  homeRows.forEach(t=>{if(t.type==='expense')catTotals[t.category_id||'']=(catTotals[t.category_id||'']||0)+(+t.amount);});
+  const entries=Object.entries(catTotals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const grandTotal=entries.reduce((s,[,v])=>s+v,0);
+  const el=$('#txCatCards');
+  if(!entries.length){el.innerHTML='<p class="empty">אין הוצאות מתויגות החודש</p>';return;}
+  el.innerHTML=entries.map(([cid,v])=>{
+    const c=DB.categories.find(x=>x.id===cid);
+    const color=catColor(cid||null);
+    const pct=grandTotal>0?Math.round(v/grandTotal*100):0;
+    return '<button type="button" class="tx-cat-card" style="border-color:'+hexA(color,.35)+'" onclick="openCategoryPeekModal(\''+(cid||'')+'\')">'
+      +'<div class="tx-cat-card-top"><span class="tx-cat-card-icon" style="background:'+hexA(color,.16)+';color:'+color+'">'+(c?.icon||'📌')+'</span><span class="tx-cat-card-pct">'+pct+'%</span></div>'
+      +'<div class="tx-cat-card-name">'+esc(c?.name||'ללא קטגוריה')+'</div>'
+      +'<div class="tx-cat-card-amt">'+fmt(v)+'</div>'
+      +'</button>';
+  }).join('');
+}
+window.toggleTxListExpanded=()=>{txListExpanded=!txListExpanded;renderExpenses();};
 function renderExpenses(){
+  const homeRows=monthRows(VY,VM,'all');
+  const sum=homeRows.reduce((s,t)=>s+(t.type==='expense'?+t.amount:0),0);
+  const incSum=homeRows.reduce((s,t)=>s+(t.type==='income'?+t.amount:0),0);
+  const net=incSum-sum;
+
+  const heroEl=$('#txHeroNum'),summaryEl=$('#txSummary');
+  if(homeRows.length){
+    summaryEl.classList.remove('hidden');
+    heroEl.textContent=(net<0?'−':'+')+'₪'+Math.abs(Math.round(net)).toLocaleString('he-IL');
+    heroEl.className='hero-num '+(net<0?'neg':'pos');
+    $('#txChipIn').textContent=fmt(incSum);
+    $('#txChipOut').textContent=fmt(sum);
+
+    // השוואה להוצאה של החודש הקודם
+    let pm=VM-1,py=VY;if(pm<0){pm=11;py=VY-1;}
+    const prevSum=monthRows(py,pm,'all').reduce((s,t)=>s+(t.type==='expense'?+t.amount:0),0);
+    renderTrend('txChipDelta',sum,prevSum,true);
+  } else summaryEl.classList.add('hidden');
+
+  renderTxCatCards(homeRows);
+
+  // תובנות אוטומטיות — קטגוריה מובילה (לחיצה פותחת הצצה), וקצב הוצאה חזוי
+  const catTotals={};
+  homeRows.forEach(t=>{if(t.type==='expense')catTotals[t.category_id||'']=(catTotals[t.category_id||'']||0)+(+t.amount);});
+  const entries=Object.entries(catTotals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const insights=[];
+  let topCatId=null;
+  if(entries.length){
+    const [topId,topV]=entries[0];
+    topCatId=topId;
+    const topC=DB.categories.find(x=>x.id===topId);
+    insights.push({html:'🔥 הכי הוצאתם החודש: <b>'+(topC?(topC.icon||'')+' '+esc(topC.name):'ללא קטגוריה')+'</b> ('+fmt(topV)+')',clickable:true});
+  }
+  const today=new Date();
+  const isLiveMonth=VY===today.getFullYear()&&VM===today.getMonth();
+  if(isLiveMonth&&sum>0){
+    const dayNum=today.getDate();
+    const daysInMonth=new Date(VY,VM+1,0).getDate();
+    const pace=sum/dayNum*daysInMonth;
+    insights.push({html:'📅 בקצב הנוכחי: כ־'+fmt(pace)+' עד סוף החודש',clickable:false});
+  }
+  const insightsEl=$('#txInsights');
+  insightsEl.innerHTML=insights.map((ins,i)=>'<'+(ins.clickable?'button type="button"':'div')+' class="tx-insight-chip"'+(ins.clickable?' data-i="'+i+'"':'')+'>'+ins.html+'</'+(ins.clickable?'button':'div')+'>').join('');
+  if(topCatId)insightsEl.querySelectorAll('.tx-insight-chip[data-i]').forEach(b=>b.onclick=()=>openCategoryPeekModal(topCatId));
+
+  // "הצג את כל התנועות" — הרשימה המלאה עם חיפוש/סינון/קיבוץ, מוסתרת כברירת מחדל
+  $('#txShowListBtn').textContent=txListExpanded?'🔼 הסתרת רשימת התנועות':'📋 הצג את כל התנועות ('+homeRows.length+')';
+  $('#txListSection').classList.toggle('hidden',!txListExpanded);
+  if(!txListExpanded)return;
+
   const f=$('#exFilters');
   f.innerHTML='<div class="filter-bar">'
     +'<button type="button" class="pill filter-trigger" id="exFilterBtn">'+exFilterLabel()+' <span class="fchev">▾</span></button>'
@@ -3966,72 +4053,6 @@ function renderExpenses(){
     rows=rows.filter(t=>(t.description||'').toLowerCase().includes(q));
   }
   rows.sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||''));
-
-  const sum=rows.reduce((s,t)=>s+(t.type==='expense'?+t.amount:0),0);
-  const incSum=rows.reduce((s,t)=>s+(t.type==='income'?+t.amount:0),0);
-  const net=incSum-sum;
-
-  const heroEl=$('#txHeroNum'),summaryEl=$('#txSummary');
-  if(rows.length){
-    summaryEl.classList.remove('hidden');
-    heroEl.textContent=(net<0?'−':'+')+'₪'+Math.abs(Math.round(net)).toLocaleString('he-IL');
-    heroEl.className='hero-num '+(net<0?'neg':'pos');
-    $('#txChipIn').textContent=fmt(incSum);
-    $('#txChipOut').textContent=fmt(sum);
-
-    // השוואה להוצאה של החודש הקודם, מכבדת את הסינון הנוכחי כדי שתהיה רלוונטית
-    let pm=VM-1,py=VY;if(pm<0){pm=11;py=VY-1;}
-    const prevSum=monthRows(py,pm,exFilter).reduce((s,t)=>s+(t.type==='expense'?+t.amount:0),0);
-    renderTrend('txChipDelta',sum,prevSum,true);
-
-    // פירוט הוצאות לפי קטגוריה — פס מוערם עם מקרא לחיץ לסינון מהיר
-    const catTotals={};
-    rows.forEach(t=>{if(t.type==='expense')catTotals[t.category_id||'']=(catTotals[t.category_id||'']||0)+(+t.amount);});
-    const entries=Object.entries(catTotals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
-    const bdEl=$('#txBreakdown'),lgEl=$('#txLegend');
-    if(entries.length&&sum>0){
-      const MAIN=6;
-      const main=entries.slice(0,MAIN);
-      const restTotal=entries.slice(MAIN).reduce((s,[,v])=>s+v,0);
-      const segHtml=([cid,v])=>{
-        const color=catColor(cid||null);
-        const name=(DB.categories.find(x=>x.id===cid)?.name)||'ללא קטגוריה';
-        return '<button type="button" class="tx-breakdown-seg" data-f="'+(cid||'')+'" style="width:'+(v/sum*100)+'%;background:'+color+'" title="'+esc(name)+' — '+fmt(v)+'"></button>';
-      };
-      const legendHtml=([cid,v])=>{
-        const c=DB.categories.find(x=>x.id===cid);
-        const color=catColor(cid||null);
-        return '<button type="button" class="tx-legend-item" data-f="'+(cid||'')+'"><span class="tx-legend-dot" style="background:'+color+'"></span>'+(c?(c.icon||'')+' '+esc(c.name):'ללא קטגוריה')+' · '+fmt(v)+'</button>';
-      };
-      bdEl.innerHTML=main.map(segHtml).join('')+(restTotal>0?'<button type="button" class="tx-breakdown-seg" data-f="" style="width:'+(restTotal/sum*100)+'%;background:var(--faint)" title="אחר — '+fmt(restTotal)+'"></button>':'');
-      lgEl.innerHTML=main.map(legendHtml).join('')+(restTotal>0?'<span class="tx-legend-item" style="cursor:default"><span class="tx-legend-dot" style="background:var(--faint)"></span>אחר · '+fmt(restTotal)+'</span>':'');
-      // לחיצה על מקטע/מקרא פותחת "הצצה" בחלון קופץ — לא משנה את הרשימה הראשית,
-      // כדי שאפשר תמיד לחזור בלי לחפש כפתור "נקה סינון".
-      bdEl.querySelectorAll('.tx-breakdown-seg[data-f]:not([data-f=""])').forEach(b=>b.onclick=()=>openCategoryPeekModal(b.dataset.f));
-      lgEl.querySelectorAll('.tx-legend-item[data-f]:not([data-f=""])').forEach(b=>b.onclick=()=>openCategoryPeekModal(b.dataset.f));
-    } else { bdEl.innerHTML=''; lgEl.innerHTML=''; }
-
-    // תובנות אוטומטיות — קטגוריה מובילה (לחיצה פותחת הצצה), וקצב הוצאה חזוי
-    const insights=[];
-    let topCatId=null;
-    if(entries.length){
-      const [topId,topV]=entries[0];
-      topCatId=topId;
-      const topC=DB.categories.find(x=>x.id===topId);
-      insights.push({html:'🔥 הכי הוצאתם החודש: <b>'+(topC?(topC.icon||'')+' '+esc(topC.name):'ללא קטגוריה')+'</b> ('+fmt(topV)+')',clickable:true});
-    }
-    const today=new Date();
-    const isLiveMonth=VY===today.getFullYear()&&VM===today.getMonth();
-    if(isLiveMonth&&sum>0&&exFilter!=='__income__'){
-      const dayNum=today.getDate();
-      const daysInMonth=new Date(VY,VM+1,0).getDate();
-      const pace=sum/dayNum*daysInMonth;
-      insights.push({html:'📅 בקצב הנוכחי: כ־'+fmt(pace)+' עד סוף החודש',clickable:false});
-    }
-    const insightsEl=$('#txInsights');
-    insightsEl.innerHTML=insights.map((ins,i)=>'<'+(ins.clickable?'button type="button"':'div')+' class="tx-insight-chip"'+(ins.clickable?' data-i="'+i+'"':'')+'>'+ins.html+'</'+(ins.clickable?'button':'div')+'>').join('');
-    if(topCatId)insightsEl.querySelectorAll('.tx-insight-chip[data-i]').forEach(b=>b.onclick=()=>openCategoryPeekModal(topCatId));
-  } else summaryEl.classList.add('hidden');
 
   const body=$('#exBody'),emptyEl=$('#exEmpty');
   if(!rows.length){body.innerHTML='';emptyEl.classList.remove('hidden');return;}
