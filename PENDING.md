@@ -2,6 +2,58 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 4) — actual category-editing UI was undiscoverable, rebuilt it
+User: "אין אפשרות לערוך על רשומה את הקטגוריה" — a transaction ("שכירות")
+was mistagged as "בריאות" (health) with, in his experience, no way to
+fix it. The editor existed in code (`txCategoryCell()` — a small
+dashed-border "▾" button below the description, opening an inline
+expanding tree of options inside the card) but was easy to miss,
+especially since a SEPARATE static colored tag (`.tx-cattag`) sat
+right next to it showing the same category name without being
+clickable — exactly the kind of thing that reads as "there's no way
+to edit this" even though a control is technically present a few
+pixels away.
+
+Replaced the whole mechanism: the category tag itself (`.tx-cattag`)
+is now the single clickable control (pencil icon, hover state) and
+opens `openTxCategoryModal(txId, isInst)` — a proper modal reusing
+the same pill-grid pattern as the filter/peek modals from earlier
+rounds, root categories first, subcategories appearing once a root
+with children is picked, auto-closing when there's nothing more to
+choose. Deleted the old inline picker's code path entirely for the
+transactions tab (`txCategoryCell`, `selectTxCat`, `selectTxSub` —
+confirmed unused elsewhere before removing) since it's now dead.
+
+This also fixed a real gap: installment shadow-rows shown inside the
+transactions list previously had **no category editor at all**
+(`catEditor` was hard-coded empty for `t._isInst` rows) — they now
+get the same modal, one level only (installments have no subcategory
+column), matching what the Installments tab's own native list
+already offered via the separate, untouched `instCategoryCell()`.
+
+Also had to extend the mobile compact-card CSS (`#exBody .tx-card`
+grid layout from an earlier session) to cover `#catPeekBody` too and
+drop a stale `display:none` rule on `.tx-cattag` that was written
+back when the tag and the picker button were two separate elements —
+harmless before, but would have hidden the *only* category control
+now that they're merged into one.
+
+**Explicitly deferred, not acted on** (both raised by the user as
+"maybe" ideas, not firm requests): a full color-scheme change, and
+deleting the Graphs tab to merge it into Transactions — gave my own
+recommendation against the merge (different time granularity: Graphs
+is year-level trend analysis, Transactions is this-month detail;
+merging risks recreating the clutter he's been fighting) and asked
+him to confirm direction before touching nav structure.
+
+Verified via headless Chrome: created a transaction pre-tagged to the
+wrong category, confirmed the tag showed as a real problem, clicked
+it, retagged root+subcategory through the new modal, confirmed the
+card and the DB both reflect the change, confirmed an installment
+shadow-row's tag also opens a working (1-level) editor, confirmed the
+Installments tab's own native list still uses its original untouched
+picker, zero console errors on mobile and desktop.
+
 ## 🟢 Resolved 2026-09-24 (round 3) — category click now peeks in a modal, dropped the serif font
 Two concrete complaints from the user after round 2:
 1. Clicking a category in the breakdown bar/legend applied it as a

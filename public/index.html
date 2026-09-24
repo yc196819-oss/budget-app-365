@@ -130,12 +130,11 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
 
   /* transaction list: the generic .tx-card flex row (badge/mid/amount/actions
      side by side) has no room on a phone width, so it wraps into 3-4 messy
-     stacked lines with the category shown twice (static tag + picker
-     trigger). Rebuild it as a compact 2-row grid, scoped to the transaction
-     list (#exBody) and the category peek modal (#catPeekBody), which render
-     the same cards, so loans/installments/investments/accounts — which
-     share the .tx-card class but have different internal structure — are
-     untouched. */
+     stacked lines. Rebuild it as a compact 2-row grid, scoped to the
+     transaction list (#exBody) and the category peek modal (#catPeekBody),
+     which render the same cards, so loans/installments/investments/accounts
+     — which share the .tx-card class but have different internal structure
+     — are untouched. */
   #exBody .tx-card,#catPeekBody .tx-card{
     display:grid;
     grid-template-columns:38px 1fr auto;
@@ -150,9 +149,7 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
   #exBody .tx-mid,#catPeekBody .tx-mid{grid-column:2;grid-row:1/3;display:flex;flex-flow:row wrap;align-items:center;column-gap:8px;row-gap:5px;min-width:0}
   #exBody .tx-desc,#catPeekBody .tx-desc{flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #exBody .tx-meta,#catPeekBody .tx-meta{margin-top:0}
-  #exBody .tx-cattag,#catPeekBody .tx-cattag{display:none}
   #exBody .tx-mid>div:last-child,#catPeekBody .tx-mid>div:last-child{margin-top:0!important}
-  #exBody .cat-picker-trigger,#catPeekBody .cat-picker-trigger{padding:2px 9px}
   #exBody .tx-amt,#catPeekBody .tx-amt{grid-column:3;grid-row:1;justify-self:start;align-self:end}
   #exBody .tx-actions,#catPeekBody .tx-actions{grid-column:3;grid-row:2;justify-self:start;align-self:start}
   #exBody .tx-actions .smallbtn,#exBody .tx-actions .btn.danger,#catPeekBody .tx-actions .smallbtn,#catPeekBody .tx-actions .btn.danger{padding:4px 9px;font-size:.72rem}
@@ -319,6 +316,9 @@ button.tx-insight-chip:hover{border-color:var(--accent);transform:translateY(-1p
 }
 .tx-meta{display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap}
 .tx-cattag{font-size:.71rem;font-weight:600;padding:2px 8px;border-radius:7px}
+button.tx-cattag{border:0;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;transition:filter .15s,transform .15s}
+button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
+.cattag-edit{font-size:.85em;opacity:.55}
 .tx-pmtag{font-size:.71rem;color:var(--faint)}
 .tx-amt{font-weight:800;font-size:.95rem;font-variant-numeric:tabular-nums;flex-shrink:0;white-space:nowrap}
 .tx-actions{display:flex;gap:4px;flex-shrink:0}
@@ -2835,36 +2835,8 @@ window.editTx=async id=>{
   if(error){UI.alert(error.message,{type:'error'});return;}
   t.description=d||'(ללא תיאור)';t.amount=amount;t.tx_date=dt;render();
 };
-// קטגוריה/תת-קטגוריה נערכות ישירות בטבלת התנועות (לא דרך editTx), כי הן
+// קטגוריה/תת-קטגוריה נערכות דרך openTxCategoryModal (לא דרך editTx), כי הן
 // דורשות בחירה מרשימה, לא טקסט חופשי.
-function txCategoryCell(t){
-  const kind=t.type==='income'?'income':'expense';
-  const roots=rootCats(kind);
-  const cur=DB.categories.find(c=>c.id===t.category_id);
-  const curSub=t.subcategory_id?DB.categories.find(c=>c.id===t.subcategory_id):null;
-  // curSub can be a direct child of cur (2 levels) OR a grandchild (3 levels,
-  // a sub-subcategory) — show the middle level too when it's skipped,
-  // otherwise "אוכל · רמי לוי" silently hides that רמי לוי is really under סופר.
-  const curMid=(curSub&&curSub.parent_id&&curSub.parent_id!==t.category_id)?DB.categories.find(c=>c.id===curSub.parent_id):null;
-  const triggerColor=cur?catColor(cur.id):'var(--faint)';
-  const label=cur?((cur.icon||'')+' '+esc(cur.name)+(curMid?' · '+esc(curMid.name):'')+(curSub?' · '+esc(curSub.name):'')):'בחר קטגוריה';
-  const panelId='catp-'+t.id;
-  const rows=roots.map(c=>{
-    const isSel=c.id===t.category_id;
-    const subs=isSel?subCats(c.id):[];
-    const subRows=subs.length?'<div class="cat-picker-sub">'+subs.map(s=>{
-      const subSel=s.id===t.subcategory_id;
-      const subsubs=subCats(s.id);
-      const subsubRows=subsubs.length?'<div class="cat-picker-subsub">'+subsubs.map(ss=>'<div class="cat-picker-opt'+(ss.id===t.subcategory_id?' sel':'')+'" onclick="event.stopPropagation();selectTxSub(\''+t.id+'\',\''+ss.id+'\',false)"><span class="sw" style="background:'+catColor(ss.id)+'"></span>↳ '+esc(ss.name)+'</div>').join('')+'</div>':'';
-      return '<div class="cat-picker-opt'+(subSel?' sel':'')+'" onclick="event.stopPropagation();selectTxSub(\''+t.id+'\',\''+s.id+'\','+(subsubs.length>0)+')"><span class="sw" style="background:'+catColor(s.id)+'"></span>'+esc(s.name)+'</div>'+subsubRows;
-    }).join('')+'</div>':'';
-    return '<div class="cat-picker-opt'+(isSel?' sel':'')+'" onclick="event.stopPropagation();selectTxCat(\''+t.id+'\',\''+c.id+'\','+(subs.length>0)+')"><span class="sw" style="background:'+catColor(c.id)+'"></span>'+(c.icon||'')+' '+esc(c.name)+'</div>'+subRows;
-  }).join('');
-  return '<div class="cat-picker">'
-    +'<button type="button" class="cat-picker-trigger" style="color:'+triggerColor+'" onclick="event.stopPropagation();toggleCatPicker(\''+panelId+'\')">'+label+' <span class="car">▾</span></button>'
-    +'<div class="cat-picker-panel hidden" id="'+panelId+'" onclick="event.stopPropagation()">'+(rows||'<p class="empty" style="padding:8px">אין קטגוריות</p>')+'</div>'
-    +'</div>';
-}
 window.toggleCatPicker=id=>{
   const panel=document.getElementById(id);if(!panel)return;
   const wasOpen=!panel.classList.contains('hidden');
@@ -2877,8 +2849,6 @@ function reopenCatPicker(panelId){
   const panel=document.getElementById(panelId);
   if(panel)panel.classList.remove('hidden');
 }
-window.selectTxCat=(id,categoryId,keepOpen)=>updateTxCategory(id,categoryId,keepOpen);
-window.selectTxSub=(id,subcategoryId,keepOpen)=>updateTxSubcategory(id,subcategoryId,keepOpen);
 window.updateTxCategory=async(id,categoryId,keepOpen)=>{
   const t=DB.transactions.find(x=>x.id===id);if(!t)return;
   const {error}=await sb.from('transactions').update({category_id:categoryId||null,subcategory_id:null}).eq('id',id);
@@ -3747,6 +3717,52 @@ function monthRows(y,m,filter){
   }
   return rs;
 }
+// שינוי קטגוריה — נפתח בחלון קופץ אחד וברור (במקום התפריט הנפתח הישן
+// והדחוס בתוך הכרטיס עצמו), עובד גם על תנועות רגילות (עם תת-קטגוריה)
+// וגם על שורות-צל של תשלומים (רמה אחת בלבד, כמו בטאב "תשלומים").
+window.openTxCategoryModal=(txId,isInst)=>{
+  const store=isInst?DB.installments:DB.transactions;
+  const t=store.find(x=>x.id===txId);if(!t)return;
+  const kind=isInst?'expense':(t.type==='income'?'income':'expense');
+  const roots=rootCats(kind);
+  const pillStyle=(active,color)=>active
+    ?('background:'+color+';color:#0c0e15;border-color:'+color)
+    :('background:'+hexA(color,.13)+';color:'+color+';border-color:'+hexA(color,.32));
+
+  const {ov,close}=UI._open('<h3 style="margin:0 0 6px">שינוי קטגוריה</h3><p class="muted" id="txCatDesc" style="margin:0 0 14px"></p><div id="txCatBody"></div><div class="row" style="margin-top:18px;justify-content:flex-end"><button type="button" class="btn sec" id="txCatCloseBtn">סגירה</button></div>');
+  ov.querySelector('#txCatCloseBtn').onclick=close;
+
+  const redraw=()=>{
+    ov.querySelector('#txCatDesc').textContent=t.description||'';
+    let html='<div class="filter-grid">'+roots.map(c=>{
+      const active=c.id===t.category_id;
+      return '<button type="button" class="pill" data-c="'+c.id+'" style="'+pillStyle(active,catColor(c.id))+'">'+(c.icon||'')+' '+esc(c.name)+'</button>';
+    }).join('')+'</div>';
+    if(!isInst&&t.category_id){
+      const subs=subCats(t.category_id);
+      if(subs.length){
+        html+='<div style="margin-top:16px"><div class="muted" style="margin-bottom:8px;font-weight:700">תת־קטגוריה (אופציונלי)</div><div class="filter-grid">'
+          +'<button type="button" class="pill'+(!t.subcategory_id?' on':'')+'" data-s="">ללא</button>'
+          +subs.map(s=>{
+            const active=s.id===t.subcategory_id;
+            return '<button type="button" class="pill'+(active?' on':'')+'" data-s="'+s.id+'" style="'+pillStyle(active,catColor(s.id))+'">'+esc(s.name)+'</button>';
+          }).join('')+'</div></div>';
+      }
+    }
+    const body=ov.querySelector('#txCatBody');
+    body.innerHTML=html;
+    body.querySelectorAll('.pill[data-c]').forEach(b=>b.onclick=async()=>{
+      if(isInst){await updateInstCategory(t.id,b.dataset.c);close();return;}
+      await updateTxCategory(t.id,b.dataset.c,false);
+      if(subCats(t.category_id).length)redraw();else close();
+    });
+    body.querySelectorAll('.pill[data-s]').forEach(b=>b.onclick=async()=>{
+      await updateTxSubcategory(t.id,b.dataset.s||null,false);
+      close();
+    });
+  };
+  redraw();
+};
 function txCardHtml(t){
   const c=DB.categories.find(x=>x.id===t.category_id);
   const color=catColor(t.category_id);
@@ -3754,7 +3770,6 @@ function txCardHtml(t){
   const subCat=t.subcategory_id?DB.categories.find(x=>x.id===t.subcategory_id):null;
   const midCat=(subCat&&subCat.parent_id&&subCat.parent_id!==t.category_id)?DB.categories.find(x=>x.id===subCat.parent_id):null;
   const catLabel=esc((c?c.name:'ללא קטגוריה')+(midCat?' · '+midCat.name:'')+(subCat?' · '+subCat.name:''));
-  const catEditor=t._isInst?'':'<div style="margin-top:5px">'+txCategoryCell(t)+'</div>';
   const btns=t._isInst
     ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
     :'<button class="smallbtn" onclick="editTx(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delTx(\''+t.id+'\')">מחק</button>';
@@ -3762,8 +3777,7 @@ function txCardHtml(t){
     +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+icon+'</div>'
     +'<div class="tx-mid">'
       +'<div class="tx-desc">'+esc(t.description)+'</div>'
-      +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+catLabel+'</span>'+txPmTag(t)+'</div>'
-      +catEditor
+      +'<div class="tx-meta"><button type="button" class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'" onclick="openTxCategoryModal(\''+t.id+'\','+(t._isInst?'true':'false')+')" title="שינוי קטגוריה">'+catLabel+' <span class="cattag-edit">✎</span></button>'+txPmTag(t)+'</div>'
     +'</div>'
     +'<div class="tx-amt '+(t.type==='income'?'pos':'neg')+'">'+(t.type==='income'?'+':'−')+'₪'+Math.abs(Math.round(t.amount)).toLocaleString('he-IL')+'</div>'
     +'<div class="tx-actions">'+btns+'</div>'
