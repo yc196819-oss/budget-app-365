@@ -2,6 +2,56 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 2) — full rebuild of the transactions-tab display, not just the filter bar
+After shipping the filter-pill fix below, the user clarified further:
+the "מזעזע, דורש שינוי מאסיבי" complaint was about the **whole
+transactions-display screen** — the summary + the list — not just the
+filter bar, and specifically that it gave no insight into spending
+habits/changes. Explicit go-ahead to rewrite extensively ("אם צריך
+לכתוב הרבה שורות אז אין לי בעיה").
+
+Rebuilt `renderExpenses()` and the surrounding panel in
+`public/index.html`:
+- **Summary card** now shows, beyond the existing net/in/out numbers:
+  a **vs-last-month trend badge** on the expense chip (reuses the
+  existing `renderTrend()` component already used on the dashboard
+  cards, so it's visually consistent, not a new pattern) — respects
+  whatever category filter is active, so the comparison stays
+  apples-to-apples; a **stacked category-breakdown bar** (top 6
+  categories + "אחר", proportional width, colored per category) with
+  a clickable legend underneath that applies the category filter;
+  and two **auto-generated insight chips** — top spending category
+  this month, and (only when viewing the actual current month) a
+  pace projection ("בקצב הנוכחי: כ-₪X עד סוף החודש").
+- **New toolbar**: a text search box (filters by description,
+  live, keeps focus while typing) and a **קיבוץ לפי יום / לפי קטגוריה**
+  toggle — category mode groups the list by category with a
+  subtotal+count header per group instead of by day, sorted by
+  spend descending, so the user can see exactly where money went
+  without doing the math themselves.
+- Refactored the month/installment-row assembly and the per-row card
+  markup into shared helpers (`monthRows()`, `instRowsForMonth()`,
+  `txCardHtml()`) since the same "give me this month's rows for a
+  filter" logic is now needed three times (current month, previous
+  month for the trend badge, and the list itself) — kept the
+  deliberate tx_date-based (not moAmt-based) filtering semantics from
+  before, per the existing in-code comment explaining why.
+
+Verified via headless Chrome on both mobile and desktop viewports,
+against the local dev server, before pushing: zero console/page
+errors on fresh load, summary numbers/trend/breakdown/insights all
+populate correctly, search filters the list and doesn't lose input
+focus, category grouping renders group headers with correct
+totals/counts, clicking a legend segment applies the category filter
+correctly, clearing the filter works.
+
+**Not yet addressed**: the still-missing "2 accounts since August"
+transaction list the user referenced in an earlier message but never
+actually attached (only the explanatory notes about what various
+recurring-transfer labels mean arrived) — still needs to be requested
+again. The voice-capture/forward-planning budget feature is still an
+unbuilt, only-scoped idea awaiting explicit go-ahead.
+
 ## 🟢 Resolved 2026-09-24 — category filter pills on the transactions tab rebuilt (the real "מזעזע" complaint)
 User clarified after round 2 (below) that hiding manual-entry behind a
 modal was never the complaint — that part was fine. The actual pain

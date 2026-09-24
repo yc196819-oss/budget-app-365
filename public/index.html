@@ -269,7 +269,8 @@ tr:last-child td{border-bottom:none}
 .cat-picker-sub{padding-right:14px;border-top:1px solid var(--line);margin-top:6px;padding-top:6px}
 
 /* ===== transactions: summary hero + day-grouped cards ===== */
-.tx-summary{background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px;flex-wrap:wrap}
+.tx-summary{background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px;display:flex;flex-direction:column;gap:14px;margin-bottom:14px}
+.tx-summary-top{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .tx-summary .lbl{color:var(--muted);font-size:.78rem;font-weight:600;margin-bottom:4px}
 .tx-summary .hero-num{font-family:'Suez One',serif;font-size:2.1rem;line-height:1;font-variant-numeric:tabular-nums}
 .tx-chips{display:flex;gap:10px;flex-wrap:wrap}
@@ -279,6 +280,25 @@ tr:last-child td{border-bottom:none}
 .tx-chip .dot.out{background:var(--danger);box-shadow:0 0 6px rgba(255,107,107,.6)}
 .tx-chip b{font-variant-numeric:tabular-nums;font-size:.9rem}
 .tx-chip span.l{color:var(--muted);font-size:.7rem;display:block}
+.tx-chip .trend{margin-top:0;margin-inline-start:6px}
+.tx-breakdown{display:flex;height:11px;border-radius:6px;overflow:hidden;background:var(--surface3)}
+.tx-breakdown-seg{height:100%;transition:opacity .15s,filter .15s;cursor:pointer;border:0;padding:0}
+.tx-breakdown-seg:hover{filter:brightness(1.25)}
+.tx-legend{display:flex;flex-wrap:wrap;gap:7px 16px}
+.tx-legend-item{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--muted);cursor:pointer;background:none;border:0;padding:0;font-family:inherit}
+.tx-legend-item:hover{color:var(--text)}
+.tx-legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.tx-insights{display:flex;flex-wrap:wrap;gap:8px}
+.tx-insight-chip{background:var(--surface3);border:1px solid var(--line2);border-radius:10px;padding:7px 12px;font-size:.76rem;color:var(--muted)}
+.tx-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.tx-search{flex:1;min-width:160px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;color:var(--text);font-size:.85rem}
+.seg{display:flex;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;flex-shrink:0}
+.seg button{border:0;background:transparent;color:var(--muted);font-size:.76rem;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.seg button.on{background:var(--grad-hero);color:#fff}
+.cat-group-head{display:flex;align-items:center;justify-content:space-between;padding:12px 2px 6px;gap:8px}
+.cat-group-head .cg-name{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.85rem}
+.cat-group-head .cg-total{font-variant-numeric:tabular-nums;font-weight:700;font-size:.85rem;flex-shrink:0}
+.cat-group-head .cg-count{color:var(--faint);font-size:.7rem;font-weight:500;margin-inline-start:6px}
 .day-group{margin-bottom:4px}
 .day-head{display:flex;align-items:baseline;gap:8px;padding:12px 2px 6px}
 .day-head b{font-size:.8rem;font-weight:700}
@@ -544,10 +564,22 @@ tr:last-child td{border-bottom:none}
     <div class="panel">
       <h2 data-i18n="nav.expenses">תנועות</h2>
       <div class="tx-summary hidden" id="txSummary">
-        <div><div class="lbl">יתרה בתקופה המסוננת</div><div class="hero-num" id="txHeroNum">₪0</div></div>
-        <div class="tx-chips">
-          <div class="tx-chip"><span class="dot in"></span><div><span class="l">הכנסות</span><b id="txChipIn">₪0</b></div></div>
-          <div class="tx-chip"><span class="dot out"></span><div><span class="l">הוצאות</span><b id="txChipOut">₪0</b></div></div>
+        <div class="tx-summary-top">
+          <div><div class="lbl">יתרה בתקופה המסוננת</div><div class="hero-num" id="txHeroNum">₪0</div></div>
+          <div class="tx-chips">
+            <div class="tx-chip"><span class="dot in"></span><div><span class="l">הכנסות</span><b id="txChipIn">₪0</b></div></div>
+            <div class="tx-chip"><span class="dot out"></span><div><span class="l">הוצאות</span><b id="txChipOut">₪0</b><span class="trend flat" id="txChipDelta"></span></div></div>
+          </div>
+        </div>
+        <div class="tx-breakdown" id="txBreakdown"></div>
+        <div class="tx-legend" id="txLegend"></div>
+        <div class="tx-insights" id="txInsights"></div>
+      </div>
+      <div class="tx-toolbar">
+        <input type="text" id="exSearchInput" class="tx-search" placeholder="🔍 חיפוש בתנועות…" oninput="exSearch=this.value;renderExpenses();">
+        <div class="seg" id="exGroupSeg">
+          <button type="button" data-g="day">לפי יום</button>
+          <button type="button" data-g="category">לפי קטגוריה</button>
         </div>
       </div>
       <div class="filters" id="exFilters"></div>
@@ -1347,7 +1379,7 @@ async function authHeaders(){
 
 let CU=null,HID=null,MNAME='',MROLE='owner'; let VM=new Date().getMonth(),VY=new Date().getFullYear();
 let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[],bankAccounts:[],creditCards:[],categoryBudgets:[]};
-let exFilter='all',catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
+let exFilter='all',exSearch='',exGroupBy='day',catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
 const memberCache={}; let charts={};
 if(window.Chart){
   Chart.defaults.font.family="'Rubik','Segoe UI',sans-serif";
@@ -3652,6 +3684,7 @@ function exFilterLabel(){
   if(exFilter==='all')return '📋 הכל';
   if(exFilter==='__expense__')return '💸 כל ההוצאות';
   if(exFilter==='__income__')return '💰 כל ההכנסות';
+  if(exFilter==='')return '🗂️ ללא קטגוריה';
   const c=[...rootCats('expense'),...rootCats('income')].find(x=>x.id===exFilter);
   return c?(c.icon||'')+' '+esc(c.name):'📋 הכל';
 }
@@ -3679,6 +3712,60 @@ window.openExFilterModal=()=>{
   const {ov,close}=UI._open(html);
   ov.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{exFilter=p.dataset.f;close();renderExpenses();});
 };
+// תשלומים (installments) של חודש נתון — כל תשלום שנופל בו כ"תנועת-צל"
+function instRowsForMonth(y,m){
+  return DB.installments.filter(p=>instMo(p,y,m)>0).map(p=>{
+    const n=p.payments_count||p.count;
+    const perMonth=+p.total_amount/n;
+    const idx=instIndexFor(p,y,m);        // מספר התשלום המדויק לחודש זה
+    const payDate=instDateFor(p,y,m);     // תאריך התשלום המדויק
+    return {_isInst:true,id:p.id,tx_date:payDate,description:p.description+' · תשלום '+idx+' מתוך '+n,category_id:p.category_id,type:'expense',nature:'fixed',spread:'month',amount:perMonth,created_by:p.created_by};
+  });
+}
+// תנועות + תשלומים לחודש/סינון נתון — מסנן לפי חודש/שנה של תאריך הצריכה
+// בפועל (תואם ל-moAmt, לא לחודש החיוב בכרטיס — זה נשאר רק בכרטיס "בקרת
+// תזרים"). מרוכז כאן כדי לשמש גם את הרשימה המוצגת וגם את השוואת החודש הקודם.
+function monthRows(y,m,filter){
+  let rs=DB.transactions.filter(t=>{
+    const d=parseLocalDate(t.tx_date||t.date);
+    return d.getFullYear()===y&&d.getMonth()===m;
+  });
+  if(filter==='__income__')rs=rs.filter(t=>t.type==='income');
+  else if(filter==='__expense__')rs=rs.filter(t=>t.type==='expense');
+  else if(filter!=='all')rs=rs.filter(t=>(t.category_id||'')===filter);
+
+  const inst=instRowsForMonth(y,m);
+  if(filter==='__income__'){
+    // תשלומים הם תמיד מסוג הוצאה — לא שייכים לסינון "כל ההכנסות"
+  } else if(filter==='all'||filter==='__expense__'){
+    rs=[...rs,...inst];
+  } else {
+    rs=[...rs,...inst.filter(r=>r.category_id===filter)];
+  }
+  return rs;
+}
+function txCardHtml(t){
+  const c=DB.categories.find(x=>x.id===t.category_id);
+  const color=catColor(t.category_id);
+  const icon=c?(c.icon||'📌'):'❔';
+  const subCat=t.subcategory_id?DB.categories.find(x=>x.id===t.subcategory_id):null;
+  const midCat=(subCat&&subCat.parent_id&&subCat.parent_id!==t.category_id)?DB.categories.find(x=>x.id===subCat.parent_id):null;
+  const catLabel=esc((c?c.name:'ללא קטגוריה')+(midCat?' · '+midCat.name:'')+(subCat?' · '+subCat.name:''));
+  const catEditor=t._isInst?'':'<div style="margin-top:5px">'+txCategoryCell(t)+'</div>';
+  const btns=t._isInst
+    ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
+    :'<button class="smallbtn" onclick="editTx(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delTx(\''+t.id+'\')">מחק</button>';
+  return '<div class="tx-card">'
+    +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+icon+'</div>'
+    +'<div class="tx-mid">'
+      +'<div class="tx-desc">'+esc(t.description)+'</div>'
+      +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+catLabel+'</span>'+txPmTag(t)+'</div>'
+      +catEditor
+    +'</div>'
+    +'<div class="tx-amt '+(t.type==='income'?'pos':'neg')+'">'+(t.type==='income'?'+':'−')+'₪'+Math.abs(Math.round(t.amount)).toLocaleString('he-IL')+'</div>'
+    +'<div class="tx-actions">'+btns+'</div>'
+    +'</div>';
+}
 function renderExpenses(){
   const f=$('#exFilters');
   f.innerHTML='<div class="filter-bar">'
@@ -3688,45 +3775,17 @@ function renderExpenses(){
   $('#exFilterBtn').onclick=openExFilterModal;
   if($('#exFilterClear'))$('#exFilterClear').onclick=()=>{exFilter='all';renderExpenses();};
 
-  // תנועות רגילות — מסנן לפי חודש/שנה של תאריך הצריכה בפועל (תואם ל-moAmt,
-  // לא לחודש החיוב בכרטיס — זה נשאר רק בכרטיס "בקרת תזרים").
-  let rows=[...DB.transactions].sort((a,b)=>(b.tx_date||b.date).localeCompare(a.tx_date||a.date));
-  rows=rows.filter(t=>{
-    const d=parseLocalDate(t.tx_date||t.date);
-    return d.getFullYear()===VY&&d.getMonth()===VM;
+  $('#exGroupSeg').querySelectorAll('button').forEach(b=>{
+    b.classList.toggle('on',b.dataset.g===exGroupBy);
+    b.onclick=()=>{exGroupBy=b.dataset.g;renderExpenses();};
   });
-  if(exFilter==='__income__')rows=rows.filter(t=>t.type==='income');
-  else if(exFilter==='__expense__')rows=rows.filter(t=>t.type==='expense');
-  else if(exFilter!=='all')rows=rows.filter(t=>t.category_id===exFilter);
+  const searchEl=$('#exSearchInput');
+  if(searchEl.value!==exSearch)searchEl.value=exSearch;
 
-  // תשלומים (installments) — מציג כל תשלום שנופל בחודש הנוכחי
-  const instRows=DB.installments.filter(p=>instMo(p,VY,VM)>0).map(p=>{
-    const c=DB.categories.find(x=>x.id===p.category_id);
-    const n=p.payments_count||p.count;
-    const perMonth=+p.total_amount/n;
-    const idx=instIndexFor(p,VY,VM);        // מספר התשלום המדויק לחודש זה
-    const payDate=instDateFor(p,VY,VM);     // תאריך התשלום המדויק
-    return {
-      _isInst:true,
-      id:p.id,
-      tx_date:payDate,
-      description:p.description+' · תשלום '+idx+' מתוך '+n,
-      category_id:p.category_id,
-      type:'expense',
-      nature:'fixed',
-      spread:'month',
-      amount:perMonth,
-      created_by:p.created_by
-    };
-  });
-  if(exFilter==='__income__'){
-    // תשלומים הם תמיד מסוג הוצאה — לא שייכים לסינון "כל ההכנסות"
-  } else if(exFilter==='all'||exFilter==='__expense__'){
-    rows=[...rows,...instRows];
-  } else {
-    // מסנן installments לפי קטגוריה ספציפית
-    const filteredInst=instRows.filter(r=>r.category_id===exFilter);
-    rows=[...rows,...filteredInst];
+  let rows=monthRows(VY,VM,exFilter);
+  if(exSearch.trim()){
+    const q=exSearch.trim().toLowerCase();
+    rows=rows.filter(t=>(t.description||'').toLowerCase().includes(q));
   }
   rows.sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||''));
 
@@ -3741,49 +3800,92 @@ function renderExpenses(){
     heroEl.className='hero-num '+(net<0?'neg':'pos');
     $('#txChipIn').textContent=fmt(incSum);
     $('#txChipOut').textContent=fmt(sum);
+
+    // השוואה להוצאה של החודש הקודם, מכבדת את הסינון הנוכחי כדי שתהיה רלוונטית
+    let pm=VM-1,py=VY;if(pm<0){pm=11;py=VY-1;}
+    const prevSum=monthRows(py,pm,exFilter).reduce((s,t)=>s+(t.type==='expense'?+t.amount:0),0);
+    renderTrend('txChipDelta',sum,prevSum,true);
+
+    // פירוט הוצאות לפי קטגוריה — פס מוערם עם מקרא לחיץ לסינון מהיר
+    const catTotals={};
+    rows.forEach(t=>{if(t.type==='expense')catTotals[t.category_id||'']=(catTotals[t.category_id||'']||0)+(+t.amount);});
+    const entries=Object.entries(catTotals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+    const bdEl=$('#txBreakdown'),lgEl=$('#txLegend');
+    if(entries.length&&sum>0){
+      const MAIN=6;
+      const main=entries.slice(0,MAIN);
+      const restTotal=entries.slice(MAIN).reduce((s,[,v])=>s+v,0);
+      const segHtml=([cid,v])=>{
+        const color=catColor(cid||null);
+        const name=(DB.categories.find(x=>x.id===cid)?.name)||'ללא קטגוריה';
+        return '<button type="button" class="tx-breakdown-seg" data-f="'+(cid||'')+'" style="width:'+(v/sum*100)+'%;background:'+color+'" title="'+esc(name)+' — '+fmt(v)+'"></button>';
+      };
+      const legendHtml=([cid,v])=>{
+        const c=DB.categories.find(x=>x.id===cid);
+        const color=catColor(cid||null);
+        return '<button type="button" class="tx-legend-item" data-f="'+(cid||'')+'"><span class="tx-legend-dot" style="background:'+color+'"></span>'+(c?(c.icon||'')+' '+esc(c.name):'ללא קטגוריה')+' · '+fmt(v)+'</button>';
+      };
+      bdEl.innerHTML=main.map(segHtml).join('')+(restTotal>0?'<button type="button" class="tx-breakdown-seg" data-f="" style="width:'+(restTotal/sum*100)+'%;background:var(--faint)" title="אחר — '+fmt(restTotal)+'"></button>':'');
+      lgEl.innerHTML=main.map(legendHtml).join('')+(restTotal>0?'<span class="tx-legend-item" style="cursor:default"><span class="tx-legend-dot" style="background:var(--faint)"></span>אחר · '+fmt(restTotal)+'</span>':'');
+      lgEl.querySelectorAll('.tx-legend-item[data-f]').forEach(b=>b.onclick=()=>{exFilter=b.dataset.f||'__expense__';renderExpenses();});
+    } else { bdEl.innerHTML=''; lgEl.innerHTML=''; }
+
+    // תובנות אוטומטיות — קטגוריה מובילה, וקצב הוצאה חזוי (רק לחודש הנוכחי בפועל)
+    const insights=[];
+    if(entries.length){
+      const [topId,topV]=entries[0];
+      const topC=DB.categories.find(x=>x.id===topId);
+      insights.push('🔥 הכי הוצאתם החודש: <b>'+(topC?(topC.icon||'')+' '+esc(topC.name):'ללא קטגוריה')+'</b> ('+fmt(topV)+')');
+    }
+    const today=new Date();
+    const isLiveMonth=VY===today.getFullYear()&&VM===today.getMonth();
+    if(isLiveMonth&&sum>0&&exFilter!=='__income__'){
+      const dayNum=today.getDate();
+      const daysInMonth=new Date(VY,VM+1,0).getDate();
+      const pace=sum/dayNum*daysInMonth;
+      insights.push('📅 בקצב הנוכחי: כ־'+fmt(pace)+' עד סוף החודש');
+    }
+    $('#txInsights').innerHTML=insights.map(t=>'<div class="tx-insight-chip">'+t+'</div>').join('');
   } else summaryEl.classList.add('hidden');
 
   const body=$('#exBody'),emptyEl=$('#exEmpty');
   if(!rows.length){body.innerHTML='';emptyEl.classList.remove('hidden');return;}
   emptyEl.classList.add('hidden');
 
-  // קיבוץ לפי תאריך — הרשימה כבר ממוינת יורד לפי tx_date
-  const groups=[];
-  let curDate=null,curGroup=null;
-  rows.forEach(t=>{
-    const dk=t.tx_date||'';
-    if(dk!==curDate){curDate=dk;curGroup={date:dk,items:[]};groups.push(curGroup);}
-    curGroup.items.push(t);
-  });
-
-  body.innerHTML=groups.map(g=>{
-    const d=parseLocalDate(g.date);
-    const dayLbl=isNaN(d)?g.date:d.toLocaleDateString('he-IL',{day:'numeric',month:'long'});
-    const wdLbl=isNaN(d)?'':d.toLocaleDateString('he-IL',{weekday:'long'});
-    const cards=g.items.map(t=>{
-      const c=DB.categories.find(x=>x.id===t.category_id);
-      const color=catColor(t.category_id);
-      const icon=c?(c.icon||'📌'):'❔';
-      const subCat=t.subcategory_id?DB.categories.find(x=>x.id===t.subcategory_id):null;
-      const midCat=(subCat&&subCat.parent_id&&subCat.parent_id!==t.category_id)?DB.categories.find(x=>x.id===subCat.parent_id):null;
-      const catLabel=esc((c?c.name:'ללא קטגוריה')+(midCat?' · '+midCat.name:'')+(subCat?' · '+subCat.name:''));
-      const catEditor=t._isInst?'':'<div style="margin-top:5px">'+txCategoryCell(t)+'</div>';
-      const btns=t._isInst
-        ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
-        :'<button class="smallbtn" onclick="editTx(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delTx(\''+t.id+'\')">מחק</button>';
-      return '<div class="tx-card">'
-        +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+icon+'</div>'
-        +'<div class="tx-mid">'
-          +'<div class="tx-desc">'+esc(t.description)+'</div>'
-          +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+catLabel+'</span>'+txPmTag(t)+'</div>'
-          +catEditor
-        +'</div>'
-        +'<div class="tx-amt '+(t.type==='income'?'pos':'neg')+'">'+(t.type==='income'?'+':'−')+'₪'+Math.abs(Math.round(t.amount)).toLocaleString('he-IL')+'</div>'
-        +'<div class="tx-actions">'+btns+'</div>'
-        +'</div>';
+  if(exGroupBy==='category'){
+    const byCat={};
+    rows.forEach(t=>{const k=t.category_id||'';(byCat[k]=byCat[k]||[]).push(t);});
+    const groups=Object.entries(byCat).map(([cid,items])=>({
+      cid,items,
+      spendTotal:items.reduce((s,t)=>s+(t.type==='expense'?+t.amount:0),0),
+      incomeTotal:items.reduce((s,t)=>s+(t.type==='income'?+t.amount:0),0)
+    })).sort((a,b)=>(b.spendTotal+b.incomeTotal)-(a.spendTotal+a.incomeTotal));
+    body.innerHTML=groups.map(g=>{
+      const c=DB.categories.find(x=>x.id===g.cid);
+      const color=catColor(g.cid||null);
+      const name=c?(c.icon||'')+' '+esc(c.name):'ללא קטגוריה';
+      const isIncomeGroup=g.incomeTotal>0&&g.spendTotal===0;
+      const total=isIncomeGroup?g.incomeTotal:g.spendTotal;
+      const cards=[...g.items].sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||'')).map(txCardHtml).join('');
+      return '<div class="day-group"><div class="cat-group-head"><span class="cg-name"><span class="tx-legend-dot" style="background:'+color+'"></span>'+name+'<span class="cg-count">('+g.items.length+')</span></span><span class="cg-total '+(isIncomeGroup?'pos':'neg')+'">'+(isIncomeGroup?'+':'−')+'₪'+Math.abs(Math.round(total)).toLocaleString('he-IL')+'</span></div>'+cards+'</div>';
     }).join('');
-    return '<div class="day-group"><div class="day-head"><b>'+dayLbl+'</b><span>'+wdLbl+'</span></div>'+cards+'</div>';
-  }).join('');
+  } else {
+    // קיבוץ לפי תאריך — הרשימה כבר ממוינת יורד לפי tx_date
+    const groups=[];
+    let curDate=null,curGroup=null;
+    rows.forEach(t=>{
+      const dk=t.tx_date||'';
+      if(dk!==curDate){curDate=dk;curGroup={date:dk,items:[]};groups.push(curGroup);}
+      curGroup.items.push(t);
+    });
+    body.innerHTML=groups.map(g=>{
+      const d=parseLocalDate(g.date);
+      const dayLbl=isNaN(d)?g.date:d.toLocaleDateString('he-IL',{day:'numeric',month:'long'});
+      const wdLbl=isNaN(d)?'':d.toLocaleDateString('he-IL',{weekday:'long'});
+      const cards=g.items.map(txCardHtml).join('');
+      return '<div class="day-group"><div class="day-head"><b>'+dayLbl+'</b><span>'+wdLbl+'</span></div>'+cards+'</div>';
+    }).join('');
+  }
 }
 
 function renderCatSummary(){
