@@ -1822,6 +1822,38 @@ const rootCats=k=>{
   return roots;
 };
 const subCats=pid=>DB.categories.filter(c=>c.parent_id===pid);
+// עולה בשרשרת ה-parent_id עד לקטגוריית השורש — category_id בתנועה תמיד
+// אמור להיות קטגוריית שורש (רמה 1), גם כשמזהים/ה-AI מחזירים ישירות id
+// של תת-תת-קטגוריה (למשל "אושר עד", שהיא נכדה של "אוכל" דרך "סופר").
+const rootOf=id=>{
+  let c=DB.categories.find(x=>x.id===id);
+  while(c&&c.parent_id){const p=DB.categories.find(x=>x.id===c.parent_id);if(!p)break;c=p;}
+  return c||null;
+};
+// מחפש שם קטגוריה בכל תת-העץ של קטגוריית שורש (כל העומק, לא רק ילדים
+// ישירים) — כדי שרשת סופרמרקט ספציפית כמו "אושר עד" תיתפס גם כשהיא
+// תת-תת-קטגוריה של "אוכל" ← "סופר" ← "אושר עד", לא רק "סופר".
+const allDescendants=rootId=>{
+  const out=[];
+  const walk=pid=>{subCats(pid).forEach(c=>{out.push(c);walk(c.id);});};
+  walk(rootId);
+  return out;
+};
+// רשימת הקטגוריות המלאה (כולל תת-תת-קטגוריות, כמו רשתות סופרמרקט
+// ספציפיות תחת "סופר") לשליחה ל-AI, כדי שיוכל לזהות בית עסק ספציפי
+// ולבחור ישירות את הרמה הכי מדויקת, לא רק את הרמה הראשונה.
+function buildCategoryTreeText(){
+  const walk=(c,depth)=>{
+    let line='  '.repeat(depth)+'- '+c.name+'(id:'+c.id+')';
+    const kids=subCats(c.id);
+    if(kids.length)line+='\n'+kids.map(k=>walk(k,depth+1)).join('\n');
+    return line;
+  };
+  const expLines=rootCats('expense').map(c=>walk(c,0)).join('\n');
+  const incLines=rootCats('income').map(c=>walk(c,0)).join('\n');
+  return 'קטגוריות הוצאה (עץ; הזחה=רמה מתחת לשורש; category_id בתנועה חייב תמיד להיות ה-id של קטגוריית השורש — השורה הכי חיצונית ללא הזחה; subcategory_id יכול להיות ה-id של כל קטגוריה מתחתיו בכל עומק, כולל תת-תת-קטגוריה. זהו את שם בית העסק בתיאור והתאימו לרמה הכי ספציפית שקיימת ברשימה, למשל שם רשת סופרמרקט ספציפי ולא רק "סופר" באופן כללי):\n'+expLines
+    +'\n\nקטגוריות הכנסה (רמה אחת בלבד):\n'+incLines;
+}
 
 function onTypeChange(){fillCatSel();}
 function toggleExpenseInstallments(){
@@ -2453,10 +2485,9 @@ async function analyzeImportedContent(input,key){
     }
   }catch(_){/* continue with existing categories snapshot */}
 
-  const expCats=rootCats('expense'),incCats=rootCats('income');
-  const catList=expCats.map(c=>{const subs=subCats(c.id).map(s=>s.name+'(id:'+s.id+')').join(',');return '- '+c.name+'(id:'+c.id+',הוצאה)'+(subs?' תתי:'+subs:'');}).join('\n')+'\n'+incCats.map(c=>'- '+c.name+'(id:'+c.id+',הכנסה)').join('\n');
+  const catList=buildCategoryTreeText();
   const textPart=input?.text?('\n\nתוכן הקובץ:\n'+String(input.text).slice(0,12000)):'\n\nאם סופקה תמונה, חלץ ממנה את התנועות.';
-  const prompt='נתח את הקלט הבא (PDF/תמונה/CSV/TXT) וחלץ את כל התנועות הכספיות. לכל תנועה קבע קטגוריה מהרשימה.\n\nקטגוריות זמינות:\n'+catList+textPart+'\n\nהחזר JSON בלבד (ללא markdown) — מערך של תנועות:\n[{"date":"YYYY-MM-DD","description":"תיאור","amount":מספר חיובי,"type":"expense"|"income","category_id":"uuid","subcategory_id":"uuid או null"}]';
+  const prompt='נתח את הקלט הבא (PDF/תמונה/CSV/TXT) וחלץ את כל התנועות הכספיות. לכל תנועה קבע קטגוריה מהרשימה — זהו את שם בית העסק ותייגו לרמה הכי ספציפית שקיימת ברשימת הקטגוריות (למשל רשת סופרמרקט ספציפית, לא רק "סופר" באופן כללי). שם בית העסק בתיאור צריך להישאר מלא כפי שהוא מופיע במקור (כולל סניף/מיקום אם מופיע) — אל תקצרו או תשמיטו פרטים מזהים.\n\nקטגוריות זמינות:\n'+catList+textPart+'\n\nהחזר JSON בלבד (ללא markdown) — מערך של תנועות:\n[{"date":"YYYY-MM-DD","description":"תיאור מלא כפי שמופיע במקור","amount":מספר חיובי,"type":"expense"|"income","category_id":"uuid של קטגוריית השורש","subcategory_id":"uuid של התת-קטגוריה המדויקת ביותר, מכל עומק, או null"}]';
   try{
     let raw='';
     let used='';
@@ -2541,8 +2572,16 @@ function findSubcategoryByHint(categoryId,hint){
   const subs=subCats(categoryId);
   if(!subs.length)return null;
 
-  const byName=subs.find(s=>h.includes(normalizeText(s.name))||normalizeText(s.name).includes(h));
-  if(byName)return byName;
+  // מחפש קודם בכל העץ (כולל נכדים, כמו רשת סופרמרקט ספציפית תחת "סופר")
+  // ומעדיף את ההתאמה הכי ספציפית (העמוקה ביותר) — כדי ש"אושר עד" יתפוס
+  // את "אושר עד" עצמה ולא יעצור ב"סופר".
+  const deep=allDescendants(categoryId)
+    .filter(s=>h.includes(normalizeText(s.name))||normalizeText(s.name).includes(h))
+    .sort((a,b)=>{
+      const depth=id=>{let n=0,c=DB.categories.find(x=>x.id===id);while(c&&c.parent_id){n++;c=DB.categories.find(x=>x.id===c.parent_id);}return n;};
+      return depth(b.id)-depth(a.id);
+    });
+  if(deep.length)return deep[0];
 
   const rules=[
     {k:['ביטוח רכב','חובה','מקיף','third party'],n:['ביטוח רכב']},
@@ -2593,8 +2632,7 @@ function findCategoryByHint(type,hint){
 }
 
 function quickAddCategoryList(){
-  const expCats=rootCats('expense'),incCats=rootCats('income');
-  return expCats.map(c=>{const subs=subCats(c.id).map(s=>s.name+'(id:'+s.id+')').join(',');return '- '+c.name+'(id:'+c.id+',הוצאה)'+(subs?' תתי:'+subs:'');}).join('\n')+'\n'+incCats.map(c=>'- '+c.name+'(id:'+c.id+',הכנסה)').join('\n');
+  return buildCategoryTreeText();
 }
 async function submitQuickAdd(prompt,extra,btn,allowMulti){
   const origLabel=btn?btn.textContent:'';
@@ -2627,7 +2665,7 @@ async function submitQuickAdd(prompt,extra,btn,allowMulti){
 window.aiQuickAdd=async()=>{
   const inp=$('#quickAddText');if(!inp)return;
   const text=inp.value.trim();if(!text)return;
-  const prompt='המשתמש תיאר תנועה כספית אחת, או כמה תנועות שונות (יכול להיות טקסט ארוך שמתאר כמה דברים בבת אחת), בשפה חופשית. חלץ את כל התנועות שמופיעות. תאריך היום: '+todayStr()+' (אם לא צוין תאריך אחר בטקסט לתנועה מסוימת, השתמש בהיום). קטגוריות זמינות:\n'+quickAddCategoryList()+'\n\nהחזר JSON בלבד (ללא markdown) — מערך של תנועה אחת או יותר:\n[{"date":"YYYY-MM-DD","description":"תיאור קצר וברור","amount":מספר חיובי,"type":"expense"|"income","category_id":"uuid מהרשימה או null","subcategory_id":"uuid מהרשימה או null"}]';
+  const prompt='המשתמש תיאר תנועה כספית אחת, או כמה תנועות שונות (יכול להיות טקסט ארוך שמתאר כמה דברים בבת אחת), בשפה חופשית. חלץ את כל התנועות שמופיעות. תאריך היום: '+todayStr()+' (אם לא צוין תאריך אחר בטקסט לתנועה מסוימת, השתמש בהיום). זהו שם בית עסק אם מוזכר ותייגו לרמה הכי ספציפית שקיימת ברשימת הקטגוריות (למשל רשת סופרמרקט ספציפית, לא רק "סופר" באופן כללי). קטגוריות זמינות:\n'+quickAddCategoryList()+'\n\nהחזר JSON בלבד (ללא markdown) — מערך של תנועה אחת או יותר:\n[{"date":"YYYY-MM-DD","description":"תיאור ברור וכולל את שם בית העסק במלואו כפי שהוזכר","amount":מספר חיובי,"type":"expense"|"income","category_id":"uuid של קטגוריית השורש, מהרשימה או null","subcategory_id":"uuid של התת-קטגוריה המדויקת ביותר, מכל עומק, או null"}]';
   await submitQuickAdd(prompt,{text},$('#quickAddBtn'),true);
   inp.value='';
 };
@@ -2636,7 +2674,7 @@ window.aiQuickAddPhoto=async(file)=>{
   const photoInp=$('#quickAddPhoto');
   try{
     const fileData=await fileToBase64(file);
-    const prompt='זו תמונה של קבלה/חשבונית בודדת. חלץ ממנה תנועה כספית אחת. תאריך היום: '+todayStr()+' (אם אין תאריך בקבלה, השתמש בהיום). קטגוריות זמינות:\n'+quickAddCategoryList()+'\n\nהחזר JSON בלבד (ללא markdown) — מערך עם תנועה אחת:\n[{"date":"YYYY-MM-DD","description":"שם העסק/תיאור קצר","amount":מספר חיובי (הסכום הכולל),"type":"expense","category_id":"uuid מהרשימה או null","subcategory_id":"uuid מהרשימה או null"}]';
+    const prompt='זו תמונה של קבלה/חשבונית בודדת. חלץ ממנה תנועה כספית אחת. תאריך היום: '+todayStr()+' (אם אין תאריך בקבלה, השתמש בהיום). זהו את שם בית העסק ותייגו לרמה הכי ספציפית שקיימת ברשימת הקטגוריות (למשל רשת סופרמרקט ספציפית, לא רק "סופר" באופן כללי). קטגוריות זמינות:\n'+quickAddCategoryList()+'\n\nהחזר JSON בלבד (ללא markdown) — מערך עם תנועה אחת:\n[{"date":"YYYY-MM-DD","description":"שם העסק המלא כפי שמופיע בקבלה","amount":מספר חיובי (הסכום הכולל),"type":"expense","category_id":"uuid של קטגוריית השורש, מהרשימה או null","subcategory_id":"uuid של התת-קטגוריה המדויקת ביותר, מכל עומק, או null"}]';
     await submitQuickAdd(prompt,{fileData,mimeType:file.type},$('#quickAddBtn'));
   }catch(err){
     UI.alert('שגיאה בקריאת התמונה: '+err.message,{type:'error'});
@@ -2650,8 +2688,19 @@ function normalizeImportedTransactions(items){
   return items.map((t)=>{
     const type=t?.type==='income'?'income':'expense';
     const roots=rootCats(type);
+
+    // ה-AI (או מנגנון ה-hint) עלול להחזיר ישירות id של תת-קטגוריה או
+    // תת-תת-קטגוריה (למשל "אושר עד" תחת "אוכל"←"סופר") בשדה category_id.
+    // category_id בתנועה תמיד אמור להיות קטגוריית שורש — אז כל id
+    // לא-שורש שמתקבל כאן הוא בעצם מועמד ל-subcategory_id, ו-category_id
+    // נגזר מהשורש שלו במקום להישאר שגוי/שטוח.
     let categoryId=t?.category_id||null;
-    if(categoryId&&!DB.categories.some(c=>c.id===categoryId))categoryId=null;
+    let impliedSubId=null;
+    if(categoryId){
+      const cat=DB.categories.find(c=>c.id===categoryId);
+      if(!cat)categoryId=null;
+      else if(cat.parent_id){impliedSubId=cat.id;categoryId=rootOf(cat.id)?.id||null;}
+    }
 
     if(!categoryId){
       const hint=t?.category||t?.category_name||t?.categoryName||t?.category_id||'';
@@ -2659,13 +2708,15 @@ function normalizeImportedTransactions(items){
       categoryId=byHint?.id||roots[0]?.id||null;
     }
 
-    let subcategoryId=t?.subcategory_id||null;
-    const subs=categoryId?subCats(categoryId):[];
-    if(subcategoryId&&!subs.some(s=>s.id===subcategoryId))subcategoryId=null;
-    if(!subcategoryId&&subs.length){
+    // תת-קטגוריה יכולה להיות ברמה כלשהי מתחת לשורש (כולל נכדה) — לא רק
+    // ילד ישיר — כדי לתמוך בקטגוריות ספציפיות כמו רשת סופרמרקט תחת "סופר".
+    let subcategoryId=impliedSubId||t?.subcategory_id||null;
+    const validDescendants=categoryId?allDescendants(categoryId):[];
+    if(subcategoryId&&!validDescendants.some(s=>s.id===subcategoryId))subcategoryId=null;
+    if(!subcategoryId&&validDescendants.length){
       const sh=normalizeText(t?.subcategory||t?.subcategory_name||t?.sub_category||'');
       if(sh){
-        const byName=subs.find(s=>normalizeText(s.name)===sh||normalizeText(s.name).includes(sh)||sh.includes(normalizeText(s.name)));
+        const byName=validDescendants.find(s=>normalizeText(s.name)===sh||normalizeText(s.name).includes(sh)||sh.includes(normalizeText(s.name)));
         if(byName)subcategoryId=byName.id;
       }
       if(!subcategoryId){
@@ -2849,22 +2900,6 @@ function reopenCatPicker(panelId){
   const panel=document.getElementById(panelId);
   if(panel)panel.classList.remove('hidden');
 }
-window.updateTxCategory=async(id,categoryId,keepOpen)=>{
-  const t=DB.transactions.find(x=>x.id===id);if(!t)return;
-  const {error}=await sb.from('transactions').update({category_id:categoryId||null,subcategory_id:null}).eq('id',id);
-  if(error){alert('שגיאה בעדכון קטגוריה: '+error.message);return;}
-  t.category_id=categoryId||null;t.subcategory_id=null;
-  render();
-  if(keepOpen)reopenCatPicker('catp-'+id);
-};
-window.updateTxSubcategory=async(id,subcategoryId,keepOpen)=>{
-  const t=DB.transactions.find(x=>x.id===id);if(!t)return;
-  const {error}=await sb.from('transactions').update({subcategory_id:subcategoryId||null}).eq('id',id);
-  if(error){alert('שגיאה בעדכון תת-קטגוריה: '+error.message);return;}
-  t.subcategory_id=subcategoryId||null;
-  render();
-  if(keepOpen)reopenCatPicker('catp-'+id);
-};
 // installments only have a single category_id (no subcategory column), so
 // this picker is one level — still lets the category itself be edited,
 // which regular transactions could already do and installments couldn't.
@@ -3729,39 +3764,64 @@ window.openTxCategoryModal=(txId,isInst)=>{
     ?('background:'+color+';color:#0c0e15;border-color:'+color)
     :('background:'+hexA(color,.13)+';color:'+color+';border-color:'+hexA(color,.32));
 
-  const {ov,close}=UI._open('<h3 style="margin:0 0 6px">שינוי קטגוריה</h3><p class="muted" id="txCatDesc" style="margin:0 0 14px"></p><div id="txCatBody"></div><div class="row" style="margin-top:18px;justify-content:flex-end"><button type="button" class="btn sec" id="txCatCloseBtn">סגירה</button></div>');
-  ov.querySelector('#txCatCloseBtn').onclick=close;
+  // בחירה "מוצגת" (staged) בלבד — שום דבר לא נכתב ל-DB עד לחיצה על "שמירה".
+  let stagedCat=t.category_id;
+  let stagedSub=isInst?null:t.subcategory_id;
 
+  const {ov,close}=UI._open('<h3 style="margin:0 0 6px">שינוי קטגוריה</h3><p class="muted" id="txCatDesc" style="margin:0 0 14px"></p><div id="txCatBody"></div><div class="row" style="margin-top:18px;justify-content:flex-end"><button type="button" class="btn sec" id="txCatCancelBtn">ביטול</button><button type="button" class="btn" id="txCatSaveBtn">💾 שמירה</button></div>');
+  ov.querySelector('#txCatCancelBtn').onclick=close;
+
+  const pillRow=(items,activeId,dataAttr)=>'<div class="filter-grid">'+items.map(c=>{
+    const active=c.id===activeId;
+    return '<button type="button" class="pill" data-'+dataAttr+'="'+c.id+'" style="'+pillStyle(active,catColor(c.id))+'">'+(c.icon||'')+' '+esc(c.name)+'</button>';
+  }).join('')+'</div>';
+
+  // רמה שלישית (למשל "אושר עד" תחת "סופר") מוצגת רק כשה-subcategory
+  // שנבחר ברמה 2 יש לו בעצמו ילדים — כדי לתמוך בקטגוריה מדויקת כמו רשת
+  // סופרמרקט ספציפית, לא רק "סופר" באופן כללי.
   const redraw=()=>{
     ov.querySelector('#txCatDesc').textContent=t.description||'';
-    let html='<div class="filter-grid">'+roots.map(c=>{
-      const active=c.id===t.category_id;
-      return '<button type="button" class="pill" data-c="'+c.id+'" style="'+pillStyle(active,catColor(c.id))+'">'+(c.icon||'')+' '+esc(c.name)+'</button>';
-    }).join('')+'</div>';
-    if(!isInst&&t.category_id){
-      const subs=subCats(t.category_id);
+    let html='<div class="muted" style="margin-bottom:8px;font-weight:700">קטגוריה ראשית</div>'+pillRow(roots,stagedCat,'c');
+    if(!isInst&&stagedCat){
+      const subs=subCats(stagedCat);
       if(subs.length){
+        const midActive=subs.find(s=>s.id===stagedSub||subCats(s.id).some(ss=>ss.id===stagedSub));
         html+='<div style="margin-top:16px"><div class="muted" style="margin-bottom:8px;font-weight:700">תת־קטגוריה (אופציונלי)</div><div class="filter-grid">'
-          +'<button type="button" class="pill'+(!t.subcategory_id?' on':'')+'" data-s="">ללא</button>'
-          +subs.map(s=>{
-            const active=s.id===t.subcategory_id;
-            return '<button type="button" class="pill'+(active?' on':'')+'" data-s="'+s.id+'" style="'+pillStyle(active,catColor(s.id))+'">'+esc(s.name)+'</button>';
-          }).join('')+'</div></div>';
+          +'<button type="button" class="pill'+(!midActive?' on':'')+'" data-sub="">ללא</button>'
+          +subs.map(s=>'<button type="button" class="pill" data-sub="'+s.id+'" style="'+pillStyle(s.id===midActive?.id,catColor(s.id))+'">'+esc(s.name)+'</button>').join('')
+          +'</div></div>';
+        if(midActive){
+          const subsubs=subCats(midActive.id);
+          if(subsubs.length){
+            html+='<div style="margin-top:16px"><div class="muted" style="margin-bottom:8px;font-weight:700">מדויק יותר (אופציונלי)</div><div class="filter-grid">'
+              +'<button type="button" class="pill'+(stagedSub===midActive.id?' on':'')+'" data-subsub="'+midActive.id+'">רק '+esc(midActive.name)+'</button>'
+              +subsubs.map(ss=>'<button type="button" class="pill" data-subsub="'+ss.id+'" style="'+pillStyle(ss.id===stagedSub,catColor(ss.id))+'">'+esc(ss.name)+'</button>').join('')
+              +'</div></div>';
+          }
+        }
       }
     }
     const body=ov.querySelector('#txCatBody');
     body.innerHTML=html;
-    body.querySelectorAll('.pill[data-c]').forEach(b=>b.onclick=async()=>{
-      if(isInst){await updateInstCategory(t.id,b.dataset.c);close();return;}
-      await updateTxCategory(t.id,b.dataset.c,false);
-      if(subCats(t.category_id).length)redraw();else close();
-    });
-    body.querySelectorAll('.pill[data-s]').forEach(b=>b.onclick=async()=>{
-      await updateTxSubcategory(t.id,b.dataset.s||null,false);
-      close();
-    });
+    body.querySelectorAll('.pill[data-c]').forEach(b=>b.onclick=()=>{stagedCat=b.dataset.c;stagedSub=null;redraw();});
+    body.querySelectorAll('.pill[data-sub]').forEach(b=>b.onclick=()=>{stagedSub=b.dataset.sub||null;redraw();});
+    body.querySelectorAll('.pill[data-subsub]').forEach(b=>b.onclick=()=>{stagedSub=b.dataset.subsub;redraw();});
   };
   redraw();
+
+  ov.querySelector('#txCatSaveBtn').onclick=async()=>{
+    const saveBtn=ov.querySelector('#txCatSaveBtn');
+    saveBtn.disabled=true;saveBtn.textContent='שומר…';
+    if(isInst){
+      await updateInstCategory(t.id,stagedCat);
+    }else{
+      const {error}=await sb.from('transactions').update({category_id:stagedCat,subcategory_id:stagedSub||null}).eq('id',t.id);
+      if(error){UI.alert('שגיאה בשמירת קטגוריה: '+error.message,{type:'error'});saveBtn.disabled=false;saveBtn.textContent='💾 שמירה';return;}
+      t.category_id=stagedCat;t.subcategory_id=stagedSub||null;
+      render();
+    }
+    close();
+  };
 };
 function txCardHtml(t){
   const c=DB.categories.find(x=>x.id===t.category_id);

@@ -2,6 +2,75 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 5) — real data-integrity bug found and fixed: category_id could point to a non-root category
+User: an "אושר עד" (supermarket chain) transaction showed only "אושר עד"
+as its category tag, not the expected "אוכל · סופר · אושר עד" hierarchy,
+and he wanted smarter auto-categorization (recognize the specific store
+chain, not just stop at "סופר") plus a save-gated category editor instead
+of live-on-click.
+
+**Root cause found**: `category_id` on a transaction is supposed to
+always be a ROOT category (`rootCats()` filters `!parent_id`); the
+display/breakdown/grouping logic throughout the app assumes this.
+`normalizeImportedTransactions()` (the function that turns AI output
+into a transaction row after quick-add/photo/statement import) only
+validated that the AI's `category_id` existed *somewhere* in
+`DB.categories` — not that it was specifically a root. When the AI (or
+the keyword-hint fallback) returned a **sub- or sub-sub-category's id**
+in the `category_id` field, it got stored as-is: a flat, non-root
+category_id with `subcategory_id` left null, which is exactly why the
+tag showed just "אושר עד" with no breadcrumb.
+
+**Scanned the real household's data and found 107 transactions with
+this exact bug** (not just אושר עד — also דלק/רכב, חשבונות/בית ודיור,
+מסעדות/אוכל בחוץ, ביטוח בריאות, etc.) — wrote a one-off migration that
+walks each bad row's category up its `parent_id` chain to the true
+root (`rootOf()`, now a shared helper) and shifts the original
+(specific) id into `subcategory_id`. All 107 fixed, re-verified
+afterward: zero remaining rows where category_id isn't a root.
+
+**Fixed the code so this can't recur and got smarter about depth**:
+- `rootOf(id)` and `allDescendants(rootId)` helpers added.
+- `normalizeImportedTransactions()` now resolves any non-root
+  `category_id` the AI returns to its true root instead of trusting it
+  flat, and validates `subcategory_id` against the *whole* subtree
+  (any depth), not just direct children — previously a valid grandchild
+  id (like a specific supermarket chain) would fail validation and get
+  silently dropped.
+- `findSubcategoryByHint()` now searches the full subtree first,
+  preferring the deepest (most specific) name match, before falling
+  back to the old direct-children-only keyword rules — so a merchant
+  name that matches an existing specific leaf category (e.g. "רמי לוי")
+  gets that leaf directly instead of stopping at "סופר".
+- The category list sent to the AI (`buildCategoryTreeText()`, now one
+  shared function instead of two near-duplicate inline builders) is a
+  full indented tree including sub-sub-categories, with explicit
+  instructions to match the most specific existing node and to keep
+  merchant names/locations in the description intact rather than
+  shortening them.
+- **Not fully verified live** — Gemini is still hitting the "high
+  demand" 502 from earlier in the session, so the AI's actual
+  merchant-recognition behavior couldn't be tested end-to-end. The
+  deterministic parts (root-resolution, deep hint-matching) were
+  verified directly: a synthetic case reproducing the exact historical
+  bug pattern resolves correctly, and the real 107-row fix + the
+  "אושר עד" spot-check both confirm the underlying logic is sound.
+
+**Also**: `openTxCategoryModal()` (from round 4) no longer writes on
+every click. Selections are staged locally; nothing hits the DB until
+the new "💾 שמירה" button is pressed, and "ביטול" discards the staged
+choice. Extended it to a proper 3rd level too — picking a subcategory
+that itself has children (e.g. "סופר") now shows those children
+("אושר עד", "רמי לוי", ...) as a further optional refinement, so the
+same manual depth the AI can reach is also reachable by hand.
+
+Verified via headless Chrome: fresh boot zero errors on mobile+desktop
+across every tab, manual-add/filter-modal/peek-modal/search/category-
+grouping all still work, the category modal's save/cancel staging
+behaves correctly (DB unchanged until save, cancel discards), the
+normalization unit test passes, and the real-household migration was
+independently re-verified read-only after running.
+
 ## 🟢 Resolved 2026-09-24 (round 4) — actual category-editing UI was undiscoverable, rebuilt it
 User: "אין אפשרות לערוך על רשומה את הקטגוריה" — a transaction ("שכירות")
 was mistagged as "בריאות" (health) with, in his experience, no way to
