@@ -2,6 +2,49 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 14) — audit list items #4, #5, #6 (user said "do all of it, don't ask each time")
+
+**#4 — cramped mobile cards in Loans/Investments.** Extended the
+mobile compact-card grid CSS (originally built for `#exBody`/
+`#catPeekBody` transaction cards) to `#loanBody` and `#invBody`, after
+confirming their card markup uses the same badge/mid/amt/actions
+shape. Investments needed one small JS change: its 3rd child was a
+bare `<div>` wrapping the value input + `.tx-amt` (not `.tx-amt`
+directly), so it silently didn't match the existing selectors — gave
+it a `.tx-amt-wrap` class and added it to the grid rules. Installments
+and Accounts were left alone — different card shape (progress bar,
+inline pickers) that already read fine on mobile per the original
+audit.
+
+**#5 — no visual separation between safe and destructive Settings
+actions.** Added a `.danger-zone-label` divider ("⚠️ אזור מסוכן —
+פעולות בלתי הפיכות") and a `.panel-danger` style (red-tinted border +
+background wash) around the two irreversible panels — delete-single-
+month and full-system-reset — so they're now visually unmistakable
+from the reminders/backup/push panels above them, not just two more
+entries in the same flat list.
+
+**#6 — 12 flat nav destinations.** The desktop rail already groups
+these into "ראשי"/"ניהול כספי"/"מערכת" — only the mobile "more" sheet
+(`.more-sheet-grid`) had lost that grouping, showing all 10 secondary
+tabs in one undifferentiated grid. Added the same two group labels
+there (`.more-sheet-section-label`, spans the full grid width),
+matching the desktop rail's grouping and order exactly. Deliberately
+did **not** attempt to reduce the actual number of destinations or
+merge tabs together (e.g. Loans+Installments into one) — that's a
+bigger IA change with real muscle-memory/mental-model cost, distinct
+from "the grouping mobile already has on desktop went missing," and
+still worth a real conversation before touching.
+
+Verified via headless Chrome: fresh boot zero errors, Loans and
+Investments cards render cleanly on mobile (nothing cut off at the
+screen edge, all action buttons reachable), Settings shows the red
+danger-zone divider with both panels visually set apart, the mobile
+more-sheet renders both section labels in the right position with all
+10 buttons still present and working.
+
+**Audit list status: all 6 items done.**
+
 ## 🟢 Resolved 2026-09-24 (round 13) — Planning tab rebuilt: point #3 from the audit list
 
 Same treatment as Dashboard, applied to the Planning (יעדים) tab. It

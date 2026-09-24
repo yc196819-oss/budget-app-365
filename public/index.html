@@ -98,6 +98,8 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
   .more-sheet{background:var(--surface);width:100%;border-radius:20px 20px 0 0;padding:14px 18px calc(18px + env(safe-area-inset-bottom));animation:modalPop .18s cubic-bezier(.2,.9,.3,1.2)}
   .more-sheet-handle{width:40px;height:4px;border-radius:3px;background:var(--line2);margin:0 auto 14px}
   .more-sheet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .more-sheet-section-label{grid-column:1/-1;font-size:.7rem;font-weight:700;color:var(--faint);letter-spacing:.02em;margin-top:8px}
+  .more-sheet-section-label:first-child{margin-top:0}
   .more-sheet-grid button{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:14px 6px;font-size:.78rem;font-weight:700;color:var(--text);cursor:pointer}
   .more-sheet-grid button .ms-icon{font-size:1.4rem}
 }
@@ -130,12 +132,14 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
 
   /* transaction list: the generic .tx-card flex row (badge/mid/amount/actions
      side by side) has no room on a phone width, so it wraps into 3-4 messy
-     stacked lines. Rebuild it as a compact 2-row grid, scoped to the
-     transaction list (#exBody) and the category peek modal (#catPeekBody),
-     which render the same cards, so loans/installments/investments/accounts
-     — which share the .tx-card class but have different internal structure
-     — are untouched. */
-  #exBody .tx-card,#catPeekBody .tx-card{
+     stacked lines. Rebuild it as a compact 2-row grid — scoped to every
+     screen that renders this same badge/mid/amt/actions card shape:
+     transactions (#exBody), the category peek modal (#catPeekBody), loans
+     (#loanBody) and investments (#invBody, whose 3rd child is
+     .tx-amt-wrap — an input + .tx-amt stacked — instead of .tx-amt alone).
+     Installments/accounts render a visibly different shape (progress bar,
+     inline pickers) and already read fine on mobile, so left untouched. */
+  #exBody .tx-card,#catPeekBody .tx-card,#loanBody .tx-card,#invBody .tx-card{
     display:grid;
     grid-template-columns:38px 1fr auto;
     grid-template-rows:auto auto;
@@ -145,14 +149,15 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
     padding:12px 14px;
     flex-wrap:unset;
   }
-  #exBody .tx-badge,#catPeekBody .tx-badge{grid-column:1;grid-row:1/3}
-  #exBody .tx-mid,#catPeekBody .tx-mid{grid-column:2;grid-row:1/3;display:flex;flex-flow:row wrap;align-items:center;column-gap:8px;row-gap:5px;min-width:0}
-  #exBody .tx-desc,#catPeekBody .tx-desc{flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #exBody .tx-meta,#catPeekBody .tx-meta{margin-top:0}
-  #exBody .tx-mid>div:last-child,#catPeekBody .tx-mid>div:last-child{margin-top:0!important}
-  #exBody .tx-amt,#catPeekBody .tx-amt{grid-column:3;grid-row:1;justify-self:start;align-self:end}
-  #exBody .tx-actions,#catPeekBody .tx-actions{grid-column:3;grid-row:2;justify-self:start;align-self:start}
-  #exBody .tx-actions .smallbtn,#exBody .tx-actions .btn.danger,#catPeekBody .tx-actions .smallbtn,#catPeekBody .tx-actions .btn.danger{padding:4px 9px;font-size:.72rem}
+  #exBody .tx-badge,#catPeekBody .tx-badge,#loanBody .tx-badge,#invBody .tx-badge{grid-column:1;grid-row:1/3}
+  #exBody .tx-mid,#catPeekBody .tx-mid,#loanBody .tx-mid,#invBody .tx-mid{grid-column:2;grid-row:1/3;display:flex;flex-flow:row wrap;align-items:center;column-gap:8px;row-gap:5px;min-width:0}
+  #exBody .tx-desc,#catPeekBody .tx-desc,#loanBody .tx-desc,#invBody .tx-desc{flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #exBody .tx-meta,#catPeekBody .tx-meta,#loanBody .tx-meta,#invBody .tx-meta{margin-top:0}
+  #exBody .tx-mid>div:last-child,#catPeekBody .tx-mid>div:last-child,#loanBody .tx-mid>div:last-child,#invBody .tx-mid>div:last-child{margin-top:0!important}
+  #exBody .tx-amt,#catPeekBody .tx-amt,#loanBody .tx-amt,#invBody .tx-amt-wrap{grid-column:3;grid-row:1;justify-self:start;align-self:end}
+  #exBody .tx-actions,#catPeekBody .tx-actions,#loanBody .tx-actions,#invBody .tx-actions{grid-column:3;grid-row:2;justify-self:start;align-self:start}
+  #exBody .tx-actions .smallbtn,#exBody .tx-actions .btn.danger,#catPeekBody .tx-actions .smallbtn,#catPeekBody .tx-actions .btn.danger,#loanBody .tx-actions .smallbtn,#loanBody .tx-actions .btn.danger,#invBody .tx-actions .smallbtn,#invBody .tx-actions .btn.danger{padding:4px 9px;font-size:.72rem}
+  #invBody .inv-value-input{width:78px}
 }
 .grid{display:grid;gap:16px}
 .cards{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
@@ -171,6 +176,9 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
 .trend.flat{background:var(--surface2);color:var(--faint)}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-top:16px;box-shadow:var(--shadow)}
 .panel h2{font-size:1.05rem;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-weight:700}
+.danger-zone-label{display:flex;align-items:center;gap:12px;margin:32px 0 4px;color:var(--danger);font-weight:800;font-size:.88rem}
+.danger-zone-label::before,.danger-zone-label::after{content:"";flex:1;height:1px;background:var(--danger);opacity:.3}
+.panel-danger{border-color:rgba(255,92,122,.4);background:linear-gradient(135deg,rgba(255,92,122,.07),var(--surface))}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .ex-form-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .ex-form-modal-grid select,.ex-form-modal-grid input{width:100%}
@@ -942,7 +950,8 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
       </div>
       <p class="muted" id="pushStatus" style="margin-top:8px"></p>
     </div>
-    <div class="panel">
+    <div class="danger-zone-label">⚠️ אזור מסוכן — פעולות בלתי הפיכות</div>
+    <div class="panel panel-danger">
       <h2 data-i18n="settings.delmonth.title">🗓️ מחיקת נתוני חודש בודד</h2>
       <p class="muted" style="margin-bottom:10px">מוחק את כל התנועות של חודש מסוים בלבד (לא נוגע בשאר החודשים, בקטגוריות או בתשלומים). לאישור, הזן שוב את הסיסמה שלך.</p>
       <div class="row" style="margin-bottom:8px">
@@ -955,7 +964,7 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
       </div>
       <p class="muted" id="delMonthStatus" style="margin-top:8px"></p>
     </div>
-    <div class="panel">
+    <div class="panel panel-danger">
       <h2 data-i18n="settings.reset.title">איפוס מערכת מאובטח</h2>
       <p class="muted" style="margin-bottom:10px">האיפוס מוחק את כל נתוני משק הבית (תנועות, תשלומים, הלוואות, השקעות, יעדים, קטגוריות). חשבונות בנק וכרטיסי אשראי לא נמחקים. לאישור, הזן שוב את הסיסמה שלך.</p>
       <div class="row">
@@ -978,12 +987,14 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
     <div class="more-sheet">
       <div class="more-sheet-handle"></div>
       <div class="more-sheet-grid">
+        <div class="more-sheet-section-label" data-i18n="nav.group.finance">ניהול כספי</div>
+        <button data-tab="installments" onclick="goToTab('installments')"><span class="ms-icon">🧾</span><span data-i18n="nav.installments">תשלומים</span></button>
         <button data-tab="categories" onclick="goToTab('categories')"><span class="ms-icon">🗂️</span><span data-i18n="nav.categories">קטגוריות</span></button>
         <button data-tab="accounts" onclick="goToTab('accounts')"><span class="ms-icon">🏦</span><span data-i18n="nav.accounts.short">חשבונות</span></button>
         <button data-tab="loans" onclick="goToTab('loans')"><span class="ms-icon">🤝</span><span data-i18n="nav.loans">הלוואות</span></button>
-        <button data-tab="installments" onclick="goToTab('installments')"><span class="ms-icon">🧾</span><span data-i18n="nav.installments">תשלומים</span></button>
         <button data-tab="investments" onclick="goToTab('investments')"><span class="ms-icon">📈</span><span data-i18n="nav.investments">השקעות</span></button>
         <button data-tab="planning" onclick="goToTab('planning')"><span class="ms-icon">🎯</span><span data-i18n="nav.planning">יעדים</span></button>
+        <div class="more-sheet-section-label" data-i18n="nav.group.system">מערכת</div>
         <button data-tab="onboarding" onclick="goToTab('onboarding')"><span class="ms-icon">🧙</span><span data-i18n="nav.onboarding">הקמה</span></button>
         <button data-tab="import" onclick="goToTab('import')"><span class="ms-icon">🤖</span><span data-i18n="nav.import">ייבוא AI</span></button>
         <button data-tab="sharing" onclick="goToTab('sharing')"><span class="ms-icon">👥</span><span data-i18n="nav.sharing">שיתוף</span></button>
@@ -4576,7 +4587,7 @@ function renderInvestments(){
       +'<div class="tx-mid"><div class="tx-desc">'+esc(i.name)+'</div>'
       +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(i.asset_type||'—')+'</span>'
       +'<span class="tx-pmtag">עלות '+fmt(+i.cost)+'</span></div></div>'
-      +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">'
+      +'<div class="tx-amt-wrap" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">'
       +'<input type="number" class="inv-value-input" value="'+Math.round(+i.current_value)+'" onchange="updInv(\''+i.id+'\',this.value)" style="text-align:left" title="שווי נוכחי">'
       +'<div class="tx-amt '+(p>=0?'pos':'neg')+'" style="font-size:.85rem">'+(p>=0?'+':'')+fmt(p)+' ('+(r>=0?'+':'')+r.toFixed(1)+'%)</div>'
       +'</div>'
