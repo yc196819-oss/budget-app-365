@@ -2,6 +2,42 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 6) — vendor/store comparison ("which supermarket do I spend the most at")
+User asked why there was no way to compare which supermarkets he
+buys from most. Added this in two places:
+
+- `openCategoryPeekModal()` (the category peek modal from round 3)
+  now shows a "השוואה לשנת {year} — איפה הכי הרבה" section — a
+  stacked bar + ranked legend of that category's spend grouped by
+  `subcategory_id`, i.e. per specific store/vendor. Deliberately
+  scoped to the **whole viewed year**, not just the current month
+  like the rest of the modal — "which store do I buy from most" is a
+  habit question, and a single month usually has too few transactions
+  per store to be a meaningful comparison. Only shown when there are
+  at least 2 distinct subcategory groups with spend (otherwise there's
+  nothing to compare).
+- The existing (pre-existing, easy to miss) per-category subcategory
+  breakdown on the "קטגוריות" tab (`renderCatSummary()`) technically
+  already showed this data but in whatever order `subCats()` returned
+  it — not ranked. Sorted both the subcategory and sub-subcategory
+  levels descending by yearly spend, so it now actually reads as a
+  comparison instead of an arbitrary list.
+
+Both depend on transactions actually being tagged to a specific
+subcategory (store/vendor), not just left at the category root or the
+generic mid-level (e.g. "סופר" alone, no specific chain) — which is
+exactly what round 5's categorization fixes improve going forward,
+and what the manual 3-level category-edit modal lets him fix by hand
+for existing rows.
+
+Verified via headless Chrome: seeded two test transactions tagged to
+different food subcategories, confirmed the peek modal's comparison
+section renders sorted with correct amounts/percentages via a fresh
+page load (avoided a false negative from same-session client-state
+staleness after direct DB inserts), confirmed the Categories tab's
+subcategory rows are now sorted highest-spend-first, zero console
+errors. Test data cleaned up from the demo household afterward.
+
 ## 🟢 Resolved 2026-09-24 (round 5) — real data-integrity bug found and fixed: category_id could point to a non-root category
 User: an "אושר עד" (supermarket chain) transaction showed only "אושר עד"
 as its category tag, not the expected "אוכל · סופר · אושר עד" hierarchy,
