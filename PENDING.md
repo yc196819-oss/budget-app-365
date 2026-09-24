@@ -2,6 +2,41 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 9) — new category didn't show on the (new) home screen; editing was name-only
+User: adding a category in the Categories tab didn't show up on the
+Transactions screen, and there was no way to edit a category. Root
+cause of the first part: round 8's new `renderTxCatCards()` (shipped
+this same session) only builds a card per category **that already has
+spend this month** — a freshly-added, still-empty category correctly
+has nothing to show, but from the user's side that reads as "didn't
+update." The second part was real too: `renameCat()` only ever offered
+a name field, never the icon, even though icons are now front-and-
+center everywhere (cards, tags, breakdown bars).
+
+Fixed both:
+- `renderTxCatCards()` now lists **every expense root category**, not
+  just ones with spend — categories with ₪0 this month render
+  de-emphasized (dimmed, "—" instead of an amount, no % badge) but are
+  always there, so a new category is visible the moment it's created.
+- Added a dashed "➕ קטגוריה חדשה" card at the end of the grid
+  (`openQuickAddCategory()`) — add a category directly from the
+  Transactions tab without navigating to "קטגוריות" at all.
+- `renameCat()` is now a real edit, not just rename: a second field
+  for the icon (emoji), reused for both root and subcategories since
+  it's the same function called from `renderCatManage()`'s ✏️ buttons.
+- Added a matching "✏️ עריכת קטגוריה" button inside the category peek
+  modal, so editing is reachable from wherever you're already looking
+  at a category, not only from the separate management tab.
+
+Verified via headless Chrome: a category added on the Categories tab
+appears immediately as a dimmed ₪0 card on the Transactions tab (no
+reload needed — `addCat()` already called `render()`, which already
+called `renderExpenses()`; the actual bug was the filter-to-spend
+logic, not a propagation bug), the "+" card creates a category
+in-place, the peek modal's edit button opens a name+icon form and the
+modal refreshes with the new values on save, zero console errors. Test
+categories cleaned up from the demo household afterward.
+
 ## 🟢 Resolved 2026-09-24 (round 8) — Transactions tab rebuilt as a dashboard, not a list
 User, forcefully: opening Transactions and seeing a long list of rows
 means he scrolls past without even looking — wanted the home screen to

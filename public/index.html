@@ -297,6 +297,10 @@ button.tx-insight-chip{cursor:pointer;text-align:inherit;transition:border-color
 .tx-cat-card-pct{font-size:.7rem;color:var(--faint);font-weight:700}
 .tx-cat-card-name{font-size:.82rem;font-weight:700;color:var(--text)}
 .tx-cat-card-amt{font-size:1.05rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text)}
+.tx-cat-card.empty-cat{opacity:.55}
+.tx-cat-card.empty-cat .tx-cat-card-amt{color:var(--faint);font-weight:600}
+.tx-cat-card.add-cat-card{align-items:center;justify-content:center;border-style:dashed;background:none}
+.tx-cat-card.add-cat-card .tx-cat-card-name{color:var(--accent)}
 button.tx-insight-chip:hover{border-color:var(--accent);transform:translateY(-1px)}
 .tx-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .tx-search{flex:1;min-width:160px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;color:var(--text);font-size:.85rem}
@@ -1991,12 +1995,27 @@ async function addCat(){const n=$('#newCat').value.trim();if(!n)return;const{dat
 async function addSub(){const n=$('#newSub').value.trim();if(!n)return;const pid=$('#subParent').value;if(!pid){alert('בחר קטגוריית אב תחילה');return;}const pk=DB.categories.find(x=>x.id===pid)?.kind||'expense';const{data,error}=await sb.from('categories').insert({household_id:HID,name:n,parent_id:pid,kind:pk}).select().single();if(error){alert('שגיאה: '+error.message);return;}DB.categories.push(data);$('#newSub').value='';render();}
 async function renameCat(id){
   const c=DB.categories.find(x=>x.id===id);if(!c)return;
-  const v=await UI.prompt('שינוי שם קטגוריה',[{key:'name',label:'שם',value:c.name}]);
+  const v=await UI.prompt('עריכת קטגוריה',[
+    {key:'name',label:'שם',value:c.name},
+    {key:'icon',label:'אייקון (אימוג\'י, אופציונלי)',value:c.icon||'',placeholder:'לדוגמה: 🎯'}
+  ]);
   if(!v||!v.name.trim())return;
-  const{error}=await sb.from('categories').update({name:v.name.trim()}).eq('id',id);
+  const icon=(v.icon||'').trim()||null;
+  const{error}=await sb.from('categories').update({name:v.name.trim(),icon}).eq('id',id);
   if(error){UI.alert(error.message,{type:'error'});return;}
-  c.name=v.name.trim();render();
+  c.name=v.name.trim();c.icon=icon;render();
 }
+window.openQuickAddCategory=async()=>{
+  const v=await UI.prompt('קטגוריה חדשה',[
+    {key:'name',label:'שם הקטגוריה',value:''},
+    {key:'icon',label:'אייקון (אימוג\'י, אופציונלי)',value:'',placeholder:'לדוגמה: 🎯'}
+  ]);
+  if(!v||!v.name.trim())return;
+  const{data,error}=await sb.from('categories').insert({household_id:HID,name:v.name.trim(),icon:(v.icon||'').trim()||null,kind:'expense'}).select().single();
+  if(error){UI.alert('שגיאה ביצירת קטגוריה: '+error.message,{type:'error'});return;}
+  DB.categories.push(data);
+  render();
+};
 async function addSubSub(parentSubId){
   const v=await UI.prompt('תת-תת קטגוריה חדשה',[{key:'name',label:'שם'}]);
   if(!v||!v.name.trim())return;
@@ -3943,12 +3962,14 @@ window.openCategoryPeekModal=(cid)=>{
     +((yearHtml||compareHtml)?'<div class="muted" style="margin-bottom:8px;font-weight:700">תנועות '+MONTHS[VM]+'</div>':'')
     +'<div id="catPeekBody" style="max-height:52vh;overflow-y:auto;margin:0 -4px;padding:0 4px">'+cards+'</div>'
     +'<div class="row" style="margin-top:16px;justify-content:flex-end;flex-wrap:wrap">'
+      +(cid?'<button type="button" class="btn sec" id="catPeekEditBtn">✏️ עריכת קטגוריה</button>':'')
       +'<button type="button" class="btn sec" id="catPeekFilterBtn">🔍 הצג רק את זה ברשימה למטה</button>'
       +'<button type="button" class="btn" id="catPeekClose">סגירה</button>'
     +'</div>';
   const {ov,close}=UI._open(html,{large:true});
   ov.querySelector('#catPeekClose').onclick=close;
   ov.querySelector('#catPeekFilterBtn').onclick=()=>{exFilter=cid;txListExpanded=true;close();renderExpenses();};
+  if(cid)ov.querySelector('#catPeekEditBtn').onclick=async()=>{close();await renameCat(cid);openCategoryPeekModal(cid);};
   ov.querySelectorAll('#peekYearGrid .pill').forEach(b=>b.onclick=()=>{
     b.classList.toggle('on');
     b.style.cssText=pillStyle(b.classList.contains('on'),color);
@@ -3965,20 +3986,28 @@ window.openCategoryPeekModal=(cid)=>{
 function renderTxCatCards(homeRows){
   const catTotals={};
   homeRows.forEach(t=>{if(t.type==='expense')catTotals[t.category_id||'']=(catTotals[t.category_id||'']||0)+(+t.amount);});
-  const entries=Object.entries(catTotals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  // מציג את כל קטגוריות ההוצאה הקיימות, גם בלי הוצאה החודש — לא רק
+  // אלה שכבר יש להן תנועות — כדי שקטגוריה חדשה שנוספה בטאב "קטגוריות"
+  // תופיע כאן מיד, ולא ייראה כאילו "לא התעדכן".
+  const roots=rootCats('expense');
+  const entries=roots.map(c=>[c.id,catTotals[c.id]||0]).sort((a,b)=>b[1]-a[1]);
   const grandTotal=entries.reduce((s,[,v])=>s+v,0);
-  const el=$('#txCatCards');
-  if(!entries.length){el.innerHTML='<p class="empty">אין הוצאות מתויגות החודש</p>';return;}
-  el.innerHTML=entries.map(([cid,v])=>{
+  const cardHtml=([cid,v])=>{
     const c=DB.categories.find(x=>x.id===cid);
     const color=catColor(cid||null);
     const pct=grandTotal>0?Math.round(v/grandTotal*100):0;
-    return '<button type="button" class="tx-cat-card" style="border-color:'+hexA(color,.35)+'" onclick="openCategoryPeekModal(\''+(cid||'')+'\')">'
-      +'<div class="tx-cat-card-top"><span class="tx-cat-card-icon" style="background:'+hexA(color,.16)+';color:'+color+'">'+(c?.icon||'📌')+'</span><span class="tx-cat-card-pct">'+pct+'%</span></div>'
+    const empty=v===0;
+    return '<button type="button" class="tx-cat-card'+(empty?' empty-cat':'')+'" style="border-color:'+(empty?'var(--line2)':hexA(color,.35))+'" onclick="openCategoryPeekModal(\''+(cid||'')+'\')">'
+      +'<div class="tx-cat-card-top"><span class="tx-cat-card-icon" style="background:'+hexA(color,.16)+';color:'+color+'">'+(c?.icon||'📌')+'</span>'+(empty?'':'<span class="tx-cat-card-pct">'+pct+'%</span>')+'</div>'
       +'<div class="tx-cat-card-name">'+esc(c?.name||'ללא קטגוריה')+'</div>'
-      +'<div class="tx-cat-card-amt">'+fmt(v)+'</div>'
+      +'<div class="tx-cat-card-amt">'+(empty?'—':fmt(v))+'</div>'
       +'</button>';
-  }).join('');
+  };
+  const addCardHtml='<button type="button" class="tx-cat-card add-cat-card" onclick="openQuickAddCategory()">'
+    +'<div class="tx-cat-card-top"><span class="tx-cat-card-icon" style="background:var(--surface3);color:var(--accent)">➕</span></div>'
+    +'<div class="tx-cat-card-name">קטגוריה חדשה</div>'
+    +'</button>';
+  $('#txCatCards').innerHTML=entries.map(cardHtml).join('')+addCardHtml;
 }
 window.toggleTxListExpanded=()=>{txListExpanded=!txListExpanded;renderExpenses();};
 function renderExpenses(){
