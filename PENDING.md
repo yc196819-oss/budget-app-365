@@ -2,6 +2,55 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 10) — same "always-visible form" pattern fixed across Loans/Installments/Investments/Accounts
+
+Did a full pass over every tab (not just Transactions) at the user's
+request — "give me the points that must change, even the hard ones."
+Found the exact same anti-pattern that made Transactions bad was still
+present in **Loans, Installments, Investments, and Accounts** (both
+bank accounts and credit cards): a permanent inline add-form sitting
+above the list/summary on every single visit, before the user sees
+anything else. Gave the user the full punch list (this item, dashboard
+being overloaded, planning tab being overloaded, cramped mobile cards
+in loans/investments, destructive settings actions with no visual
+separation, 12 flat top-level nav tabs) — he confirmed starting with
+this one.
+
+Applied the same modal pattern from `openManualAddModal()` to all 5
+forms:
+- `openAddLoanModal()`, `openAddInstModal()`, `openAddInvModal()`,
+  `openAddBankAccountModal()`, `openAddCreditCardModal()` — each a
+  `UI._open()` modal with the exact same form fields/ids as before
+  (so `addLoan()`/`addInst()`/`addInv()`/`addBankAccount()`/
+  `addCreditCard()` needed no logic changes, just `return true;` added
+  on their success paths so the modal knows when to close).
+- Each tab's panel now leads with the stat cards / list, with a small
+  "+ הוספת X" link opening the modal — matching the Transactions
+  pattern exactly.
+- `openAddCreditCardModal()` refuses to open (with a clear message)
+  if there's no bank account yet, since a card always needs one — this
+  didn't exist before as a guard, just a silently-useless empty select.
+- Credit card modal calls `renderAccounts()` after opening to populate
+  the bank-account and billing-day `<select>`s, since that population
+  logic already existed (guarded with `if(sel)`) but only ran from the
+  main `render()` loop, never on-demand for a freshly-created modal.
+
+Verified via headless Chrome: fresh boot zero errors, all 5 add flows
+tested end-to-end (loan, installment with populated category select,
+investment, bank account, credit card with both selects correctly
+populated from the just-added bank account) — each created its record
+and closed its modal correctly. Test records cleaned up from the demo
+household afterward.
+
+**Still open from the same audit, not yet started**: dashboard and
+planning-tab information overload (both very long, unsectioned pages
+of stat cards), cramped/cut-off mobile cards in Loans and Investments
+lists (the same fix already applied to the Transactions card grid
+hasn't been extended there), no visual separation between safe and
+destructive actions in Settings, and the 12-tab flat navigation
+(flagged as worth a separate conversation before touching nav
+structure).
+
 ## 🟢 Resolved 2026-09-24 (round 9) — new category didn't show on the (new) home screen; editing was name-only
 User: adding a category in the Categories tab didn't show up on the
 Transactions screen, and there was no way to edit a category. Root

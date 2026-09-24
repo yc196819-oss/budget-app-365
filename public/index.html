@@ -690,23 +690,14 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
     <div class="panel">
       <h2 data-i18n="accounts.bank.title">🏦 חשבונות בנק</h2>
       <p class="muted" style="margin-bottom:12px">כל תנועה משויכת לחשבון ספציפי — שימושי כשיש כמה חשבונות במשק הבית (למשל שלך ושל בן/בת הזוג).</p>
-      <div class="row">
-        <input id="newAcctName" placeholder="שם החשבון (למשל: העו״ש שלי)" style="flex:1;min-width:160px">
-        <input id="newAcctBank" placeholder="בנק (אופציונלי)" style="min-width:140px">
-        <button class="btn" onclick="addBankAccount()">הוסף חשבון</button>
-      </div>
-      <div id="acctManage" style="margin-top:16px"></div>
+      <button type="button" class="link-btn" onclick="openAddBankAccountModal()" style="margin-bottom:14px;font-size:.82rem">+ הוספת חשבון בנק</button>
+      <div id="acctManage"></div>
     </div>
     <div class="panel">
       <h2 data-i18n="accounts.cards.title">💳 כרטיסי אשראי</h2>
       <p class="muted" style="margin-bottom:12px">לכל כרטיס יום חיוב משלו — קובע לאיזה חודש הוצאה שמשויכת לכרטיס תיפול בפועל במאזן ובגרפים.</p>
-      <div class="row">
-        <select id="newCardAcct"></select>
-        <input id="newCardName" placeholder="שם הכרטיס (למשל: ויזה 1234)" style="flex:1;min-width:160px">
-        <select id="newCardBillingDay"></select>
-        <button class="btn" onclick="addCreditCard()">הוסף כרטיס</button>
-      </div>
-      <div id="cardManage" style="margin-top:16px"></div>
+      <button type="button" class="link-btn" onclick="openAddCreditCardModal()" style="margin-bottom:14px;font-size:.82rem">+ הוספת כרטיס אשראי</button>
+      <div id="cardManage"></div>
     </div>
   </section>
 
@@ -717,17 +708,10 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
       <div class="card"><div class="label">מאזן נטו</div><div class="value neu" id="lNet">₪0</div></div>
     </div>
     <div class="panel">
-      <h2 data-i18n="loans.add.title">הוספת הלוואה</h2>
-      <div class="row">
-        <select id="loanDir"><option value="tome">חייבים לי</option><option value="iowe">אני חייב</option></select>
-        <input id="loanWho" placeholder="מי?" style="flex:1;min-width:120px">
-        <input id="loanAmt" type="number" placeholder="סכום ₪" style="width:110px">
-        <input id="loanDate" type="date">
-        <input id="loanNote" placeholder="הערה" style="flex:1;min-width:100px">
-        <button class="btn" onclick="addLoan()" data-i18n="action.add">הוסף</button>
-      </div>
+      <h2 data-i18n="nav.loans">הלוואות</h2>
+      <button type="button" class="link-btn" onclick="openAddLoanModal()" style="margin-bottom:14px;font-size:.82rem">+ הוספת הלוואה</button>
+      <div id="loanBody"></div>
     </div>
-    <div class="panel"><h2 data-i18n="nav.loans">הלוואות</h2><div id="loanBody"></div></div>
   </section>
 
   <section id="tab-installments" class="hidden">
@@ -737,17 +721,10 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
       <div class="card"><div class="label">רכישות פעילות</div><div class="value" id="iCount">0</div></div>
     </div>
     <div class="panel">
-      <h2 data-i18n="inst.add.title">הוספת רכישה בתשלומים</h2>
-      <div class="row">
-        <input id="instDesc" placeholder="מה רכשת?" style="flex:1;min-width:130px">
-        <input id="instTotal" type="number" placeholder="סכום כולל ₪" style="width:125px">
-        <input id="instCount" type="number" placeholder="כמה תשלומים" style="width:115px">
-        <input id="instFirst" type="date">
-        <select id="instCat"></select>
-        <button class="btn" onclick="addInst()" data-i18n="action.add">הוסף</button>
-      </div>
+      <h2 data-i18n="nav.installments">רכישות בתשלומים</h2>
+      <button type="button" class="link-btn" onclick="openAddInstModal()" style="margin-bottom:14px;font-size:.82rem">+ הוספת רכישה בתשלומים</button>
+      <div id="instBody"></div>
     </div>
-    <div class="panel"><h2 data-i18n="nav.installments">רכישות בתשלומים</h2><div id="instBody"></div></div>
   </section>
 
   <section id="tab-investments" class="hidden">
@@ -767,17 +744,10 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
       <p class="muted" id="mqUpdated" style="font-size:.72rem;margin-top:8px"></p>
     </div>
     <div class="panel">
-      <h2 data-i18n="inv.add.title">הוספת השקעה</h2>
-      <div class="row">
-        <input id="invName" placeholder="שם ההשקעה" style="flex:1;min-width:140px">
-        <select id="invType"><option>מניות</option><option>קרן/ETF</option><option>קריפטו</option><option>נדל״ן</option><option>פנסיה/השתלמות</option><option>אחר</option></select>
-        <input id="invCostIn" type="number" placeholder="עלות ₪" style="width:110px">
-        <input id="invValIn" type="number" placeholder="שווי נוכחי ₪" style="width:130px">
-        <input id="invDate" type="date">
-        <button class="btn" onclick="addInv()" data-i18n="action.add">הוסף</button>
-      </div>
+      <h2 data-i18n="inv.portfolio.title">תיק ההשקעות</h2>
+      <button type="button" class="link-btn" onclick="openAddInvModal()" style="margin-bottom:14px;font-size:.82rem">+ הוספת השקעה</button>
+      <div id="invBody"></div>
     </div>
-    <div class="panel"><h2 data-i18n="inv.portfolio.title">תיק ההשקעות</h2><div id="invBody"></div></div>
   </section>
 
   <section id="tab-planning" class="hidden">
@@ -1765,6 +1735,77 @@ window.openManualAddModal=(prefill)=>{
   ov.querySelector('#exModalCancel').onclick=close;
   ov.querySelector('#exModalSubmit').onclick=async()=>{if(await addTransaction())close();};
 };
+window.openAddLoanModal=()=>{
+  const html='<h3>הוספת הלוואה</h3>'
+    +'<div class="ex-form-modal-grid">'
+      +'<select id="loanDir"><option value="tome">חייבים לי</option><option value="iowe">אני חייב</option></select>'
+      +'<input id="loanWho" placeholder="מי?">'
+      +'<input id="loanAmt" type="number" placeholder="סכום ₪">'
+      +'<input id="loanDate" type="date">'
+      +'<input id="loanNote" placeholder="הערה (אופציונלי)">'
+    +'</div>'
+    +'<div class="row" style="margin-top:20px;justify-content:flex-end"><button class="btn sec" id="loanModalCancel">ביטול</button><button class="btn" id="loanModalSubmit">הוסף</button></div>';
+  const {ov,close}=UI._open(html);
+  $('#loanDate').value=todayStr();
+  ov.querySelector('#loanModalCancel').onclick=close;
+  ov.querySelector('#loanModalSubmit').onclick=async()=>{if(await addLoan())close();};
+};
+window.openAddInstModal=()=>{
+  const html='<h3>הוספת רכישה בתשלומים</h3>'
+    +'<div class="ex-form-modal-grid">'
+      +'<input id="instDesc" placeholder="מה רכשת?">'
+      +'<input id="instTotal" type="number" placeholder="סכום כולל ₪">'
+      +'<input id="instCount" type="number" placeholder="כמה תשלומים">'
+      +'<input id="instFirst" type="date">'
+      +'<select id="instCat"></select>'
+    +'</div>'
+    +'<div class="row" style="margin-top:20px;justify-content:flex-end"><button class="btn sec" id="instModalCancel">ביטול</button><button class="btn" id="instModalSubmit">הוסף</button></div>';
+  const {ov,close}=UI._open(html);
+  fillCatSel();
+  $('#instFirst').value=todayStr();
+  ov.querySelector('#instModalCancel').onclick=close;
+  ov.querySelector('#instModalSubmit').onclick=async()=>{if(await addInst())close();};
+};
+window.openAddInvModal=()=>{
+  const html='<h3>הוספת השקעה</h3>'
+    +'<div class="ex-form-modal-grid">'
+      +'<input id="invName" placeholder="שם ההשקעה">'
+      +'<select id="invType"><option>מניות</option><option>קרן/ETF</option><option>קריפטו</option><option>נדל״ן</option><option>פנסיה/השתלמות</option><option>אחר</option></select>'
+      +'<input id="invCostIn" type="number" placeholder="עלות ₪">'
+      +'<input id="invValIn" type="number" placeholder="שווי נוכחי ₪">'
+      +'<input id="invDate" type="date">'
+    +'</div>'
+    +'<div class="row" style="margin-top:20px;justify-content:flex-end"><button class="btn sec" id="invModalCancel">ביטול</button><button class="btn" id="invModalSubmit">הוסף</button></div>';
+  const {ov,close}=UI._open(html);
+  $('#invDate').value=todayStr();
+  ov.querySelector('#invModalCancel').onclick=close;
+  ov.querySelector('#invModalSubmit').onclick=async()=>{if(await addInv())close();};
+};
+window.openAddBankAccountModal=()=>{
+  const html='<h3>🏦 הוספת חשבון בנק</h3>'
+    +'<div class="ex-form-modal-grid">'
+      +'<input id="newAcctName" placeholder="שם החשבון (למשל: העו״ש שלי)">'
+      +'<input id="newAcctBank" placeholder="בנק (אופציונלי)">'
+    +'</div>'
+    +'<div class="row" style="margin-top:20px;justify-content:flex-end"><button class="btn sec" id="acctModalCancel">ביטול</button><button class="btn" id="acctModalSubmit">הוסף</button></div>';
+  const {ov,close}=UI._open(html);
+  ov.querySelector('#acctModalCancel').onclick=close;
+  ov.querySelector('#acctModalSubmit').onclick=async()=>{if(await addBankAccount())close();};
+};
+window.openAddCreditCardModal=()=>{
+  if(!DB.bankAccounts.length){UI.alert('קודם הוסף חשבון בנק — לכל כרטיס יש חשבון שהוא מחויב דרכו.',{type:'error'});return;}
+  const html='<h3>💳 הוספת כרטיס אשראי</h3>'
+    +'<div class="ex-form-modal-grid">'
+      +'<select id="newCardAcct"></select>'
+      +'<input id="newCardName" placeholder="שם הכרטיס (למשל: ויזה 1234)">'
+      +'<select id="newCardBillingDay"></select>'
+    +'</div>'
+    +'<div class="row" style="margin-top:20px;justify-content:flex-end"><button class="btn sec" id="cardModalCancel">ביטול</button><button class="btn" id="cardModalSubmit">הוסף</button></div>';
+  const {ov,close}=UI._open(html);
+  renderAccounts();
+  ov.querySelector('#cardModalCancel').onclick=close;
+  ov.querySelector('#cardModalSubmit').onclick=async()=>{if(await addCreditCard())close();};
+};
 window.openMoreSheet=()=>{$('#moreSheetOverlay')?.classList.remove('hidden');};
 window.closeMoreSheet=()=>{$('#moreSheetOverlay')?.classList.add('hidden');};
 function setupNav(){document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>goToTab(b.dataset.tab));
@@ -2024,9 +2065,9 @@ async function addSubSub(parentSubId){
   if(error){UI.alert(error.message,{type:'error'});return;}
   DB.categories.push(data);render();
 }
-async function addLoan(){const amt=parseFloat($('#loanAmt').value);if(!amt||amt<=0){alert('הכנס סכום');return;}const{data,error}=await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:$('#loanDir').value,counterparty:$('#loanWho').value||'(ללא שם)',amount:amt,loan_date:$('#loanDate').value||todayStr(),note:$('#loanNote').value,settled:false}).select().single();if(error){alert('שגיאה בהוספת הלוואה: '+error.message);return;}DB.loans.unshift(data);$('#loanWho').value='';$('#loanAmt').value='';$('#loanNote').value='';render();}
-async function addInst(){const total=parseFloat($('#instTotal').value),count=parseInt($('#instCount').value);if(!total||!count){alert('הכנס סכום ומספר תשלומים');return;}const{data,error}=await sb.from('installments').insert({household_id:HID,created_by:CU.id,description:$('#instDesc').value||'(ללא תיאור)',total_amount:total,payments_count:count,first_payment:$('#instFirst').value||todayStr(),category_id:$('#instCat').value||null}).select().single();if(error){alert('שגיאה בשמירה: '+error.message+'\n\nהנתונים לא נמחקו — נסה שוב.');return;}DB.installments.push(data);$('#instDesc').value='';$('#instTotal').value='';$('#instCount').value='';render();}
-async function addInv(){const cost=parseFloat($('#invCostIn').value);if(!cost){alert('הכנס עלות');return;}const val=parseFloat($('#invValIn').value)||cost;const{data}=await sb.from('investments').insert({household_id:HID,created_by:CU.id,name:$('#invName').value||'(ללא שם)',asset_type:$('#invType').value,cost,current_value:val,buy_date:$('#invDate').value||todayStr()}).select().single();DB.investments.push(data);$('#invName').value='';$('#invCostIn').value='';$('#invValIn').value='';render();}
+async function addLoan(){const amt=parseFloat($('#loanAmt').value);if(!amt||amt<=0){alert('הכנס סכום');return;}const{data,error}=await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:$('#loanDir').value,counterparty:$('#loanWho').value||'(ללא שם)',amount:amt,loan_date:$('#loanDate').value||todayStr(),note:$('#loanNote').value,settled:false}).select().single();if(error){alert('שגיאה בהוספת הלוואה: '+error.message);return;}DB.loans.unshift(data);render();return true;}
+async function addInst(){const total=parseFloat($('#instTotal').value),count=parseInt($('#instCount').value);if(!total||!count){alert('הכנס סכום ומספר תשלומים');return;}const{data,error}=await sb.from('installments').insert({household_id:HID,created_by:CU.id,description:$('#instDesc').value||'(ללא תיאור)',total_amount:total,payments_count:count,first_payment:$('#instFirst').value||todayStr(),category_id:$('#instCat').value||null}).select().single();if(error){alert('שגיאה בשמירה: '+error.message+'\n\nהנתונים לא נמחקו — נסה שוב.');return;}DB.installments.push(data);render();return true;}
+async function addInv(){const cost=parseFloat($('#invCostIn').value);if(!cost){alert('הכנס עלות');return;}const val=parseFloat($('#invValIn').value)||cost;const{data}=await sb.from('investments').insert({household_id:HID,created_by:CU.id,name:$('#invName').value||'(ללא שם)',asset_type:$('#invType').value,cost,current_value:val,buy_date:$('#invDate').value||todayStr()}).select().single();DB.investments.push(data);render();return true;}
 async function addGoal(){const target=parseFloat($('#goalTarget').value);if(!target){alert('הכנס סכום יעד');return;}const saved=parseFloat($('#goalSaved').value)||0;const{data,error}=await sb.from('goals').insert({household_id:HID,created_by:CU.id,icon:$('#goalIcon').value,name:$('#goalName').value||'(ללא שם)',target_amount:target,saved_amount:saved,target_date:$('#goalDate').value||null}).select().single();if(error){alert('שגיאה בהוספת יעד: '+error.message);return;}DB.goals.push(data);$('#goalName').value='';$('#goalTarget').value='';$('#goalSaved').value='';render();}
 
 // INVITE — pretty link
@@ -4246,7 +4287,7 @@ async function addBankAccount(){
   const bankName=$('#newAcctBank').value.trim()||null;
   const{data,error}=await sb.from('bank_accounts').insert({household_id:HID,created_by:CU.id,name,bank_name:bankName}).select().single();
   if(error){alert('שגיאה בהוספת חשבון: '+error.message+'\n\nהרצת את supabase_accounts_cards.sql ב-Supabase?');return;}
-  DB.bankAccounts.push(data);$('#newAcctName').value='';$('#newAcctBank').value='';render();
+  DB.bankAccounts.push(data);render();return true;
 }
 async function delBankAccount(id){
   const cardsOnAcct=DB.creditCards.filter(c=>c.bank_account_id===id);
@@ -4294,7 +4335,7 @@ async function addCreditCard(){
   const billingDay=parseInt($('#newCardBillingDay').value,10)||10;
   const{data,error}=await sb.from('credit_cards').insert({household_id:HID,created_by:CU.id,bank_account_id:acctId,name,billing_day:billingDay}).select().single();
   if(error){alert('שגיאה בהוספת כרטיס: '+error.message);return;}
-  DB.creditCards.push(data);$('#newCardName').value='';render();
+  DB.creditCards.push(data);render();return true;
 }
 async function delCreditCard(id){
   if(!await UI.confirm('למחוק את הכרטיס? תנועות משויכות יישארו בלי כרטיס (יחושבו כאילו שולמו ישירות מהחשבון).',{danger:true,title:'מחיקת כרטיס אשראי'}))return;
