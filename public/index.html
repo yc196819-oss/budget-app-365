@@ -22,7 +22,7 @@
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700;800;900&family=Suez+One&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a0c14;--surface:#151827;--surface2:#1c2033;--surface3:#252a42;--line:#2b3049;--line2:#383e5c;--text:#eef0f9;--muted:#9ba1c4;--faint:#6b7094;--accent:#7c6cff;--accent2:#22e2a8;--accent3:#ff5fa8;--danger:#ff5c7a;--warn:#ffb454;--radius:18px;--shadow:0 10px 34px rgba(0,0,0,.4);
   --grad-hero:linear-gradient(135deg,#8b7cff 0%,#6c8cff 45%,#22e2a8 100%);--grad-warm:linear-gradient(135deg,#ff5fa8,#ff8f6b);--glow-accent:0 0 0 1px rgba(124,108,255,.25),0 8px 24px rgba(124,108,255,.35);
@@ -51,7 +51,7 @@ body{font-family:'Rubik','Segoe UI',system-ui,Arial,sans-serif;background:var(--
 .auth-err{font-size:.85rem;margin-top:10px;text-align:center;padding:10px;border-radius:8px}
 .auth-err.err{color:var(--danger);background:rgba(255,107,107,.1)}
 .auth-err.ok{color:var(--accent2);background:rgba(34,226,168,.1)}
-.logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:1.1rem;flex-shrink:0;font-family:'Suez One',serif;color:#0f1117}
+.logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:1.1rem;flex-shrink:0;font-family:'Rubik',sans-serif;font-weight:900;color:#0f1117}
 .avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:.85rem;font-weight:700;color:#fff;flex-shrink:0}
 
 /* ===== sidebar rail ===== */
@@ -132,10 +132,11 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
      side by side) has no room on a phone width, so it wraps into 3-4 messy
      stacked lines with the category shown twice (static tag + picker
      trigger). Rebuild it as a compact 2-row grid, scoped to the transaction
-     list only (#exBody) so loans/installments/investments/accounts, which
-     share the .tx-card class but have different internal structure, are
+     list (#exBody) and the category peek modal (#catPeekBody), which render
+     the same cards, so loans/installments/investments/accounts — which
+     share the .tx-card class but have different internal structure — are
      untouched. */
-  #exBody .tx-card{
+  #exBody .tx-card,#catPeekBody .tx-card{
     display:grid;
     grid-template-columns:38px 1fr auto;
     grid-template-rows:auto auto;
@@ -145,16 +146,16 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
     padding:12px 14px;
     flex-wrap:unset;
   }
-  #exBody .tx-badge{grid-column:1;grid-row:1/3}
-  #exBody .tx-mid{grid-column:2;grid-row:1/3;display:flex;flex-flow:row wrap;align-items:center;column-gap:8px;row-gap:5px;min-width:0}
-  #exBody .tx-desc{flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #exBody .tx-meta{margin-top:0}
-  #exBody .tx-cattag{display:none}
-  #exBody .tx-mid>div:last-child{margin-top:0!important}
-  #exBody .cat-picker-trigger{padding:2px 9px}
-  #exBody .tx-amt{grid-column:3;grid-row:1;justify-self:start;align-self:end}
-  #exBody .tx-actions{grid-column:3;grid-row:2;justify-self:start;align-self:start}
-  #exBody .tx-actions .smallbtn,#exBody .tx-actions .btn.danger{padding:4px 9px;font-size:.72rem}
+  #exBody .tx-badge,#catPeekBody .tx-badge{grid-column:1;grid-row:1/3}
+  #exBody .tx-mid,#catPeekBody .tx-mid{grid-column:2;grid-row:1/3;display:flex;flex-flow:row wrap;align-items:center;column-gap:8px;row-gap:5px;min-width:0}
+  #exBody .tx-desc,#catPeekBody .tx-desc{flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #exBody .tx-meta,#catPeekBody .tx-meta{margin-top:0}
+  #exBody .tx-cattag,#catPeekBody .tx-cattag{display:none}
+  #exBody .tx-mid>div:last-child,#catPeekBody .tx-mid>div:last-child{margin-top:0!important}
+  #exBody .cat-picker-trigger,#catPeekBody .cat-picker-trigger{padding:2px 9px}
+  #exBody .tx-amt,#catPeekBody .tx-amt{grid-column:3;grid-row:1;justify-self:start;align-self:end}
+  #exBody .tx-actions,#catPeekBody .tx-actions{grid-column:3;grid-row:2;justify-self:start;align-self:start}
+  #exBody .tx-actions .smallbtn,#exBody .tx-actions .btn.danger,#catPeekBody .tx-actions .smallbtn,#catPeekBody .tx-actions .btn.danger{padding:4px 9px;font-size:.72rem}
 }
 .grid{display:grid;gap:16px}
 .cards{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
@@ -208,7 +209,7 @@ tr:last-child td{border-bottom:none}
 .advisor-health.watch{background:linear-gradient(135deg,rgba(255,180,84,.16),rgba(255,180,84,.03));border:1px solid rgba(255,180,84,.4)}
 .advisor-health.risk{background:linear-gradient(135deg,rgba(255,107,107,.16),rgba(255,107,107,.03));border:1px solid rgba(255,107,107,.4)}
 .advisor-health-icon{font-size:2.3rem;flex-shrink:0}
-.advisor-health-text{font-family:'Suez One',serif;font-size:1.25rem;line-height:1.4}
+.advisor-health-text{font-family:'Rubik',sans-serif;font-weight:800;font-size:1.25rem;line-height:1.4}
 .advisor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px}
 .advisor-section h3{font-size:.88rem;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .advisor-item{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px;font-size:.85rem;line-height:1.55}
@@ -272,7 +273,7 @@ tr:last-child td{border-bottom:none}
 .tx-summary{background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px;display:flex;flex-direction:column;gap:14px;margin-bottom:14px}
 .tx-summary-top{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .tx-summary .lbl{color:var(--muted);font-size:.78rem;font-weight:600;margin-bottom:4px}
-.tx-summary .hero-num{font-family:'Suez One',serif;font-size:2.1rem;line-height:1;font-variant-numeric:tabular-nums}
+.tx-summary .hero-num{font-family:'Rubik',sans-serif;font-weight:900;letter-spacing:-.01em;font-size:2.1rem;line-height:1;font-variant-numeric:tabular-nums}
 .tx-chips{display:flex;gap:10px;flex-wrap:wrap}
 .tx-chip{display:flex;align-items:center;gap:8px;background:var(--surface3);border:1px solid var(--line2);padding:8px 14px;border-radius:12px}
 .tx-chip .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -289,7 +290,9 @@ tr:last-child td{border-bottom:none}
 .tx-legend-item:hover{color:var(--text)}
 .tx-legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .tx-insights{display:flex;flex-wrap:wrap;gap:8px}
-.tx-insight-chip{background:var(--surface3);border:1px solid var(--line2);border-radius:10px;padding:7px 12px;font-size:.76rem;color:var(--muted)}
+.tx-insight-chip{background:var(--surface3);border:1px solid var(--line2);border-radius:10px;padding:7px 12px;font-size:.76rem;color:var(--muted);font-family:inherit}
+button.tx-insight-chip{cursor:pointer;text-align:inherit;transition:border-color .15s,transform .15s}
+button.tx-insight-chip:hover{border-color:var(--accent);transform:translateY(-1px)}
 .tx-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .tx-search{flex:1;min-width:160px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;color:var(--text);font-size:.85rem}
 .seg{display:flex;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;flex-shrink:0}
@@ -3766,6 +3769,29 @@ function txCardHtml(t){
     +'<div class="tx-actions">'+btns+'</div>'
     +'</div>';
 }
+// "הצצה" לקטגוריה — נפתחת בחלון קופץ בלבד, לא נוגעת בסינון הכללי של
+// הרשימה, כדי שאפשר תמיד לחזור למצב המלא בלי לחפש כפתור "נקה סינון".
+window.openCategoryPeekModal=(cid)=>{
+  const c=DB.categories.find(x=>x.id===cid);
+  const color=catColor(cid||null);
+  const name=c?(c.icon||'')+' '+esc(c.name):'ללא קטגוריה';
+  const rows=monthRows(VY,VM,'all').filter(t=>t.type==='expense'&&(t.category_id||'')===cid).sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||''));
+  const total=rows.reduce((s,t)=>s+ +t.amount,0);
+  const cards=rows.length?rows.map(txCardHtml).join(''):'<p class="empty">אין תנועות בקטגוריה זו החודש</p>';
+  const html='<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:2px">'
+    +'<h3 style="margin:0;display:flex;align-items:center;gap:9px"><span class="tx-legend-dot" style="width:15px;height:15px;background:'+color+'"></span>'+name+'</h3>'
+    +'<div style="font-weight:800;font-size:1.35rem;white-space:nowrap">'+fmt(total)+'</div>'
+    +'</div>'
+    +'<p class="muted" style="margin:0 0 14px">'+rows.length+' תנועות · '+MONTHS[VM]+' '+VY+'</p>'
+    +'<div id="catPeekBody" style="max-height:52vh;overflow-y:auto;margin:0 -4px;padding:0 4px">'+cards+'</div>'
+    +'<div class="row" style="margin-top:16px;justify-content:flex-end;flex-wrap:wrap">'
+      +'<button type="button" class="btn sec" id="catPeekFilterBtn">🔍 הצג רק את זה ברשימה למטה</button>'
+      +'<button type="button" class="btn" id="catPeekClose">סגירה</button>'
+    +'</div>';
+  const {ov,close}=UI._open(html,{large:true});
+  ov.querySelector('#catPeekClose').onclick=close;
+  ov.querySelector('#catPeekFilterBtn').onclick=()=>{exFilter=cid;close();renderExpenses();};
+};
 function renderExpenses(){
   const f=$('#exFilters');
   f.innerHTML='<div class="filter-bar">'
@@ -3827,15 +3853,20 @@ function renderExpenses(){
       };
       bdEl.innerHTML=main.map(segHtml).join('')+(restTotal>0?'<button type="button" class="tx-breakdown-seg" data-f="" style="width:'+(restTotal/sum*100)+'%;background:var(--faint)" title="אחר — '+fmt(restTotal)+'"></button>':'');
       lgEl.innerHTML=main.map(legendHtml).join('')+(restTotal>0?'<span class="tx-legend-item" style="cursor:default"><span class="tx-legend-dot" style="background:var(--faint)"></span>אחר · '+fmt(restTotal)+'</span>':'');
-      lgEl.querySelectorAll('.tx-legend-item[data-f]').forEach(b=>b.onclick=()=>{exFilter=b.dataset.f||'__expense__';renderExpenses();});
+      // לחיצה על מקטע/מקרא פותחת "הצצה" בחלון קופץ — לא משנה את הרשימה הראשית,
+      // כדי שאפשר תמיד לחזור בלי לחפש כפתור "נקה סינון".
+      bdEl.querySelectorAll('.tx-breakdown-seg[data-f]:not([data-f=""])').forEach(b=>b.onclick=()=>openCategoryPeekModal(b.dataset.f));
+      lgEl.querySelectorAll('.tx-legend-item[data-f]:not([data-f=""])').forEach(b=>b.onclick=()=>openCategoryPeekModal(b.dataset.f));
     } else { bdEl.innerHTML=''; lgEl.innerHTML=''; }
 
-    // תובנות אוטומטיות — קטגוריה מובילה, וקצב הוצאה חזוי (רק לחודש הנוכחי בפועל)
+    // תובנות אוטומטיות — קטגוריה מובילה (לחיצה פותחת הצצה), וקצב הוצאה חזוי
     const insights=[];
+    let topCatId=null;
     if(entries.length){
       const [topId,topV]=entries[0];
+      topCatId=topId;
       const topC=DB.categories.find(x=>x.id===topId);
-      insights.push('🔥 הכי הוצאתם החודש: <b>'+(topC?(topC.icon||'')+' '+esc(topC.name):'ללא קטגוריה')+'</b> ('+fmt(topV)+')');
+      insights.push({html:'🔥 הכי הוצאתם החודש: <b>'+(topC?(topC.icon||'')+' '+esc(topC.name):'ללא קטגוריה')+'</b> ('+fmt(topV)+')',clickable:true});
     }
     const today=new Date();
     const isLiveMonth=VY===today.getFullYear()&&VM===today.getMonth();
@@ -3843,9 +3874,11 @@ function renderExpenses(){
       const dayNum=today.getDate();
       const daysInMonth=new Date(VY,VM+1,0).getDate();
       const pace=sum/dayNum*daysInMonth;
-      insights.push('📅 בקצב הנוכחי: כ־'+fmt(pace)+' עד סוף החודש');
+      insights.push({html:'📅 בקצב הנוכחי: כ־'+fmt(pace)+' עד סוף החודש',clickable:false});
     }
-    $('#txInsights').innerHTML=insights.map(t=>'<div class="tx-insight-chip">'+t+'</div>').join('');
+    const insightsEl=$('#txInsights');
+    insightsEl.innerHTML=insights.map((ins,i)=>'<'+(ins.clickable?'button type="button"':'div')+' class="tx-insight-chip"'+(ins.clickable?' data-i="'+i+'"':'')+'>'+ins.html+'</'+(ins.clickable?'button':'div')+'>').join('');
+    if(topCatId)insightsEl.querySelectorAll('.tx-insight-chip[data-i]').forEach(b=>b.onclick=()=>openCategoryPeekModal(topCatId));
   } else summaryEl.classList.add('hidden');
 
   const body=$('#exBody'),emptyEl=$('#exEmpty');

@@ -2,6 +2,50 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 3) — category click now peeks in a modal, dropped the serif font
+Two concrete complaints from the user after round 2:
+1. Clicking a category in the breakdown bar/legend applied it as a
+   page-wide filter with no obvious way back except a small "נקה
+   סינון" text button — felt like a trap ("אין איך לחזור לראות את
+   השאר"). Changed the interaction: clicking a breakdown segment or
+   legend item now opens `openCategoryPeekModal(cid)` — a modal
+   showing that category's total, transaction count, and full list
+   for the period. Closing it (✕/Escape/backdrop, all pre-existing
+   `UI._open()` behavior) leaves the main list's filter completely
+   untouched — nothing to reset, nothing to get stuck in. A "🔍 הצג
+   רק את זה ברשימה למטה" button inside the modal still lets you apply
+   it as a real filter for those who want that. The top-category
+   insight chip is now also clickable and opens the same peek modal.
+   Discovered along the way that the mobile-friendly transaction-card
+   grid layout (from an earlier session's "declutter the 4-line
+   mobile card" fix) was scoped to `#exBody .tx-card` only, so cards
+   rendered inside this new modal fell back to the old cramped
+   pre-fix layout — extended that CSS to also match `#catPeekBody
+   .tx-card` so the modal's cards look identical to the main list's.
+2. "הפונטים המגעילים האלו" — traced to the `Suez One` serif display
+   font used for the big hero number, the AI-advisor health text, and
+   the app's logo monogram. Dropped it app-wide in favor of the same
+   `Rubik` family (at heavy 800/900 weight for the display spots)
+   used everywhere else, and removed it from the Google Fonts import
+   entirely. One consistent typeface across the whole app now instead
+   of a sans/serif mix.
+
+Also raised by the user, explicitly **not acted on yet**:
+- A full color-scheme change — he said himself "זה עדיין לא" (not
+  yet), so left untouched.
+- Deleting the Graphs tab and merging it into the transactions tab —
+  he floated this as "אולי אפשר" (maybe it's possible), not a firm
+  instruction. This is a nav-structure change (removing a whole tab),
+  so asked him directly whether/when to do it rather than guessing.
+
+Verified via headless Chrome (mobile + desktop): fresh boot zero
+errors, legend/breakdown-segment clicks open the peek modal without
+touching the main filter, closing the modal restores exactly the
+prior state, the in-modal "show only this" button still applies a
+real filter correctly, manual-add/search/category-grouping/filter-
+picker all still work, hero-number font confirmed as Rubik via
+computed style.
+
 ## 🟢 Resolved 2026-09-24 (round 2) — full rebuild of the transactions-tab display, not just the filter bar
 After shipping the filter-pill fix below, the user clarified further:
 the "מזעזע, דורש שינוי מאסיבי" complaint was about the **whole
