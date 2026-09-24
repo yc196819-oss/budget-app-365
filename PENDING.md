@@ -2,6 +2,40 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 11) — stat cards on Installments tab were dead, not clickable
+User: clicking "רכישות פעילות" (active purchases count) on the
+Installments tab expected a popup with those purchases; nothing
+happened. Cause: the three stat cards there (`חיוב החודש`, `יתרה
+פתוחה`, `רכישות פעילות`) were plain non-interactive `<div class="card">`
+— no `onclick` at all, just numbers. The full installment list *was*
+already visible lower on the same page, but mixes active and
+fully-paid purchases together, so the stat card couldn't give a
+focused view even by scrolling.
+
+Made all three clickable (`.card.clickable`, cursor+hover added — a
+new modifier, not applied to `.card` globally since most stat cards
+elsewhere in the app aren't meant to be clickable):
+- "רכישות פעילות" / "יתרה פתוחה" both open
+  `openActiveInstallmentsModal()` — a modal listing only the
+  not-yet-fully-paid installments, each with its per-payment amount,
+  progress bar, and remaining balance, plus the combined open total in
+  the header. Both cards open the same modal since open balance is
+  just the sum across that same active set.
+- "חיוב החודש" opens `openThisMonthInstallmentsModal()` — which
+  purchases actually have a payment landing in the currently-viewed
+  month specifically, and how much each contributes, summing to the
+  number on the card.
+- New shared `instCardHtml()` helper for these read-only modal cards.
+  Deliberately **not** reused by `renderInstallments()`'s own list,
+  which needs the editable category picker (`instCategoryCell()`) —
+  these two card renderers now look almost identical but serve
+  different purposes (one editable, one a read-only peek), so keeping
+  them separate was a deliberate choice, not missed duplication.
+
+Verified via headless Chrome: both cards open with the right filtered
+set (2 active purchases, 1 due this month, amounts matching the stat
+card numbers exactly), zero console errors.
+
 ## 🟢 Resolved 2026-09-24 (round 10) — same "always-visible form" pattern fixed across Loans/Installments/Investments/Accounts
 
 Did a full pass over every tab (not just Transactions) at the user's

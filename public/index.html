@@ -158,6 +158,8 @@ nav button.active::before{content:"";position:absolute;right:-12px;top:8px;botto
 .cards{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
 .card{position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);transition:transform .18s cubic-bezier(.2,.8,.3,1),box-shadow .18s ease;animation:cardIn .35s cubic-bezier(.2,.8,.3,1) backwards}
 .card::before{content:"";position:absolute;top:0;right:0;left:0;height:3px;background:var(--grad-hero);opacity:.85}
+.card.clickable{cursor:pointer}
+.card.clickable:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.25)}
 .card:hover{transform:translateY(-3px);box-shadow:var(--glow-accent),var(--shadow)}
 @keyframes cardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .card .label{color:var(--muted);font-size:.75rem;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
@@ -716,9 +718,9 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
 
   <section id="tab-installments" class="hidden">
     <div class="grid cards">
-      <div class="card"><div class="label">חיוב החודש</div><div class="value neg" id="iThisMonth">₪0</div></div>
-      <div class="card"><div class="label">יתרה פתוחה</div><div class="value neu" id="iOpen">₪0</div></div>
-      <div class="card"><div class="label">רכישות פעילות</div><div class="value" id="iCount">0</div></div>
+      <div class="card clickable" onclick="openThisMonthInstallmentsModal()"><div class="label">חיוב החודש</div><div class="value neg" id="iThisMonth">₪0</div></div>
+      <div class="card clickable" onclick="openActiveInstallmentsModal()"><div class="label">יתרה פתוחה</div><div class="value neu" id="iOpen">₪0</div></div>
+      <div class="card clickable" onclick="openActiveInstallmentsModal()"><div class="label">רכישות פעילות</div><div class="value" id="iCount">0</div></div>
     </div>
     <div class="panel">
       <h2 data-i18n="nav.installments">רכישות בתשלומים</h2>
@@ -4415,6 +4417,56 @@ function renderLoans(){
   box.innerHTML=html;
 }
 
+// כרטיס סטטיסטיקה לחיץ שמראה בחלון קופץ בדיוק את הרכישות שמרכיבות את
+// המספר — כדי שלא יהיה צריך לגלול ולסנן ידנית ברשימה המלאה למטה
+// (שמערבבת רכישות פעילות עם רכישות ששולמו במלואן).
+function instCardHtml(p){
+  const c=DB.categories.find(x=>x.id===p.category_id);
+  const color=catColor(p.category_id);
+  const n=p.payments_count||p.count;const paid=instPaid(p);const rem=n-paid;const pct=Math.min(100,paid/n*100);
+  return '<div class="tx-card">'
+    +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">🧾</div>'
+    +'<div class="tx-mid"><div class="tx-desc">'+esc(p.description)+'</div>'
+    +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(c?(c.icon||'')+' '+esc(c.name):'ללא קטגוריה')+'</span>'
+    +'<span class="tx-pmtag">'+paid+'/'+n+' תשלומים</span></div>'
+    +'<div class="bar" style="margin-top:6px"><span style="width:'+pct+'%"></span></div></div>'
+    +'<div class="tx-amt neg">'+fmt(+p.total_amount/n)+'<div class="muted" style="font-size:.68rem;font-weight:600;margin-top:2px">'+(rem>0?'נותר '+fmt(rem*(+p.total_amount/n)):'שולם ✅')+'</div></div>'
+    +'</div>';
+}
+window.openActiveInstallmentsModal=()=>{
+  const items=DB.installments.filter(p=>{const n=p.payments_count||p.count;return n-instPaid(p)>0;});
+  const total=items.reduce((s,p)=>{const n=p.payments_count||p.count;return s+(n-instPaid(p))*(+p.total_amount/n);},0);
+  const cards=items.length?items.map(instCardHtml).join(''):'<p class="empty">אין רכישות פעילות בתשלומים</p>';
+  const html='<h3 style="margin:0 0 4px">🧾 רכישות פעילות בתשלומים</h3>'
+    +'<p class="muted" style="margin:0 0 14px">'+items.length+' רכישות · יתרה פתוחה כוללת '+fmt(total)+'</p>'
+    +'<div style="max-height:60vh;overflow-y:auto;margin:0 -4px;padding:0 4px">'+cards+'</div>'
+    +'<div class="row" style="margin-top:16px;justify-content:flex-end"><button type="button" class="btn" id="instActiveClose">סגירה</button></div>';
+  const {ov,close}=UI._open(html,{large:true});
+  ov.querySelector('#instActiveClose').onclick=close;
+};
+window.openThisMonthInstallmentsModal=()=>{
+  const items=DB.installments.filter(p=>instMo(p,VY,VM)>0);
+  const total=items.reduce((s,p)=>s+instMo(p,VY,VM),0);
+  const cards=items.length?items.map(p=>{
+    const c=DB.categories.find(x=>x.id===p.category_id);
+    const color=catColor(p.category_id);
+    const n=p.payments_count||p.count;
+    const idx=instIndexFor(p,VY,VM);
+    return '<div class="tx-card">'
+      +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">🧾</div>'
+      +'<div class="tx-mid"><div class="tx-desc">'+esc(p.description)+'</div>'
+      +'<div class="tx-meta"><span class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'">'+(c?(c.icon||'')+' '+esc(c.name):'ללא קטגוריה')+'</span>'
+      +'<span class="tx-pmtag">תשלום '+idx+' מתוך '+n+'</span></div></div>'
+      +'<div class="tx-amt neg">'+fmt(instMo(p,VY,VM))+'</div>'
+      +'</div>';
+  }).join(''):'<p class="empty">אין חיובי תשלומים החודש</p>';
+  const html='<h3 style="margin:0 0 4px">📅 חיוב תשלומים — '+MONTHS[VM]+' '+VY+'</h3>'
+    +'<p class="muted" style="margin:0 0 14px">'+items.length+' רכישות · סה"כ '+fmt(total)+'</p>'
+    +'<div style="max-height:60vh;overflow-y:auto;margin:0 -4px;padding:0 4px">'+cards+'</div>'
+    +'<div class="row" style="margin-top:16px;justify-content:flex-end"><button type="button" class="btn" id="instMonthClose">סגירה</button></div>';
+  const {ov,close}=UI._open(html,{large:true});
+  ov.querySelector('#instMonthClose').onclick=close;
+};
 function renderInstallments(){
   const y=VY,m=VM;const tmo=DB.installments.reduce((s,p)=>s+instMo(p,y,m),0);
   let open=0,active=0;
