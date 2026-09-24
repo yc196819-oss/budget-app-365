@@ -427,7 +427,7 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
     <div class="auth-logo">🔒</div>
     <h1>נעול</h1>
     <p class="sub">הזן קוד לפתיחה</p>
-    <input id="lockPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••" style="text-align:center;font-size:1.6rem;letter-spacing:.3em" onkeydown="if(event.key==='Enter')submitPinUnlock()">
+    <input id="lockPinInput" type="password" autocomplete="new-password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••" style="text-align:center;font-size:1.6rem;letter-spacing:.3em" onkeydown="if(event.key==='Enter')submitPinUnlock()">
     <button class="auth-btn" onclick="submitPinUnlock()">פתיחה</button>
     <button class="btn sec hidden" id="bioUnlockBtn" style="width:100%;margin-top:10px" onclick="tryBioUnlock()">🔓 טביעת אצבע / פנים</button>
     <p class="auth-err hidden" id="lockErr"></p>
@@ -1064,6 +1064,11 @@ const $=s=>document.querySelector(s);
 // stored in localStorage per-device, so this only guards a shared phone's
 // lock screen from casual glances, not a determined attacker with device access.
 const PIN_SALT_KEY='appPinSalt_v1', PIN_HASH_KEY='appPinHash_v1';
+// זמן חסד אחרי פתיחה מוצלחת — מכשיר נייד יכול להשעות/לרענן PWA ברקע תוך
+// דקה-שתיים (נעילת מסך, החלפת אפליקציות), ובלי זה המשתמש נתקל בנעילה
+// שוב כל פעם שחוזר, למרות שהוא בקושי עזב. לחיצה מפורשת על "נעילה עכשיו"
+// עדיין נועלת מיד, בלי קשר לזמן החסד.
+const LOCK_GRACE_KEY='appLastUnlockAt_v1', LOCK_GRACE_MS=5*60*1000;
 let appUnlockedThisSession=false;
 async function sha256Hex(str){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
@@ -1126,12 +1131,14 @@ window.tryBioUnlock=async()=>{
   }catch(_err){/* user cancelled or verification failed — stay locked */}
 };
 function showLockScreen(){
+  const inp=$('#lockPinInput');if(inp)inp.value=''; // לא להשאיר ספרות ישנות/autofill מהדפדפן
   $('#lockScreen')?.classList.remove('hidden');
   $('#bioUnlockBtn')?.classList.toggle('hidden',!hasBioCred());
   setTimeout(()=>$('#lockPinInput')?.focus(),50);
 }
 function hideLockScreen(){
   appUnlockedThisSession=true;
+  localStorage.setItem(LOCK_GRACE_KEY,String(Date.now()));
   $('#lockScreen')?.classList.add('hidden');
 }
 window.submitPinUnlock=async()=>{
@@ -1176,11 +1183,23 @@ window.deactivateAppPin=async()=>{
   removeAppPin();
   refreshPinPanel();
 };
-if(hasAppPin())showLockScreen();
+if(hasAppPin()){
+  const lastUnlock=Number(localStorage.getItem(LOCK_GRACE_KEY)||0);
+  if(Date.now()-lastUnlock<LOCK_GRACE_MS)appUnlockedThisSession=true;
+  else showLockScreen();
+}
 
 if('serviceWorker' in navigator){
   const hadControllerAtLoad=!!navigator.serviceWorker.controller;
-  window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('/sw.js').then(reg=>{
+      // בדיקת גרסה חדשה יזומה בכל פעם שחוזרים לאפליקציה (לא מחכים לבדיקה
+      // האוטומטית והאיטית של הדפדפן) — כדי שגרסה חדשה תתגלה מהר, במיוחד
+      // ב-PWA מותקן שנשאר "פתוח" ברקע ימים בלי לגלוש אליו מחדש.
+      document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{});});
+      window.addEventListener('focus',()=>reg.update().catch(()=>{}));
+    }).catch(()=>{});
+  });
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
     if(!hadControllerAtLoad)return; // first-ever install claiming control, not a real update
     showUpdateBanner();
@@ -3852,6 +3871,30 @@ window.openCategoryPeekModal=(cid)=>{
   const rows=monthRows(VY,VM,'all').filter(t=>t.type==='expense'&&(t.category_id||'')===cid).sort((a,b)=>(b.tx_date||'').localeCompare(a.tx_date||''));
   const total=rows.reduce((s,t)=>s+ +t.amount,0);
   const cards=rows.length?rows.map(txCardHtml).join(''):'<p class="empty">אין תנועות בקטגוריה זו החודש</p>';
+  const pillStyle=(active,pc)=>active
+    ?('background:'+pc+';color:#0c0e15;border-color:'+pc)
+    :('background:'+hexA(pc,.13)+';color:'+pc+';border-color:'+hexA(pc,.32));
+
+  // דוח רב-שנתי — "כמה הוצאתי על רכב בשנת 2026, או 2026+2025 ביחד" —
+  // מזהה את כל השנים שיש בהן נתונים לקטגוריה הזו, ונותן לסמן/לבטל סימון
+  // כדי לראות סה"כ לשנה בודדת או לצירוף שנים לפי בחירה.
+  const txYears=new Set();
+  DB.transactions.forEach(t=>{const d=parseLocalDate(t.tx_date||t.date);if(!isNaN(d))txYears.add(d.getFullYear());});
+  DB.installments.forEach(p=>{const d=parseLocalDate(p.first_payment||p.first);if(!isNaN(d)){const n=p.payments_count||p.count||1;for(let i=0;i<n;i++)txYears.add(d.getFullYear()+Math.floor((d.getMonth()+i)/12));}});
+  const yearTotalsMap={};
+  [...txYears].forEach(y=>{
+    let s=0;
+    for(let m=0;m<12;m++)s+=monthRows(y,m,'all').filter(t=>t.type==='expense'&&(t.category_id||'')===cid).reduce((a,t)=>a+ +t.amount,0);
+    if(s>0)yearTotalsMap[y]=s;
+  });
+  const yearsWithData=Object.keys(yearTotalsMap).map(Number).sort((a,b)=>b-a);
+  let yearHtml='';
+  if(yearsWithData.length>1){
+    yearHtml='<div style="margin-bottom:20px"><div class="muted" style="margin-bottom:8px;font-weight:700">דוח רב-שנתי — סמנו שנים להשוואה או לסכימה</div>'
+      +'<div class="filter-grid" id="peekYearGrid">'+yearsWithData.map(y=>'<button type="button" class="pill on" data-y="'+y+'" style="'+pillStyle(true,color)+'">'+y+' · '+fmt(yearTotalsMap[y])+'</button>').join('')+'</div>'
+      +'<div style="margin-top:10px;font-weight:800" id="peekYearTotal">סה"כ לשנים המסומנות: '+fmt(yearsWithData.reduce((s,y)=>s+yearTotalsMap[y],0))+'</div>'
+      +'</div>';
+  }
 
   // השוואה בין תתי-הקטגוריות (לדוגמה: אילו רשתות סופרמרקט) — על פני כל
   // השנה הנצפית, לא רק החודש, כי "איפה אני קונה הכי הרבה" היא שאלה של
@@ -3882,8 +3925,9 @@ window.openCategoryPeekModal=(cid)=>{
     +'<div style="font-weight:800;font-size:1.35rem;white-space:nowrap">'+fmt(total)+'</div>'
     +'</div>'
     +'<p class="muted" style="margin:0 0 14px">'+rows.length+' תנועות · '+MONTHS[VM]+' '+VY+'</p>'
+    +yearHtml
     +compareHtml
-    +(compareHtml?'<div class="muted" style="margin-bottom:8px;font-weight:700">תנועות '+MONTHS[VM]+'</div>':'')
+    +((yearHtml||compareHtml)?'<div class="muted" style="margin-bottom:8px;font-weight:700">תנועות '+MONTHS[VM]+'</div>':'')
     +'<div id="catPeekBody" style="max-height:52vh;overflow-y:auto;margin:0 -4px;padding:0 4px">'+cards+'</div>'
     +'<div class="row" style="margin-top:16px;justify-content:flex-end;flex-wrap:wrap">'
       +'<button type="button" class="btn sec" id="catPeekFilterBtn">🔍 הצג רק את זה ברשימה למטה</button>'
@@ -3892,6 +3936,13 @@ window.openCategoryPeekModal=(cid)=>{
   const {ov,close}=UI._open(html,{large:true});
   ov.querySelector('#catPeekClose').onclick=close;
   ov.querySelector('#catPeekFilterBtn').onclick=()=>{exFilter=cid;close();renderExpenses();};
+  ov.querySelectorAll('#peekYearGrid .pill').forEach(b=>b.onclick=()=>{
+    b.classList.toggle('on');
+    b.style.cssText=pillStyle(b.classList.contains('on'),color);
+    const activeYears=Array.from(ov.querySelectorAll('#peekYearGrid .pill.on')).map(x=>+x.dataset.y);
+    const sum=activeYears.reduce((s,y)=>s+(yearTotalsMap[y]||0),0);
+    ov.querySelector('#peekYearTotal').textContent='סה"כ לשנים המסומנות: '+fmt(sum);
+  });
 };
 function renderExpenses(){
   const f=$('#exFilters');

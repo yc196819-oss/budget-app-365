@@ -2,6 +2,62 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 7) — app-lock friction, faster update detection, multi-year category report
+
+Three separate complaints in one message:
+
+**1. "Update banner not showing up"** — the deploy itself was live
+(re-verified via curl + a fresh headless load, zero errors), but a PWA
+that stays "open" in the background can go a long time before the
+browser's own throttled service-worker update check fires, so the
+"🔄 New version available" banner might not appear promptly. Added an
+active `registration.update()` call on `visibilitychange`→visible and
+on `window focus`, so returning to the app checks for a new version
+immediately instead of waiting on the browser's own schedule. This
+doesn't change the *first* time a fix ships, but should make "I don't
+see it" much rarer going forward — his fix was already live regardless.
+
+**2. App-lock (PIN) popping up "every minute" and pre-filled with
+stale digits.** Two real, separate bugs:
+- `showLockScreen()` never cleared `#lockPinInput`'s value, and the
+  input had no `autocomplete` attribute, so the browser's own
+  password-autofill (or simply a never-cleared DOM value across
+  show/hide cycles) left old digits sitting there — fixed by clearing
+  the field on every show and setting `autocomplete="new-password"`
+  to stop the browser from offering saved values.
+- No grace period existed: any fresh page load/resume with an active
+  PIN re-locked immediately, and mobile PWAs get suspended/reloaded by
+  the OS far more often than a user actually "leaves" the app (screen
+  auto-lock, app-switching, memory pressure) — which reads as "pops up
+  every minute" even though the user barely stepped away. Added a
+  5-minute grace period keyed off the last successful unlock
+  (`appLastUnlockAt_v1` in localStorage): a resume within 5 minutes of
+  the last unlock skips the lock screen entirely; the explicit
+  "נעילה עכשיו" button still locks immediately regardless, since
+  that's a deliberate action.
+
+**3. "No way to see a report of car expenses for 2026, or 2026+2025."**
+Added a multi-year report section to the category peek modal
+(`openCategoryPeekModal`, from round 3): detects every year with data
+for that category (scanning transactions + installments), shows each
+year as a toggleable pill with its own total, and a running combined
+total for whichever years are checked — defaults to all years
+selected. Sits above the existing per-store comparison and the
+transaction list, in the same modal reached by tapping a category.
+
+**4. Also asked**: rough monthly AI-credit cost for one user's normal
+usage — answered directly in conversation (not a code change); no
+pricing/cost data lives in this repo to record as a fact.
+
+Verified via headless Chrome: PIN-lock cycle (set → locked on fresh
+load → unlock clears grace → reload within grace stays unlocked →
+grace expiry re-locks → input always empty on every show, including
+after a wrong attempt) all behave correctly; multi-year report tested
+by seeding a transaction in a prior year and confirming the modal
+shows both years with correct individual and combined totals, and
+that toggling a year off recalculates the sum. Zero console errors.
+Test data cleaned up from the demo household afterward.
+
 ## 🟢 Resolved 2026-09-24 (round 6) — vendor/store comparison ("which supermarket do I spend the most at")
 User asked why there was no way to compare which supermarkets he
 buys from most. Added this in two places:
