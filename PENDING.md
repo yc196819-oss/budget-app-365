@@ -2,6 +2,56 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 12) — Dashboard rebuilt: point #2 from the audit list
+
+User asked for the next real, structural change. Went for the
+Dashboard next — the first screen every user sees, and it had the
+exact same problem already fixed elsewhere: five panels stacked in one
+long scroll (5-6 stat cards, then a whole "בקרת תזרים" cash-flow
+section with per-bank-account balance inputs and card-by-card billing
+breakdown, then a budget-progress panel, then a donut chart, then a
+fixed-vs-variable bar) — roughly a 4900px-tall page before any of it
+was actually digested.
+
+Cut it down to **6 stat cards + one small panel**:
+- מאזן החודש / הכנסות החודש / הוצאות החודש / שווי השקעות — unchanged,
+  still always-visible glance numbers.
+- **💳 באמת פנוי להוצאה** and **💰 תקציב חודשי** are now `.card
+  clickable` summaries — a single number/status ("✅ תקין" / "⚠️ 2
+  בחריגה") — tapping either opens the full detail in a modal:
+  `openCashFlowModal()` (the entire old cash-flow panel, balance
+  inputs and all — `computeFlow()`/`recalcFlowSafe()` needed zero
+  logic changes since they already guarded on the container existing)
+  and `openBudgetModal()` (reuses `renderBudgetProgress()` unchanged,
+  same guard trick).
+- Added `computeFlowSafeTotal()` and `computeBudgetSummary()` — pure,
+  DOM-independent versions of the same math, used only to keep the two
+  compact chips current on every render without needing the modal
+  open.
+- **Removed the "פילוח הוצאות" donut chart entirely** — it's now
+  redundant with the Transactions tab's category-card grid (round 8),
+  which shows the same this-month category breakdown better. Removed
+  its now-dead-code renderer (`drawPie()`) too, since nothing else
+  called it.
+- "תשלומים החודש" stat dropped from the dashboard — same reasoning:
+  already one tap away via the Installments tab's own (now-clickable,
+  round 11) stat cards.
+- Kept "שוטף מול קבוע" as the one remaining panel — genuinely
+  different info, not duplicated anywhere else, already compact.
+
+Verified via headless Chrome: fresh boot zero errors, exactly 6 cards
+render on the dashboard, both modals open with full correct content,
+editing a bank balance inside the cash-flow modal recalculates
+correctly AND the compact dashboard chip updates to match after
+closing (₪3,373 → ₪1,627 matched on both), budget modal shows all 3
+budgeted categories' progress bars correctly.
+
+**Audit list status**: #1 (forms) done, #2 (dashboard) done. Still
+open: #3 (planning tab overload), #4 (cramped mobile cards in
+loans/investments), #5 (destructive settings actions need visual
+separation), #6 (12-tab flat navigation, flagged for a separate
+conversation before touching).
+
 ## 🟢 Resolved 2026-09-24 (round 11) — stat cards on Installments tab were dead, not clickable
 User: clicking "רכישות פעילות" (active purchases count) on the
 Installments tab expected a popup with those purchases; nothing

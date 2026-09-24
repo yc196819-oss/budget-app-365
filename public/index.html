@@ -545,24 +545,13 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
       </div>
     </div>
     <div class="grid cards">
+      <div class="card"><div class="label">מאזן החודש</div><div class="value neu" id="kBalance">₪0</div><span class="trend flat" id="kBalanceTrend"></span></div>
       <div class="card"><div class="label">הכנסות החודש</div><div class="value pos" id="kIncome">₪0</div><span class="trend flat" id="kIncomeTrend"></span></div>
       <div class="card"><div class="label">הוצאות החודש</div><div class="value neg" id="kExpense">₪0</div><span class="trend flat" id="kExpenseTrend"></span></div>
-      <div class="card"><div class="label">מאזן החודש</div><div class="value neu" id="kBalance">₪0</div><span class="trend flat" id="kBalanceTrend"></span></div>
-      <div class="card"><div class="label">תשלומים החודש</div><div class="value" id="kInst">₪0</div></div>
+      <div class="card clickable" onclick="openCashFlowModal()"><div class="label">💳 באמת פנוי להוצאה</div><div class="value" id="dashFlowSafeChip">₪0</div></div>
+      <div class="card clickable" onclick="openBudgetModal()"><div class="label">💰 תקציב חודשי</div><div class="value" id="dashBudgetChip">—</div></div>
       <div class="card"><div class="label">שווי השקעות</div><div class="value pos" id="kInv">₪0</div></div>
     </div>
-    <div class="panel" id="flowPanel" style="border:1px solid var(--accent)">
-      <h2 data-i18n="dash.flow.title">💳 בקרת תזרים ואשראי — כמה באמת פנוי לי?</h2>
-      <p class="muted" style="margin-bottom:12px">לכל חשבון יש יום חיוב משלו, לפי הכרטיסים המשויכים אליו. הזן את היתרה הנוכחית בכל חשבון.</p>
-      <div id="flowAccounts"></div>
-      <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:14px">
-        <div class="card" style="background:var(--surface2)"><div class="label">סה"כ חיוב אשראי צפוי</div><div class="value neg" id="flowBilling">₪0</div><div class="muted" id="flowBillingNote" style="font-size:.72rem;margin-top:4px"></div></div>
-        <div class="card" style="background:var(--surface2)"><div class="label">סה"כ יתרות שהוזנו</div><div class="value neu" id="flowOs">₪0</div></div>
-        <div class="card" id="flowSafeCard" style="background:linear-gradient(135deg,rgba(34,226,168,.12),rgba(124,108,255,.08));border:1px solid var(--accent2)"><div class="label">💰 באמת פנוי להוצאה (סה"כ)</div><div class="value pos" id="flowSafe" style="font-size:1.9rem">₪0</div><div class="muted" id="flowSafeNote" style="font-size:.72rem;margin-top:4px"></div></div>
-      </div>
-    </div>
-    <div class="panel hidden" id="budgetProgressPanel"><h2 data-i18n="dash.budget.title">💰 תקציב חודשי</h2><div id="budgetProgress"></div></div>
-    <div class="panel"><h2><span data-i18n="dash.breakdown.title">פילוח הוצאות</span> <span class="muted" id="dashPeriod"></span></h2><div class="chart-box pie-box"><canvas id="dashPie"></canvas></div><div class="chart-legend" id="dashPieLegend"></div></div>
     <div class="panel"><h2 data-i18n="dash.fixedvar.title">שוטף מול קבוע</h2><div id="fixedVar"></div></div>
   </section>
 
@@ -3138,7 +3127,79 @@ let _flowBillingByAccount={};
 function onAccountBalanceChange(accId,val){
   localStorage.setItem('acctBal_'+accId,val);
   recalcFlowSafe();
+  updateDashFlowChip();
 }
+// גרסה קלה של computeFlow שלא תלויה ב-DOM של הפאנל (שעבר לחלון קופץ) —
+// לחישוב מספר בלבד עבור כרטיס הסיכום הקבוע בדשבורד.
+function computeFlowSafeTotal(){
+  const accounts=DB.bankAccounts||[];
+  if(!accounts.length)return null;
+  let totalBilling=DB.installments.reduce((s,p)=>s+instMo(p,VY,VM),0),totalBalance=0;
+  accounts.forEach(acc=>{
+    const cards=(DB.creditCards||[]).filter(c=>c.bank_account_id===acc.id);
+    const bal=parseFloat(localStorage.getItem('acctBal_'+acc.id))||0;
+    cards.forEach(c=>{
+      totalBilling+=DB.transactions.filter(t=>t.type==='expense'&&t.card_id===c.id).reduce((s,t)=>{
+        const eff=txEffectiveMonth(t);
+        return s+(eff.y===VY&&eff.m===VM?+t.amount:0);
+      },0);
+    });
+    totalBalance+=bal;
+  });
+  return totalBalance-totalBilling;
+}
+function updateDashFlowChip(){
+  const chip=$('#dashFlowSafeChip');if(!chip)return;
+  const safe=computeFlowSafeTotal();
+  if(safe===null){chip.textContent='הגדר חשבון';chip.className='value neu';return;}
+  chip.textContent=fmt(safe);chip.className='value '+(safe>=0?'pos':'neg');
+}
+function computeBudgetSummary(){
+  if(!DB.categoryBudgets.length)return null;
+  const exp=DB.transactions.filter(t=>t.type==='expense');
+  let overCount=0,nearCount=0;
+  DB.categoryBudgets.forEach(b=>{
+    const c=DB.categories.find(x=>x.id===b.category_id);if(!c)return;
+    let spent=exp.filter(t=>t.category_id===c.id).reduce((s,t)=>s+moAmt(t,VY,VM),0);
+    spent+=DB.installments.filter(p=>p.category_id===c.id).reduce((s,p)=>s+instMo(p,VY,VM),0);
+    const pct=b.monthly_amount?spent/b.monthly_amount*100:0;
+    if(pct>=100)overCount++;else if(pct>=70)nearCount++;
+  });
+  return{overCount,nearCount};
+}
+function updateDashBudgetChip(){
+  const chip=$('#dashBudgetChip');if(!chip)return;
+  const summary=computeBudgetSummary();
+  if(!summary){chip.textContent='לא הוגדר';chip.className='value neu';return;}
+  if(summary.overCount>0){chip.textContent='⚠️ '+summary.overCount+' בחריגה';chip.className='value neg';}
+  else if(summary.nearCount>0){chip.textContent='⚠️ '+summary.nearCount+' קרובות';chip.className='value';chip.style.color='var(--warn)';}
+  else{chip.textContent='✅ תקין';chip.className='value pos';}
+}
+window.openCashFlowModal=()=>{
+  const html='<h3 style="margin:0 0 4px">💳 בקרת תזרים ואשראי — כמה באמת פנוי לי?</h3>'
+    +'<p class="muted" style="margin:0 0 12px">לכל חשבון יש יום חיוב משלו, לפי הכרטיסים המשויכים אליו. הזן את היתרה הנוכחית בכל חשבון.</p>'
+    +'<div id="flowAccounts"></div>'
+    +'<div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:14px">'
+      +'<div class="card" style="background:var(--surface2)"><div class="label">סה"כ חיוב אשראי צפוי</div><div class="value neg" id="flowBilling">₪0</div><div class="muted" id="flowBillingNote" style="font-size:.72rem;margin-top:4px"></div></div>'
+      +'<div class="card" style="background:var(--surface2)"><div class="label">סה"כ יתרות שהוזנו</div><div class="value neu" id="flowOs">₪0</div></div>'
+      +'<div class="card" id="flowSafeCard" style="background:linear-gradient(135deg,rgba(34,226,168,.12),rgba(124,108,255,.08));border:1px solid var(--accent2)"><div class="label">💰 באמת פנוי להוצאה (סה"כ)</div><div class="value pos" id="flowSafe" style="font-size:1.9rem">₪0</div><div class="muted" id="flowSafeNote" style="font-size:.72rem;margin-top:4px"></div></div>'
+    +'</div>'
+    +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button type="button" class="btn" id="flowModalClose">סגירה</button></div>';
+  const {ov,close}=UI._open(html,{large:true});
+  ov.querySelector('#flowModalClose').onclick=()=>{close();updateDashFlowChip();};
+  computeFlow();
+};
+window.openBudgetModal=()=>{
+  const hasBudgets=DB.categoryBudgets.length>0;
+  const html='<h3 style="margin:0 0 4px">💰 תקציב חודשי — '+MONTHS[VM]+' '+VY+'</h3>'
+    +(hasBudgets
+      ?'<div id="budgetProgressPanel"><div id="budgetProgress" style="margin-top:12px"></div></div>'
+      :'<p class="muted" style="margin:14px 0">עדיין לא הוגדר תקציב לאף קטגוריה. אפשר להגדיר תקציב חודשי לכל קטגוריית הוצאה בטאב "קטגוריות".</p>')
+    +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button type="button" class="btn" id="budgetModalClose">סגירה</button></div>';
+  const {ov,close}=UI._open(html,{large:true});
+  ov.querySelector('#budgetModalClose').onclick=close;
+  if(hasBudgets)renderBudgetProgress();
+};
 function computeFlow(){
   const box=$('#flowAccounts'); if(!box)return;
   const accounts=DB.bankAccounts||[];
@@ -3253,7 +3314,6 @@ function render(){
   const mInc=inc.reduce((s,t)=>s+moAmt(t,y,m),0),mExp=exp.reduce((s,t)=>s+moAmt(t,y,m),0)+instMoT,bal=mInc-mExp;
   $('#kIncome').textContent=fmt(mInc);$('#kExpense').textContent=fmt(mExp);
   $('#kBalance').textContent=fmt(bal);$('#kBalance').className='value '+(bal>=0?'pos':'neg');
-  $('#kInst').textContent=fmt(instMoT);
 
   let pm=m-1,py=y;if(pm<0){pm=11;py=y-1;}
   const pInc=inc.reduce((s,t)=>s+moAmt(t,py,pm),0);
@@ -3263,11 +3323,6 @@ function render(){
   renderTrend('kExpenseTrend',mExp,pExp,true);
   renderTrend('kBalanceTrend',bal,pInc-pExp,false);
   $('#kInv').textContent=fmt(DB.investments.reduce((s,i)=>s+(+i.current_value),0));
-  $('#dashPeriod').textContent='— '+MONTHS[m]+' '+y;
-
-  // dash pie
-  const ctots=rootCats('expense').map(c=>{let t=exp.filter(x=>x.category_id===c.id).reduce((s,x)=>s+moAmt(x,y,m),0);t+=DB.installments.filter(p=>p.category_id===c.id).reduce((s,p)=>s+instMo(p,y,m),0);return{c,t};}).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
-  drawPie('dashPie',ctots.map(x=>x.c.name),ctots.map(x=>x.t));
 
   const fix=exp.filter(t=>t.nature==='fixed').reduce((s,t)=>s+moAmt(t,y,m),0);
   const vr=exp.filter(t=>t.nature==='variable').reduce((s,t)=>s+moAmt(t,y,m),0)+instMoT;
@@ -3277,34 +3332,12 @@ function render(){
   renderExpenses();renderCatSummary();renderCatManage();renderBudgetManage();renderBudgetProgress();renderLoans();renderInstallments();renderInvestments();renderGoals();
   renderAccounts();renderCreditCards();fillImportSourceSel();
   renderNextMonthCards(buildNextMonthProjection());
-  computeFlow();
+  computeFlow();updateDashFlowChip();updateDashBudgetChip();
   fillDelMonthSelectors&&fillDelMonthSelectors();
   if(typeof calcLoanPlan==='function' && $('#planResult'))calcLoanPlan();
 }
 
 function monthsElapsed(y){const now=new Date();return y===now.getFullYear()?now.getMonth()+1:12;}
-
-function drawPie(id,labels,vals){
-  if(charts[id])charts[id].destroy();
-  const el=document.getElementById(id);if(!el)return;
-  const legendEl=document.getElementById(id+'Legend');
-  if(!vals.length){
-    const ctx=el.getContext('2d');ctx.clearRect(0,0,el.width,el.height);
-    if(legendEl)legendEl.innerHTML='<p class="empty" style="padding:16px 0">אין נתונים להצגה</p>';
-    return;
-  }
-  const colors=labels.map((_,i)=>PALETTE[i%PALETTE.length]);
-  const total=vals.reduce((s,v)=>s+v,0);
-  charts[id]=new Chart(el,{type:'doughnut',data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:3,borderColor:cssVar('--surface'),hoverOffset:8,hoverBorderColor:cssVar('--surface')}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{backgroundColor:cssVar('--surface2'),borderColor:cssVar('--line2'),borderWidth:1,titleColor:cssVar('--text'),bodyColor:cssVar('--text'),padding:11,cornerRadius:10,titleFont:{family:'Rubik'},bodyFont:{family:'Rubik'},callbacks:{label:c=>c.label+': ₪'+Math.round(c.raw).toLocaleString('he-IL')+' ('+Math.round(c.raw/total*100)+'%)'}}}}});
-  if(legendEl){
-    legendEl.innerHTML=labels.map((l,i)=>'<button type="button" class="chart-legend-item" data-i="'+i+'" style="background:'+hexA(colors[i],.15)+';color:'+colors[i]+'"><span class="sw" style="background:'+colors[i]+';color:'+colors[i]+'"></span><span class="lbl">'+l+'</span><span class="val">'+fmt(vals[i])+'</span></button>').join('');
-    legendEl.querySelectorAll('.chart-legend-item').forEach(btn=>btn.onclick=()=>{
-      const i=+btn.dataset.i,ch=charts[id];
-      ch.toggleDataVisibility(i);ch.update();
-      btn.classList.toggle('off',!ch.getDataVisibility(i));
-    });
-  }
-}
 
 function renderCharts(){
   $('#chartYearLbl').textContent=VY;
