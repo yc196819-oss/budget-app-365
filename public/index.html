@@ -324,10 +324,6 @@ tr:last-child td{border-bottom:none}
 .subcat .icon-btn{width:24px;height:24px;font-size:.7rem}
 .filters{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
 .filtergroup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}
-.filter-row{display:flex;gap:7px;align-items:center;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
-.filter-row::-webkit-scrollbar{height:5px}
-.filter-row::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
-.filter-row::-webkit-scrollbar-track{background:transparent}
 .empty{text-align:center;color:var(--muted);padding:36px}
 .pill{font-size:.79rem;padding:6px 13px;border-radius:20px;background:var(--surface2);border:1px solid var(--line);cursor:pointer;color:var(--muted);font-weight:600;white-space:nowrap;flex-shrink:0;transition:transform .12s,filter .12s}
 .pill:hover{transform:translateY(-1px)}
@@ -335,6 +331,12 @@ tr:last-child td{border-bottom:none}
 .pill:hover{transform:translateY(-1px)}
 .pill.group{font-weight:800}
 .pill.all-pill{font-weight:800}
+.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.filter-trigger{display:inline-flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--line2)}
+.filter-trigger .fchev{font-size:.7em;opacity:.65}
+.filter-clear{background:transparent;border:1px dashed var(--line2);color:var(--muted)}
+.filter-grid{display:flex;flex-wrap:wrap;gap:9px}
+.filter-grid .pill{white-space:normal}
 .goalcard{background:var(--surface2);border:1px solid var(--line);border-radius:16px;padding:18px;cursor:pointer;transition:border-color .15s,transform .15s;position:relative}
 .goalcard:hover{border-color:var(--accent);transform:translateY(-2px)}
 .goalcard .meta{color:var(--muted);font-size:.82rem;margin-bottom:10px}
@@ -3646,8 +3648,14 @@ function txPmTag(t){
   return l?'<span class="tx-pmtag">'+l+'</span>':'';
 }
 
-function renderExpenses(){
-  const f=$('#exFilters');
+function exFilterLabel(){
+  if(exFilter==='all')return '📋 הכל';
+  if(exFilter==='__expense__')return '💸 כל ההוצאות';
+  if(exFilter==='__income__')return '💰 כל ההכנסות';
+  const c=[...rootCats('expense'),...rootCats('income')].find(x=>x.id===exFilter);
+  return c?(c.icon||'')+' '+esc(c.name):'📋 הכל';
+}
+window.openExFilterModal=()=>{
   const expRoots=rootCats('expense'),incRoots=rootCats('income');
   const pillStyle=(active,color)=>active
     ?('background:'+color+';color:#0c0e15;border-color:'+color)
@@ -3661,13 +3669,24 @@ function renderExpenses(){
     return '<button type="button" class="pill group'+(active?' on':'')+'" data-f="'+key+'" style="'+pillStyle(active,color)+'">'+label+'</button>';
   };
   const allActive=exFilter==='all';
-  f.innerHTML='<div class="filter-row">'
+  const html='<h3 style="margin:0 0 14px">סינון לפי קטגוריה</h3>'
+    +'<div class="filter-grid">'
     +'<button type="button" class="pill all-pill'+(allActive?' on':'')+'" data-f="all">📋 הכל</button>'
     +(expRoots.length?groupPill('__expense__','💸 כל ההוצאות','#ff6b6b'):'')
     +expRoots.map(pill).join('')
     +'</div>'
-    +(incRoots.length?'<div class="filter-row">'+groupPill('__income__','💰 כל ההכנסות','#52d6a4')+incRoots.map(pill).join('')+'</div>':'');
-  f.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{exFilter=p.dataset.f;renderExpenses();});
+    +(incRoots.length?'<div class="filter-grid" style="margin-top:12px">'+groupPill('__income__','💰 כל ההכנסות','#52d6a4')+incRoots.map(pill).join('')+'</div>':'');
+  const {ov,close}=UI._open(html);
+  ov.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{exFilter=p.dataset.f;close();renderExpenses();});
+};
+function renderExpenses(){
+  const f=$('#exFilters');
+  f.innerHTML='<div class="filter-bar">'
+    +'<button type="button" class="pill filter-trigger" id="exFilterBtn">'+exFilterLabel()+' <span class="fchev">▾</span></button>'
+    +(exFilter!=='all'?'<button type="button" class="pill filter-clear" id="exFilterClear">✕ נקה סינון</button>':'')
+    +'</div>';
+  $('#exFilterBtn').onclick=openExFilterModal;
+  if($('#exFilterClear'))$('#exFilterClear').onclick=()=>{exFilter='all';renderExpenses();};
 
   // תנועות רגילות — מסנן לפי חודש/שנה של תאריך הצריכה בפועל (תואם ל-moAmt,
   // לא לחודש החיוב בכרטיס — זה נשאר רק בכרטיס "בקרת תזרים").

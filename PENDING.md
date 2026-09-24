@@ -1,6 +1,32 @@
-# Pending items (updated 2026-09-23, end of session)
+# Pending items (updated 2026-09-24, end of session)
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
+
+## 🟢 Resolved 2026-09-24 — category filter pills on the transactions tab rebuilt (the real "מזעזע" complaint)
+User clarified after round 2 (below) that hiding manual-entry behind a
+modal was never the complaint — that part was fine. The actual pain
+point, called out twice, was the category **filter bar** above the
+transaction list: two rows of ~10-13 colorful pills in a horizontally
+scrolling strip with no scroll affordance, so on load it often showed
+content cut off mid-word at the edge and gave no indication there was
+more to scroll to ("אין שום דרך להסתכל על זה"). Confirmed visually via
+a mobile screenshot on production before touching anything.
+
+Replaced the two `.filter-row` pill strips in `renderExpenses()` with
+a single compact `[📋 הכל ▾]` trigger button (shows current filter,
+plus a `✕ נקה סינון` chip when a filter is active) that opens a modal
+(`openExFilterModal()`, reuses the existing `UI._open()` system) with
+every category — expense and income — laid out in a wrapping grid, no
+hidden overflow, nothing cut off. Removed the now-dead `.filter-row`
+CSS. The unrelated `#catFilters` pill bar on the Graphs tab uses a
+different container/pattern and was intentionally left untouched —
+verified still working after the change.
+
+Verified via headless Chrome (fresh boot zero errors, filter button
+renders, modal opens with all 8 expense + 7 income root categories
+visible with no scrolling needed, clicking a pill applies the filter
+and closes the modal, clear button resets to "הכל", desktop layout
+unaffected, Graphs-tab filters unaffected) before pushing.
 
 ## 🟢 Resolved 2026-09-23 — push notifications diagnosed, investments cleaned up, live market data added
 User: push notifications on phone don't work. Checked `push_subscriptions`
