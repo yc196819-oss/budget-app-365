@@ -756,32 +756,10 @@ button.tx-cattag:hover{filter:brightness(1.22);transform:translateY(-1px)}
       <div class="card"><div class="label">נחסך עד כה</div><div class="value pos" id="pSaved">₪0</div></div>
     </div>
     <div class="panel">
-      <h2 data-i18n="plan.addgoal.title">הוספת יעד / תכנון</h2>
-      <div class="row">
-        <select id="goalIcon"><option value="✈️">✈️ טיסה / טיול</option><option value="🏠">🏠 רכישת דירה</option><option value="📦">📦 מעבר דירה</option><option value="🚗">🚗 רכב</option><option value="🛋️">🛋️ רכישה גדולה</option><option value="🎓">🎓 חינוך</option><option value="🎯">🎯 כללי</option></select>
-        <input id="goalName" placeholder="שם היעד" style="flex:1;min-width:140px">
-        <input id="goalTarget" type="number" placeholder="סכום יעד ₪" style="width:125px">
-        <input id="goalSaved" type="number" placeholder="כבר נחסך ₪" style="width:125px">
-        <input id="goalDate" type="date">
-        <button class="btn" onclick="addGoal()" data-i18n="action.add">הוסף</button>
-      </div>
-    </div>
-    <div class="panel"><h2 data-i18n="plan.mygoals.title">היעדים שלי</h2><div id="goalGrid" class="goalgrid"></div></div>
-
-    <div class="panel" style="border:1px solid var(--accent)">
-      <h2 data-i18n="plan.bigloan.title">🚗 מתכנן הלוואות ורכישות גדולות</h2>
-      <p class="muted" style="margin-bottom:14px">הזן את פרטי ההלוואה או הרכישה המתוכננת. המערכת תחשב תשלום חודשי בכל תרחיש ריבית ותשווה לתזרים הפנוי שלך.</p>
-      <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
-        <div style="flex:1;min-width:150px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">שם התכנון</label><input id="planName" placeholder="למשל: רכב חדש" style="width:100%"></div>
-        <div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">סכום ההלוואה (₪)</label><input id="planAmount" type="number" placeholder="120000" oninput="calcLoanPlan()" style="width:100%"></div>
-        <div style="flex:1;min-width:120px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">מספר חודשים</label><input id="planMonths" type="number" placeholder="60" value="60" oninput="calcLoanPlan()" style="width:100%"></div>
-      </div>
-      <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
-        <div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">ריבית פריים נוכחית (%)</label><input id="planPrime" type="number" step="0.01" value="6" oninput="calcLoanPlan()" style="width:100%"></div>
-        <div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">תוספת/מרווח מעל פריים (%)</label><input id="planSpread" type="number" step="0.01" value="1.5" oninput="calcLoanPlan()" style="width:100%"></div>
-        <div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">הון עצמי / מקדמה (₪)</label><input id="planDown" type="number" placeholder="0" value="0" oninput="calcLoanPlan()" style="width:100%"></div>
-      </div>
-      <div id="planResult"></div>
+      <h2 data-i18n="plan.mygoals.title">היעדים שלי</h2>
+      <button type="button" class="link-btn" onclick="openAddGoalModal()" style="margin-bottom:14px;font-size:.82rem">+ הוספת יעד</button>
+      <button type="button" class="link-btn" onclick="openLoanPlannerModal()" style="margin-bottom:14px;margin-inline-start:16px;font-size:.82rem">🚗 מתכנן הלוואות ורכישות גדולות</button>
+      <div id="goalGrid" class="goalgrid"></div>
     </div>
   </section>
 
@@ -1772,6 +1750,39 @@ window.openAddInvModal=()=>{
   ov.querySelector('#invModalCancel').onclick=close;
   ov.querySelector('#invModalSubmit').onclick=async()=>{if(await addInv())close();};
 };
+window.openAddGoalModal=()=>{
+  const html='<h3>הוספת יעד</h3>'
+    +'<div class="ex-form-modal-grid">'
+      +'<select id="goalIcon"><option value="✈️">✈️ טיסה / טיול</option><option value="🏠">🏠 רכישת דירה</option><option value="📦">📦 מעבר דירה</option><option value="🚗">🚗 רכב</option><option value="🛋️">🛋️ רכישה גדולה</option><option value="🎓">🎓 חינוך</option><option value="🎯">🎯 כללי</option></select>'
+      +'<input id="goalName" placeholder="שם היעד">'
+      +'<input id="goalTarget" type="number" placeholder="סכום יעד ₪">'
+      +'<input id="goalSaved" type="number" placeholder="כבר נחסך ₪">'
+      +'<input id="goalDate" type="date">'
+    +'</div>'
+    +'<div class="row" style="margin-top:20px;justify-content:flex-end"><button class="btn sec" id="goalModalCancel">ביטול</button><button class="btn" id="goalModalSubmit">הוסף</button></div>';
+  const {ov,close}=UI._open(html);
+  ov.querySelector('#goalModalCancel').onclick=close;
+  ov.querySelector('#goalModalSubmit').onclick=async()=>{if(await addGoal())close();};
+};
+window.openLoanPlannerModal=()=>{
+  const html='<h3 style="margin:0 0 4px">🚗 מתכנן הלוואות ורכישות גדולות</h3>'
+    +'<p class="muted" style="margin-bottom:14px">הזן את פרטי ההלוואה או הרכישה המתוכננת. המערכת תחשב תשלום חודשי בכל תרחיש ריבית ותשווה לתזרים הפנוי שלך.</p>'
+    +'<div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">'
+      +'<div style="flex:1;min-width:150px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">שם התכנון</label><input id="planName" placeholder="למשל: רכב חדש" style="width:100%"></div>'
+      +'<div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">סכום ההלוואה (₪)</label><input id="planAmount" type="number" placeholder="120000" oninput="calcLoanPlan()" style="width:100%"></div>'
+      +'<div style="flex:1;min-width:120px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">מספר חודשים</label><input id="planMonths" type="number" placeholder="60" value="60" oninput="calcLoanPlan()" style="width:100%"></div>'
+    +'</div>'
+    +'<div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">'
+      +'<div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">ריבית פריים נוכחית (%)</label><input id="planPrime" type="number" step="0.01" value="6" oninput="calcLoanPlan()" style="width:100%"></div>'
+      +'<div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">תוספת/מרווח מעל פריים (%)</label><input id="planSpread" type="number" step="0.01" value="1.5" oninput="calcLoanPlan()" style="width:100%"></div>'
+      +'<div style="flex:1;min-width:140px"><label class="muted" style="display:block;font-size:.75rem;margin-bottom:4px">הון עצמי / מקדמה (₪)</label><input id="planDown" type="number" placeholder="0" value="0" oninput="calcLoanPlan()" style="width:100%"></div>'
+    +'</div>'
+    +'<div id="planResult"></div>'
+    +'<div class="row" style="margin-top:18px;justify-content:flex-end"><button type="button" class="btn" id="planModalClose">סגירה</button></div>';
+  const {ov,close}=UI._open(html,{large:true});
+  ov.querySelector('#planModalClose').onclick=close;
+  calcLoanPlan();
+};
 window.openAddBankAccountModal=()=>{
   const html='<h3>🏦 הוספת חשבון בנק</h3>'
     +'<div class="ex-form-modal-grid">'
@@ -2059,7 +2070,7 @@ async function addSubSub(parentSubId){
 async function addLoan(){const amt=parseFloat($('#loanAmt').value);if(!amt||amt<=0){alert('הכנס סכום');return;}const{data,error}=await sb.from('loans').insert({household_id:HID,created_by:CU.id,direction:$('#loanDir').value,counterparty:$('#loanWho').value||'(ללא שם)',amount:amt,loan_date:$('#loanDate').value||todayStr(),note:$('#loanNote').value,settled:false}).select().single();if(error){alert('שגיאה בהוספת הלוואה: '+error.message);return;}DB.loans.unshift(data);render();return true;}
 async function addInst(){const total=parseFloat($('#instTotal').value),count=parseInt($('#instCount').value);if(!total||!count){alert('הכנס סכום ומספר תשלומים');return;}const{data,error}=await sb.from('installments').insert({household_id:HID,created_by:CU.id,description:$('#instDesc').value||'(ללא תיאור)',total_amount:total,payments_count:count,first_payment:$('#instFirst').value||todayStr(),category_id:$('#instCat').value||null}).select().single();if(error){alert('שגיאה בשמירה: '+error.message+'\n\nהנתונים לא נמחקו — נסה שוב.');return;}DB.installments.push(data);render();return true;}
 async function addInv(){const cost=parseFloat($('#invCostIn').value);if(!cost){alert('הכנס עלות');return;}const val=parseFloat($('#invValIn').value)||cost;const{data}=await sb.from('investments').insert({household_id:HID,created_by:CU.id,name:$('#invName').value||'(ללא שם)',asset_type:$('#invType').value,cost,current_value:val,buy_date:$('#invDate').value||todayStr()}).select().single();DB.investments.push(data);render();return true;}
-async function addGoal(){const target=parseFloat($('#goalTarget').value);if(!target){alert('הכנס סכום יעד');return;}const saved=parseFloat($('#goalSaved').value)||0;const{data,error}=await sb.from('goals').insert({household_id:HID,created_by:CU.id,icon:$('#goalIcon').value,name:$('#goalName').value||'(ללא שם)',target_amount:target,saved_amount:saved,target_date:$('#goalDate').value||null}).select().single();if(error){alert('שגיאה בהוספת יעד: '+error.message);return;}DB.goals.push(data);$('#goalName').value='';$('#goalTarget').value='';$('#goalSaved').value='';render();}
+async function addGoal(){const target=parseFloat($('#goalTarget').value);if(!target){alert('הכנס סכום יעד');return;}const saved=parseFloat($('#goalSaved').value)||0;const{data,error}=await sb.from('goals').insert({household_id:HID,created_by:CU.id,icon:$('#goalIcon').value,name:$('#goalName').value||'(ללא שם)',target_amount:target,saved_amount:saved,target_date:$('#goalDate').value||null}).select().single();if(error){alert('שגיאה בהוספת יעד: '+error.message);return;}DB.goals.push(data);render();return true;}
 
 // INVITE — pretty link
 async function genInvite(){

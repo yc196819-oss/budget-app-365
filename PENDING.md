@@ -2,6 +2,40 @@
 
 Read this first in any new session — it captures open threads so context isn't lost across machines/sessions.
 
+## 🟢 Resolved 2026-09-24 (round 13) — Planning tab rebuilt: point #3 from the audit list
+
+Same treatment as Dashboard, applied to the Planning (יעדים) tab. It
+had: a 5-card next-month forecast (kept — genuinely different info,
+not duplicated elsewhere, and reasonably compact already), 3 stat
+cards (kept), a permanent inline "add goal" form (the same anti-
+pattern from round 10 — this tab wasn't in that batch, so it still had
+it), the goals list, and then a full loan/big-purchase calculator
+panel (name, amount, months, prime rate, spread, down payment, 4
+interest-rate scenarios with live results) sitting permanently
+expanded at the bottom — a distinct occasional-use tool, not something
+someone needs open by default every visit to check their goals.
+
+- `openAddGoalModal()` — same modal pattern as round 10; `addGoal()`
+  got `return true;` on its success path, same treatment as the other
+  four add functions.
+- `openLoanPlannerModal()` — moved the entire calculator into a modal.
+  `calcLoanPlan()` needed zero logic changes (already guarded on
+  `#planResult` existing, same trick used for `computeFlow()` and
+  `renderBudgetProgress()` in round 12).
+- The goals panel now leads with the list, with "+ הוספת יעד" and "🚗
+  מתכנן הלוואות ורכישות גדולות" as two small link-buttons above it.
+
+Verified via headless Chrome: fresh boot zero errors, adding a goal
+through the modal works end-to-end, opening the loan planner modal and
+typing an amount live-recalculates all four interest scenarios
+correctly (verified against known math: ₪100,000/60mo at 6% ≈
+₪1,933/mo). Test goal cleaned up from the demo household afterward.
+
+**Audit list status**: #1 (forms), #2 (dashboard), #3 (planning) done.
+Still open: #4 (cramped mobile cards in loans/investments), #5
+(destructive settings actions need visual separation), #6 (12-tab flat
+navigation, flagged for a separate conversation).
+
 ## 🟢 Resolved 2026-09-24 (round 12) — Dashboard rebuilt: point #2 from the audit list
 
 User asked for the next real, structural change. Went for the
