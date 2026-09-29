@@ -909,6 +909,262 @@ async function fetchSpyQuote() {
     return { price: close, changePct: open ? ((close - open) / open) * 100 : null };
   }
 }
+// ═══ AI advisor → action plan (tasks with clear steps + push reminders) ═══
+const TASK_TABS = ['dash', 'expenses', 'charts', 'categories', 'accounts', 'loans', 'installments', 'investments', 'planning'];
+function israelToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date()); // YYYY-MM-DD
+}
+function addDaysIso(iso, days) {
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+app.post('/api/ai/action-plan', requireAuth, aiLimiter, async (req, res) => {
+  try {
+    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
+      return res.status(503).json({ error: 'No AI key configured' });
+    }
+    const { summary, advice, messages } = req.body || {};
+    if (!summary) return res.status(400).json({ error: 'summary is required' });
+
+    const convo = (Array.isArray(messages) ? messages : [])
+      .filter((m) => m && (m.role === 'user' || m.role === 'ai') && m.text)
+      .slice(-12)
+      .map((m) => `${m.role === 'user' ? 'משתמש' : 'יועץ'}: ${String(m.text).slice(0, 1500)}`)
+      .join('\n');
+
+    const prompt = `אתה יועץ פיננסי שהופך ייעוץ לתוכנית פעולה מעשית בעברית, עבור "${summary.userName || ''}".
+קיבלת: סיכום נתוני התקציב (JSON), את הניתוח שנתת (advice) ואת השיחה עם המשתמש.
+צור 3 עד 6 משימות שהמשתמש צריך לבצע כדי ליישם את ההמלצות. כל משימה:
+- title: פעולה אחת ברורה, מתחילה בפועל (למשל "להוריד את תקציב המסעדות ל-600 ₪ בחודש"), עד 60 תווים.
+- why: משפט אחד שמסביר למה, עם המספרים האמיתיים מהנתונים.
+- steps: 2 עד 5 צעדים קצרים וקונקרטיים לביצוע, כל אחד פעולה שאפשר לסמן כבוצעה (למשל "להיכנס לאתר של חברת הביטוח ולבקש הצעה מתחרה").
+- due_in_days: בעוד כמה ימים לבצע (0 עד 30). משימות קלות ודחופות מוקדם, גדולות מאוחר יותר.
+- link_tab: המסך באפליקציה שבו מבצעים את זה, אחד מ: ${TASK_TABS.join(', ')}, או null.
+- target_amount: סכום יעד בשקלים אם רלוונטי, אחרת null.
+- deliverable_kind: אם כדאי שהיועץ יכין תוצר מוכן למשימה: "checklist" (רשימת בדיקה), "budget" (תקציב חודשי לקטגוריות), "meal_plan" (תפריט שבועי ורשימת קניות), "comparison" (השוואת הצעות מחיר), "message" (מכתב/הודעה/תסריט שיחה), "savings_plan" (תוכנית חיסכון ליעד), "loan_payoff" (סדר פירעון הלוואות), "info" (משכנתא/השקעות: חישובים ושאלות), אחרת null.
+- בכל צעד שבו המשתמש צריך לדווח מידע (הצעת מחיר, תשובה שקיבל, תאריך), הפוך את הצעד לאובייקט: {"text":"...","input":{"type":"number|text|date|choice","label":"...","options":["..."]}}. צעד בלי דיווח נשאר מחרוזת.
+אל תמציא נתונים שלא מופיעים בסיכום. העדף משימות שהשיחה עסקה בהן.
+ענה אך ורק ב-JSON תקני בלי markdown: {"tasks":[{"title":"","why":"","steps":["", {"text":"","input":{"type":"number","label":""}}],"due_in_days":0,"link_tab":null,"target_amount":null,"deliverable_kind":null}]}`;
+
+    const text = JSON.stringify({ summary, advice: advice || null }) + (convo ? '\n\nהשיחה:\n' + convo : '');
+    const aiResult = await generateWithFallback({ prompt, text });
+    let parsed = null;
+    try { parsed = JSON.parse(extractJsonText(aiResult.output || '')); } catch (_e) {
+      const m = String(aiResult.output || '').match(/\{[\s\S]*\}/);
+      if (m) { try { parsed = JSON.parse(m[0]); } catch (_e2) { parsed = null; } }
+    }
+    const raw = parsed && Array.isArray(parsed.tasks) ? parsed.tasks : null;
+    if (!raw) return res.status(502).json({ error: 'AI response could not be parsed' });
+
+    const today = israelToday();
+    const tasks = raw.slice(0, 6).map((t) => {
+      const days = Math.max(0, Math.min(60, parseInt(t.due_in_days, 10) || 7));
+      const INPUT_TYPES = ['number', 'text', 'date', 'choice'];
+      const steps = (Array.isArray(t.steps) ? t.steps : []).slice(0, 6).map((x) => {
+        const text = String((x && typeof x === 'object') ? x.text : x || '').trim().slice(0, 200);
+        if (!text) return null;
+        const step = { text, done: false };
+        const inp = x && typeof x === 'object' ? x.input : null;
+        if (inp && INPUT_TYPES.includes(inp.type)) {
+          step.input = { type: inp.type, label: String(inp.label || '').slice(0, 80) };
+          if (inp.type === 'choice') step.input.options = (Array.isArray(inp.options) ? inp.options : ['כן', 'לא']).map(String).slice(0, 5);
+        }
+        return step;
+      }).filter(Boolean);
+      return {
+        title: String(t.title || '').trim().slice(0, 120),
+        why: String(t.why || '').trim().slice(0, 400) || null,
+        steps,
+        due_date: addDaysIso(today, days),
+        link_tab: TASK_TABS.includes(t.link_tab) ? t.link_tab : null,
+        target_amount: Number.isFinite(+t.target_amount) && +t.target_amount > 0 ? Math.round(+t.target_amount) : null,
+        deliverable_kind: ['checklist', 'budget', 'meal_plan', 'comparison', 'message', 'savings_plan', 'loan_payoff', 'info'].includes(t.deliverable_kind) ? t.deliverable_kind : null
+      };
+    }).filter((t) => t.title);
+    return res.json({ tasks, aiProvider: aiResult.provider });
+  } catch (err) {
+    return res.status(err.statusCode || 502).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
+// ═══ advisor chat v2: streaming (SSE), shared conversations, follow-up chips ═══
+const SUGG_MARK = '@@הצעות:';
+const FIX_MARK = '@@שינויים:';
+function buildFixContext(candidates, categories) {
+  if (!Array.isArray(candidates) || !candidates.length) return '';
+  const rows = candidates.slice(0, 60).map((t) => [t.id, t.date, t.type === 'income' ? '+' : '-', t.amount, String(t.description || '').slice(0, 60), t.category || '', t.subcategory || ''].join(' | ')).join('\n');
+  const cats = (Array.isArray(categories) ? categories : []).slice(0, 120).map((c) => c.parent ? `${c.parent} > ${c.name}` : c.name).join(', ');
+  return `
+מצב סוכן: אם המשתמש מבקש לתקן, למחוק, להעביר קטגוריה או לשנות תנועות — אל תשנה בעצמך. הצע שינויים והמשתמש יאשר.
+כתוב משפט או שניים שמסבירים מה מצאת, ואז בשורה נפרדת: ${FIX_MARK} ואחריו JSON בשורה אחת:
+{"ops":[{"op":"update","id":"<id מהרשימה>","set":{"category":"<שם קטגוריה ראשית קיים>","subcategory":"<שם תת-קטגוריה קיים או null>","amount":0,"tx_date":"YYYY-MM-DD","description":"..."},"reason":"קצר"},{"op":"delete","id":"<id>","reason":"קצר"}]}
+ב-set כלול רק את השדות שמשתנים. השתמש רק ב-id מהרשימה ורק בשמות קטגוריות מהרשימה. עד 20 פעולות. אם לא בטוח איזו תנועה — שאל במקום להציע. מחיקה רק לכפילות ברורה או כשהמשתמש ביקש.
+שורת ${FIX_MARK} באה לפני שורת ${SUGG_MARK}. אם אין בקשת תיקון — אל תכתוב ${FIX_MARK} בכלל.
+תנועות רלוונטיות (id | תאריך | כיוון | סכום | תיאור | קטגוריה | תת-קטגוריה):
+${rows}
+קטגוריות קיימות: ${cats}`;
+}
+function buildChatPrompt(summary, history, message, authorName, fixContext) {
+  const historyText = Array.isArray(history)
+    ? history.slice(-20).map((h) => `${h.role === 'user' ? (h.author || 'משתמש') : 'יועץ'}: ${String(h.text || '').slice(0, 2000)}`).join('\n')
+    : '';
+  return `אתה יועץ פיננסי חם, ענייני ומקצועי למשק בית בישראל. עונים בעברית פשוטה.
+בשיחה יכולים להשתתף שני בני הזוג; ההודעה הנוכחית נכתבה על ידי ${authorName || 'משתמש'} — פנה אליו/אליה בשמו/ה כשזה טבעי.
+הנתונים (JSON) כוללים categorySpendingHistory ברמת משק הבית, personalCategoryBreakdown של המשתמש, תקציבים, יעדים ומשימות. ענה על סמך המספרים בפועל, 2-6 משפטים, בלי markdown ובלי כותרות.
+בהחלטות גדולות (משכנתא, השקעות) תן מידע, חישובים ושאלות לבדיקה, וציין שכדאי להתייעץ עם יועץ מורשה; אל תמליץ על נייר ערך או מוצר ספציפי.
+בסוף התשובה, בשורה נפרדת, כתוב בדיוק: ${SUGG_MARK} ואחריו 2-3 שאלות המשך קצרות (עד 5 מילים כל אחת) מופרדות ב-|.
+${fixContext || ''}
+${historyText ? '\nהשיחה עד עכשיו:\n' + historyText + '\n' : ''}
+ההודעה הנוכחית (${authorName || 'משתמש'}): ${message}`;
+}
+
+app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, async (req, res) => {
+  const { summary, history, message, authorName, candidates, categories } = req.body || {};
+  if (!message) return res.status(400).json({ error: 'message is required' });
+  if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'No AI key configured' });
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders && res.flushHeaders();
+  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  const prompt = buildChatPrompt(summary, history, message, authorName, buildFixContext(candidates, categories));
+  const text = JSON.stringify(summary || {}).slice(0, 12000);
+  try {
+    if (ANTHROPIC_KEY) {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 3000, temperature: 0.3, stream: true,
+          messages: [{ role: 'user', content: `${prompt}\n\n${text}` }] })
+      });
+      if (r.ok && r.body) {
+        const decoder = new TextDecoder();
+        let buf = '';
+        for await (const chunk of r.body) {
+          buf += decoder.decode(chunk, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n\n')) >= 0) {
+            const evt = buf.slice(0, i); buf = buf.slice(i + 2);
+            const line = evt.split('\n').find((l) => l.startsWith('data: '));
+            if (!line) continue;
+            try {
+              const d = JSON.parse(line.slice(6));
+              if (d.type === 'content_block_delta' && d.delta && d.delta.type === 'text_delta') send({ delta: d.delta.text });
+            } catch (_e) { /* ignore keep-alives */ }
+          }
+        }
+        send({ done: true, provider: 'claude' });
+        return res.end();
+      }
+    }
+    // fallback: no streaming — whole answer as one chunk
+    const ai = await generateWithFallback({ prompt, text });
+    send({ delta: String(ai.output || '').trim() });
+    send({ done: true, provider: ai.provider });
+    return res.end();
+  } catch (err) {
+    send({ error: err.message || 'AI error' });
+    return res.end();
+  }
+});
+
+// ═══ deliverables: create / revise together / shopping list ═══
+const DELIVERABLE_SPECS = {
+  checklist: '{"items":[{"text":"..."}]}  — 4 עד 12 פריטים קונקרטיים לבדיקה או לביצוע.',
+  budget: '{"lines":[{"category":"שם קטגוריה קיים בדיוק כמו בנתונים","current_avg":0,"proposed":0,"note":"..."}]}  — current_avg מהנתונים בפועל; proposed מציאותי.',
+  meal_plan: '{"days":[{"day":"ראשון","meal":"...","note":""}],"assumptions":"...","est_weekly_cost":0}  — ארוחות ערב לשבוע, פשוטות וחסכוניות, לפי מה שנאמר בשיחה.',
+  comparison: '{"subject":"...","columns":["חברה/אפשרות","מחיר בחודש","הערה"],"rows":[{"name":"...","monthly":0,"note":"...","current":true}],"best":"שם האפשרות הכי משתלמת או null","yearly_saving":0}  — כלול את המצב הנוכחי מהנתונים (current:true). סכומים שהמשתמש דיווח בצעדי המשימה (value) הם נתונים אמיתיים; אל תמציא הצעות מחיר — אם חסר, השאר את השורה עם monthly null ו-note "לבירור".',
+  message: '{"channel":"email|whatsapp|call","to":"למי","subject":"נושא או null","body":"הנוסח המלא","tips":["טיפ קצר לשיחה"]}  — בעברית, מנומס וענייני, עם המספרים האמיתיים. בשיחת טלפון body הוא תסריט קצר.',
+  savings_plan: '{"goal_name":"...","target_amount":0,"monthly":0,"months":0,"target_date":"YYYY-MM-DD","start_from":0,"notes":"..."}  — ריאלי לפי המאזן החודשי בפועל; start_from = סכום שכבר נחסך אם ידוע.',
+  loan_payoff: '{"strategy":"שם הגישה","order":[{"loan":"שם ההלוואה כפי שמופיע בנתונים","balance":0,"monthly":0,"extra":0,"payoff_date":"YYYY-MM"}],"total_interest_saved":0,"notes":"..."}  — רק הלוואות שמופיעות בנתונים; אם חסר מידע כמו ריבית, ציין הנחה.',
+  info: '{"topic":"...","calcs":[{"label":"...","value":"..."}],"questions":["שאלה לבדוק מול בנק/יועץ"],"considerations":["..."],"disclaimer":"מידע וחישובים בלבד, לא ייעוץ מורשה"}  — משכנתא/השקעות: חישובים על הנתונים, שאלות נכונות, בלי המלצה על מוצר או נייר ערך ספציפי.',
+  shopping_list: '{"sections":[{"name":"מחלקה","items":[{"text":"מוצר, כמות","for":"לאיזו ארוחה"}]}],"at_home":["..."],"est_cost":0}  — מאוחד (בלי כפילויות), לפי מחלקות בסופר, בלי מה שכבר יש בבית.'
+};
+app.post('/api/ai/deliverable', requireAuth, aiLimiter, async (req, res) => {
+  try {
+    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'No AI key configured' });
+    const { summary, task, kind, content, chat, message, action, authorName } = req.body || {};
+    const outKind = action === 'shopping_list' ? 'shopping_list' : kind;
+    if (!DELIVERABLE_SPECS[outKind]) return res.status(400).json({ error: 'unknown deliverable kind' });
+    const chatText = (Array.isArray(chat) ? chat : []).slice(-16)
+      .map((m) => `${m.role === 'user' ? (m.author || 'משתמש') : 'יועץ'}: ${String(m.text || '').slice(0, 1200)}`).join('\n');
+    const mode = action === 'shopping_list'
+      ? 'בנה רשימת קניות מהתפריט המאושר (content).'
+      : content ? 'עדכן את הטיוטה הקיימת (content) לפי ההודעה האחרונה. שנה רק מה שהתבקש.'
+        : 'צור טיוטה ראשונה. אם חסר מידע חיוני (למשל בתפריט: כמה נפשות, הגבלות ומה לא אוכלים, כמה ערבים מבשלים) — אל תיצור עדיין, רק שאל עד 3 שאלות קצרות.';
+    const prompt = `אתה יועץ פיננסי למשק בית, בונה תוצר מעשי בעברית עבור המשימה: "${(task && task.title) || ''}".
+${mode}
+מבנה התוכן (content) לסוג "${outKind}": ${DELIVERABLE_SPECS[outKind]}
+ענה אך ורק ב-JSON תקני בלי markdown:
+{"reply":"משפט או שניים למשתמש","questions":["..."] או [],"content":<תוכן לפי המבנה או null אם אתה רק שואל>,"changes":["מה שונה מהגרסה הקודמת"]}
+${chatText ? '\nהשיחה על התוצר:\n' + chatText : ''}
+${message ? `\nהודעה חדשה (${authorName || 'משתמש'}): ${message}` : ''}`;
+    const text = JSON.stringify({ summary: summary || null, task: task || null, content: content || null }).slice(0, 12000);
+    const ai = await generateWithFallback({ prompt, text });
+    let parsed = null;
+    try { parsed = JSON.parse(extractJsonText(ai.output || '')); } catch (_e) {
+      const m = String(ai.output || '').match(/\{[\s\S]*\}/);
+      if (m) { try { parsed = JSON.parse(m[0]); } catch (_e2) { parsed = null; } }
+    }
+    if (!parsed || typeof parsed !== 'object') return res.status(502).json({ error: 'AI response could not be parsed' });
+    return res.json({
+      kind: outKind,
+      reply: String(parsed.reply || '').slice(0, 1500),
+      questions: Array.isArray(parsed.questions) ? parsed.questions.map(String).slice(0, 4) : [],
+      content: parsed.content && typeof parsed.content === 'object' ? parsed.content : null,
+      changes: Array.isArray(parsed.changes) ? parsed.changes.map(String).slice(0, 8) : []
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 502).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
+// Called once a day by Supabase pg_cron (job "advisor-task-reminders").
+// Auth: X-Cron-Secret must equal app_secrets.cron_secret (service-role only table).
+app.post('/api/tasks/remind-due', async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase not configured' });
+    const given = String(req.headers['x-cron-secret'] || '');
+    const { data: sec } = await supabaseAdmin.from('app_secrets').select('value').eq('key', 'cron_secret').maybeSingle();
+    const expected = sec && sec.value ? String(sec.value) : '';
+    const a = Buffer.from(given), b = Buffer.from(expected);
+    if (!expected || a.length !== b.length || !require('crypto').timingSafeEqual(a, b)) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+    const today = israelToday();
+    const { data: tasks, error } = await supabaseAdmin
+      .from('advisor_tasks')
+      .select('id,user_id,title,due_date,last_reminded_on')
+      .eq('status', 'open').eq('remind', true).lte('due_date', today);
+    if (error) throw new Error(error.message);
+
+    // due today → every day; overdue → every 3 days (nudge, not nag)
+    const daysBetween = (x, y) => Math.round((new Date(y) - new Date(x)) / 864e5);
+    const due = (tasks || []).filter((t) => t.last_reminded_on !== today && (
+      t.due_date === today || !t.last_reminded_on || daysBetween(t.last_reminded_on, today) >= 3));
+
+    const byUser = new Map();
+    due.forEach((t) => { if (!byUser.has(t.user_id)) byUser.set(t.user_id, []); byUser.get(t.user_id).push(t); });
+
+    let sentUsers = 0;
+    for (const [userId, list] of byUser) {
+      const overdue = list.filter((t) => t.due_date < today).length;
+      const title = list.length === 1 ? '📋 משימה מהיועץ מחכה לך' : `📋 ${list.length} משימות מהיועץ מחכות לך`;
+      const body = list[0].title + (list.length > 1 ? ` ועוד ${list.length - 1}` : '') + (overdue ? ` (${overdue} באיחור)` : '');
+      try {
+        await sendPushToUser(userId, { title, body, url: (APP_URL.replace(/\/$/, '')) + '/?tab=advisor' });
+        sentUsers += 1;
+      } catch (_e) { /* no subscription for this user – the in-app list still shows it */ }
+      await supabaseAdmin.from('advisor_tasks').update({ last_reminded_on: today }).in('id', list.map((t) => t.id));
+    }
+    return res.json({ ok: true, today, dueTasks: due.length, usersNotified: sentUsers });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get('/api/market/quote', requireAuth, async (req, res) => {
   try {
     const force = req.query.force === '1';
