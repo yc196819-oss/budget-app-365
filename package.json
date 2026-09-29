@@ -2,10 +2,10 @@
   "name": "budget-app",
   "version": "1.0.0",
   "description": "",
-  "main": "app.js",
+  "main": "budget-ai-server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
+    "start": "node budget-ai-server.js",
     "start:ai": "node budget-ai-server.js"
   },
   "keywords": [],
