@@ -33,7 +33,7 @@ body.light{--bg:#FFF6EC;--surface:#FFFBF6;--surface2:#FFFFFF;--surface3:#F4E6D4;
   --accent-rgb:154,79,18;--accent2-rgb:30,107,63;--on-accent:#FFF6EC;--on-accent2:#FFFFFF;--me:#3A2A1C;--me-text:#FFF6EC;--hl:#FCD9A8;
   --grad-hero:linear-gradient(135deg,#B8621A 0%,#9A4F12 100%);--glow-accent:0 0 0 1px rgba(154,79,18,.2),0 8px 20px rgba(154,79,18,.18);
   --cat-1:#B8621A;--cat-2:#2F6F95;--cat-3:#A07A12;--cat-4:#1F7A6C;--cat-5:#B3432F;--cat-6:#1E6B3F;--cat-7:#8C5A2B;--cat-8:#A0467A}
-body.light .auth-tab.active{color:#fff}
+body.light .auth-tab.active{color:var(--text)}
 html{overflow-x:hidden;width:100%}
 body{font-family:'Rubik','Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden;width:100%}
 .app{max-width:none;margin:0;padding:0;display:flex;align-items:stretch;min-height:100vh}
@@ -278,6 +278,98 @@ tr:last-child td{border-bottom:none}
 .dash-greeting b{display:block;font-size:1.25rem;font-weight:800}
 .dash-greeting span{color:var(--muted);font-size:.88rem}
 #nav button{font-size:.92rem;padding:11px 12px}
+
+
+
+/* ═══ stage 4 ═══ */
+.wc-tool{width:36px;height:36px;border-radius:50%;border:1px solid var(--line2);background:var(--surface);font-size:1rem;cursor:pointer;flex-shrink:0}
+.wc-tool.on{background:rgba(var(--accent-rgb),.18);border-color:var(--accent)}
+.wc-tool.rec{background:var(--accent);animation:vcPulse 1.2s ease-in-out infinite}
+.mem-row{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:.88rem}
+.mem-row:last-child{border-bottom:0}
+.mem-row .t{flex:1;line-height:1.5}
+.mem-row .w{font-size:.7rem;color:var(--faint);white-space:nowrap}
+.mem-row button{background:none;border:0;color:var(--faint);cursor:pointer;font-size:1rem;padding:2px 4px}
+.rp-card{display:flex;gap:12px;align-items:center;background:var(--surface2);border:1px solid var(--line2);border-radius:18px;padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.rp-card b{display:block}
+.rp-card span{font-size:.8rem;color:var(--muted)}
+.rp-cmp{font-size:.74rem;display:block;margin-top:2px}
+.rp-recs{background:var(--surface2);border-radius:14px;padding:10px 14px;line-height:1.9;font-size:.9rem;margin-bottom:10px}
+/* ═══ stage 3: login, friends, voice ═══ */
+.auth-box{border-radius:28px;padding:32px 26px}
+.auth-logo{background:var(--accent);color:var(--on-accent);box-shadow:none;font-weight:800}
+.auth-box .sub{margin-bottom:18px}
+.auth-banner{background:rgba(var(--accent-rgb),.14);border-radius:14px;padding:10px 12px;font-size:.88rem;text-align:center;margin-bottom:14px;line-height:1.55}
+.auth-google{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--surface2);border:1px solid var(--line2);color:var(--text);padding:13px;border-radius:14px;font-family:inherit;font-size:.95rem;font-weight:700;cursor:pointer}
+.auth-or{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:.76rem;margin:14px 0 2px}
+.auth-or::before,.auth-or::after{content:"";flex:1;height:1px;background:var(--line)}
+.auth-box label{text-transform:none;letter-spacing:0;font-size:.82rem}
+.auth-pw{position:relative}
+.auth-pw input{padding-left:44px}
+.auth-eye{position:absolute;left:8px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:1rem;cursor:pointer;opacity:.7;padding:4px}
+.auth-note{font-size:.78rem;color:var(--muted);margin-top:12px;line-height:1.55}
+.auth-lang{display:block;margin:14px auto 0;background:none;border:0;color:var(--muted);font-family:inherit;font-size:.8rem;cursor:pointer}
+.auth-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.vc-mic{width:84px;height:84px;border-radius:50%;border:0;background:var(--accent);color:var(--on-accent);font-size:2rem;margin:6px auto 12px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 0 10px rgba(var(--accent-rgb),.15)}
+.vc-mic.on{animation:vcPulse 1.2s ease-in-out infinite}
+@keyframes vcPulse{50%{box-shadow:0 0 0 18px rgba(var(--accent-rgb),.08)}}
+@media (prefers-reduced-motion:reduce){.vc-mic.on{animation:none}}
+.vc-text{background:var(--surface2);border-radius:14px;padding:12px;min-height:48px;font-size:.95rem;line-height:1.6;margin-bottom:10px;text-align:right}
+.vc-hint{font-size:.8rem;color:var(--muted);text-align:center;margin-bottom:10px}
+.dash-voice{display:flex;gap:8px;margin:0 2px 12px}
+.dash-voice button{flex:1;font-family:inherit;font-size:.86rem;padding:10px;border-radius:14px;border:1px solid var(--line2);background:var(--surface2);color:var(--text);cursor:pointer}
+/* ═══ stage 2 ═══ */
+.al-card{background:var(--surface2);border:1px solid var(--line);border-right:4px solid var(--accent);border-radius:16px;padding:12px 14px;margin-bottom:8px}
+.al-card.warn{border-right-color:var(--danger)}
+.al-k{font-size:.72rem;color:var(--muted);margin-bottom:2px}
+.al-t{font-weight:800;font-size:.93rem;line-height:1.45}
+.al-b{color:var(--muted);font-size:.82rem;margin:3px 0 9px;line-height:1.5}
+.al-a{display:flex;gap:6px;flex-wrap:wrap}
+.ck-card{background:var(--me);color:var(--me-text);border-radius:18px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.ck-card b{display:block;font-size:.98rem}
+.ck-card span{font-size:.8rem;opacity:.85}
+.ck-feel{display:flex;gap:6px;margin:6px 0 10px}
+.ck-feel button{flex:1;font-family:inherit;font-size:.9rem;padding:10px 4px;border-radius:14px;border:1px solid var(--line2);background:var(--surface2);color:var(--text);cursor:pointer}
+.ck-feel button[aria-pressed="true"]{background:var(--me);color:var(--me-text);border-color:transparent;font-weight:700}
+.ck-dec{display:flex;align-items:center;gap:10px;justify-content:space-between;background:var(--surface2);border-radius:14px;padding:10px 12px;margin-bottom:8px;font-size:.88rem}
+.ck-dec .yn{display:flex;gap:6px;flex-shrink:0}
+.ck-dec .yn button{font-family:inherit;font-size:.78rem;padding:5px 12px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);color:var(--text);cursor:pointer}
+.ck-dec .yn button[aria-pressed="true"]{background:var(--accent2);color:var(--on-accent2);border-color:transparent;font-weight:700}
+.ck-votes{font-size:.72rem;color:var(--muted);margin-top:3px}
+.ls-card{display:flex;gap:12px;align-items:center;background:var(--surface2);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:10px;cursor:pointer}
+.ls-ic{width:38px;height:38px;border-radius:12px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.ls-card b{display:block;font-size:.92rem}
+.ls-card span{font-size:.78rem;color:var(--muted)}
+.ls-body{line-height:1.8;font-size:.92rem;white-space:pre-line}
+.sim-sum{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.sim-sum div{background:var(--surface2);border-radius:14px;padding:10px 12px}
+.sim-sum span{display:block;font-size:.72rem;color:var(--muted)}
+.sim-sum b{font-size:1.05rem}
+.sim-ev{font-size:.8rem;color:var(--muted);line-height:1.7}
+.iv-hero{background:var(--me);color:var(--me-text);border-radius:18px;padding:14px 16px;margin-bottom:10px}
+.iv-hero span{font-size:.78rem;opacity:.85}
+.iv-hero b{display:block;font-size:1.6rem;font-weight:800}
+.iv-fx{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.iv-fx div{background:var(--surface2);border-radius:14px;padding:9px 12px;font-size:.78rem;color:var(--muted)}
+.iv-fx b{display:block;color:var(--text);font-size:1rem}
+.iv-row{display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.iv-row:last-child{border-bottom:0}
+.iv-sym{width:40px;height:40px;border-radius:12px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:800;flex-shrink:0;color:var(--accent)}
+.iv-row .m{flex:1;min-width:0}
+.iv-row .m b{display:block;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iv-row .m span{font-size:.74rem;color:var(--muted)}
+.iv-row .v{text-align:left}
+.iv-row .v b{display:block}
+.iv-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.iv-need{background:rgba(var(--accent-rgb),.12);border-radius:14px;padding:10px 12px;font-size:.82rem;margin-bottom:10px;line-height:1.55}
+.tour{text-align:center;padding-top:6px}
+.tour-ic{width:72px;height:72px;border-radius:22px;background:var(--surface3);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:2rem}
+.tour h3{margin-bottom:6px!important}
+.tour p{line-height:1.7}
+.tour-dots{display:flex;justify-content:center;gap:6px;margin:14px 0}
+.tour-dots i{width:7px;height:7px;border-radius:99px;background:var(--line2)}
+.tour-dots i.on{width:20px;background:var(--accent)}
+.tour-hl{outline:3px solid var(--accent)!important;outline-offset:2px;border-radius:12px;position:relative;z-index:1001}
 /* ═══ warm theme (advisor v2). Dark = default, body.light = warm light ═══ */
 .panel,.modal{border-color:var(--line)}
 .btn{box-shadow:none}
@@ -631,19 +723,21 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
   <div class="auth-box">
     <div class="auth-logo">₪</div>
     <h1 data-i18n="app.title">ניהול תקציב</h1>
-    <p class="sub" data-i18n="auth.tagline">נהל את הכסף שלך בחכמה</p>
+    <p class="sub">יועץ אישי, תוכנית פעולה, ושניכם באותו עמוד</p>
+    <div id="authInviteBanner" class="auth-banner hidden"></div>
     <div class="auth-tabs">
       <button class="auth-tab active" id="tabLogin" onclick="setAuthMode('login')" data-i18n="auth.login">כניסה</button>
       <button class="auth-tab" id="tabRegister" onclick="setAuthMode('register')" data-i18n="auth.register">הרשמה</button>
     </div>
-    <button class="btn sec" id="langToggleBtnAuth" onclick="toggleLanguage()" style="width:100%;margin-bottom:14px" title="Switch language / החלף שפה">🌐 <span data-i18n="auth.langSwitch">English</span></button>
+    <button type="button" class="auth-google" onclick="doAuthGoogle()"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.8 6C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.3.8-4.7l-7.8-6C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.8-6z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.8 6C6.6 42.6 14.6 48 24 48z"/></svg><span>המשך עם Google</span></button>
+    <div class="auth-or"><span>או עם מייל</span></div>
     <div id="loginForm">
       <label data-i18n="auth.email">אימייל</label>
       <input id="authEmail" type="email" placeholder="you@example.com">
       <label data-i18n="auth.password">סיסמה</label>
-      <input id="authPass" type="password" placeholder="••••••••">
+      <div class="auth-pw"><input id="authPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doAuth()"><button type="button" class="auth-eye" onclick="togglePw('authPass',this)" aria-label="הצגת סיסמה">👁</button></div>
       <button class="auth-btn" id="authBtn" onclick="doAuth()" data-i18n="auth.login">כניסה</button>
-      <button class="btn sec" id="authGoogleBtn" style="width:100%;margin-top:10px" onclick="doAuthGoogle()" data-i18n="auth.google">התחברות עם Google</button>
+      <span id="authGoogleBtn" class="hidden"></span>
       <div style="margin-top:10px;text-align:center">
         <button class="link-btn" onclick="forgotPassword()" data-i18n="auth.forgotPass">שכחתי סיסמה</button>
       </div>
@@ -652,13 +746,14 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
       <label data-i18n="auth.email">אימייל</label>
       <input id="regEmail" type="email" placeholder="you@example.com">
       <label data-i18n="auth.passwordMin">סיסמה (לפחות 6 תווים)</label>
-      <input id="regPass" type="password" placeholder="••••••••">
+      <div class="auth-pw"><input id="regPass" type="password" placeholder="••••••••"><button type="button" class="auth-eye" onclick="togglePw('regPass',this)" aria-label="הצגת סיסמה">👁</button></div>
       <label data-i18n="auth.displayName">שם תצוגה</label>
       <input id="regName" placeholder='למשל "דן" או "נעמי"'>
-      <p class="muted" style="margin-top:14px" data-i18n="auth.verifyNote">📧 לאחר ההרשמה יישלח מייל אימות לכתובת שלך. לחץ על הקישור בו כדי להפעיל את החשבון.</p>
+      <p class="auth-note">🔒 הנתונים של כל משפחה נפרדים לגמרי. אף משתמש אחר באפליקציה לא רואה אותם.</p>
       <button class="auth-btn" onclick="doRegister()" data-i18n="auth.createAccount">צור חשבון</button>
     </div>
     <p class="auth-err hidden" id="authErr"></p>
+    <button type="button" class="auth-lang" id="langToggleBtnAuth" onclick="toggleLanguage()" title="Switch language / החלף שפה">🌐 <span data-i18n="auth.langSwitch">English</span></button>
   </div>
 </div>
 
@@ -698,7 +793,12 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
   <div id="subNav" class="subnav hidden" role="tablist" aria-label="מסכים בקבוצה"></div>
   <section id="tab-dash">
     <div id="dashGreeting" class="dash-greeting"></div>
+    <div class="dash-voice"><button type="button" onclick="openVoiceAdd()">🎤 להוסיף תנועה בקול</button><button type="button" onclick="goToTab('expenses');setTimeout(()=>$('#quickAddText')?.focus(),200)">✍️ בכתב</button></div>
+    <div id="dashReport"></div>
+    <div id="dashCheckin"></div>
+    <div id="dashAlerts"></div>
     <div id="dashTasks"></div>
+    <div id="dashLesson"></div>
     <div class="panel hidden" id="onbBanner" style="border:1px solid var(--accent);background:linear-gradient(135deg,rgba(var(--accent-rgb),.1),rgba(var(--accent2-rgb),.06));display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:12px">
         <span style="font-size:1.8rem">🧙</span>
@@ -730,6 +830,7 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
       <div class="row" style="align-items:flex-start">
         <textarea id="quickAddText" rows="2" placeholder='למשל: "שילמתי 80 שקל בסופר, ואתמול קיבלתי 500 שקל מתנה מסבתא"' style="flex:1;resize:vertical;min-height:44px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiQuickAdd();}"></textarea>
         <input type="file" id="quickAddPhoto" accept="image/*" capture="environment" class="hidden" onchange="aiQuickAddPhoto(this.files[0])">
+        <button type="button" class="btn sec" onclick="openVoiceAdd()" title="הוספה בקול">🎤 בקול</button>
         <button type="button" class="btn sec" onclick="document.getElementById('quickAddPhoto').click()" title="צלם/העלה קבלה">📷 קבלה</button>
         <button type="button" class="btn" id="quickAddBtn" onclick="aiQuickAdd()">✨ מלא עם AI</button>
       </div>
@@ -798,6 +899,7 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
         </div>
       </div>
       <div id="taskBoard"></div>
+      <div id="memoryBoard"></div>
       <div id="advisorHistoryWrap">
         <div class="row" style="margin-bottom:10px"><b style="font-size:.85rem" data-i18n="advisor.topicsPrompt">על מה תרצו להתייעץ?</b></div>
         <div id="advisorTopicChips" class="advisor-topic-chips"></div>
@@ -817,6 +919,8 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
         <div id="advisorChips" class="wc-chips"></div>
         <div class="wc-inputbar">
           <textarea id="advisorChatInput" rows="1" placeholder="שאלו את היועץ…" aria-label="הודעה ליועץ" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,140)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAdvisorChat()}"></textarea>
+          <button type="button" class="wc-tool" id="wcSpeakBtn" onclick="toggleAdvisorSpeak()" aria-label="הקראת תשובות" title="הקראת תשובות">🔇</button>
+          <button type="button" class="wc-tool" id="wcMicBtn" onclick="advisorListen()" aria-label="לדבר עם היועץ" title="לדבר">🎤</button>
           <button type="button" class="wc-send" onclick="sendAdvisorChat()" aria-label="שליחה">↑</button>
         </div>
       </div>
@@ -893,6 +997,7 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
   </section>
 
   <section id="tab-investments" class="hidden">
+    <div class="panel" id="inv2Panel"></div>
     <div class="grid cards">
       <div class="card"><div class="label">עלות רכישה</div><div class="value neu" id="invCost">₪0</div></div>
       <div class="card"><div class="label">שווי נוכחי</div><div class="value" id="invValue">₪0</div></div>
@@ -916,6 +1021,13 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
   </section>
 
   <section id="tab-planning" class="hidden">
+    <div class="panel" id="simPanel">
+      <h2>🔮 מה אם…?</h2>
+      <p class="muted" style="margin-bottom:10px">כתבו תרחיש במילים, וראו איך ייראו 12 החודשים הבאים.</p>
+      <div class="wc-inputbar" style="position:relative;margin:0 0 10px"><textarea id="simInput" rows="1" placeholder="למשל: מה אם נקנה רכב ב-60,000 בינואר?" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();runScenario()}"></textarea><button type="button" class="wc-send" onclick="runScenario()" aria-label="חישוב">↑</button></div>
+      <div class="wc-chips" id="simChips"></div>
+      <div id="simResult"></div>
+    </div>
     <div class="panel">
       <h2><span data-i18n="plan.nextmonth.title">🔮 תכנון החודש הבא</span> — <span class="muted" id="nextMonthLabel"></span></h2>
       <p class="muted" style="margin-bottom:12px">תחזית מבוססת על הכנסות/הוצאות קבועות, תשלומים ידועים, וממוצע ההוצאות המשתנות שלכם.</p>
@@ -990,6 +1102,11 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
       <button class="btn" onclick="genInvite()">✨ צור קישור הזמנה</button>
       <div id="inviteResult" style="margin-top:16px"></div>
     </div>
+    <div class="panel"><h2>🤝 להזמין חברים לאפליקציה</h2>
+      <p class="muted" style="margin-bottom:10px;line-height:1.6">חברים מקבלים חשבון משלהם, נפרד לגמרי: הם לא רואים את הנתונים שלכם, ואתם לא את שלהם. זה לא הזמנה למשק הבית שלכם.</p>
+      <div class="dv-note">🤖 היועץ ושאר ה-AI רצים על החשבון שלך. לכל משפחה של חברים יש עד <b id="friendAiLimit">150</b> פעולות AI בחודש.<br>🔐 כבעלים של המערכת יש לך גישה טכנית למסד הנתונים. כדאי לספר להם.</div>
+      <div class="row" style="gap:8px;margin-top:10px"><button type="button" class="btn" onclick="shareFriendLink('wa')">💬 לשלוח בוואטסאפ</button><button type="button" class="btn sec" onclick="shareFriendLink('copy')">📋 להעתיק קישור</button></div>
+    </div>
     <div class="panel"><h2 data-i18n="sharing.members.title">חברי משק הבית</h2><div id="membersList"></div><div id="pendingInvites"></div></div>
     <div class="panel">
       <h2 data-i18n="sharing.integrations.title">🔌 אינטגרציות צ'אט חכם</h2>
@@ -1021,6 +1138,7 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
   </section>
 
   <section id="tab-settings" class="hidden">
+    <div class="panel"><h2>👋 הדרכה</h2><p class="muted" style="margin-bottom:10px">סיור קצר של 5 מסכים על האפליקציה.</p><button type="button" class="btn sec" onclick="startTour()">להתחיל את ההדרכה</button></div>
     <div class="panel">
       <h2 data-i18n="settings.account.title">פרטי חשבון</h2>
       <div class="row" style="gap:24px;flex-wrap:wrap">
@@ -1915,6 +2033,16 @@ async function loadAll(){
   ]);
   DB.categories=c.data||[];DB.transactions=t.data||[];DB.loans=l.data||[];DB.installments=i.data||[];DB.investments=inv.data||[];DB.goals=g.data||[];
   DB.bankAccounts=ba.data||[];DB.creditCards=cc.data||[];DB.categoryBudgets=cb.data||[];
+  try{
+    const since=new Date(Date.now()-14*864e5).toISOString();
+    const [al,ck,fe,snap]=await Promise.all([
+      sb.from('advisor_alerts').select('*').eq('household_id',HID).is('dismissed_at',null).gte('created_at',since).order('created_at',{ascending:false}),
+      sb.from('weekly_checkins').select('*').eq('household_id',HID).order('week_start',{ascending:false}).limit(1),
+      sb.from('checkin_feelings').select('*').eq('household_id',HID).order('week_start',{ascending:false}).limit(8),
+      sb.from('investment_snapshots').select('snap_date,total_ils').eq('household_id',HID).order('snap_date',{ascending:true}).limit(400)]);
+    try{const[mm,rp]=await Promise.all([sb.from('advisor_memories').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(60),sb.from('monthly_reports').select('*').eq('household_id',HID).order('month',{ascending:false}).limit(1)]);DB.memories=mm.error?[]:(mm.data||[]);DB.report=rp.error?null:((rp.data||[])[0]||null);}catch(_){DB.memories=[];DB.report=null;}
+    DB.alerts=al.error?[]:(al.data||[]);DB.checkin=ck.error?null:((ck.data||[])[0]||null);DB.feelings=fe.error?[]:(fe.data||[]);DB.invSnaps=snap.error?[]:(snap.data||[]);
+  }catch(_){DB.alerts=[];DB.checkin=null;DB.feelings=[];DB.invSnaps=[];}
   try{const hh=await sb.from('households').select('income_expectations').eq('id',HID).maybeSingle();DB.incomeExp=Array.isArray(hh.data&&hh.data.income_expectations)?hh.data.income_expectations:[];}catch(_){DB.incomeExp=[];}
   try{const tk=await sb.from('advisor_tasks').select('*').eq('household_id',HID).order('due_date',{ascending:true});DB.tasks=tk.error?[]:(tk.data||[]);}catch(_){DB.tasks=[];}
   const neededIds=[...new Set(DB.transactions.map(t=>t.created_by).filter(Boolean))].filter(id=>!memberCache[id]);
@@ -1958,6 +2086,9 @@ function goToTab(tab){
   if(tab==='dash')syncDashboard(true);
   if(tab==='charts')renderCharts();
   if(tab==='advisor'){showAdvisorConvoView(false);loadAdvisorConversationsList();renderAdvisorTopics();renderTaskBoard();}
+  if(tab==='investments')renderInv2();
+  if(tab==='advisor')renderMemoryBoard();
+  if(tab==='planning')renderSimChips();
   if(tab==='investments')loadMarketQuote();
   if(tab==='import'&&!importInProgress){const s=$('#importStatus');if(s&&s.textContent&&s.textContent.includes('מנתחת ומסווגת'))s.innerHTML='';}
 }
@@ -3642,6 +3773,9 @@ window.dismissOnbBanner=()=>{localStorage.setItem('onbBannerDismissed_v1','1');$
 function render(){
   refreshOnbBanner();
   renderDashTasks();
+  if(!window.__deepLinked&&new URLSearchParams(location.search).get('checkin')==='1')setTimeout(()=>openCheckin(),900);
+  if(!window.__deepLinked&&new URLSearchParams(location.search).get('report')==='1')setTimeout(()=>openReport(),900);
+  if(!window.__deepLinked){try{if(!localStorage.getItem('tourSeen_v2')&&localStorage.getItem('welcomeSeen_v1'))setTimeout(()=>{if(!document.querySelector('.modal-overlay:not(.hidden)'))startTour();},1400);}catch(_){}}
   if(!window.__deepLinked){window.__deepLinked=true;const dl=new URLSearchParams(location.search).get('tab');if(dl&&TABS.includes(dl)){setTimeout(()=>goToTab(dl),0);history.replaceState(null,'',location.pathname);}
     const dueT=pickDueTask(),key='execShown_'+todayStr();
     if(dueT&&!dl){let seen=null;try{seen=localStorage.getItem(key);}catch(_){}
@@ -3818,6 +3952,12 @@ window.startNextMonthConsult=()=>{
   },60);
 };
 
+function feelingsSummary(){
+  const f=(DB.feelings||[]);if(!f.length)return null;
+  const wk=f[0].week_start;const cur=f.filter(x=>x.week_start===wk);
+  const lbl={calm:'calm',ok:'ok',stressed:'stressed'};
+  return {week:wk,members:cur.map(x=>({name:memberName(x.user_id),feeling:lbl[x.feeling],note:x.note||undefined}))};
+}
 function buildAdviceSummary(){
   const monthKeys=[];
   for(let i=5;i>=0;i--){
@@ -3861,7 +4001,7 @@ function buildAdviceSummary(){
     return{category:c.name,monthlyBudget:+b.monthly_amount,spentSoFarThisMonth:Math.round(spent)};
   }).filter(Boolean);
   const savingsGoals=DB.goals.map(g=>({name:g.name,target:+g.target_amount,saved:+g.saved_amount}));
-  return{userName:MNAME,currentMonth:MONTHS[VM]+' '+VY,last6Months,categorySpendingHistory,personalCategoryBreakdown,budgetsVsActual,savingsGoals};
+  return{userName:MNAME,currentMonth:MONTHS[VM]+' '+VY,last6Months,categorySpendingHistory,personalCategoryBreakdown,budgetsVsActual,savingsGoals,feelings:feelingsSummary(),memories:(DB.memories||[]).slice(0,30).map(m=>m.text),nextMonth:(()=>{try{const p=buildNextMonthProjection();return{income:p.expectedFixedIncome,balance:p.projectedBalance};}catch(_){return null;}})()};
 }
 
 function renderAdvice(a,targetSel){
@@ -3932,10 +4072,12 @@ function renderAdvisorTopics(){
     +'<button type="button" class="advisor-topic-chip" onclick="startNewConsultation()"><span class="ic">💬</span><span>שאלה חופשית / ניתוח כללי</span></button>';
 }
 function showAdvisorConvoView(show){
+  if(!show)try{maybeExtractMemories();}catch(_){}
   const convo=$('#advisorConvo'),hist=$('#advisorHistoryWrap');
   if(convo)convo.classList.toggle('hidden',!show);
   if(hist)hist.classList.toggle('hidden',show);
   const tb=$('#taskBoard');if(tb)tb.classList.toggle('hidden',show);
+  const mb=$('#memoryBoard');if(mb)mb.classList.toggle('hidden',show);
   const hero=document.querySelector('#tab-advisor .advisor-hero-top');if(hero)hero.classList.toggle('hidden',show);
 }
 
@@ -3978,6 +4120,7 @@ async function persistMessage(m){
 }
 async function saveCurrentConversation(){ /* kept for older callers; rows are saved per message now */ await ensureConversationRow().catch(()=>{}); }
 function renderConvoOwnerBar(){
+  try{refreshSpeakBtn();}catch(_){}
   const bar=$('#convoOwnerBar'),sub=$('#wcSub');if(!currentConversation)return;
   const mine=convoIsMine();
   if(sub)sub.textContent=currentConversation.is_private?'🔒 שיחה פרטית':(mine?'👥 משותפת עם משק הבית':'👥 שיחה ש'+memberName(currentConversation.user_id)+' פתח/ה. אפשר להמשיך אותה');
@@ -4243,6 +4386,7 @@ window.sendAdvisorChat=async(presetMsg)=>{
   renderAdvisorChat();
   renderChips(suggestions,true);
   persistMessage(am);
+  try{speakAdvisor(am.text);}catch(_){}
   loadAdvisorConversationsList();
 };
 
@@ -4309,6 +4453,7 @@ function renderDashGreeting(){
 }
 function renderDashTasks(){
   renderDashGreeting();
+  try{renderDashAlerts();renderDashCheckin();renderDashLesson();renderDashReport();}catch(e){console.warn('stage2 home',e);}
   const box=$('#dashTasks');if(!box)return;
   const open=(DB.tasks||[]).filter(t=>t.status==='open').sort((a,b)=>String(a.due_date||'9').localeCompare(String(b.due_date||'9')));
   if(!open.length){box.innerHTML='';return;}
@@ -4628,6 +4773,434 @@ window.buildActionPlan=async()=>{
   };
 };
 
+// ═══════════════ STAGE 4 ═══════════════
+// ── advisor memory ──
+const MEM_KIND={decision:'📌',preference:'💛',goal:'🎯',fact:'ℹ️'};
+function renderMemoryBoard(){
+  const box=$('#memoryBoard');if(!box)return;
+  const list=DB.memories||[];
+  box.innerHTML='<details class="dv-card" style="padding:4px 14px;margin-bottom:14px"'+(list.length?'':' open')+'><summary style="cursor:pointer;padding:8px 0;font-weight:700">🧠 מה היועץ זוכר ('+list.length+')</summary>'
+    +(list.length?list.map(m=>'<div class="mem-row"><span>'+(MEM_KIND[m.kind]||'📌')+'</span><span class="t">'+esc(m.text)+'</span><span class="w">'+_dgDate(String(m.created_at).slice(0,10)).slice(0,5)+(m.created_by?' · '+esc(memberName(m.created_by)):'')+'</span><button type="button" onclick="forgetMemory(\''+m.id+'\')" aria-label="למחוק">✕</button></div>').join(''):'<p class="muted" style="font-size:.84rem;padding:4px 0 8px">עוד אין. אחרי שיחות משותפות היועץ ירשום כאן החלטות והעדפות שלכם.</p>')
+    +'<div style="padding:6px 0 10px"><button type="button" class="smallbtn" onclick="addMemory()">+ להוסיף משהו שחשוב לזכור</button></div></details>';
+}
+window.forgetMemory=async id=>{
+  if(!await UI.confirm('שהיועץ ישכח את זה?',{title:'מחיקת זיכרון',okLabel:'כן, למחוק'}))return;
+  const{error}=await sb.from('advisor_memories').delete().eq('id',id);
+  if(error){notify('שגיאה: '+error.message);return;}
+  DB.memories=(DB.memories||[]).filter(m=>m.id!==id);renderMemoryBoard();
+};
+window.addMemory=async()=>{
+  const v=await UI.prompt('🧠 משהו שהיועץ צריך לזכור',[{key:'t',label:'למשל: "לא לוקחים הלוואות חדשות השנה"',value:''}]);
+  const t=v&&String(v.t||'').trim();if(!t)return;
+  const{data,error}=await sb.from('advisor_memories').insert({household_id:HID,text:t.slice(0,120),kind:'decision',created_by:CU.id}).select().single();
+  if(error){notify('שגיאה: '+error.message);return;}
+  DB.memories=[data,...(DB.memories||[])];renderMemoryBoard();UI.toast('✓ נשמר');
+};
+const __memDone={};
+async function maybeExtractMemories(){
+  const c=currentConversation;if(!c||!c.id||c.is_private)return;
+  const userMsgs=(c.messages||[]).filter(m=>m.role==='user').length;
+  if(userMsgs<1||__memDone[c.id]===userMsgs)return;
+  __memDone[c.id]=userMsgs;
+  try{
+    const res=await fetch(API_BASE+'/api/ai/extract-memories',{method:'POST',headers:await authHeaders(),body:JSON.stringify({
+      messages:c.messages.filter(m=>m.role==='user'||m.role==='ai').map(m=>({role:m.role,text:String(m.text||''),author:m.role==='user'?memberName(m.author_id):undefined})),
+      existing:(DB.memories||[]).map(m=>m.text)})});
+    const d=await res.json();if(!d.memories||!d.memories.length)return;
+    const rows=d.memories.map(m=>({household_id:HID,text:m.text,kind:m.kind,source_conversation_id:c.id,created_by:CU.id}));
+    const{data}=await sb.from('advisor_memories').insert(rows).select();
+    if(data&&data.length){DB.memories=[...data,...(DB.memories||[])];renderMemoryBoard();UI.toast('🧠 היועץ רשם '+data.length+' דברים לזכור');}
+  }catch(_){}
+}
+
+// ── talk to the advisor ──
+function advisorSpeakOn(){try{return localStorage.getItem('advisorSpeak')==='1';}catch(_){return false;}}
+function refreshSpeakBtn(){const b=$('#wcSpeakBtn');if(b){const on=advisorSpeakOn();b.textContent=on?'🔊':'🔇';b.classList.toggle('on',on);}}
+window.toggleAdvisorSpeak=()=>{try{localStorage.setItem('advisorSpeak',advisorSpeakOn()?'0':'1');}catch(_){}if(!advisorSpeakOn())try{speechSynthesis.cancel();}catch(_){}refreshSpeakBtn();UI.toast(advisorSpeakOn()?'🔊 היועץ יקריא את התשובות':'🔇 הקראה כבויה');};
+function speakAdvisor(text){
+  if(!advisorSpeakOn()||!('speechSynthesis' in window)||!text)return;
+  const clean=String(text).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu,'').replace(/₪\s?([\d,.]+)/g,'$1 שקלים').slice(0,1200);
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(clean);u.lang='he-IL';
+    const v=(speechSynthesis.getVoices()||[]).find(x=>/^he|iw/i.test(x.lang));if(v)u.voice=v;u.rate=1;speechSynthesis.speak(u);}catch(_){}
+}
+window.advisorListen=()=>{
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const inp=$('#advisorChatInput'),btn=$('#wcMicBtn');
+  if(!SR){inp.focus();UI.toast('לחצו על המיקרופון במקלדת ודברו');return;}
+  try{speechSynthesis.cancel();}catch(_){}
+  if(btn.classList.contains('rec')){try{window.__advRec&&window.__advRec.stop();}catch(_){}return;}
+  const r=new SR();window.__advRec=r;r.lang='he-IL';r.interimResults=true;
+  let finalT='';
+  r.onstart=()=>btn.classList.add('rec');
+  r.onresult=e=>{let it='';for(let k=e.resultIndex;k<e.results.length;k++){const x=e.results[k];if(x.isFinal)finalT+=x[0].transcript;else it+=x[0].transcript;}inp.value=(finalT+' '+it).trim();};
+  r.onend=()=>{btn.classList.remove('rec');if(inp.value.trim())sendAdvisorChat();};
+  r.onerror=e=>{btn.classList.remove('rec');if(e.error==='not-allowed')notify('צריך לאשר גישה למיקרופון בהגדרות הדפדפן');};
+  try{r.start();}catch(_){}
+};
+
+// ── monthly report ──
+function reportSeen(id){try{return localStorage.getItem('reportSeen')===id;}catch(_){return false;}}
+function renderDashReport(){
+  const box=$('#dashReport');if(!box)return;
+  const r=DB.report;if(!r){box.innerHTML='';return;}
+  const age=(Date.now()-new Date(r.created_at).getTime())/864e5;
+  if(age>12){box.innerHTML='';return;}
+  const d=r.data||{};
+  box.innerHTML='<div class="rp-card" onclick="openReport()"><span style="font-size:1.5rem">📊</span><div style="flex:1"><b>הדוח של '+esc(d.monthLabel||r.month)+(reportSeen(r.id)?'':' · חדש')+'</b><span>נשארו '+fmt(d.balance||0)+' · '+((d.recommendations||[]).length)+' המלצות</span></div><span>‹</span></div>';
+}
+window.openReport=()=>{
+  const r=DB.report;if(!r){notify('עוד אין דוח. הוא נוצר ב-1 לכל חודש.');return;}
+  try{localStorage.setItem('reportSeen',r.id);}catch(_){}
+  const d=r.data||{},p=d.prev||{};
+  const cmp=(a,b,good)=>{if(!b)return '';const x=Math.round((a-b)/Math.abs(b)*100);if(!x)return '<span class="rp-cmp muted">כמו החודש הקודם</span>';const ok=good==='up'?x>0:x<0;return '<span class="rp-cmp '+(ok?'pos':'neg')+'">'+(x>0?'▲':'▼')+' '+Math.abs(x)+'% מהחודש הקודם</span>';};
+  const recs=d.recommendations||[];
+  const {ov,close}=UI._open('<h3>📊 הדוח של '+esc(d.monthLabel||r.month)+'</h3>'
+    +'<div class="dv-stats"><div class="dv-stat"><span>הכנסות</span><b>'+fmt(d.income||0)+'</b>'+cmp(d.income,p.income,'up')+'</div><div class="dv-stat"><span>הוצאות</span><b>'+fmt(d.expense||0)+'</b>'+cmp(d.expense,p.expense,'down')+'</div><div class="dv-stat"><span>נשאר</span><b class="'+((d.balance||0)>=0?'pos':'neg')+'">'+fmt(d.balance||0)+'</b></div></div>'
+    +(d.narrative?'<div class="dv-note" style="line-height:1.7;color:var(--text)">'+esc(d.narrative)+'</div>':'')
+    +((d.topCategories||[]).length?'<div class="dv-card">'+d.topCategories.map(c=>'<div class="dv-row"><span class="v">'+esc(c.name)+'</span><span class="by">'+(c.prev?(c.amount>c.prev?'▲':'▼')+' מ-'+fmt(c.prev):'')+'</span><b>'+fmt(c.amount)+'</b></div>').join('')+'</div>':'')
+    +((d.goals||[]).length?'<div class="dv-note">🎯 '+d.goals.map(g=>esc(g.name)+': '+g.pct+'%').join(' · ')+'</div>':'')
+    +(d.tasksDone?'<div class="dv-note">✓ ביצעתם '+d.tasksDone+' משימות החודש</div>':'')
+    +(recs.length?'<div class="dv-sec" style="padding:6px 0">3 המלצות לחודש הבא</div><div class="rp-recs">'+recs.map((x,i)=>(i+1)+'. '+esc(x)).join('<br>')+'</div>':'')
+    +'<div class="dg-actions">'+(recs.length&&!r.data.tasks_created?'<button class="btn" id="rpPlan">📋 הפוך לתוכנית</button>':'')+'<button class="dg-back" id="rpClose">סגור</button></div>',{large:true});
+  ov.querySelector('.modal').classList.add('dg-modal');
+  ov.querySelector('#rpClose').onclick=close;
+  const pb=ov.querySelector('#rpPlan');
+  if(pb)pb.onclick=async()=>{
+    pb.disabled=true;pb.textContent='יוצר משימות…';
+    const due=new Date();due.setDate(due.getDate()+7);
+    const rows=recs.map(x=>({household_id:HID,user_id:CU.id,title:x,why:'מהדוח של '+(d.monthLabel||r.month),steps:[],due_date:due.toISOString().slice(0,10)}));
+    const{data,error}=await sb.from('advisor_tasks').insert(rows).select();
+    if(error){notify('שגיאה: '+error.message);pb.disabled=false;return;}
+    DB.tasks=(DB.tasks||[]).concat(data||[]);
+    r.data.tasks_created=true;sb.from('monthly_reports').update({data:r.data}).eq('id',r.id);
+    close();renderDashTasks();UI.toast('✓ נוספו '+rows.length+' משימות לתוכנית');
+  };
+  renderDashReport();
+};
+
+// ═══════════════ STAGE 3 ═══════════════
+window.togglePw=(id,btn)=>{const i=document.getElementById(id);if(!i)return;const show=i.type==='password';i.type=show?'text':'password';btn.textContent=show?'🙈':'👁';};
+// login banner: household invite ("X invited you") or friend link ("X recommends")
+(async function authBanner(){
+  try{
+    const qs=new URLSearchParams(location.search);
+    const box=document.getElementById('authInviteBanner');if(!box)return;
+    const inv=qs.get('invite')||(localStorage.getItem('pendingInvite')||'');
+    if(inv){
+      const{data}=await sb.rpc('get_invite_info',{p_code:inv});
+      const r=Array.isArray(data)?data[0]:data;
+      if(r&&r.valid){box.textContent='👋 '+(r.inviter_name||'מישהו')+' הזמין/ה אותך להצטרף למשק הבית "'+(r.household_name||'')+'"';box.classList.remove('hidden');setAuthMode('register');}
+      return;
+    }
+    if(qs.get('friend')==='1'){
+      const from=(qs.get('from')||'').slice(0,30);
+      box.textContent='🤝 '+(from?from+' ממליץ/ה לך':'הוזמנת')+' לנהל את התקציב המשפחתי שלכם כאן. החשבון שלכם יהיה נפרד ופרטי.';
+      box.classList.remove('hidden');setAuthMode('register');
+    }
+  }catch(_){}
+})();
+window.shareFriendLink=async how=>{
+  const name=(memberCache[CU.id]||'').split(' ')[0];
+  const link=location.origin+location.pathname+'?friend=1'+(name?'&from='+encodeURIComponent(name):'');
+  const msg='היי! אני מנהל את התקציב המשפחתי באפליקציה הזו, עם יועץ AI ותוכנית פעולה. אפשר לפתוח חשבון משלכם, נפרד ופרטי: '+link;
+  if(how==='wa'){window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');return;}
+  try{await navigator.clipboard.writeText(link);UI.toast('📋 הקישור הועתק');}catch(_){notify(link);}
+};
+// voice → quick add (Web Speech API, Hebrew). Falls back to keyboard dictation.
+let __vcRec=null;
+window.openVoiceAdd=()=>{
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const {ov,close}=UI._open('<h3 style="text-align:center">🎤 הוספה בקול</h3>'
+    +(SR?'<button type="button" class="vc-mic" id="vcMic" aria-label="הקלטה">🎤</button><div class="vc-hint" id="vcHint">לחצו ודברו, למשל: "שילמתי 80 שקל בסופר"</div><div class="vc-text" id="vcText"></div>'
+        :'<div class="vc-hint">הדפדפן הזה לא תומך בזיהוי קול ישיר. לחצו בתיבה ואז על המיקרופון 🎤 במקלדת של הטלפון, ודברו.</div><textarea id="vcText" class="vc-text" rows="3" style="width:100%;border:1px solid var(--line2)" placeholder="שילמתי 80 שקל בסופר"></textarea>')
+    +'<div class="dg-actions"><button class="btn" id="vcGo" disabled>✨ למלא עם AI</button><button class="dg-back" id="vcCancel">ביטול</button></div>');
+  ov.querySelector('.modal').classList.add('dg-modal');
+  const txt=ov.querySelector('#vcText'),go=ov.querySelector('#vcGo');
+  const getText=()=>SR?txt.textContent.trim():txt.value.trim();
+  const stop=()=>{try{__vcRec&&__vcRec.stop();}catch(_){}};
+  ov.querySelector('#vcCancel').onclick=()=>{stop();close();};
+  go.onclick=()=>{const t=getText();if(!t)return;stop();close();goToTab('expenses');const q=$('#quickAddText');if(q){q.value=t;}setTimeout(()=>aiQuickAdd(),120);};
+  if(!SR){txt.oninput=()=>{go.disabled=!getText();};setTimeout(()=>txt.focus(),100);return;}
+  const mic=ov.querySelector('#vcMic'),hint=ov.querySelector('#vcHint');
+  const start=()=>{
+    const r=new SR();__vcRec=r;r.lang='he-IL';r.interimResults=true;r.continuous=false;
+    let finalT='';
+    r.onresult=e=>{let interim='';for(let k=e.resultIndex;k<e.results.length;k++){const x=e.results[k];if(x.isFinal)finalT+=x[0].transcript;else interim+=x[0].transcript;}txt.textContent=(finalT+' '+interim).trim();go.disabled=!getText();};
+    r.onstart=()=>{mic.classList.add('on');hint.textContent='מקשיב…';};
+    r.onend=()=>{mic.classList.remove('on');hint.textContent=getText()?'אפשר ללחוץ שוב כדי להוסיף, או להמשיך':'לא שמעתי. לחצו ונסו שוב';if(getText())go.focus();};
+    r.onerror=e=>{mic.classList.remove('on');hint.textContent=e.error==='not-allowed'?'צריך לאשר גישה למיקרופון בהגדרות הדפדפן':'לא הצלחתי לשמוע. נסו שוב, או כתבו בתיבת ההוספה';};
+    try{r.start();}catch(_){}
+  };
+  mic.onclick=()=>{if(mic.classList.contains('on'))stop();else start();};
+  start();
+};
+
+// ═══════════════ STAGE 2 ═══════════════
+// ── 1. proactive alerts (written nightly by /api/alerts/run) ──
+const ALERT_KIND={budget_pace:'💰 תקציב',budget_over:'💰 תקציב',price_increase:'📈 חיוב קבוע',duplicate:'🔁 כפילות',market_move:'📊 השקעות'};
+function renderDashAlerts(){
+  const box=$('#dashAlerts');if(!box)return;
+  const list=(DB.alerts||[]).slice(0,3);
+  if(!list.length){box.innerHTML='';return;}
+  box.innerHTML='<div class="dv-sec" style="padding:0 2px 6px">💡 היועץ שם לב</div>'+list.map(a=>'<div class="al-card '+(a.severity==='warn'?'warn':'')+'"><div class="al-k">'+(ALERT_KIND[a.kind]||'💡')+'</div><div class="al-t">'+esc(a.title)+'</div>'+(a.body?'<div class="al-b">'+esc(a.body)+'</div>':'')
+    +'<div class="al-a"><button type="button" class="smallbtn go" onclick="actOnAlert(\''+a.id+'\')">🧠 תטפל בזה</button><button type="button" class="smallbtn" onclick="dismissAlert(\''+a.id+'\')">ראיתי</button></div></div>').join('');
+}
+window.dismissAlert=async id=>{
+  DB.alerts=(DB.alerts||[]).filter(a=>a.id!==id);renderDashAlerts();
+  await sb.from('advisor_alerts').update({dismissed_at:new Date().toISOString(),dismissed_by:CU.id}).eq('id',id);
+};
+window.actOnAlert=async id=>{
+  const a=(DB.alerts||[]).find(x=>x.id===id);if(!a)return;
+  sb.from('advisor_alerts').update({acted_at:new Date().toISOString()}).eq('id',id);
+  const seed={budget_pace:'היועץ התריע: "'+a.title+'". '+(a.body||'')+' מה אפשר לעשות כדי לא לחרוג החודש?',
+    budget_over:'עברנו את התקציב: "'+a.title+'". '+(a.body||'')+' איך מאזנים את זה בשאר החודש?',
+    price_increase:'שמתי לב ש'+a.title+'. '+(a.body||'')+' כדאי לברר או להחליף? תבנה לי תוכנית אם צריך.',
+    duplicate:'ייתכן שיש חיוב כפול: '+a.title+'. '+(a.body||'')+' תבדוק את התנועות ואם זו כפילות תציע למחוק אחת.',
+    market_move:a.title+'. '+(a.body||'')+' תסביר לי מה זה אומר עבורנו, בלי להמליץ לקנות או למכור.'}[a.kind]||a.title;
+  goToTab('advisor');
+  setTimeout(()=>{startNewConsultation({label:'על ההתראה',seed});},80);
+};
+
+// ── 2. weekly couple check-in + feelings ──
+const FEEL={calm:'😌 רגוע',ok:'🙂 בסדר',stressed:'😟 לחוץ'};
+function myFeeling(wk){return (DB.feelings||[]).find(f=>f.week_start===wk&&f.user_id===CU.id)||null;}
+function renderDashCheckin(){
+  const box=$('#dashCheckin');if(!box)return;
+  const c=DB.checkin;if(!c){box.innerHTML='';return;}
+  const age=(Date.now()-new Date(c.week_start+'T12:00:00').getTime())/864e5;
+  if(age>7){box.innerHTML='';return;}
+  const done=!!myFeeling(c.week_start);
+  const open=(c.decisions||[]).filter(d=>!(d.votes||{})[CU.id]).length;
+  box.innerHTML='<div class="ck-card" onclick="openCheckin()"><span style="font-size:1.5rem">📅</span><div style="flex:1"><b>רבע השעה הזוגית שלכם</b><span>'+(done&&!open?'✓ ענית השבוע · אפשר להציץ שוב':(open?open+' החלטות קטנות מחכות':'איך אתה מרגיש עם הכסף השבוע?'))+'</span></div><span>‹</span></div>';
+}
+window.openCheckin=()=>{
+  const c=DB.checkin;if(!c){notify('עוד אין סיכום שבועי. הוא נוצר ביום ראשון בערב.');return;}
+  const sm=c.summary||{},wk=c.week_start,mine=myFeeling(wk);
+  const others=(DB.feelings||[]).filter(f=>f.week_start===wk&&f.user_id!==CU.id);
+  const diff=sm.avgWeek?Math.round((sm.spentWeek-sm.avgWeek)/sm.avgWeek*100):null;
+  const decs=(c.decisions||[]).map((d,i)=>{
+    const v=(d.votes||{})[CU.id];
+    const who=Object.entries(d.votes||{}).filter(([u])=>u!==CU.id).map(([u,x])=>esc(memberName(u))+': '+(x==='yes'?'כן':'לא')).join(' · ');
+    return '<div class="ck-dec"><div><div>'+esc(d.text)+'</div>'+(who?'<div class="ck-votes">'+who+'</div>':'')+(d.task_id?'<div class="ck-votes">✓ נוסף לתוכנית</div>':'')+'</div><div class="yn"><button type="button" data-d="'+i+'" data-v="yes" aria-pressed="'+(v==='yes')+'">כן</button><button type="button" data-d="'+i+'" data-v="no" aria-pressed="'+(v==='no')+'">לא</button></div></div>';
+  }).join('');
+  const {ov,close}=UI._open('<h3>📅 השבוע שלכם</h3>'
+    +'<div class="dv-stats"><div class="dv-stat"><span>יצא השבוע</span><b>'+fmt(sm.spentWeek||0)+'</b></div><div class="dv-stat"><span>ממוצע שבועי</span><b>'+fmt(sm.avgWeek||0)+'</b></div><div class="dv-stat"><span>הכי הרבה</span><b style="font-size:.85rem">'+esc(sm.topCategory?sm.topCategory.name:'—')+'</b></div></div>'
+    +(diff!=null?'<div class="dv-note">'+(diff>10?'השבוע יצא יותר מהרגיל ב-'+diff+'%':diff<-10?'השבוע יצא פחות מהרגיל ב-'+(-diff)+'% 👏':'שבוע רגיל, קרוב לממוצע')+'</div>':'')
+    +((sm.tasksDone||[]).length?'<div class="dv-note">✓ ביצעתם השבוע: '+sm.tasksDone.map(esc).join(' · ')+'</div>':'')
+    +'<div class="dv-sec" style="padding:6px 0 0">איך אתה מרגיש עם הכסף השבוע?</div>'
+    +'<div class="ck-feel">'+Object.entries(FEEL).map(([k,l])=>'<button type="button" data-f="'+k+'" aria-pressed="'+(mine&&mine.feeling===k)+'">'+l+'</button>').join('')+'</div>'
+    +'<input id="ckNote" placeholder="משפט אחד, אם בא לך (לא חובה)" value="'+esc(mine&&mine.note||'')+'" style="width:100%;margin-bottom:8px">'
+    +(others.length?'<div class="dv-note">'+others.map(o=>esc(memberName(o.user_id))+': '+FEEL[o.feeling]+(o.note?' · "'+esc(o.note)+'"':'')).join('<br>')+'</div>':'')
+    +(decs?'<div class="dv-sec" style="padding:8px 0 6px">החלטות קטנות לשבוע</div>'+decs:'')
+    +'<div class="dg-actions" style="margin-top:10px"><button class="btn" id="ckSave">שמור</button><button class="dg-back" id="ckClose">סגור</button></div>',{large:true});
+  ov.querySelector('.modal').classList.add('dg-modal');
+  let feel=mine?mine.feeling:null;
+  ov.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{feel=b.dataset.f;ov.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
+  ov.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ov.querySelectorAll('[data-d="'+b.dataset.d+'"]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
+  ov.querySelector('#ckClose').onclick=close;
+  ov.querySelector('#ckSave').onclick=async()=>{
+    const btn=ov.querySelector('#ckSave');btn.disabled=true;btn.textContent='שומר…';
+    if(feel){
+      const row={household_id:HID,week_start:wk,user_id:CU.id,feeling:feel,note:(ov.querySelector('#ckNote').value||'').trim().slice(0,200)||null};
+      const{data,error}=await sb.from('checkin_feelings').upsert(row,{onConflict:'household_id,week_start,user_id'}).select().single();
+      if(!error&&data){DB.feelings=[data,...(DB.feelings||[]).filter(f=>!(f.week_start===wk&&f.user_id===CU.id))];}
+    }
+    const decisions=JSON.parse(JSON.stringify(c.decisions||[]));
+    ov.querySelectorAll('[data-d][aria-pressed="true"]').forEach(b=>{const d=decisions[+b.dataset.d];d.votes=d.votes||{};d.votes[CU.id]=b.dataset.v;});
+    const members=Object.keys(memberCache).length||1;
+    for(const d of decisions){
+      const yes=Object.values(d.votes||{}).filter(v=>v==='yes').length;
+      if(!d.task_id&&yes>=members){
+        const due=new Date();due.setDate(due.getDate()+6);
+        const{data:t}=await sb.from('advisor_tasks').insert({household_id:HID,user_id:CU.id,title:d.text,why:'הוחלט ברבע השעה הזוגית',steps:[],due_date:due.toISOString().slice(0,10)}).select().single();
+        if(t){d.task_id=t.id;DB.tasks=(DB.tasks||[]).concat(t);}
+      }
+    }
+    await sb.from('weekly_checkins').update({decisions}).eq('id',c.id);
+    c.decisions=decisions;
+    close();renderDashTasks();UI.toast('✓ נשמר');
+  };
+};
+
+// ── 3. short lessons, shown when they are relevant ──
+const LESSONS=[
+ {id:'emergency',icon:'🛟',title:'מה זו קרן חירום?',min:2,when:()=>{try{return buildNextMonthProjection().projectedBalance<0;}catch(_){return false;}},why:'כי התחזית לחודש הבא שלילית',
+  body:'קרן חירום היא כסף נזיל שנשמר בצד להוצאות לא צפויות או לחודש שבו ההכנסה יורדת — כדי לא להיכנס למינוס או לקחת הלוואה.\n\nכלל אצבע נפוץ: 3 עד 6 חודשי הוצאות. מי שההכנסה שלו פחות יציבה (למשל אחרי מעבר עבודה) נוטה לשמור יותר.\n\nאיפה שומרים? במקום סולידי ונזיל, כמו פיקדון קצר או קרן כספית — לא במניות.\n\nצעד ראשון: יעד קטן (למשל ₪5,000) והוראת קבע חודשית קבועה אליו.',
+  source:{label:'ויקיפדיה: קרן חירום',url:'https://he.wikipedia.org/wiki/%D7%A7%D7%A8%D7%9F_%D7%97%D7%99%D7%A8%D7%95%D7%9D'}},
+ {id:'index',icon:'📊',title:'מה זו קרן מחקה מדד?',min:2,when:()=>(DB.investments||[]).some(i=>/S&P|SPY|מדד|ETF/i.test((i.name||'')+(i.symbol||''))),why:'כי יש לכם השקעה במדד',
+  body:'קרן מחקה (או קרן סל) עוקבת אחרי מדד — למשל S&P 500, 500 החברות הגדולות בארה"ב — ומנסה להשיג בדיוק את התשואה שלו.\n\nהיתרונות: פיזור רחב בקנייה אחת ודמי ניהול נמוכים יחסית, כי אין מנהל שבוחר מניות.\n\nמה לבדוק: דמי הניהול, באיזה מטבע הקרן, ואם היא נסחרת בישראל או בחו"ל (זה משפיע על מס ועל עמלות).\n\nמדד יכול לרדת, לפעמים הרבה. הוא מתאים לכסף שלא צריך בשנים הקרובות.',
+  source:{label:'ויקיפדיה: קרן מחקה',url:'https://he.wikipedia.org/wiki/%D7%A7%D7%A8%D7%9F_%D7%9E%D7%97%D7%A7%D7%94'}},
+ {id:'fx',icon:'💱',title:'שער יציג מול שער בזמן אמת',min:1,when:()=>(DB.investments||[]).some(i=>i.currency==='USD'||/SPY|S&P/i.test((i.name||'')+(i.symbol||''))),why:'כי יש לכם השקעה בדולרים',
+  body:'השער היציג נקבע ע"י בנק ישראל פעם ביום עסקים, לפי המסחר באותו רגע. הוא משמש לחוזים, להנהלת חשבונות ולמס.\n\nהשער בזמן אמת זז כל הזמן. באפליקציה השווי מחושב לפי השער העדכני, והיציג מוצג לידו להשוואה.\n\nלמה זה חשוב? בהשקעה בדולרים הרווח מורכב משני חלקים: השינוי במחיר, והשינוי בשער הדולר. דולר שנחלש יכול למחוק חלק מרווח בשוק.',
+  source:{label:'בנק ישראל: על השערים היציגים (אנגלית)',url:'https://www.boi.org.il/en/economic-roles/financial-markets/explanatory-notes-to-the-representative-exchange-rates/'}},
+ {id:'budget',icon:'🧭',title:'איך בונים תקציב שעובד',min:2,when:()=>!(DB.categoryBudgets||[]).length,why:'כי עוד לא הוגדרו תקציבים לקטגוריות',
+  body:'תקציב טוב מתחיל ממה שכבר קורה: ממוצע של 3 החודשים האחרונים בכל קטגוריה.\n\nמשם בוחרים 2–3 קטגוריות לשפר, לא את כולן. יעד קטן שמצליחים בו עדיף על יעד גדול שנשברים ממנו.\n\nמקדימים את החיסכון: קובעים סכום שיוצא בתחילת החודש, ומתקצבים את השאר.\n\nופעם בשבוע מציצים — בשביל זה יש את רבע השעה הזוגית.',
+  source:{label:'משרד החינוך: חינוך פיננסי',url:'https://pop.education.gov.il/financial-education/'}}
+];
+function pickLesson(){
+  let seen={};try{seen=JSON.parse(localStorage.getItem('lessonsSeen')||'{}');}catch(_){}
+  return LESSONS.find(l=>!seen[l.id]&&(()=>{try{return l.when();}catch(_){return false;}})())||null;
+}
+function renderDashLesson(){
+  const box=$('#dashLesson');if(!box)return;
+  const l=pickLesson();
+  box.innerHTML=l?'<div class="ls-card" onclick="openLesson(\''+l.id+'\')"><div class="ls-ic">'+l.icon+'</div><div style="flex:1"><b>'+esc(l.title)+' ('+l.min+' דק׳)</b><span>'+esc(l.why)+'</span></div><span>‹</span></div>':'';
+}
+window.openLesson=id=>{
+  const l=LESSONS.find(x=>x.id===id);if(!l)return;
+  const {ov,close}=UI._open('<h3>'+l.icon+' '+esc(l.title)+'</h3><div class="ls-body">'+esc(l.body)+'</div>'
+    +'<div class="dv-note" style="margin-top:12px">📚 להרחבה: <a href="'+l.source.url+'" target="_blank" rel="noopener">'+esc(l.source.label)+'</a></div>'
+    +'<div class="dg-actions"><button class="btn" id="lsDone">הבנתי ✓</button><button class="dg-back" id="lsAsk">🧠 לשאול את היועץ על זה</button></div>');
+  ov.querySelector('.modal').classList.add('dg-modal');
+  const mark=()=>{try{const s=JSON.parse(localStorage.getItem('lessonsSeen')||'{}');s[id]=1;localStorage.setItem('lessonsSeen',JSON.stringify(s));}catch(_){}renderDashLesson();};
+  ov.querySelector('#lsDone').onclick=()=>{mark();close();};
+  ov.querySelector('#lsAsk').onclick=()=>{mark();close();goToTab('advisor');setTimeout(()=>startNewConsultation({label:l.title,seed:'קראתי את השיעור "'+l.title+'". איך זה נוגע אלינו לפי הנתונים שלנו?'}),80);};
+};
+
+// ── 4. "what if" simulator ──
+const SIM_EXAMPLES=['מה אם נקנה רכב ב-60,000 בינואר?','מה אם נחסוך 1,000 בחודש מנובמבר?','מה אם המשכורת של נעמי תהיה 14,000?'];
+function renderSimChips(){const b=$('#simChips');if(b)b.innerHTML=SIM_EXAMPLES.map((x,i)=>'<button type="button" class="wc-chip" onclick="$(\'#simInput\').value=SIM_EXAMPLES['+i+'];runScenario()">'+esc(x)+'</button>').join('');}
+function simBaseline(){
+  const p=buildNextMonthProjection();
+  return Math.round((p.expectedFixedIncome||0)-(p.expectedFixedExpenses||0)-(p.estimatedVariableExpenses||0)-(p.installmentsDue||0));
+}
+window.runScenario=async()=>{
+  const inp=$('#simInput'),out=$('#simResult');const text=(inp.value||'').trim();if(!text)return;
+  out.innerHTML='<div class="advisor-loading"><div class="advisor-spinner"></div>מחשב…</div>';
+  let r;
+  try{const res=await fetch(API_BASE+'/api/ai/scenario',{method:'POST',headers:await authHeaders(),body:JSON.stringify({text,summary:buildAdviceSummary()})});r=await res.json();if(r.error)throw new Error(r.error);}
+  catch(e){out.innerHTML='<p class="empty">לא הצלחתי לחשב: '+esc(e.message)+'</p>';return;}
+  if(r.question&&!(r.events||[]).length){out.innerHTML='<div class="dv-note">❓ '+esc(r.question)+'</div>';return;}
+  const base=simBaseline();const months=[];const now=new Date();
+  for(let i=1;i<=12;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  let a=0,b=0;const with_=[],without=[];let firstNeg=null,minB=Infinity;
+  months.forEach(m=>{
+    let delta=0;(r.events||[]).forEach(e=>{if(e.type==='once'&&e.month===m)delta+=e.amount;if(e.type==='monthly'&&m>=e.from&&(!e.to||m<=e.to))delta+=e.amount;});
+    a+=base;b+=base+delta;without.push(a);with_.push(b);if(b<minB)minB=b;if(b<0&&!firstNeg)firstNeg=m;
+  });
+  const lbl=m=>MONTHS[+m.slice(5)-1]+' '+m.slice(2,4);
+  out.innerHTML='<div class="dv-sec" style="padding:4px 0">'+esc(r.title||'')+'</div>'
+    +'<div style="position:relative;height:210px"><canvas id="simChart"></canvas></div>'
+    +'<div class="sim-sum"><div><span>בעוד 12 חודשים</span><b class="'+(b>=0?'pos':'neg')+'">'+fmt(b)+'</b></div><div><span>בלי התרחיש</span><b>'+fmt(a)+'</b></div></div>'
+    +'<div class="dv-note">'+(firstNeg?'⚠️ לפי התרחיש, החיסכון המצטבר יורד מתחת לאפס ב'+lbl(firstNeg)+'. הנקודה הנמוכה: '+fmt(minB)+'.':'✓ לפי התרחיש, החיסכון המצטבר נשאר חיובי כל השנה.')+'</div>'
+    +'<div class="sim-ev">מבוסס על עודף חודשי צפוי של '+fmt(base)+' (מהתחזית).<br>'+(r.events||[]).map(e=>'• '+esc(e.label||'')+': '+(e.amount>0?'+':'')+fmt(e.amount)+(e.type==='monthly'?' בחודש מ'+lbl(e.from)+(e.to?' עד '+lbl(e.to):''):' ב'+lbl(e.month))).join('<br>')+'</div>'
+    +'<div class="dv-mini" style="margin-top:8px"><button type="button" class="smallbtn" onclick="goToTab(\'advisor\');setTimeout(()=>startNewConsultation({label:\'מה אם\',seed:'+esc(JSON.stringify('בדקתי תרחיש: '+text+'. לפי הסימולטור בעוד שנה נגיע ל-'+Math.round(b)+' ש"ח במקום '+Math.round(a)+'. מה דעתך, ומה כדאי לבדוק לפני?'))+'}),80)">🧠 לדבר על זה עם היועץ</button></div>';
+  try{
+    const css=getComputedStyle(document.body),c1=css.getPropertyValue('--accent2').trim()||'#1E6B3F',c2=css.getPropertyValue('--faint').trim()||'#999';
+    if(window.__simChart)window.__simChart.destroy();
+    window.__simChart=new Chart($('#simChart'),{type:'line',data:{labels:months.map(lbl),datasets:[{label:'עם התרחיש',data:with_,borderColor:c1,backgroundColor:c1,tension:.25,pointRadius:2},{label:'בלי',data:without,borderColor:c2,borderDash:[5,4],pointRadius:0,tension:.25}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>'₪'+Math.round(v/1000)+'K'}}}}});
+  }catch(_){}
+};
+
+// ── 5. investments 2.0 ──
+const INV_CATALOG=[
+ {label:'S&P 500',symbol:'SPY',currency:'USD',alt:'VOO / IVV'},{label:'נאסד"ק 100',symbol:'QQQ',currency:'USD'},
+ {label:'כל העולם',symbol:'ACWI',currency:'USD'},{label:'כל השוק האמריקאי',symbol:'VTI',currency:'USD'},
+ {label:'זהב',symbol:'GLD',currency:'USD'},{label:'ביטקוין',symbol:'BTC-USD',currency:'USD'},
+ {label:'קרן כספית',symbol:null,currency:'ILS',manual:true},{label:'קרן/נייר ישראלי',symbol:null,currency:'ILS',manual:true}];
+let INVQ={fetchedAt:0,data:null};
+async function loadInvQuotes(force){
+  if(!force&&INVQ.data&&Date.now()-INVQ.fetchedAt<5*60*1000)return INVQ.data;
+  const syms=[...new Set((DB.investments||[]).map(i=>i.symbol).filter(Boolean))];
+  const res=await fetch(API_BASE+'/api/market/quotes?symbols='+encodeURIComponent(syms.join(',')),{headers:await authHeaders()});
+  const data=await res.json();if(data.error)throw new Error(data.error);
+  INVQ={fetchedAt:Date.now(),data};return data;
+}
+function invValue(i,q){
+  const fx=q&&q.usdIls||0;
+  if(i.symbol&&+i.units>0&&q&&q.quotes&&q.quotes[i.symbol]&&!q.quotes[i.symbol].error){
+    const Q=q.quotes[i.symbol],rate=Q.currency==='ILS'?1:Q.currency==='ILA'?0.01:fx;
+    const value=+i.units*Q.price*rate;
+    let mkt=null,fxPart=null;
+    if(+i.buy_price>0&&Q.currency==='USD'&&+i.buy_fx>0){mkt=+i.units*(Q.price-(+i.buy_price))*fx;fxPart=+i.units*(+i.buy_price)*(fx-(+i.buy_fx));}
+    return {value,live:true,chg:Q.changePct,mkt,fxPart};
+  }
+  return {value:+i.current_value||0,live:false};
+}
+window.renderInv2=async(force)=>{
+  const box=$('#inv2Panel');if(!box)return;
+  const invs=DB.investments||[];
+  box.innerHTML='<h2>📈 התיק שלכם <button type="button" class="smallbtn" style="margin-right:8px" onclick="renderInv2(true)" title="רענון">🔄</button></h2><div class="advisor-loading"><div class="advisor-spinner"></div>טוען מחירים…</div>';
+  let q=null,err=null;try{q=await loadInvQuotes(force);}catch(e){err=e.message;}
+  let total=0,mkt=0,fxp=0,anySplit=false;
+  const rows=invs.map(i=>{const v=invValue(i,q);total+=v.value;if(v.mkt!=null){mkt+=v.mkt;fxp+=v.fxPart;anySplit=true;}
+    const cost=+i.cost||0,p=v.value-cost,pct=cost?p/cost*100:0;
+    const tag=i.symbol?esc(i.symbol.replace('-USD','')):'₪';
+    const sub=i.symbol?(+i.units>0?(+i.units)+' יח׳'+(v.chg!=null?' · היום '+(v.chg>=0?'+':'')+v.chg.toFixed(1)+'%':''):'⚠️ חסר מספר יחידות'):('עודכן ידנית'+(i.value_updated_at?' · '+_dgDate(i.value_updated_at.slice(0,10)):''));
+    return '<div class="iv-row" onclick="editHolding(\''+i.id+'\')"><div class="iv-sym">'+tag+'</div><div class="m"><b>'+esc(i.name)+'</b><span>'+sub+'</span></div><div class="v"><b>'+fmt(v.value)+'</b><span class="'+(p>=0?'pos':'neg')+'" style="font-size:.74rem">'+(p>=0?'+':'')+pct.toFixed(1)+'%</span></div></div>';}).join('');
+  const needUnits=invs.filter(i=>i.symbol&&!(+i.units>0)).length+invs.filter(i=>!i.symbol&&/SPY|S&P/i.test(i.name||'')).length;
+  const fxAt=q&&q.usdIlsAt?new Date(q.usdIlsAt).toLocaleString('he-IL',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}):'';
+  const boiAt=q&&q.boi&&q.boi.at?new Date(q.boi.at).toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'}):'';
+  box.innerHTML='<h2>📈 התיק שלכם <button type="button" class="smallbtn" style="margin-right:8px" onclick="renderInv2(true)" title="רענון">🔄</button></h2>'
+    +'<div class="iv-hero"><span>שווי התיק</span><b>'+fmt(total)+'</b>'+(anySplit?'<span>רווח מהשוק '+(mkt>=0?'+':'')+fmt(mkt)+' · מהדולר '+(fxp>=0?'+':'')+fmt(fxp)+'</span>':'')+'</div>'
+    +(q?'<div class="iv-fx"><div>דולר עכשיו<b>₪'+(+q.usdIls).toFixed(3)+'</b>'+(q.usdIlsSource==='live'?fxAt:(q.usdIlsSource==='boi'?'לפי בנק ישראל':'לפי הבנק האירופי'))+'</div><div>שער יציג (בנק ישראל)<b>'+(q.boi?'₪'+(+q.boi.rate).toFixed(3):'—')+'</b>'+boiAt+'</div></div>':'<div class="dv-note">⚠️ המחירים לא זמינים כרגע'+(err?' ('+esc(err)+')':'')+'. מוצג השווי האחרון שנשמר.</div>')
+    +(needUnits?'<div class="iv-need">✏️ כדי שהשווי יתעדכן לבד, לחצו על ההשקעה והוסיפו כמה יחידות יש לכם ובאיזה מחיר קניתם.</div>':'')
+    +(rows?'<div class="dv-card">'+rows+'</div>':'<p class="empty">עוד אין השקעות</p>')
+    +'<div class="dv-sec" style="padding:10px 2px 0">הוספת השקעה</div><div class="iv-chips">'+INV_CATALOG.map((c,k)=>'<button type="button" class="wc-chip" onclick="addHolding('+k+')">'+esc(c.label)+'</button>').join('')+'<button type="button" class="wc-chip" style="border-style:dashed" onclick="addHolding(-1)">+ סימול אחר</button></div>'
+    +((DB.invSnaps||[]).length>1?'<div class="dv-sec" style="padding:12px 2px 6px">השווי לאורך זמן</div><div style="position:relative;height:160px"><canvas id="invSnapChart"></canvas></div>':'');
+  if((DB.invSnaps||[]).length>1){try{const c=getComputedStyle(document.body).getPropertyValue('--accent').trim();if(window.__invChart)window.__invChart.destroy();window.__invChart=new Chart($('#invSnapChart'),{type:'line',data:{labels:DB.invSnaps.map(s=>_dgDate(s.snap_date).slice(0,5)),datasets:[{data:DB.invSnaps.map(s=>+s.total_ils),borderColor:c,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});}catch(_){}}
+};
+async function holdingForm(title,i,preset){
+  const isSym=preset?!preset.manual:!!(i&&i.symbol);
+  const fields=[{key:'name',label:'שם',value:(i&&i.name)||(preset&&preset.label)||''}];
+  if(isSym){
+    fields.push({key:'symbol',label:'סימול (למשל SPY, QQQ, BTC-USD)',value:(i&&i.symbol)||(preset&&preset.symbol)||''});
+    fields.push({key:'units',label:'כמה יחידות יש לכם',type:'number',value:(i&&i.units)||''});
+    fields.push({key:'buy_price',label:'מחיר ממוצע ליחידה בקנייה ($, לא חובה)',type:'number',value:(i&&i.buy_price)||''});
+    fields.push({key:'buy_fx',label:'שער הדולר ביום הקנייה (לא חובה)',type:'number',value:(i&&i.buy_fx)||''});
+  }else{
+    fields.push({key:'current_value',label:'שווי נוכחי (₪)',type:'number',value:(i&&i.current_value)||''});
+  }
+  fields.push({key:'cost',label:'כמה הושקע בסך הכול (₪)',type:'number',value:(i&&i.cost)||''});
+  return UI.prompt(title,fields);
+}
+window.addHolding=async k=>{
+  const preset=k>=0?INV_CATALOG[k]:{label:'',symbol:'',currency:'USD'};
+  const v=await holdingForm('➕ '+(preset.label||'השקעה חדשה'),null,preset);if(!v)return;
+  const sym=String(v.symbol||'').trim().toUpperCase()||null;
+  if(sym&&!/^[A-Z0-9.\-=^]{1,15}$/.test(sym)){notify('הסימול לא תקין');return;}
+  const row={household_id:HID,created_by:CU.id,name:String(v.name||sym||'השקעה').trim(),asset_type:preset.manual?(preset.label):'מניות/ETF',
+    symbol:sym,units:+v.units||null,currency:sym?(preset.currency||'USD'):'ILS',buy_price:+v.buy_price||null,buy_fx:+v.buy_fx||null,
+    cost:+v.cost||0,current_value:sym?(+v.cost||0):(+v.current_value||0),buy_date:todayStr(),value_updated_at:new Date().toISOString()};
+  const{error}=await sb.from('investments').insert(row);
+  if(error){notify('שגיאה בשמירה: '+error.message);return;}
+  await loadAll();render();renderInv2(true);UI.toast('✓ נוספה');
+};
+window.editHolding=async id=>{
+  const i=(DB.investments||[]).find(x=>x.id===id);if(!i)return;
+  const guess=!i.symbol&&/SPY|S&P/i.test(i.name||'')?{label:i.name,symbol:'SPY',currency:'USD'}:null;
+  const v=await holdingForm('✏️ '+i.name,guess?{...i,symbol:'SPY'}:i,guess);if(!v)return;
+  const sym=v.symbol!==undefined?(String(v.symbol||'').trim().toUpperCase()||null):i.symbol;
+  const patch={name:String(v.name||i.name).trim(),cost:+v.cost||0};
+  if(v.symbol!==undefined){patch.symbol=sym;patch.units=+v.units||null;patch.buy_price=+v.buy_price||null;patch.buy_fx=+v.buy_fx||null;if(sym)patch.currency='USD';}
+  if(v.current_value!==undefined){patch.current_value=+v.current_value||0;patch.value_updated_at=new Date().toISOString();}
+  const{error}=await sb.from('investments').update(patch).eq('id',id);
+  if(error){notify('שגיאה בשמירה: '+error.message);return;}
+  await loadAll();render();renderInv2(true);UI.toast('✓ עודכן');
+};
+
+// ── 6. first-run tour (5 slides, one per tab) ──
+const TOUR=[
+ {icon:'🏠',title:'בית',group:'home',text:'כאן מתחיל כל יום: מה לעשות היום, מה היועץ שם לב אליו, וכמה נשאר לכם החודש. לחיצה על מספר פותחת את התנועות שמאחוריו.'},
+ {icon:'💸',title:'תנועות',group:'money',text:'כל ההכנסות וההוצאות. אפשר להוסיף במילים ("שילמתי 80 בסופר"), לייבא דוח אשראי, ולראות גרפים וקטגוריות.'},
+ {icon:'📋',title:'תוכנית',group:'plan',text:'היועץ והמשימות. שואלים אותו כל דבר, והוא הופך עצות למשימות עם צעדים ותזכורות. אפשר גם לבקש ממנו לתקן תנועות, ולבדוק "מה אם".'},
+ {icon:'🏦',title:'נכסים וחובות',group:'assets',text:'חשבונות, כרטיסים, הלוואות, תשלומים והשקעות. השקעות במדדים מתעדכנות לבד לפי המחיר והדולר.'},
+ {icon:'⚙️',title:'הגדרות',group:'settings',text:'שיתוף עם בן/בת הזוג, התראות לטלפון, ואשף ההקמה. ההדרכה הזו נמצאת כאן אם תרצו לראות אותה שוב.'}
+];
+window.startTour=(step)=>{
+  step=step||0;
+  document.querySelectorAll('.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
+  const t=TOUR[step];
+  document.querySelectorAll('.mtab-btn[data-group="'+t.group+'"],#nav button[data-group="'+t.group+'"]').forEach(x=>x.classList.add('tour-hl'));
+  const {ov,close}=UI._open('<div class="tour"><div class="tour-ic">'+t.icon+'</div><h3>'+t.title+'</h3><p>'+t.text+'</p>'
+    +'<div class="tour-dots">'+TOUR.map((_,i)=>'<i class="'+(i===step?'on':'')+'"></i>').join('')+'</div>'
+    +'<div class="dg-actions"><button class="btn" id="tNext">'+(step<TOUR.length-1?'הבא':'בואו נתחיל')+'</button>'+(step<TOUR.length-1?'<button class="dg-back" id="tSkip">דלג</button>':'')+'</div></div>');
+  ov.querySelector('.modal').classList.add('dg-modal');
+  const end=()=>{document.querySelectorAll('.tour-hl').forEach(x=>x.classList.remove('tour-hl'));try{localStorage.setItem('tourSeen_v2','1');}catch(_){}};
+  ov.querySelector('#tNext').onclick=()=>{close();if(step<TOUR.length-1)startTour(step+1);else{end();goToTab('dash');}};
+  const sk=ov.querySelector('#tSkip');if(sk)sk.onclick=()=>{close();end();};
+};
+
 // ═══ AI onboarding wizard ═══
 const ONBOARDING_QUESTIONS=[
   {key:'salary',q:'כדי שנתחיל לנהל את התקציב שלכם יחד — מה המשכורת החודשית שלך?'},
@@ -4787,7 +5360,10 @@ const WELCOME_TIPS=[
   {icon:'🎯',title:'יעדים עם תוכנית',text:'לחיצה כפולה על כרטיס יעד פותחת חלון תכנון מפורט — סעיפי תקציב, הערות חופשיות, ומעקב התקדמות. יש גם כפתור "🤖 הצע תוכנית עם AI" שמציע סעיפים לפי שם היעד והסכום.'},
   {icon:'🧠',title:'יועץ AI אישי',text:'בטאב "יועץ AI" לוחצים "התחל ייעוץ" לניתוח אישי מבוסס הנתונים האמיתיים שלכם (לא רק של משק הבית — גם ההוצאות האישיות שלכם), אפשר לשוחח עם היועץ בשאלות המשך, וכל שיחה נשמרת ונגישה שוב מאוחר יותר — רק לכם, לא משותפת עם שאר בני הבית.'}
 ];
-window.showWelcomeGuide=()=>{
+window.showWelcomeGuide=()=>{try{if(!localStorage.getItem('tourSeen_v2')){localStorage.setItem('welcomeSeen_v1','1');startTour();return;}}catch(_){}
+  return showWelcomeGuideOld();
+};
+window.showWelcomeGuideOld=()=>{
   const html='<button type="button" onclick="this.closest(\'.modal-overlay\').remove()" style="position:absolute;left:16px;top:16px;background:none;border:0;color:var(--muted);font-size:1.1rem;cursor:pointer;line-height:1" title="סגור">✕</button>'
     +'<h3>👋 ברוכים הבאים!</h3><p>כמה דברים שכדאי לדעת לפני שמתחילים:</p>'
     +WELCOME_TIPS.map(t=>'<div class="welcome-tip"><span class="wicon">'+t.icon+'</span><div><b>'+t.title+'</b><span class="d">'+t.text+'</span></div></div>').join('')
