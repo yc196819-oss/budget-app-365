@@ -106,6 +106,26 @@ const aiLimiter = rateLimit({
   keyGenerator: (req) => req.authUserId || req.ip,
   message: { error: 'יותר מדי בקשות AI, נסה שוב בעוד דקה' }
 });
+
+// ═══ stage 3: monthly AI quota per household (friends use the owner's AI keys) ═══
+// households.ai_monthly_limit: null = unlimited (our own household), number = cap.
+// Counts one per AI request, per calendar month (Israel time), in ai_usage.
+async function aiQuota(req, res, next) {
+  try {
+    if (!supabaseAdmin || !req.authUserId) return next();
+    const { data: m } = await supabaseAdmin.from('memberships').select('household_id').eq('user_id', req.authUserId).maybeSingle();
+    if (!m) return next();
+    const { data: hh, error: hhErr } = await supabaseAdmin.from('households').select('ai_monthly_limit').eq('id', m.household_id).maybeSingle();
+    if (hhErr) return next();                       // column not there yet (DB not migrated) → don't block
+    const month = israelToday().slice(0, 7);
+    const { data: used } = await supabaseAdmin.rpc('bump_ai_usage', { p_household: m.household_id, p_month: month });
+    const limit = hh && hh.ai_monthly_limit;
+    if (limit != null && Number(used) > Number(limit)) {
+      return res.status(429).json({ error: `הגעתם למכסת ה-AI החודשית (${limit} פעולות). היא מתאפסת בתחילת החודש הבא.`, quota: { used: Number(used) - 1, limit } });
+    }
+    return next();
+  } catch (_e) { return next(); }                   // never block on a quota bug
+}
 const notifyLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
@@ -658,7 +678,7 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
-app.post('/api/ai/import', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/ai/import', requireAuth, aiLimiter, aiQuota, async (req, res) => {
   try {
     if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
       return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
@@ -709,7 +729,7 @@ app.post('/api/ai/import', requireAuth, aiLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/ai/advice', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/ai/advice', requireAuth, aiLimiter, aiQuota, async (req, res) => {
   try {
     if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
       return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
@@ -758,7 +778,7 @@ app.post('/api/ai/advice', requireAuth, aiLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/ai/advice-chat', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/ai/advice-chat', requireAuth, aiLimiter, aiQuota, async (req, res) => {
   try {
     if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
       return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
@@ -785,7 +805,7 @@ ${historyText ? '\nהיסטוריית שיחה קודמת:\n' + historyText + '\
   }
 });
 
-app.post('/api/ai/onboarding', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/ai/onboarding', requireAuth, aiLimiter, aiQuota, async (req, res) => {
   try {
     if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
       return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
@@ -838,7 +858,7 @@ ${qaText}`;
   }
 });
 
-app.post('/api/chat/parse', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/chat/parse', requireAuth, aiLimiter, aiQuota, async (req, res) => {
   try {
     const { text } = req.body || {};
     if (!text) return res.status(400).json({ error: 'text is required' });
@@ -878,12 +898,60 @@ app.post('/api/chat/parse', requireAuth, aiLimiter, async (req, res) => {
 });
 
 let marketQuoteCache = null; // { data, fetchedAt } -- refreshed at most every 5 min
-async function fetchUsdIls() {
+let boiCache = null; // { rate, at, fetchedAt }
+async function fetchBoiUsd() {
+  if (boiCache && Date.now() - boiCache.fetchedAt < 30 * 60 * 1000) return boiCache;
+  const res = await fetch('https://boi.org.il/PublicApi/GetExchangeRates');
+  const xml = await res.text();
+  const block = (xml.split('</ExchangeRateResponseDTO>').find((b) => /<Key>USD<\/Key>/.test(b))) || '';
+  const rate = Number((block.match(/<CurrentExchangeRate>([\d.]+)<\/CurrentExchangeRate>/) || [])[1]);
+  const at = (block.match(/<LastUpdate>([^<]+)<\/LastUpdate>/) || [])[1] || null;
+  if (!res.ok || !rate) throw new Error('BOI rate unavailable');
+  boiCache = { rate, at, fetchedAt: Date.now() };
+  return boiCache;
+}
+// Live rate for valuation; the official BOI representative rate is shown next to it.
+async function fetchUsdIlsDetailed() {
+  try {
+    const q = await fetchYahooQuote('ILS=X');
+    if (q && q.price) return { rate: q.price, at: q.at, source: 'live' };
+  } catch (_e) { /* fall through */ }
+  try {
+    const b = await fetchBoiUsd();
+    return { rate: b.rate, at: b.at, source: 'boi' };
+  } catch (_e) { /* fall through */ }
   const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=ILS');
   const data = await res.json();
   const rate = data?.rates?.ILS;
   if (!res.ok || !rate) throw new Error('USD/ILS rate unavailable');
-  return Number(rate);
+  return { rate: Number(rate), at: data.date || null, source: 'ecb' };
+}
+async function fetchUsdIls() { return (await fetchUsdIlsDetailed()).rate; }
+const quoteCache = new Map(); // symbol -> { data, fetchedAt }
+async function fetchYahooQuote(symbol) {
+  const hit = quoteCache.get(symbol);
+  if (hit && Date.now() - hit.fetchedAt < 5 * 60 * 1000) return hit.data;
+  const res = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(symbol) + '?interval=1d&range=1mo', {
+    headers: { 'User-Agent': 'Mozilla/5.0' }
+  });
+  const json = await res.json();
+  const r = json?.chart?.result?.[0];
+  const m = r?.meta;
+  if (!res.ok || !m || !m.regularMarketPrice) throw new Error('no quote for ' + symbol);
+  const closes = (r.indicators?.quote?.[0]?.close || []).filter((x) => x != null);
+  const prev = m.previousClose ?? m.chartPreviousClose;
+  const weekAgo = closes.length > 5 ? closes[closes.length - 6] : null;
+  const data = {
+    symbol,
+    price: Number(m.regularMarketPrice),
+    currency: m.currency || 'USD',
+    changePct: prev ? ((m.regularMarketPrice - prev) / prev) * 100 : null,
+    weekChangePct: weekAgo ? ((m.regularMarketPrice - weekAgo) / weekAgo) * 100 : null,
+    at: m.regularMarketTime ? new Date(m.regularMarketTime * 1000).toISOString() : new Date().toISOString(),
+    name: m.shortName || m.longName || symbol
+  };
+  quoteCache.set(symbol, { data, fetchedAt: Date.now() });
+  return data;
 }
 async function fetchSpyQuote() {
   try {
@@ -920,7 +988,7 @@ function addDaysIso(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 
-app.post('/api/ai/action-plan', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/ai/action-plan', requireAuth, aiLimiter, aiQuota, async (req, res) => {
   try {
     if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
       return res.status(503).json({ error: 'No AI key configured' });
@@ -1014,13 +1082,15 @@ function buildChatPrompt(summary, history, message, authorName, fixContext) {
 בשיחה יכולים להשתתף שני בני הזוג; ההודעה הנוכחית נכתבה על ידי ${authorName || 'משתמש'} — פנה אליו/אליה בשמו/ה כשזה טבעי.
 הנתונים (JSON) כוללים categorySpendingHistory ברמת משק הבית, personalCategoryBreakdown של המשתמש, תקציבים, יעדים ומשימות. ענה על סמך המספרים בפועל, 2-6 משפטים, בלי markdown ובלי כותרות.
 בהחלטות גדולות (משכנתא, השקעות) תן מידע, חישובים ושאלות לבדיקה, וציין שכדאי להתייעץ עם יועץ מורשה; אל תמליץ על נייר ערך או מוצר ספציפי.
+אם בנתונים יש memories (החלטות והעדפות שבני הזוג קבעו בעבר): התחשב בהן כעובדה, אל תציע משהו שסותר אותן אלא אם שואלים, ואם משהו השתנה — שאל.
+אם בנתונים יש feelings (איך בני הזוג מרגישים השבוע עם הכסף): כשמישהו "stressed" — טון רגוע, צעד אחד קטן בכל פעם, הזכר מה כבר הולך טוב; כשכולם "calm" — אפשר להציע יעד גדול יותר. אל תכתוב "ראיתי שאתה לחוץ" אלא אם שאלו.
 בסוף התשובה, בשורה נפרדת, כתוב בדיוק: ${SUGG_MARK} ואחריו 2-3 שאלות המשך קצרות (עד 5 מילים כל אחת) מופרדות ב-|.
 ${fixContext || ''}
 ${historyText ? '\nהשיחה עד עכשיו:\n' + historyText + '\n' : ''}
 ההודעה הנוכחית (${authorName || 'משתמש'}): ${message}`;
 }
 
-app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (req, res) => {
   const { summary, history, message, authorName, candidates, categories } = req.body || {};
   if (!message) return res.status(400).json({ error: 'message is required' });
   if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'No AI key configured' });
@@ -1082,7 +1152,7 @@ const DELIVERABLE_SPECS = {
   info: '{"topic":"...","calcs":[{"label":"...","value":"..."}],"questions":["שאלה לבדוק מול בנק/יועץ"],"considerations":["..."],"disclaimer":"מידע וחישובים בלבד, לא ייעוץ מורשה"}  — משכנתא/השקעות: חישובים על הנתונים, שאלות נכונות, בלי המלצה על מוצר או נייר ערך ספציפי.',
   shopping_list: '{"sections":[{"name":"מחלקה","items":[{"text":"מוצר, כמות","for":"לאיזו ארוחה"}]}],"at_home":["..."],"est_cost":0}  — מאוחד (בלי כפילויות), לפי מחלקות בסופר, בלי מה שכבר יש בבית.'
 };
-app.post('/api/ai/deliverable', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/ai/deliverable', requireAuth, aiLimiter, aiQuota, async (req, res) => {
   try {
     if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'No AI key configured' });
     const { summary, task, kind, content, chat, message, action, authorName } = req.body || {};
@@ -1171,9 +1241,13 @@ app.get('/api/market/quote', requireAuth, async (req, res) => {
     if (!force && marketQuoteCache && Date.now() - marketQuoteCache.fetchedAt < 5 * 60 * 1000) {
       return res.json(marketQuoteCache.data);
     }
-    const [usdIls, spy] = await Promise.all([fetchUsdIls(), fetchSpyQuote()]);
+    const [fx, spy, boi] = await Promise.all([fetchUsdIlsDetailed(), fetchSpyQuote(), fetchBoiUsd().catch(() => null)]);
+    const usdIls = fx.rate;
     const data = {
       usdIls,
+      usdIlsAt: fx.at,
+      usdIlsSource: fx.source,
+      boi: boi ? { rate: boi.rate, at: boi.at } : null,
       spy: { priceUsd: spy.price, priceIls: spy.price * usdIls, changePct: spy.changePct },
       fetchedAt: new Date().toISOString()
     };
@@ -1181,6 +1255,335 @@ app.get('/api/market/quote', requireAuth, async (req, res) => {
     return res.json(data);
   } catch (err) {
     return res.status(502).json({ error: err.message || 'Market data unavailable' });
+  }
+});
+
+// ═══ stage 2: market quotes for any holdings ═══
+app.get('/api/market/quotes', requireAuth, async (req, res) => {
+  try {
+    const symbols = String(req.query.symbols || '').split(',').map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z0-9.\-=^]{1,15}$/.test(x)).slice(0, 20);
+    const [fx, boi] = await Promise.all([fetchUsdIlsDetailed(), fetchBoiUsd().catch(() => null)]);
+    const quotes = {};
+    await Promise.all(symbols.map(async (sym) => {
+      try { quotes[sym] = await fetchYahooQuote(sym); } catch (e) { quotes[sym] = { symbol: sym, error: e.message }; }
+    }));
+    return res.json({ usdIls: fx.rate, usdIlsAt: fx.at, usdIlsSource: fx.source, boi: boi ? { rate: boi.rate, at: boi.at } : null, quotes, fetchedAt: new Date().toISOString() });
+  } catch (err) {
+    return res.status(502).json({ error: err.message || 'Market data unavailable' });
+  }
+});
+
+// ═══ stage 2: cron auth shared by nightly alerts + weekly check-in ═══
+async function checkCronSecret(req) {
+  if (!supabaseAdmin) return false;
+  const given = String(req.headers['x-cron-secret'] || '');
+  const { data: sec } = await supabaseAdmin.from('app_secrets').select('value').eq('key', 'cron_secret').maybeSingle();
+  const expected = sec && sec.value ? String(sec.value) : '';
+  const a = Buffer.from(given), b = Buffer.from(expected);
+  return !!expected && a.length === b.length && require('crypto').timingSafeEqual(a, b);
+}
+async function householdMembers(hid) {
+  const { data } = await supabaseAdmin.from('memberships').select('user_id').eq('household_id', hid);
+  return (data || []).map((m) => m.user_id);
+}
+async function pushHousehold(hid, payload) {
+  for (const uid of await householdMembers(hid)) {
+    try { await sendPushToUser(uid, payload); } catch (_e) { /* no subscription */ }
+  }
+}
+const normDesc = (d) => String(d || '').replace(/\(?\s*תשלום\s*\d+\s*מתוך\s*\d+\s*\)?/g, ' ').replace(/[\d"'׳״().,:\-_/\\*#]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+const ilMonth = (iso) => String(iso).slice(0, 7);
+
+// ═══ stage 2: nightly proactive alerts + investment snapshot ═══
+async function buildAlertsForHousehold(hid) {
+  const today = israelToday();
+  const month = ilMonth(today);
+  const since = addDaysIso(today, -120);
+  const [{ data: tx }, { data: cats }, { data: budgets }, { data: invs }] = await Promise.all([
+    supabaseAdmin.from('transactions').select('id,type,amount,description,tx_date,category_id,card_id,created_at').eq('household_id', hid).gte('tx_date', since),
+    supabaseAdmin.from('categories').select('id,name,parent_id').eq('household_id', hid),
+    supabaseAdmin.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
+    supabaseAdmin.from('investments').select('id,name,symbol,units,currency,current_value').eq('household_id', hid)
+  ]);
+  const catName = (id) => ((cats || []).find((c) => c.id === id) || {}).name || '';
+  const out = [];
+  const exp = (tx || []).filter((t) => t.type === 'expense');
+
+  // a) budget pace / over budget
+  const dayOfMonth = Number(today.slice(8, 10));
+  const daysInMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate();
+  for (const b of budgets || []) {
+    const spent = exp.filter((t) => t.category_id === b.category_id && ilMonth(t.tx_date) === month).reduce((s, t) => s + Number(t.amount), 0);
+    const budget = Number(b.monthly_amount);
+    if (!budget) continue;
+    const name = catName(b.category_id);
+    if (spent > budget) {
+      out.push({ kind: 'budget_over', severity: 'warn', dedupe_key: `over:${b.category_id}:${month}`,
+        title: `עברתם את התקציב של ${name}`, body: `הוצאתם ₪${Math.round(spent).toLocaleString('he-IL')} מתוך ₪${Math.round(budget).toLocaleString('he-IL')} החודש.`,
+        data: { category_id: b.category_id, spent, budget } });
+    } else if (dayOfMonth >= 5) {
+      const projected = spent / dayOfMonth * daysInMonth;
+      if (projected > budget * 1.1) {
+        out.push({ kind: 'budget_pace', severity: 'info', dedupe_key: `pace:${b.category_id}:${month}`,
+          title: `נשארו ₪${Math.round(budget - spent).toLocaleString('he-IL')} בתקציב ${name}`,
+          body: `בקצב הנוכחי תחרגו בכ-₪${Math.round(projected - budget).toLocaleString('he-IL')} עד סוף החודש.`,
+          data: { category_id: b.category_id, spent, budget, projected } });
+      }
+    }
+  }
+
+  // b) recurring charge went up (same merchant, different months, +5% and at least ₪10)
+  const byDesc = {};
+  exp.forEach((t) => { const k = normDesc(t.description); if (k.length < 3) return; (byDesc[k] = byDesc[k] || []).push(t); });
+  Object.values(byDesc).forEach((list) => {
+    const months = {};
+    list.forEach((t) => { const m = ilMonth(t.tx_date); if (!months[m] || t.tx_date > months[m].tx_date) months[m] = t; });
+    const ms = Object.keys(months).sort();
+    if (ms.length < 3) return;                     // must look like a subscription
+    const last = months[ms[ms.length - 1]], prev = months[ms[ms.length - 2]];
+    if (ms[ms.length - 1] !== month && ms[ms.length - 1] !== ilMonth(addDaysIso(today, -28))) return;
+    const a = Number(prev.amount), b = Number(last.amount);
+    if (b > a * 1.05 && b - a >= 10) {
+      out.push({ kind: 'price_increase', severity: 'info', dedupe_key: `rise:${last.id}`,
+        title: `${String(last.description).slice(0, 40)} התייקר`,
+        body: `מ-₪${a.toLocaleString('he-IL')} ל-₪${b.toLocaleString('he-IL')} (+${Math.round((b - a) / a * 100)}%).`,
+        data: { tx_id: last.id, prev_id: prev.id, from: a, to: b } });
+    }
+  });
+
+  // c) possible duplicates added in the last 3 days
+  const recent = exp.filter((t) => t.created_at && t.created_at >= addDaysIso(today, -3));
+  recent.forEach((t) => {
+    const twin = exp.find((o) => o.id !== t.id && Math.abs(Number(o.amount) - Number(t.amount)) < 0.01
+      && Math.abs(new Date(o.tx_date) - new Date(t.tx_date)) <= 864e5
+      && normDesc(o.description).split(' ')[0] === normDesc(t.description).split(' ')[0]);
+    if (twin) {
+      const ids = [t.id, twin.id].sort();
+      out.push({ kind: 'duplicate', severity: 'warn', dedupe_key: `dup:${ids[0]}:${ids[1]}`,
+        title: `אולי חיוב כפול: ${String(t.description).slice(0, 36)}`,
+        body: `שתי תנועות של ₪${Number(t.amount).toLocaleString('he-IL')} בהפרש של עד יום.`,
+        data: { tx_ids: ids } });
+    }
+  });
+
+  // d) market move on a held symbol + portfolio snapshot
+  let total = 0; const detail = [];
+  let fx = null; try { fx = await fetchUsdIls(); } catch (_e) { fx = null; }
+  for (const inv of invs || []) {
+    let val = Number(inv.current_value) || 0;
+    if (inv.symbol && Number(inv.units) > 0) {
+      try {
+        const q = await fetchYahooQuote(inv.symbol);
+        const rate = q.currency === 'ILS' ? 1 : q.currency === 'ILA' ? 0.01 : (fx || 0);
+        if (rate) val = Number(inv.units) * q.price * rate;
+        if (q.weekChangePct != null && q.weekChangePct <= -5) {
+          const wk = addDaysIso(today, -((new Date(today).getUTCDay() + 7) % 7));
+          out.push({ kind: 'market_move', severity: 'info', dedupe_key: `mkt:${inv.symbol}:${wk}`,
+            title: `${inv.symbol} ירד ${Math.abs(q.weekChangePct).toFixed(1)}% השבוע`,
+            body: 'ירידות קורות. כדאי להיזכר למה השקעתם ולאיזה טווח, לפני שמחליטים משהו.',
+            data: { symbol: inv.symbol, weekChangePct: q.weekChangePct } });
+        }
+      } catch (_e) { /* keep last value */ }
+    }
+    total += val; detail.push({ id: inv.id, name: inv.name, value: Math.round(val) });
+  }
+  if ((invs || []).length) {
+    await supabaseAdmin.from('investment_snapshots').upsert({ household_id: hid, snap_date: today, total_ils: Math.round(total), detail }, { onConflict: 'household_id,snap_date' });
+  }
+  return out;
+}
+app.post('/api/alerts/run', async (req, res) => {
+  try {
+    if (!(await checkCronSecret(req))) return res.status(401).json({ error: 'unauthorized' });
+    const { data: hhs } = await supabaseAdmin.from('memberships').select('household_id');
+    const ids = [...new Set((hhs || []).map((m) => m.household_id))];
+    let created = 0;
+    for (const hid of ids) {
+      let alerts = [];
+      try { alerts = await buildAlertsForHousehold(hid); } catch (e) { console.warn('alerts', hid, e.message); continue; }
+      if (!alerts.length) continue;
+      const { data: ins } = await supabaseAdmin.from('advisor_alerts')
+        .upsert(alerts.map((a) => ({ ...a, household_id: hid })), { onConflict: 'household_id,dedupe_key', ignoreDuplicates: true }).select('id,title');
+      const fresh = ins || [];
+      created += fresh.length;
+      if (fresh.length) {
+        await pushHousehold(hid, { title: fresh.length === 1 ? '💡 היועץ שם לב למשהו' : `💡 היועץ שם לב ל-${fresh.length} דברים`,
+          body: fresh[0].title + (fresh.length > 1 ? ` ועוד ${fresh.length - 1}` : ''), url: APP_URL.replace(/\/$/, '') + '/?tab=dash' });
+      }
+    }
+    return res.json({ ok: true, households: ids.length, created });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ═══ stage 2: weekly couple check-in (Sunday evening) ═══
+app.post('/api/checkin/run', async (req, res) => {
+  try {
+    if (!(await checkCronSecret(req))) return res.status(401).json({ error: 'unauthorized' });
+    const today = israelToday();
+    const weekStart = addDaysIso(today, -new Date(today + 'T12:00:00Z').getUTCDay()); // Sunday
+    const { data: hhs } = await supabaseAdmin.from('memberships').select('household_id');
+    const ids = [...new Set((hhs || []).map((m) => m.household_id))];
+    let made = 0;
+    for (const hid of ids) {
+      const since = addDaysIso(weekStart, -56);
+      const [{ data: tx }, { data: cats }, { data: tasks }, { data: goals }] = await Promise.all([
+        supabaseAdmin.from('transactions').select('type,amount,tx_date,category_id').eq('household_id', hid).gte('tx_date', since),
+        supabaseAdmin.from('categories').select('id,name').eq('household_id', hid),
+        supabaseAdmin.from('advisor_tasks').select('title,status,done_at,due_date').eq('household_id', hid),
+        supabaseAdmin.from('goals').select('name,target_amount,saved_amount').eq('household_id', hid)
+      ]);
+      const lastWeekStart = addDaysIso(weekStart, -7);
+      const exp = (tx || []).filter((t) => t.type === 'expense');
+      const thisWeek = exp.filter((t) => t.tx_date >= lastWeekStart && t.tx_date < weekStart);
+      const spentWeek = thisWeek.reduce((s, t) => s + Number(t.amount), 0);
+      const avgWeek = exp.filter((t) => t.tx_date < lastWeekStart).reduce((s, t) => s + Number(t.amount), 0) / 7;
+      const byCat = {};
+      thisWeek.forEach((t) => { byCat[t.category_id] = (byCat[t.category_id] || 0) + Number(t.amount); });
+      const topId = Object.keys(byCat).sort((a, b) => byCat[b] - byCat[a])[0];
+      const summary = {
+        week: lastWeekStart, spentWeek: Math.round(spentWeek), avgWeek: Math.round(avgWeek),
+        topCategory: topId ? { name: ((cats || []).find((c) => c.id === topId) || {}).name || '', amount: Math.round(byCat[topId]) } : null,
+        tasksDone: (tasks || []).filter((t) => t.status === 'done' && t.done_at && t.done_at.slice(0, 10) >= lastWeekStart).map((t) => t.title).slice(0, 5),
+        tasksOpen: (tasks || []).filter((t) => t.status === 'open').length,
+        goals: (goals || []).map((g) => ({ name: g.name, pct: Number(g.target_amount) ? Math.round(Number(g.saved_amount || 0) / Number(g.target_amount) * 100) : 0 })).slice(0, 5)
+      };
+      let decisions = [];
+      try {
+        const ai = await generateWithFallback({
+          prompt: 'אתה יועץ כלכלי למשק בית בישראל. מתוך סיכום השבוע (JSON) הצע עד 3 החלטות קטנות וקונקרטיות שבני הזוג יכולים לענות עליהן כן/לא בשבוע הקרוב (למשל "להגביל משלוחים לפעם אחת השבוע"). בעברית, עד 70 תווים כל אחת. ענה רק ב-JSON: {"decisions":["..."]}',
+          text: JSON.stringify(summary)
+        });
+        const j = JSON.parse(extractJsonText(ai.output || '{}'));
+        decisions = (Array.isArray(j.decisions) ? j.decisions : []).map((d) => ({ text: String(d).slice(0, 90), votes: {} })).slice(0, 3);
+      } catch (_e) { decisions = []; }
+      const { data: row } = await supabaseAdmin.from('weekly_checkins')
+        .upsert({ household_id: hid, week_start: weekStart, summary, decisions }, { onConflict: 'household_id,week_start', ignoreDuplicates: true }).select('id');
+      if (row && row.length) {
+        made += 1;
+        await pushHousehold(hid, { title: '📅 רבע השעה הזוגית שלכם מוכנה', body: `השבוע יצאו ₪${summary.spentWeek.toLocaleString('he-IL')}. ${decisions.length ? decisions.length + ' החלטות קטנות מחכות לכם.' : ''}`.trim(), url: APP_URL.replace(/\/$/, '') + '/?tab=dash&checkin=1' });
+      }
+    }
+    return res.json({ ok: true, households: ids.length, created: made });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ═══ stage 2: "what if" — turn a sentence into dated cash-flow events ═══
+app.post('/api/ai/scenario', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  try {
+    const { text, summary } = req.body || {};
+    if (!text) return res.status(400).json({ error: 'text is required' });
+    const today = israelToday();
+    const prompt = `המר תרחיש "מה אם" של משק בית לאירועים כספיים. היום ${today}. החודשים בפורמט YYYY-MM.
+אירוע חד-פעמי: {"type":"once","month":"YYYY-MM","amount":<שלילי להוצאה, חיובי להכנסה>,"label":"..."}
+שינוי חודשי קבוע: {"type":"monthly","from":"YYYY-MM","to":"YYYY-MM או null","amount":<שינוי בחודש, שלילי/חיובי>,"label":"..."}
+אם כתוב "הלוואה"/"תשלומים", פצל לסכום מקדמה (once) + תשלום חודשי (monthly) רק אם יש מספרים. אל תמציא מספרים שלא נאמרו — אם חסר סכום, החזר "question".
+ענה רק ב-JSON: {"events":[...],"question":null או "שאלה קצרה","title":"כותרת קצרה לתרחיש"}`;
+    const ai = await generateWithFallback({ prompt, text: `התרחיש: ${text}\n\nסיכום נתונים: ${JSON.stringify(summary || {}).slice(0, 6000)}` });
+    let j = null;
+    try { j = JSON.parse(extractJsonText(ai.output || '')); } catch (_e) { const m = String(ai.output || '').match(/\{[\s\S]*\}/); if (m) { try { j = JSON.parse(m[0]); } catch (_e2) { j = null; } } }
+    if (!j) return res.status(502).json({ error: 'AI response could not be parsed' });
+    const ym = /^\d{4}-\d{2}$/;
+    const events = (Array.isArray(j.events) ? j.events : []).filter((e) => e && Number.isFinite(+e.amount) && +e.amount !== 0 &&
+      ((e.type === 'once' && ym.test(e.month)) || (e.type === 'monthly' && ym.test(e.from) && (!e.to || ym.test(e.to)))))
+      .slice(0, 10).map((e) => ({ ...e, amount: Math.round(+e.amount), label: String(e.label || '').slice(0, 60) }));
+    return res.json({ events, question: j.question ? String(j.question).slice(0, 200) : null, title: String(j.title || text).slice(0, 80) });
+  } catch (err) {
+    return res.status(err.statusCode || 502).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
+// ═══ stage 4: advisor memory — pull durable decisions/preferences out of a chat ═══
+app.post('/api/ai/extract-memories', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  try {
+    const { messages, existing } = req.body || {};
+    const convo = (Array.isArray(messages) ? messages : []).filter((m) => m && (m.role === 'user' || m.role === 'ai') && m.text)
+      .slice(-20).map((m) => `${m.role === 'user' ? (m.author || 'משתמש') : 'יועץ'}: ${String(m.text).slice(0, 1200)}`).join('\n');
+    if (!convo) return res.json({ memories: [] });
+    const prompt = `מתוך שיחה עם יועץ פיננסי למשק בית, חלץ רק דברים שכדאי לזכור לשיחות הבאות:
+החלטות שבני הזוג קיבלו ("סיכמנו לא לקנות רכב השנה"), העדפות קבועות ("חשוב לנו להפריש מעשרות"), יעדים שהוגדרו, ועובדות יציבות על המשפחה שהם אמרו.
+לא: עצות של היועץ שלא אושרו, מספרים שמשתנים כל חודש, רגשות רגעיים, פרטים רפואיים.
+כל פריט — משפט קצר בעברית (עד 80 תווים). עד 5 פריטים. אל תחזור על מה שכבר קיים: ${JSON.stringify((existing || []).slice(0, 40))}
+ענה רק ב-JSON: {"memories":[{"text":"...","kind":"decision|preference|goal|fact"}]}`;
+    const ai = await generateWithFallback({ prompt, text: convo });
+    let j = null;
+    try { j = JSON.parse(extractJsonText(ai.output || '')); } catch (_e) { j = null; }
+    const kinds = ['decision', 'preference', 'goal', 'fact'];
+    const memories = (j && Array.isArray(j.memories) ? j.memories : []).filter((m) => m && m.text)
+      .map((m) => ({ text: String(m.text).trim().slice(0, 120), kind: kinds.includes(m.kind) ? m.kind : 'decision' })).slice(0, 5);
+    return res.json({ memories });
+  } catch (err) {
+    return res.status(err.statusCode || 502).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
+// ═══ stage 4: monthly report (1st of the month, cron) ═══
+app.post('/api/reports/run', async (req, res) => {
+  try {
+    if (!(await checkCronSecret(req))) return res.status(401).json({ error: 'unauthorized' });
+    const today = israelToday();
+    const d = new Date(today + 'T12:00:00Z'); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1);
+    const month = d.toISOString().slice(0, 7);
+    const p = new Date(d); p.setUTCMonth(p.getUTCMonth() - 1);
+    const prevMonth = p.toISOString().slice(0, 7);
+    const { data: hhs } = await supabaseAdmin.from('memberships').select('household_id');
+    const ids = [...new Set((hhs || []).map((m) => m.household_id))];
+    let made = 0;
+    const monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+    for (const hid of ids) {
+      const [{ data: tx }, { data: cats }, { data: goals }, { data: tasks }, { data: mems }] = await Promise.all([
+        supabaseAdmin.from('transactions').select('type,amount,tx_date,category_id').eq('household_id', hid).gte('tx_date', prevMonth + '-01').lt('tx_date', addDaysIso(today, 1)),
+        supabaseAdmin.from('categories').select('id,name').eq('household_id', hid),
+        supabaseAdmin.from('goals').select('name,target_amount,saved_amount').eq('household_id', hid),
+        supabaseAdmin.from('advisor_tasks').select('title,status,done_at').eq('household_id', hid),
+        supabaseAdmin.from('advisor_memories').select('text').eq('household_id', hid).limit(30)
+      ]);
+      const sum = (m, type) => (tx || []).filter((t) => t.type === type && String(t.tx_date).slice(0, 7) === m).reduce((s, t) => s + Number(t.amount), 0);
+      const income = sum(month, 'income'), expense = sum(month, 'expense');
+      if (!income && !expense) continue;
+      const pIncome = sum(prevMonth, 'income'), pExpense = sum(prevMonth, 'expense');
+      const byCat = {}, byCatPrev = {};
+      (tx || []).filter((t) => t.type === 'expense').forEach((t) => {
+        const m = String(t.tx_date).slice(0, 7);
+        if (m === month) byCat[t.category_id] = (byCat[t.category_id] || 0) + Number(t.amount);
+        if (m === prevMonth) byCatPrev[t.category_id] = (byCatPrev[t.category_id] || 0) + Number(t.amount);
+      });
+      const catName = (id) => ((cats || []).find((c) => c.id === id) || {}).name || 'ללא קטגוריה';
+      const top = Object.keys(byCat).sort((a, b) => byCat[b] - byCat[a]).slice(0, 5)
+        .map((id) => ({ name: catName(id), amount: Math.round(byCat[id]), prev: Math.round(byCatPrev[id] || 0) }));
+      const data = {
+        month, monthLabel: monthNames[Number(month.slice(5)) - 1] + ' ' + month.slice(0, 4),
+        income: Math.round(income), expense: Math.round(expense), balance: Math.round(income - expense),
+        prev: { income: Math.round(pIncome), expense: Math.round(pExpense), balance: Math.round(pIncome - pExpense) },
+        topCategories: top,
+        goals: (goals || []).map((g) => ({ name: g.name, pct: Number(g.target_amount) ? Math.round(Number(g.saved_amount || 0) / Number(g.target_amount) * 100) : 0 })).slice(0, 5),
+        tasksDone: (tasks || []).filter((t) => t.status === 'done' && String(t.done_at || '').slice(0, 7) === month).length
+      };
+      try {
+        const ai = await generateWithFallback({
+          prompt: `אתה יועץ פיננסי למשק בית בישראל. כתוב דוח חודשי קצר על סמך הנתונים (JSON). בעברית חמה ועניינית.
+narrative: 2–3 משפטים — מה היה החודש לעומת הקודם, מה בולט, מה הלך טוב. recommendations: בדיוק 3 פעולות קונקרטיות לחודש הבא, כל אחת עד 60 תווים, שאפשר להפוך למשימה.
+התחשב בהחלטות של המשפחה (memories) ואל תסתור אותן: ${JSON.stringify((mems || []).map((m) => m.text))}
+ענה רק ב-JSON: {"narrative":"...","recommendations":["...","...","..."]}`,
+          text: JSON.stringify(data)
+        });
+        const j = JSON.parse(extractJsonText(ai.output || '{}'));
+        data.narrative = String(j.narrative || '').slice(0, 600);
+        data.recommendations = (Array.isArray(j.recommendations) ? j.recommendations : []).map((x) => String(x).slice(0, 90)).slice(0, 3);
+      } catch (_e) { data.narrative = ''; data.recommendations = []; }
+      const { data: row } = await supabaseAdmin.from('monthly_reports')
+        .upsert({ household_id: hid, month, data }, { onConflict: 'household_id,month', ignoreDuplicates: true }).select('id');
+      if (row && row.length) {
+        made += 1;
+        await pushHousehold(hid, { title: `📊 הדוח של ${data.monthLabel} מוכן`, body: `נשארו ₪${data.balance.toLocaleString('he-IL')} · 3 המלצות לחודש הבא`, url: APP_URL.replace(/\/$/, '') + '/?tab=dash&report=1' });
+      }
+    }
+    return res.json({ ok: true, month, households: ids.length, created: made });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
