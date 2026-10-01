@@ -2,6 +2,7 @@ import { api } from '../lib/api.js';
 import { readXlsx } from '../lib/xlsx.js';
 import { pdfText } from '../lib/pdf.js';
 import { fileKind, decodeText, isBinaryXls, htmlTables, base64 } from '../lib/files.js';
+import { aiEnabled } from '../lib/settings.js';
 import { parseCsv, rowsToTransactions, fromAi, importPrompt, categorizePrompt, categorizeText, waitingMerchants, applyAiCategories, prepare, categorizeFromHistory } from '../domain/statement.js';
 
 // Reads a statement file into import items, ready for review.
@@ -15,6 +16,7 @@ const MAX_TEXT = 12000;
 export class ImportError extends Error {}
 
 async function aiImport(body) {
+  if (!aiEnabled()) throw new ImportError('היועץ (AI) כבוי בפרופיל, ולכן אפשר לקרוא כרגע רק קובצי אקסל ו-CSV. הפעילו אותו כדי לקרוא PDF או צילום.');
   const res = await api('/api/ai/import', { method: 'POST', body });
   return Array.isArray(res.transactions) ? res.transactions : [];
 }
