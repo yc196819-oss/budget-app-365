@@ -38,3 +38,9 @@ export function initials(name, email) {
   const local = String(email || '').split('@')[0];
   return local ? local.slice(0, 2).toUpperCase() : '?';
 }
+
+// "2026-08-05" -> "5.8"
+export function shortDate(iso) {
+  const [, m, d] = String(iso || '').split('-').map(Number);
+  return d && m ? d + '.' + m : '';
+}

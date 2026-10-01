@@ -99,6 +99,38 @@ export async function addTransaction({ type = 'expense', amount, description, ca
   return data;
 }
 
+// Saves the lines of an imported statement. Returns the new rows.
+export async function addImported(rows) {
+  const added = [];
+  for (let i = 0; i < rows.length; i += 500) {
+    const chunk = rows.slice(i, i + 500).map((r) => ({ ...r, household_id: state.hid, created_by: state.userId }));
+    const { data, error } = await sb.from('transactions').insert(chunk).select();
+    if (error) {
+      // Keep the store in step with what did get saved before the failure.
+      if (added.length) { state.txs = [...added, ...state.txs]; emit(); }
+      const err = new Error(error.message || 'insert failed');
+      err.saved = added;
+      throw err;
+    }
+    added.push(...data);
+  }
+  state.txs = [...added, ...state.txs];
+  emit();
+  return added;
+}
+
+// Undo of an import.
+export async function removeMany(ids) {
+  for (let i = 0; i < ids.length; i += 200) {
+    const part = ids.slice(i, i + 200);
+    const { error } = await sb.from('transactions').delete().in('id', part).eq('household_id', state.hid);
+    if (error) throw error;
+  }
+  const gone = new Set(ids);
+  state.txs = state.txs.filter((t) => !gone.has(t.id));
+  emit();
+}
+
 // Changes the category of several transactions at once and returns what is
 // needed to undo it.
 export async function setCategory(ids, category_id, subcategory_id = null) {

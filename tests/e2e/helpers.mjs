@@ -112,7 +112,7 @@ export async function mockSupabase(page, db, calls = []) {
     }
     if (method === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
-      const rows = (Array.isArray(body) ? body : [body]).map((r) => ({ id: 'new' + (table.length + 1), created_at: new Date().toISOString(), ...r }));
+      const rows = (Array.isArray(body) ? body : [body]).map((r, i) => ({ id: 'new' + (table.length + 1 + i), created_at: new Date().toISOString(), ...r }));
       table.push(...rows);
       return reply(rows);
     }

@@ -71,3 +71,27 @@
   .toast { inset-inline: auto; left: 50%; transform: translateX(-50%); width: 460px; bottom: 28px; }
   .money-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 }
+
+/* statement import */
+.drop { position: relative; border: 2px dashed var(--line); border-radius: var(--radius-l); padding: 24px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; cursor: pointer; }
+.drop.over { border-color: var(--accent); background: var(--accent-tint); }
+.drop .muted { font-size: 13px; line-height: 1.5; }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.drop:focus-within { border-color: var(--accent); }
+.steps { display: flex; flex-direction: column; gap: 12px; padding: 6px 0; }
+.step { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; color: var(--faint); }
+.step.active { color: var(--accent); }
+.step.done { color: var(--income); }
+.step-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; }
+.step.active .step-dot { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.import-summary { border-radius: var(--radius-l); padding: 14px 16px; background: var(--income-tint); display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.5; }
+.import-summary b { font-size: 17px; color: var(--income); }
+.import-line + .import-line { border-top: 1px solid var(--line); }
+.import-line .row { padding: 6px 10px 6px 14px; gap: 8px; }
+.import-line.off .import-open { opacity: .45; }
+.import-check { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--accent); }
+.import-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px 0; border: 0; background: transparent; text-align: right; }
+.import-line .warn { color: var(--warn); font-weight: 700; }
+.import-pick { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+.import-actions { position: sticky; bottom: -26px; margin: 0 -18px -26px; padding: 12px 18px 22px; background: var(--bg); border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 8px; }

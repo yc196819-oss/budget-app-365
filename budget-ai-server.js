@@ -1847,7 +1847,10 @@ const APP_VENDOR_FILES = {
   'preact.js': 'node_modules/preact/dist/preact.module.js',
   'hooks.js': 'node_modules/preact/hooks/dist/hooks.module.js',
   'htm.js': 'node_modules/htm/dist/htm.module.js',
-  'supabase.js': 'node_modules/@supabase/supabase-js/dist/umd/supabase.js'
+  'supabase.js': 'node_modules/@supabase/supabase-js/dist/umd/supabase.js',
+  // Loaded only when a PDF statement is picked.
+  'pdf.js': 'node_modules/pdfjs-dist/build/pdf.min.mjs',
+  'pdf.worker.js': 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs'
 };
 app.get('/app/vendor/:file', (req, res) => {
   const rel = APP_VENDOR_FILES[req.params.file];
