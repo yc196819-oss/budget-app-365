@@ -6,6 +6,7 @@ import { useAiSetting } from '../advisor/useAiSetting.js';
 import { InviteButton } from '../../components/InviteButton.js';
 import { useState } from 'preact/hooks';
 import { MemoriesView } from './MemoriesView.js';
+import { PushToggle } from '../../components/PushToggle.js';
 
 export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid, userId }) {
   const aiOn = useAiSetting();
@@ -27,6 +28,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
           <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, נשלח סיכום של המספרים (לא שמות בתי עסק מלאים או פרטי חשבון). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>
         <input type="checkbox" role="switch" checked=${aiOn} onChange=${(e) => setAiEnabled(e.target.checked)} aria-label="היועץ והצעות AI" />
       </label>
+      ${hid && html`<${PushToggle} userId=${userId} hid=${hid} />`}
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}>🧠 מה היועץ יודע עלינו</button>`}
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>

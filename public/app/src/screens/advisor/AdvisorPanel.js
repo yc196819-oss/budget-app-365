@@ -10,6 +10,8 @@ import { LearnReview } from './LearnReview.js';
 import { normalizeItems, learnContext, learnMessages, worthLearning } from '../../domain/learn.js';
 import { askLearnings, applyLearnings } from '../../data/learn.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
+import { snapshot as decisionsSnapshot } from '../../data/decisions.js';
+import { forAdvisor } from '../../domain/decisions.js';
 
 // How many messages of a conversation were already looked at for learning,
 // so the "save what I learned?" offer does not repeat for the same messages.
@@ -71,7 +73,9 @@ export function AdvisorPanel({ data, session, screen }) {
       setConv(c);
       await addMessage({ conversationId: c.id, hid, userId: me, role: 'user', text: msg });
       if (!memories.current) memories.current = await loadMemories(hid).catch(() => []);
-      const summary = buildSummary({ ...data, userId: me, userName: memberName(me), memories: memories.current, screen });
+      const dec = decisionsSnapshot();
+      const sharedDecisions = dec.status === 'ready' ? forAdvisor(dec.decisions, dec.votes, Object.keys(names)) : [];
+      const summary = buildSummary({ ...data, sharedDecisions, userId: me, userName: memberName(me), memories: memories.current, screen });
       let raw = '';
       abort.current = new AbortController();
       await streamReply({ summary, history, message: msg, authorName: memberName(me) }, (delta) => {

@@ -3,14 +3,14 @@ import { TABS, hrefFor } from '../domain/routes.js';
 import { Icon } from './Icon.js';
 
 // Desktop navigation: same tabs as the mobile bottom bar.
-export function Sidebar({ tab, onAdd, onImport, onLearn, onProfile, profile }) {
+export function Sidebar({ tab, onAdd, onImport, onLearn, onProfile, profile, badges = {} }) {
   return html`
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark"><${Icon} name="spark" size=${19} stroke=${2.2} /></span>התקציב שלנו</div>
       <nav aria-label="ניווט ראשי" class="stack" style="gap:4px">
         ${TABS.map((t) => html`
           <a class="side-item" href=${hrefFor(t.key)} aria-current=${tab === t.key ? 'page' : 'false'}>
-            <${Icon} name=${t.icon} />${t.label}
+            <${Icon} name=${t.icon} />${t.label}${badges[t.key] > 0 && html`<span class="nav-badge side">${badges[t.key]}</span>`}
           </a>`)}
       </nav>
       <div class="side-sep"></div>

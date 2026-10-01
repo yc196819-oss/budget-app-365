@@ -24,7 +24,7 @@ export function parseReply(raw) {
 // What the advisor gets: six months of income and spending, categories with
 // their trend, budgets against spending, goals, decisions the household
 // already made (memories), the forecast and the screen the person is on.
-export function buildSummary({ txs, categories, budgets, goals = [], installments = [], income = [], userId, userName, memories = [], today = new Date(), screen = 'home' }) {
+export function buildSummary({ txs, categories, budgets, goals = [], installments = [], income = [], sharedDecisions = [], userId, userName, memories = [], today = new Date(), screen = 'home' }) {
   const months = monthsBack(today, 6);
   const label = (mo) => MONTH_NAMES[mo.m] + ' ' + mo.y;
   const cur = months[months.length - 1];
@@ -69,6 +69,8 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
     savingsGoals,
     memories: memories.slice(0, 30).map((m) => m.text),
     // What the household said it expects to earn each month (0 = not set).
+    // Purchases the couple is deciding on together (title, amount, status).
+    sharedDecisions,
     expectedMonthlyIncome: round((Array.isArray(income) ? income : []).reduce((s, l) => s + (Number(l && l.amount) || 0), 0)),
     thisMonth: { budget: round(plan.budget), spent: round(plan.spent), projectedEnd: plan.canForecast ? round(plan.projectedEnd) : null, daysLeft: plan.daysLeft },
     comingMonths: { verdict: v.title, months: fc.months.map((m) => ({ month: m.name, net: round(m.net) })) }
@@ -79,6 +81,7 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
 const STARTERS = {
   home: ['כמה אני יכול להוציא היום?', 'למה החודש יקר יותר?', 'מה הכי דחוף לטפל בו?'],
   money: ['איפה אפשר לקצץ החודש?', 'מה השתנה לעומת החודש שעבר?', 'יש מנויים שכדאי לבטל?'],
+  together: ['אפשר להרשות את מה שמחכה לאישור?', 'מה הכי חשוב לקנות קודם?', 'איך מחליטים בלי לריב?'],
   plans: ['היעדים שלנו ריאליים?', 'איך סוגרים את הפער החודשי?', 'כמה לחסוך לחגים?'],
   assets: ['כדאי להחזיר הלוואה מוקדם?', 'דמי הניהול שלנו סבירים?', 'כמה כסף לשמור בעו״ש?']
 };
@@ -86,7 +89,7 @@ export function starters(screen) {
   return STARTERS[screen] || STARTERS.home;
 }
 
-const SCREEN_NAMES = { home: 'בית', money: 'כסף', plans: 'תוכניות', assets: 'נכסים' };
+const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', plans: 'תוכניות', assets: 'נכסים' };
 export function newTitle(firstMessage, screen, today = new Date()) {
   const t = String(firstMessage || '').trim().replace(/\s+/g, ' ');
   const short = t.length > 40 ? t.slice(0, 38) + '…' : t;
