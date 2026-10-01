@@ -170,3 +170,12 @@ test('topCategories: biggest first with their share', () => {
   assert.equal(t.total, 400);
   assert.deepEqual(t.rows.map((r) => [r.id, r.share]), [['food', 75], ['home', 25]]);
 });
+
+test('expectedFixed matches lines without a description by category', () => {
+  const txs = [
+    tx({ type: 'income', amount: 9000, nature: 'fixed', tx_date: '2026-09-10', category_id: 'sal', description: '' }),
+    tx({ type: 'income', amount: 9000, nature: 'fixed', tx_date: '2026-10-10', category_id: 'sal', description: '' }),
+    tx({ amount: 300, nature: 'fixed', tx_date: '2026-09-20', category_id: 'home', description: '123' })
+  ];
+  assert.deepEqual(expectedFixed(txs, TODAY).map((t) => t.category_id), ['home']);
+});

@@ -2,7 +2,7 @@
 // for the end of the month, what is coming up, cash in the bank and what
 // needs attention. No DOM, no network.
 
-import { isoDate, parseDate, monthShare, sameMerchant, categoryRows, totalsFor, monthsBack } from './money.js';
+import { isoDate, parseDate, monthShare, sameMerchant, merchantKey, categoryRows, totalsFor, monthsBack } from './money.js';
 import { bestDuplicate } from './statement.js';
 import { money } from './format.js';
 
@@ -13,6 +13,14 @@ export function daysInMonth(y, m) {
 const isExpense = (t) => t.type !== 'income';
 const sum = (list, f = (x) => x) => list.reduce((s, x) => s + f(x), 0);
 const dm = (iso) => { const d = parseDate(iso); return d.d + '.' + (d.m + 1); };
+
+// The same recurring line: same merchant, or, for lines without a usable
+// description, the same category.
+function sameLine(a, b) {
+  if (a.type !== b.type) return false;
+  if (merchantKey(a.description) && merchantKey(b.description)) return sameMerchant(a.description, b.description);
+  return !!a.category_id && a.category_id === b.category_id;
+}
 
 // Fixed lines of last month that have not shown up yet this month: they are
 // expected on the same day of the month.
@@ -25,11 +33,11 @@ export function expectedFixed(txs, today) {
   const dim = daysInMonth(y, m);
   const out = [];
   for (const t of prev) {
-    if (now.some((n) => n.type === t.type && sameMerchant(n.description, t.description))) continue;
-    if (out.some((o) => o.type === t.type && sameMerchant(o.description, t.description))) continue;
+    if (now.some((n) => sameLine(n, t))) continue;
+    if (out.some((o) => sameLine(o, t))) continue;
     const day = Math.min(parseDate(t.tx_date).d, dim);
     // A payment whose day already passed may just be late; still expected this month.
-    out.push({ date: isoDate(new Date(y, m, Math.max(day, today.getDate()))), day, description: t.description, amount: Number(t.amount) || 0, type: t.type, late: day < today.getDate() });
+    out.push({ date: isoDate(new Date(y, m, Math.max(day, today.getDate()))), day, description: t.description, category_id: t.category_id, amount: Number(t.amount) || 0, type: t.type, late: day < today.getDate() });
   }
   return out.sort((a, b) => (a.date < b.date ? -1 : 1));
 }

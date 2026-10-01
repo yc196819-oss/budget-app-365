@@ -8,12 +8,16 @@ import { CashCard } from './CashCard.js';
 import { Attention } from './Attention.js';
 import { Upcoming } from './Upcoming.js';
 import { WhereMoney } from './WhereMoney.js';
+import { PlanCards } from '../plans/PlanCards.js';
+import { PlanSheets, usePlanSheet } from '../plans/PlanSheets.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
 // what needs attention (one action each) and what is coming up.
 export function HomeScreen({ data, onAdd, onImport }) {
   // One sheet at a time: { kind: 'hero' } | { kind: 'tx', id } | null
   const [sheet, setSheet] = useState(null);
+  // The holiday plan and the quarterly check-in have their own sheets.
+  const planSheet = usePlanSheet();
 
   if (data.status === 'loading' || data.status === 'idle') return html`<div class="card empty" role="status">טוען…</div>`;
   if (data.status === 'error') {
@@ -41,7 +45,7 @@ export function HomeScreen({ data, onAdd, onImport }) {
 
   const act = (a) => {
     if (a.to === 'import') onImport();
-    else if (a.to === 'tx') setSheet({ kind: 'tx', id: a.id });
+    else if (a.to === 'tx') { planSheet.close(); setSheet({ kind: 'tx', id: a.id }); }
     else if (a.to === 'money-cats') location.hash = '#/money/cats';
     else location.hash = '#/' + a.to;
   };
@@ -49,14 +53,16 @@ export function HomeScreen({ data, onAdd, onImport }) {
 
   return html`<div class="stack home">
     <div class="home-main stack">
-      <${Hero} plan=${plan} onOpen=${() => setSheet({ kind: 'hero' })} />
+      <${Hero} plan=${plan} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
       <${Attention} items=${items} onAct=${act} />
+      <${PlanCards} data=${data} onSheet=${(s) => { setSheet(null); planSheet.open(s); }} />
       <${WhereMoney} top=${top} />
     </div>
     <div class="home-side stack">
       <${CashCard} cash=${cash} accounts=${data.accounts} />
       <${Upcoming} items=${soon} />
     </div>
+    <${PlanSheets} data=${data} sheet=${planSheet.value} onClose=${planSheet.close} />
     ${sheet && sheet.kind === 'hero' && html`<${HeroSheet} plan=${plan} onClose=${() => setSheet(null)} />`}
     ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
   </div>`;

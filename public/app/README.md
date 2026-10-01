@@ -38,12 +38,20 @@ month), free cash (the bank balance typed in by hand minus card purchases
 not charged yet, an estimate), the next two weeks, and at most three things
 that need attention, each with one action.
 
+Plans: "the coming months" forecasts half a year month by month (3-month
+averages, last month's fixed lines, yearly payments coming round, installments,
+dated goals, and holidays not planned yet at what they cost last time), with
+a verdict, up to one action, bars and a "what if" check that saves nothing.
+Holiday plans and the quarterly check-in are saved as goals with a date and
+plan items, the same shape the current app uses, so no schema change.
+The check-in's "answered this quarter" mark is kept on the device.
+
 Rules:
 - One home per entity, max depth 2 (tab, then one sheet), no sheet on top of a sheet.
 - Same tabs in the same order on mobile and desktop.
 - Anything that computes numbers goes in `src/domain/` as a pure function, with tests in `tests/`.
 
-Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home (done), 3 plans, 4 assets, 5 advisor and learning, 6 onboarding.
+Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home (done), 3 plans (done), 4 assets, 5 advisor and learning, 6 onboarding.
 
 Tests:
 - `npm test`: pure logic and the server (no browser).
