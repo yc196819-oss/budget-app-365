@@ -35,7 +35,7 @@
 
 ## לא לגעת
 - `budget-ai-server.js`, `public/` (חוץ מ-app.js ו-style.css), `render.yaml`, `package-lock.json`
-- כל קבצי `supabase_*.sql` (תיעוד), `PENDING.md`, `DEPLOY_RENDER.md`, `.env.example`, `.gitignore`
+- כל קבצי `supabase_*.sql` (תיעוד), `DEPLOY_RENDER.md`, `.env.example`, `.gitignore`
 - התיקייה `sql-already-applied/` ב-ZIP — **לא להריץ**, כבר הופעלה ב-Supabase.
 
 ## פקודה אחת (אם עובדים עם git בטרמינל)
