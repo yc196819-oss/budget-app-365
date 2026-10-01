@@ -1,0 +1,104 @@
+/* App shell. Mobile: header + content + bottom nav + "ask" button.
+   Desktop (>= 1024px): sidebar on the right, content in the middle,
+   advisor rail on the left. Same tabs, same order. */
+
+.shell { min-height: 100vh; }
+.shell-main { padding: 20px 18px 120px; max-width: 720px; margin: 0 auto; }
+.sidebar, .rail { display: none; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.topbar-title { display: flex; flex-direction: column; gap: 2px; }
+.topbar-title small { font-size: 13px; font-weight: 700; color: var(--muted); }
+.topbar-title h1 { margin: 0; font-family: var(--font-display); font-size: 30px; line-height: 1.1; }
+.topbar-actions { display: flex; gap: 8px; }
+
+/* bottom nav */
+.bottom-nav {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 10;
+  height: calc(76px + env(safe-area-inset-bottom)); padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
+  background: var(--nav); border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: 1fr 1fr 64px 1fr 1fr; align-items: center; gap: 4px;
+}
+.nav-item {
+  height: 54px; border: 0; border-radius: var(--radius-m); background: transparent; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 12px; font-weight: 700; text-decoration: none;
+}
+.nav-item .pill { width: 44px; height: 28px; border-radius: 999px; display: flex; align-items: center; justify-content: center; }
+.nav-item[aria-current="page"] { color: var(--text); font-weight: 800; }
+.nav-item[aria-current="page"] .pill { background: var(--accent-tint); color: var(--accent); }
+.nav-add {
+  justify-self: center; width: 54px; height: 54px; border-radius: 18px; border: 0;
+  background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .25);
+}
+.ask-fab {
+  position: fixed; left: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 11;
+  height: 48px; padding: 0 16px 0 6px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--text); font-weight: 800;
+  display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+}
+.orb {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), var(--danger)); color: var(--accent-ink);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* sheets and dialogs */
+.scrim { position: fixed; inset: 0; z-index: 20; background: var(--scrim); animation: fade-in .25s ease; }
+.sheet {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 21; max-height: 88vh; overflow-y: auto;
+  background: var(--bg); border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 10px 18px 26px;
+  display: flex; flex-direction: column; gap: 14px; animation: sheet-in .4s cubic-bezier(.22, 1, .36, 1);
+}
+.sheet-handle { align-self: center; width: 40px; height: 5px; border-radius: 999px; background: var(--line); }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sheet-head h2 { margin: 0; font-size: 19px; }
+
+/* placeholder cards for screens that arrive in later stages */
+.soon { display: flex; flex-direction: column; gap: 12px; }
+.soon-badge { align-self: flex-start; font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); }
+.soon ul { margin: 0; padding-inline-start: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+
+@media (min-width: 1024px) {
+  .shell { display: grid; grid-template-columns: 236px minmax(0, 1fr) 340px; height: 100vh; }
+  .shell-main { padding: 26px 32px 40px; max-width: none; margin: 0; overflow-y: auto; height: 100vh; }
+  .bottom-nav, .ask-fab { display: none; }
+  .sidebar {
+    display: flex; flex-direction: column; gap: 4px; padding: 24px 16px 18px;
+    background: var(--nav); border-left: 1px solid var(--line); height: 100vh;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; font-family: var(--font-display); font-size: 22px; font-weight: 700; }
+  .brand-mark { width: 34px; height: 34px; border-radius: 11px; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; }
+  .side-item {
+    height: 46px; padding: 0 12px; border-radius: 14px; color: var(--muted); text-decoration: none;
+    display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 700;
+  }
+  .side-item[aria-current="page"] { background: var(--accent-tint); color: var(--text); font-weight: 800; }
+  .side-item[aria-current="page"] svg { color: var(--accent); }
+  .side-sep { height: 1px; background: var(--line); margin: 14px 8px; }
+  .side-spacer { flex-grow: 1; }
+  .side-profile { display: flex; align-items: center; gap: 10px; padding: 8px; border: 0; border-radius: 14px; background: transparent; text-align: right; }
+  .rail {
+    display: flex; flex-direction: column; gap: 12px; padding: 24px 20px;
+    background: var(--nav); border-right: 1px solid var(--line); height: 100vh; overflow-y: auto;
+  }
+  .rail-head { display: flex; align-items: center; gap: 10px; }
+  .topbar-actions .only-mobile { display: none; }
+  .sheet {
+    inset: auto; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 520px; max-height: 80vh;
+    border-radius: var(--radius-xl); border: 1px solid var(--line); animation: fade-in .25s ease;
+  }
+  .sheet-handle { display: none; }
+}
+
+/* home hero (filled with real numbers in stage 2) */
+.hero {
+  background: var(--hero-bg); color: var(--hero-text); border-radius: var(--radius-xl); padding: 22px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* login */
+.login { min-height: 100vh; max-width: 440px; margin: 0 auto; padding: 32px 22px; display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+.brand-login { display: flex; align-items: center; gap: 10px; }
+.brand-login .brand-mark { width: 38px; height: 38px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; }

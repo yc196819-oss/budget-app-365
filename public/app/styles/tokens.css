@@ -1,0 +1,57 @@
+/* Design tokens. Same palette as the approved prototype.
+   Dark is the default; light follows the system unless the user picked a theme. */
+:root {
+  --bg: #13100E;
+  --surface: #1E1A17;
+  --surface-2: #2A241F;
+  --line: #3A322B;
+  --text: #F7EFE6;
+  --muted: #BCAA99;
+  --faint: #9A8878;
+  --accent: #F2B66D;
+  --accent-ink: #1B130C;
+  --accent-tint: #F2B66D26;
+  --income: #7FD1A8;
+  --income-tint: #7FD1A824;
+  --danger: #F29384;
+  --danger-tint: #F2938424;
+  --warn: #F2B66D;
+  --warn-tint: #F2B66D24;
+  --hero-bg: #F2B66D;
+  --hero-text: #1B130C;
+  --hero-muted: #1B130CBF;
+  --hero-track: #1B130C1F;
+  --nav: #1A1614;
+  --scrim: rgba(0, 0, 0, .55);
+
+  --radius-s: 12px;
+  --radius-m: 16px;
+  --radius-l: 22px;
+  --radius-xl: 28px;
+  --font: 'Assistant', system-ui, sans-serif;
+  --font-display: 'Frank Ruhl Libre', Georgia, serif;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #F6F1EA; --surface: #FFFFFF; --surface-2: #EFE7DC; --line: #E3D7C8;
+    --text: #221A13; --muted: #6B5948; --faint: #7A6755;
+    --accent: #A5570F; --accent-ink: #FFFFFF; --accent-tint: #A5570F1F;
+    --income: #1F7A4D; --income-tint: #1F7A4D1A; --danger: #B3362A; --danger-tint: #B3362A1A;
+    --warn: #9A5410; --warn-tint: #C77A2A24;
+    --hero-bg: #221A13; --hero-text: #FBF4EA; --hero-muted: #FBF4EABF; --hero-track: #FFFFFF24;
+    --nav: #FFFFFF; --scrim: rgba(34, 26, 19, .45);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #F6F1EA; --surface: #FFFFFF; --surface-2: #EFE7DC; --line: #E3D7C8;
+  --text: #221A13; --muted: #6B5948; --faint: #7A6755;
+  --accent: #A5570F; --accent-ink: #FFFFFF; --accent-tint: #A5570F1F;
+  --income: #1F7A4D; --income-tint: #1F7A4D1A; --danger: #B3362A; --danger-tint: #B3362A1A;
+  --warn: #9A5410; --warn-tint: #C77A2A24;
+  --hero-bg: #221A13; --hero-text: #FBF4EA; --hero-muted: #FBF4EABF; --hero-track: #FFFFFF24;
+  --nav: #FFFFFF; --scrim: rgba(34, 26, 19, .45);
+  color-scheme: light;
+}

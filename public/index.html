@@ -1721,7 +1721,7 @@ function catColor(id){
 }
 function hexA(hex,a){const n=parseInt(hex.slice(1),16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
 function cssVar(name){return getComputedStyle(document.body).getPropertyValue(name).trim();}
-const API_BASE=(window.__APP_CONFIG?.API_BASE||localStorage.getItem('aiApiBase')||((location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8787':location.origin)).replace(/\/$/, '');
+const API_BASE=(window.__APP_CONFIG?.API_BASE||((location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8787':location.origin)).replace(/\/$/, '');
 async function authHeaders(){
   const{data}=await sb.auth.getSession();
   const token=data?.session?.access_token;
@@ -1758,7 +1758,7 @@ setInterval(()=>{
   const pct=Math.max(0,100-el/TIMEOUT_MS*100);
   $('#timeoutBar').style.width=pct+'%';
   $('#timeoutBar').style.background=pct<20?'var(--danger)':pct<50?'var(--warn)':'var(--accent)';
-  if(el>TIMEOUT_MS){sb.auth.signOut();notify('פג תוקף החיבור לאחר 30 דקות חוסר פעילות. התחבר מחדש.');}
+  if(el>TIMEOUT_MS){clearSensitiveLocal();sb.auth.signOut();notify('פג תוקף החיבור לאחר 30 דקות חוסר פעילות. התחבר מחדש.');}
 },5000);
 
 // AUTH
@@ -1817,9 +1817,13 @@ async function doRegister(){
   if(error){showErr(authErrMsg(error));return;}
   showErr('✅ נרשמת! נשלח מייל אימות לכתובת '+email+'. לחץ על הקישור בו ואז התחבר.','ok');
 }
+// Things that must not stay on a shared device after logout.
+function clearSensitiveLocal(){
+  try{['geminiKey','aiApiBase'].forEach(k=>localStorage.removeItem(k));}catch(_){}
+}
 async function doLogout(){
   // Immediate local logout so UI never feels stuck on network delays.
-  CU=null;HID=null;MROLE='owner';stopAutoSync();
+  CU=null;HID=null;MROLE='owner';stopAutoSync();clearSensitiveLocal();
   $('#authWrap').classList.remove('hidden');
   $('#mainApp').classList.add('hidden');
   try{
