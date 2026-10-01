@@ -92,3 +92,19 @@ test('protected API routes still require a session', async () => {
   const res = await fetch(BASE + '/api/ai/advice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.ok(res.status === 401 || res.status === 503);
 });
+
+test('the new app shell preloads every module, and every preloaded file exists', async () => {
+  const res = await fetch(BASE + '/app/');
+  const html = await res.text();
+  const links = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)">/g)].map((m) => m[1]);
+  assert.ok(links.includes('/app/src/main.js'));
+  assert.ok(links.includes('/app/vendor/preact.js'));
+  assert.ok(links.length > 50, 'all modules listed: ' + links.length);
+  // Preloads come before the entry module, so they start first.
+  assert.ok(html.indexOf('modulepreload') < html.indexOf('<script type="module"'));
+  for (const l of links) {
+    const r = await fetch(BASE + l);
+    assert.equal(r.status, 200, l);
+    assert.match(r.headers.get('content-type'), /javascript/, l);
+  }
+});

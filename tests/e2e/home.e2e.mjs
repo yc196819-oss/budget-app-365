@@ -117,3 +117,20 @@ test('desktop: two columns, no errors, and missing accounts tables do not break 
   assert.equal(await page2.locator('.cash').count(), 0);
   await page2.close();
 });
+
+test('while the data loads, a skeleton of the screen shows instead of a blank page', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  const db = makeFakeDb();
+  await mockSupabase(page, db);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await page.route('**/rest/v1/transactions*', async (r) => { await gate; return r.fallback(); });
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/home');
+  await page.waitForSelector('.loading .skel');
+  assert.equal(await page.locator('.loading[role="status"]').count(), 1);
+  release();
+  await page.waitForSelector('.hero');
+  assert.equal(await page.locator('.loading').count(), 0);
+  await page.close();
+});

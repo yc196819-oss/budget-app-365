@@ -9,6 +9,7 @@ const nodemailer = require('nodemailer');
 const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
+const { claudeRequest, isRetryable } = require('./server/claude');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -286,24 +287,14 @@ async function callClaude({ prompt, text, fileData, mimeType }) {
     });
   }
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 4096,
-      temperature: 0.1,
-      messages: [{ role: 'user', content }]
-    })
-  });
+  const req = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 4096, content });
+  const response = await fetch(req.url, req.init);
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok || data.type === 'error') {
-    throw new Error(data.error?.message || 'Claude provider error');
+    const err = new Error(data.error?.message || 'Claude provider error');
+    err.status = response.status;
+    throw err;
   }
 
   return {
@@ -401,18 +392,20 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function generateWithFallback(payload) {
+async function generateWithFallback(payload, { skipClaude = false } = {}) {
   const attempted = [];
 
-  if (ANTHROPIC_KEY) {
+  if (ANTHROPIC_KEY && !skipClaude) {
     try {
       const result = await callClaude(payload);
       return { ...result, attempted };
     } catch (err) {
       attempted.push({ provider: 'claude', error: err.message || 'Unknown Claude error' });
+      console.error('Claude failed:', err.status || '', err.message);
       // one retry after a short delay, same reasoning as the Gemini retry below --
       // most failures at this stage are transient (rate limit, momentary 5xx).
-      try {
+      // A request Claude rejects as wrong (4xx) fails the same way again.
+      if (isRetryable(err.status)) try {
         await delay(1200);
         const retryResult = await callClaude(payload);
         return { ...retryResult, attempted };
@@ -1147,12 +1140,9 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
   const text = JSON.stringify(summary || {}).slice(0, 12000);
   try {
     if (ANTHROPIC_KEY) {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 3000, temperature: 0.3, stream: true,
-          messages: [{ role: 'user', content: `${prompt}\n\n${text}` }] })
-      });
+      const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 3000, stream: true, content: `${prompt}\n\n${text}` });
+      const r = await fetch(cr.url, cr.init);
+      if (!r.ok) console.error('Claude stream failed:', r.status, (await r.text().catch(() => '')).slice(0, 300));
       if (r.ok && r.body) {
         const decoder = new TextDecoder();
         let buf = '';
@@ -1173,13 +1163,15 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
         return res.end();
       }
     }
-    // fallback: no streaming — whole answer as one chunk
-    const ai = await generateWithFallback({ prompt, text });
+    // fallback: no streaming — whole answer as one chunk. Claude was just
+    // tried, so go straight to the other providers.
+    const ai = await generateWithFallback({ prompt, text }, { skipClaude: !!ANTHROPIC_KEY });
     send({ delta: String(ai.output || '').trim() });
     send({ done: true, provider: ai.provider });
     return res.end();
   } catch (err) {
-    send({ error: err.message || 'AI error' });
+    console.error('advice-chat-stream failed:', err.message);
+    send({ error: 'היועץ לא הצליח לענות כרגע. נסו שוב בעוד דקה.' });
     return res.end();
   }
 });
@@ -1859,6 +1851,24 @@ app.get('/app/vendor/:file', (req, res) => {
   return res.sendFile(path.join(__dirname, rel));
 });
 
+// The new app has no build step: the browser discovers its ~100 modules one
+// import at a time, a round trip per level. The shell lists every module up
+// front (modulepreload), so they are all fetched in parallel right away.
+function listModules(dir, base) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory()
+    ? listModules(path.join(dir, e.name), base + e.name + '/')
+    : e.name.endsWith('.js') ? [base + e.name] : []));
+}
+let APP_SHELL = null;
+function appShell() {
+  if (APP_SHELL && process.env.NODE_ENV === 'production') return APP_SHELL;
+  const html = fs.readFileSync(path.join(NEW_APP_DIR, 'index.html'), 'utf8');
+  const mods = ['/app/vendor/preact.js', '/app/vendor/hooks.js', '/app/vendor/htm.js', ...listModules(path.join(NEW_APP_DIR, 'src'), '/app/src/')];
+  const links = mods.map((m) => `<link rel="modulepreload" href="${m}">`).join('\n');
+  APP_SHELL = html.replace('<script type="module"', links + '\n<script type="module"');
+  return APP_SHELL;
+}
+
 // The main address opens the new app; the query string is kept, so invite
 // links (?invite=) and push links from the previous version still work. The
 // previous version stays available at /old/.
@@ -1875,7 +1885,8 @@ app.use(express.static(PUBLIC_DIR, { index: false }));
 // gets its shell.
 app.use('/app', (req, res, next) => {
   if (req.method !== 'GET') return next();
-  return res.sendFile(path.join(NEW_APP_DIR, 'index.html'));
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.type('html').send(appShell());
 });
 app.get('/app-config.js', (req, res) => {
   res.type('application/javascript');

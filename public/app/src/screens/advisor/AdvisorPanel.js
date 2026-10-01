@@ -115,7 +115,9 @@ export function AdvisorPanel({ data, session, screen }) {
         ${conv.messages.length === 0 && html`<div class="muted" style="font-size:14px;text-align:center;padding:16px 0">שאלו כל דבר על הכסף שלכם</div>`}
         ${conv.messages.map((m, i) => html`<div class=${'adv-msg ' + (m.role === 'user' ? (m.author_id === me ? 'me' : 'partner') : 'ai')} key=${m.id || i}>
           ${m.role === 'user' && m.author_id !== me && html`<small>${memberName(m.author_id)}</small>`}
-          <span>${m.text || (m.pending ? '…' : '')}</span>
+          ${m.pending && !m.text
+            ? html`<span class="adv-thinking" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>היועץ חושב…</span>`
+            : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
           ${m.role === 'ai' && !m.pending && m.text && canSpeak() && html`<button type="button" class="adv-speak" aria-label=${speaking === i ? 'להפסיק להקריא' : 'להקריא'} onClick=${() => toggleSpeak(i, m.text)}>${speaking === i ? '■' : '🔊'}</button>`}
         </div>`)}
       </div>
@@ -136,7 +138,7 @@ export function AdvisorPanel({ data, session, screen }) {
     ${error && html`<div class="adv-err" role="alert">${error}</div>`}
     <div class="stack" style="gap:6px">
       <b style="font-size:13px;color:var(--muted)">שיחות אחרונות</b>
-      ${list === null && !listError && html`<span class="muted" style="font-size:13px">טוען…</span>`}
+      ${list === null && !listError && html`<div class="list" aria-busy="true">${[0, 1, 2].map((i) => html`<div class="skel-row" key=${i}><span class="skel" style="width:60%"></span><span class="skel" style="width:35%"></span></div>`)}</div>`}
       ${listError && html`<span class="muted" style="font-size:13px">לא הצלחנו לטעון את השיחות. <button type="button" class="btn-text" onClick=${refresh}>לנסות שוב</button></span>`}
       ${list && list.length === 0 && html`<span class="muted" style="font-size:13px">עוד אין שיחות.</span>`}
       ${list && list.length > 0 && html`<div class="list">${list.map((c) => html`<button type="button" class="row" key=${c.id} onClick=${() => open(c.id)}>
@@ -150,6 +152,6 @@ function Composer({ draft, setDraft, busy, onSend, onMic, listening }) {
   return html`<form class="adv-compose" onSubmit=${(e) => { e.preventDefault(); onSend(); }}>
     <input class="input" value=${draft} onInput=${(e) => setDraft(e.target.value)} placeholder=${listening ? 'מקשיב…' : 'שאלו את היועץ'} aria-label="שאלה ליועץ" disabled=${busy} />
     ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}>🎙️</button>`}
-    <button type="submit" class="btn" disabled=${busy || !draft.trim()}>${busy ? '…' : 'לשאול'}</button>
+    <button type="submit" class="btn" disabled=${busy || !draft.trim()}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>
   </form>`;
 }

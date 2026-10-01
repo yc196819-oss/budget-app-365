@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Loading } from '../../components/Loading.js';
 import { useState } from 'preact/hooks';
 import { monthPlan, cashNow, upcoming, attention, topCategories } from '../../domain/home.js';
 import { TxSheet } from '../money/TxSheet.js';
@@ -20,7 +21,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
   // The holiday plan and the quarterly check-in have their own sheets.
   const planSheet = usePlanSheet();
 
-  if (data.status === 'loading' || data.status === 'idle') return html`<div class="card empty" role="status">טוען…</div>`;
+  if (data.status === 'loading' || data.status === 'idle') return html`<${Loading} label="טוען…" />`;
   if (data.status === 'error') {
     return html`<div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו לטעון את הנתונים</b><span>${data.error}</span>
       <button type="button" class="btn btn-ghost" onClick=${data.reload}>לנסות שוב</button></div>`;

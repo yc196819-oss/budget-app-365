@@ -127,3 +127,37 @@ test('desktop: the advisor sits in the side rail', async () => {
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('while the advisor thinks, an animated indicator shows; it gives way to the answer', async () => {
+  const { page } = await open();
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await page.route('**/api/ai/advice-chat-stream', async (r) => {
+    await gate;
+    return r.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: {"delta":"תשובה קצרה."}\n\ndata: {"done":true}\n\n' });
+  });
+  await page.click('.ask-fab');
+  await page.fill('input[aria-label="שאלה ליועץ"]', 'מה המצב?');
+  await page.click('.adv-compose button[type="submit"]');
+  await page.waitForSelector('.adv-msg.ai .adv-thinking .dots i');
+  assert.match(await page.locator('.adv-thinking').textContent(), /היועץ חושב/);
+  assert.equal(await page.locator('.adv-compose .spinner').count(), 1);
+  release();
+  await page.waitForSelector('.adv-msg.ai:has-text("תשובה קצרה.")');
+  assert.equal(await page.locator('.adv-thinking').count(), 0);
+  assert.equal(await page.locator('.adv-compose .spinner').count(), 0);
+  await page.close();
+});
+
+test('when the AI fails, a clear message shows and the question is not lost from the log', async () => {
+  const { page } = await open();
+  await page.route('**/api/ai/advice-chat-stream', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ error: 'היועץ לא הצליח לענות כרגע. נסו שוב בעוד דקה.' }) + '\n\n' }));
+  await page.click('.ask-fab');
+  await page.fill('input[aria-label="שאלה ליועץ"]', 'מה המצב?');
+  await page.click('.adv-compose button[type="submit"]');
+  await page.waitForSelector('.adv-err');
+  assert.match(await page.locator('.adv-err').textContent(), /נסו שוב/);
+  assert.equal(await page.locator('.adv-thinking').count(), 0);
+  assert.match(await page.locator('.adv-log').textContent(), /מה המצב\?/);
+  await page.close();
+});
