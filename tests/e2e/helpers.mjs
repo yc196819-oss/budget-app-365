@@ -53,7 +53,7 @@ export function makeFakeDb(today = new Date()) {
     add({ type: 'income', amount: 18400, description: 'משכורת', tx_date: day(Math.min(10, lastDay)), category_id: 'sal', nature: 'fixed' });
     add({ type: 'expense', amount: 4500, description: 'משכנתא', tx_date: day(1), category_id: 'home', nature: 'fixed' });
     for (let d = 2; d <= lastDay; d += 3) {
-      add({ type: 'expense', amount: 300 + ((d * 37 + back * 11) % 200), description: 'שופרסל דיל ' + (d % 3 === 0 ? '1234' : ''), tx_date: day(d), category_id: 'food', subcategory_id: 'super' });
+      add({ type: 'expense', amount: 300 + ((d * 37 + back * 11) % 200), description: 'שופרסל דיל ' + (d % 3 === 0 ? '1234' : ''), tx_date: day(d), category_id: 'food', subcategory_id: 'super', card_id: 'c1' });
       add({ type: 'expense', amount: 40 + (d % 4) * 6, description: 'ארומה', tx_date: day(d), category_id: 'food', subcategory_id: 'cafe' });
     }
     add({ type: 'expense', amount: 280, description: 'סונול', tx_date: day(Math.min(5, lastDay)), category_id: 'car' });
@@ -65,7 +65,9 @@ export function makeFakeDb(today = new Date()) {
       transactions: txs,
       categories,
       category_budgets: [{ household_id: hid, category_id: 'food', monthly_amount: 3000 }, { household_id: hid, category_id: 'car', monthly_amount: 900 }],
-      memberships: [{ household_id: hid, user_id: 'u1', display_name: 'יוסי ודני', role: 'owner', created_at: '2026-01-01' }]
+      memberships: [{ household_id: hid, user_id: 'u1', display_name: 'יוסי ודני', role: 'owner', created_at: '2026-01-01' }],
+      bank_accounts: [{ id: 'a1', household_id: hid, name: 'עו״ש', balance: 12000, balance_updated_at: iso(today) + 'T08:00:00Z' }],
+      credit_cards: [{ id: 'c1', household_id: hid, name: 'ויזה 4821', bank_account_id: 'a1', billing_day: 10 }]
     }
   };
 }

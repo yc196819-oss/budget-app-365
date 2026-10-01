@@ -19,6 +19,7 @@ export function ImportSheet({ data, onClose }) {
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [cardId, setCardId] = useState(() => (data.cards.length === 1 ? data.cards[0].id : null));
   const run = useRef(0);
 
   const start = async (file) => {
@@ -45,7 +46,7 @@ export function ImportSheet({ data, onClose }) {
   const reset = () => { run.current++; setItems([]); setError(''); setPhase('pick'); };
 
   const save = async () => {
-    const rows = toRows(items);
+    const rows = toRows(items, { cardId });
     if (!rows.length || saving) return;
     setSaving(true);
     try {
@@ -76,6 +77,6 @@ export function ImportSheet({ data, onClose }) {
         <span class="muted" style="line-height:1.5">${error}</span>
       </div>
       <button type="button" class="btn" onClick=${reset}>לבחור קובץ אחר</button>`}
-    ${phase === 'review' && html`<${Review} items=${items} categories=${data.categories} onChange=${setItems} onSave=${save} saving=${saving} onAnother=${reset} />`}
+    ${phase === 'review' && html`<${Review} items=${items} categories=${data.categories} cards=${data.cards} cardId=${cardId} onCard=${setCardId} onChange=${setItems} onSave=${save} saving=${saving} onAnother=${reset} />`}
   <//>`;
 }

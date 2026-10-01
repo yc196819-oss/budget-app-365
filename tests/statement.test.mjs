@@ -201,6 +201,8 @@ test('summary and rows to save', () => {
   const rows = toRows(items);
   assert.equal(rows.length, 3);
   assert.deepEqual(rows[0], { type: 'expense', amount: 100, description: 'a', tx_date: '2026-08-12', category_id: 'food', subcategory_id: null, nature: 'variable', spread: 'month', source: 'pdf' });
+  const carded = toRows(items, { cardId: 'c1' });
+  assert.ok(carded.every((r) => r.card_id === 'c1' && r.payment_method === 'credit'));
 });
 
 test('shortDate', () => {

@@ -101,6 +101,8 @@ test('an Excel statement: read on the device, categorized, duplicates held back,
   assert.equal(by('שופרסל דיל ת"א')[0].tx_date, iso(prev(2)));
   assert.equal(by('זיכוי ZARA')[0].type, 'income');
   assert.ok(added.every((t) => t.household_id === 'h1' && t.created_by === 'u1' && t.source === 'pdf'));
+  // The household has one card, so it is chosen by default.
+  assert.ok(added.every((t) => t.card_id === 'c1' && t.payment_method === 'credit'));
   assert.equal(by('משכנתא').length, 0);
 
   // The new lines show up in the money list right away.
@@ -122,9 +124,11 @@ test('without AI the lines still import; unknown merchants just wait for a categ
   await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: statementXlsx() });
   await page.waitForSelector('.import-summary');
   assert.match(await page.locator('.import-summary').textContent(), /4 מחכות לכם/);
+  await page.click('.sheet .chip:has-text("לא מכרטיס")');
   await page.click('text=לשמור 5 תנועות');
   await page.waitForSelector('.toast');
   assert.equal(db.tables.transactions.length, before + 5);
+  assert.ok(db.tables.transactions.slice(before).every((t) => !t.card_id));
   assert.equal(db.tables.transactions.slice(before).filter((t) => !t.category_id).length, 4);
   await page.close();
 });

@@ -31,12 +31,19 @@ to read, so their text or image goes to the AI. Duplicates of existing lines
 start unchecked. Nothing is saved before the review, and saving can be undone.
 Old binary .xls files are not read: the user is asked for .xlsx or PDF.
 
+Home: what is left of the monthly budget, a forecast for the end of the
+month (spent so far + last month's fixed lines that did not show up yet +
+the pace of variable spending, leaning on the last 3 months early in the
+month), free cash (the bank balance typed in by hand minus card purchases
+not charged yet, an estimate), the next two weeks, and at most three things
+that need attention, each with one action.
+
 Rules:
 - One home per entity, max depth 2 (tab, then one sheet), no sheet on top of a sheet.
 - Same tabs in the same order on mobile and desktop.
 - Anything that computes numbers goes in `src/domain/` as a pure function, with tests in `tests/`.
 
-Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home, 3 plans, 4 assets, 5 advisor and learning, 6 onboarding.
+Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home (done), 3 plans, 4 assets, 5 advisor and learning, 6 onboarding.
 
 Tests:
 - `npm test`: pure logic and the server (no browser).

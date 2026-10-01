@@ -329,8 +329,9 @@ export function summary(items) {
   };
 }
 
-// The rows to insert into `transactions`.
-export function toRows(items) {
+// The rows to insert into `transactions`. A card, when chosen, goes on every
+// expense line (refunds too) so the card's charge can be estimated.
+export function toRows(items, { cardId = null } = {}) {
   return items.filter((t) => t.include).map((t) => ({
     type: t.type,
     amount: t.amount,
@@ -340,6 +341,7 @@ export function toRows(items) {
     subcategory_id: t.subcategory_id || null,
     nature: 'variable',
     spread: 'month',
-    source: 'pdf'
+    source: 'pdf',
+    ...(cardId ? { card_id: cardId, payment_method: 'credit' } : {})
   }));
 }

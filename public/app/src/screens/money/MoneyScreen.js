@@ -8,6 +8,7 @@ import { ReportView } from './ReportView.js';
 import { TxSheet } from './TxSheet.js';
 import { CategorySheet } from './CategorySheet.js';
 import { monthsBack } from '../../domain/money.js';
+import { routeView } from '../../domain/routes.js';
 
 const VIEWS = [{ key: 'list', label: 'תנועות' }, { key: 'cats', label: 'קטגוריות' }, { key: 'report', label: 'דוח' }];
 
@@ -15,7 +16,7 @@ export function MoneyScreen({ data, onAdd, onImport }) {
   const months = useMemo(() => monthsBack(new Date(), 12), []);
   const [period, setPeriod] = useState('month');
   const [index, setIndex] = useState(months.length - 1);
-  const [view, setView] = useState('list');
+  const [view, setView] = useState(() => (VIEWS.some((v) => v.key === routeView(location.hash)) ? routeView(location.hash) : 'list'));
   // One sheet at a time: { kind: 'tx', id } | { kind: 'cat', id } | null
   const [sheet, setSheet] = useState(null);
 

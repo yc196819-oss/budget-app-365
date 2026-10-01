@@ -18,3 +18,8 @@ export function parseRoute(hash) {
 export function hrefFor(tab) {
   return '#/' + tab;
 }
+
+// "#/money/cats" -> "cats": a view inside a tab, for links from other screens.
+export function routeView(hash) {
+  return String(hash || '').replace(/^#\/?/, '').split(/[/?]/)[1] || '';
+}

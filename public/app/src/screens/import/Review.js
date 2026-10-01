@@ -8,7 +8,7 @@ import { summary, setItemCategory } from '../../domain/statement.js';
 // What was found in the file, before saving. Lines that probably exist
 // already start unchecked. Choosing a category fills the other lines of the
 // same merchant too.
-export function Review({ items, categories, onChange, onSave, saving, onAnother }) {
+export function Review({ items, categories, cards = [], cardId, onCard, onChange, onSave, saving, onAnother }) {
   const [filter, setFilter] = useState(() => (items.some((t) => !t.category_id) ? 'waiting' : 'all'));
   const [open, setOpen] = useState(null);
   const byId = new Map(categories.map((c) => [c.id, c]));
@@ -29,6 +29,13 @@ export function Review({ items, categories, onChange, onSave, saving, onAnother 
       ].filter(Boolean).join(' · ')}</span>
       ${s.from && html`<span>${'מ-' + shortDate(s.from) + ' עד ' + shortDate(s.to) + ' · הוצאות ' + money(s.expense) + (s.income ? ' · זיכויים ' + money(s.income) : '')}</span>`}
     </div>
+    ${cards.length > 0 && html`<div class="stack" style="gap:6px">
+      <b style="font-size:13px;color:var(--muted)">מאיזה כרטיס הפירוט?</b>
+      <div class="chips" role="group" aria-label="כרטיס">
+        ${cards.map((c) => html`<button type="button" class="chip" aria-pressed=${String(cardId === c.id)} onClick=${() => onCard(c.id)}>${c.name}</button>`)}
+        <button type="button" class="chip" aria-pressed=${String(!cardId)} onClick=${() => onCard(null)}>לא מכרטיס</button>
+      </div>
+    </div>`}
     <${Segmented} variant="tabs" label="סינון" value=${filter} onChange=${(f) => { setFilter(f); setOpen(null); }} options=${[
       { key: 'waiting', label: 'מחכות (' + s.waiting + ')' },
       { key: 'dupes', label: 'כפולות (' + (s.likely + s.maybe) + ')' },
