@@ -52,12 +52,25 @@ in), pension and study funds (long term), loans both ways, installments left
 and card charges not taken yet. Accounts, investments and loans are added and
 edited here, in the same tables the current app uses.
 
+Advisor: the same conversations as the current app (advisor_conversations +
+advisor_messages, shared with the household unless private; older
+conversations keep their messages in a JSON column and are read from there).
+The new app never deletes or edits a message. Questions go to the server's
+/api/ai/advice-chat-stream with a summary of the numbers (no merchant names)
+and the screen the person is on; voice in and read-aloud use the browser's
+speech services. The AI switch in the profile turns off everything that would
+send data to the AI from this device.
+
+Learning corner: 116 lessons in 13 topics (src/content/learning), one a day
+with a 2-question quiz and a streak. Progress is per person in
+user_settings.learning (own row by RLS), with a copy on the device.
+
 Rules:
 - One home per entity, max depth 2 (tab, then one sheet), no sheet on top of a sheet.
 - Same tabs in the same order on mobile and desktop.
 - Anything that computes numbers goes in `src/domain/` as a pure function, with tests in `tests/`.
 
-Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home (done), 3 plans (done), 4 assets (done), 5 advisor and learning, 6 onboarding.
+Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home (done), 3 plans (done), 4 assets (done), 5 advisor and learning (done), 6 onboarding.
 
 Tests:
 - `npm test`: pure logic and the server (no browser).

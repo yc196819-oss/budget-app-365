@@ -8,12 +8,13 @@ import { CashCard } from './CashCard.js';
 import { Attention } from './Attention.js';
 import { Upcoming } from './Upcoming.js';
 import { WhereMoney } from './WhereMoney.js';
+import { LearnCard } from '../learn/LearnCard.js';
 import { PlanCards } from '../plans/PlanCards.js';
 import { PlanSheets, usePlanSheet } from '../plans/PlanSheets.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
 // what needs attention (one action each) and what is coming up.
-export function HomeScreen({ data, onAdd, onImport }) {
+export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
   // One sheet at a time: { kind: 'hero' } | { kind: 'tx', id } | null
   const [sheet, setSheet] = useState(null);
   // The holiday plan and the quarterly check-in have their own sheets.
@@ -60,6 +61,7 @@ export function HomeScreen({ data, onAdd, onImport }) {
     </div>
     <div class="home-side stack">
       <${CashCard} cash=${cash} accounts=${data.accounts} />
+      ${onLearn && html`<${LearnCard} userId=${userId} onOpen=${onLearn} />`}
       <${Upcoming} items=${soon} />
     </div>
     <${PlanSheets} data=${data} sheet=${planSheet.value} onClose=${planSheet.close} />
