@@ -11,7 +11,7 @@ const PAGE = 1000;
 const MONTHS_BACK = 23;
 const DELETE_DELAY_MS = 5000;
 
-const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], goals: [], installments: [], hidden: new Set() };
+const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], goals: [], installments: [], loans: [], investments: [], hidden: new Set() };
 const listeners = new Set();
 const pendingDeletes = new Map();
 
@@ -34,7 +34,9 @@ export function snapshot() {
     accounts: state.accounts,
     cards: state.cards,
     goals: state.goals,
-    installments: state.installments
+    installments: state.installments,
+    loans: state.loans,
+    investments: state.investments
   };
 }
 
@@ -61,7 +63,7 @@ export async function load(hid, userId, { force = false } = {}) {
   try {
     const now = new Date();
     const since = isoDate(new Date(now.getFullYear(), now.getMonth() - MONTHS_BACK, 1));
-    const [txs, cats, budgets, mems, accounts, cards, goals, installments] = await Promise.all([
+    const [txs, cats, budgets, mems, accounts, cards, goals, installments, loans, investments] = await Promise.all([
       fetchAllTransactions(hid, since),
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
@@ -69,10 +71,13 @@ export async function load(hid, userId, { force = false } = {}) {
       sb.from('bank_accounts').select('id,name,balance,balance_updated_at').eq('household_id', hid),
       sb.from('credit_cards').select('id,name,bank_account_id,billing_day').eq('household_id', hid),
       sb.from('goals').select('*').eq('household_id', hid),
-      sb.from('installments').select('*').eq('household_id', hid)
+      sb.from('installments').select('*').eq('household_id', hid),
+      sb.from('loans').select('*').eq('household_id', hid),
+      sb.from('investments').select('*').eq('household_id', hid)
     ]);
     for (const r of [cats, budgets, mems]) if (r.error) throw r.error;
-    // Accounts, cards, goals and installments add to home and plans: without them both still work.
+    // Accounts, cards, goals, installments, loans and investments add to home,
+    // plans and assets: if one of them fails, those screens still work without it.
     if (state.hid !== hid) return;
     Object.assign(state, {
       status: 'ready',
@@ -84,6 +89,8 @@ export async function load(hid, userId, { force = false } = {}) {
       cards: cards.error ? [] : cards.data || [],
       goals: goals.error ? [] : goals.data || [],
       installments: installments.error ? [] : installments.data || [],
+      loans: loans.error ? [] : loans.data || [],
+      investments: investments.error ? [] : investments.data || [],
       hidden: new Set()
     });
   } catch (err) {
@@ -158,6 +165,32 @@ export async function deleteGoal(id) {
   const { error } = await sb.from('goals').delete().eq('id', id).eq('household_id', state.hid);
   if (error) throw error;
   state.goals = state.goals.filter((g) => g.id !== id);
+  emit();
+}
+
+// Insert or update a row of a household table (accounts, investments, loans)
+// and keep the store in step.
+const LISTS = { bank_accounts: 'accounts', investments: 'investments', loans: 'loans' };
+export async function saveRow(table, row) {
+  const key = LISTS[table];
+  if (!key) throw new Error('unknown table ' + table);
+  const { id, ...fields } = row;
+  const q = id
+    ? sb.from(table).update(fields).eq('id', id).eq('household_id', state.hid)
+    : sb.from(table).insert({ ...fields, household_id: state.hid, created_by: state.userId });
+  const { data, error } = await q.select().single();
+  if (error) throw error;
+  state[key] = id ? state[key].map((r) => (r.id === id ? data : r)) : [...state[key], data];
+  emit();
+  return data;
+}
+
+export async function deleteRow(table, id) {
+  const key = LISTS[table];
+  if (!key) throw new Error('unknown table ' + table);
+  const { error } = await sb.from(table).delete().eq('id', id).eq('household_id', state.hid);
+  if (error) throw error;
+  state[key] = state[key].filter((r) => r.id !== id);
   emit();
 }
 
