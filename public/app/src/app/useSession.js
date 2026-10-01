@@ -9,6 +9,8 @@ export function useSession() {
   const [state, setState] = useState({ loading: true, user: null, household: null });
 
   const [tick, setTick] = useState(0);
+  // Arrived from a password-reset email: ask for a new password first.
+  const [recovery, setRecovery] = useState(() => /type=recovery/.test(location.hash));
   useEffect(() => {
     let alive = true;
     const load = async (session) => {
@@ -22,7 +24,10 @@ export function useSession() {
       if (alive) setState({ loading: false, user, household: data && data[0] ? data[0] : null });
     };
     sb.auth.getSession().then(({ data }) => load(data.session));
-    const { data: sub } = sb.auth.onAuthStateChange((_event, session) => load(session));
+    const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true);
+      load(session);
+    });
     return () => { alive = false; sub.subscription.unsubscribe(); };
   }, [tick]);
 
@@ -35,5 +40,5 @@ export function useSession() {
   // After creating or joining a household.
   const refresh = () => setTick((t) => t + 1);
 
-  return { ...state, signOut, refresh };
+  return { ...state, signOut, refresh, recovery, doneRecovery: () => setRecovery(false) };
 }

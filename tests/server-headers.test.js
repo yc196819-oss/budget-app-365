@@ -23,15 +23,32 @@ before(async () => {
 
 after(() => { if (server) server.kill(); });
 
+test('the main address opens the new app, keeping the query string', async () => {
+  const res = await fetch(BASE + '/', { redirect: 'manual' });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), '/app/');
+  const inv = await fetch(BASE + '/?invite=abc123', { redirect: 'manual' });
+  assert.equal(inv.headers.get('location'), '/app/?invite=abc123');
+});
+
+test('the previous version stays available at /old/', async () => {
+  const res = await fetch(BASE + '/old/');
+  assert.equal(res.status, 200);
+  assert.doesNotMatch(await res.text(), /src\/main\.js/);
+  const bare = await fetch(BASE + '/old', { redirect: 'manual' });
+  assert.equal(bare.status, 301);
+  assert.equal(bare.headers.get('location'), '/old/');
+});
+
 test('every response gets the basic security headers', async () => {
-  const res = await fetch(BASE + '/');
+  const res = await fetch(BASE + '/old/');
   assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(res.headers.get('x-frame-options'), 'DENY');
   assert.equal(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
 });
 
-test('the current app is not given the strict CSP (it would break)', async () => {
-  const res = await fetch(BASE + '/');
+test('the previous app is not given the strict CSP (it would break)', async () => {
+  const res = await fetch(BASE + '/old/');
   assert.equal(res.headers.get('content-security-policy'), null);
 });
 

@@ -5,6 +5,7 @@ import { Shell } from './Shell.js';
 import { LoginScreen } from '../screens/auth/LoginScreen.js';
 import { Onboarding } from '../screens/onboarding/Onboarding.js';
 import { JoinInvite } from '../screens/onboarding/JoinInvite.js';
+import { NewPassword } from '../screens/auth/NewPassword.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
 import { PENDING_INVITE, DECLINED_INVITE } from '../data/onboarding.js';
 
@@ -23,6 +24,7 @@ export function App() {
   const session = useSession();
   if (session.loading) return html`<div class="boot" role="status">טוען…</div>`;
   if (!session.user) return html`<${LoginScreen} />`;
+  if (session.recovery) return html`<${NewPassword} onDone=${session.doneRecovery} />`;
   if (!session.household) {
     const invite = readLocal(PENDING_INVITE, '') || (session.user.user_metadata && session.user.user_metadata.invite_code) || '';
     if (invite && invite !== readLocal(DECLINED_INVITE, '')) return html`<${JoinInvite} code=${invite} session=${session} />`;

@@ -1859,7 +1859,18 @@ app.get('/app/vendor/:file', (req, res) => {
   return res.sendFile(path.join(__dirname, rel));
 });
 
-app.use(express.static(PUBLIC_DIR));
+// The main address opens the new app; the query string is kept, so invite
+// links (?invite=) and push links from the previous version still work. The
+// previous version stays available at /old/.
+app.get('/', (req, res) => {
+  const q = req.originalUrl.indexOf('?');
+  res.redirect(302, '/app/' + (q >= 0 ? req.originalUrl.slice(q) : ''));
+});
+app.get(['/old', '/old/'], (req, res) => {
+  if (req.path === '/old') return res.redirect(301, '/old/');
+  return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
+app.use(express.static(PUBLIC_DIR, { index: false }));
 // The new app uses hash routes (/app/#/money), so every other GET under /app
 // gets its shell.
 app.use('/app', (req, res, next) => {

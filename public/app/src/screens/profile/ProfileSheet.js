@@ -23,7 +23,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
       </label>
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
-      <a class="btn btn-ghost" href="/" style="text-decoration:none">לגרסה הנוכחית של האפליקציה</a>
+      <a class="btn btn-ghost" href="/old/" style="text-decoration:none">לגרסה הקודמת של האפליקציה</a>
       <button type="button" class="btn btn-ghost" style="color:var(--danger)" onClick=${onSignOut}><${Icon} name="logout" />יציאה</button>
       <p class="faint" style="font-size:12px;margin:0">ביציאה נמחקים מהמכשיר גם מפתחות ונתונים רגישים ששמורים בו.</p>
     <//>`;

@@ -1,8 +1,9 @@
 // Minimal service worker: exists so the browser offers "add to home screen",
 // but does NOT cache dynamic data — this is a live financial app, showing a
 // stale balance offline would be actively misleading.
-const SHELL_CACHE = 'budget-app-shell-v18';
-const SHELL_FILES = ['/', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
+const SHELL_CACHE = 'budget-app-shell-v19';
+// '/' now redirects to the new app, and a redirect cannot be cached as a shell.
+const SHELL_FILES = ['/app/', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL_FILES)).catch(() => {}));

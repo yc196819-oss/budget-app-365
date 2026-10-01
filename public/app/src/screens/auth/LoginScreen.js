@@ -48,8 +48,7 @@ export function LoginScreen() {
   const reset = async () => {
     setError(''); setNotice('');
     if (!email.trim()) { setError('כתבו קודם את האימייל, ואז לחצו שוב'); return; }
-    // The current app handles the reset link.
-    const { error: err } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: location.origin + '/' });
+    const { error: err } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: location.origin + '/app/' });
     if (err) setError('לא הצלחנו לשלוח מייל. נסו שוב בעוד רגע.');
     else setNotice('אם האימייל רשום, נשלח אליו קישור לאיפוס הסיסמה.');
   };
@@ -74,6 +73,6 @@ export function LoginScreen() {
         <button class="btn" type="submit" disabled=${busy}>${busy ? '…' : mode === 'register' ? 'הרשמה' : 'כניסה'}</button>
         ${mode === 'login' && html`<button class="btn-text" type="button" onClick=${reset}>שכחתי סיסמה</button>`}
       </form>
-      <p class="faint" style="font-size:13px">זו הגרסה החדשה, בבנייה. אפשר לחזור לגרסה הנוכחית בכל רגע: <a href="/">לגרסה הנוכחית</a></p>
+      <p class="faint" style="font-size:13px">זו הגרסה החדשה, בבנייה. אפשר לעבור לגרסה הקודמת בכל רגע: <a href="/old/">לגרסה הקודמת</a></p>
     </main>`;
 }

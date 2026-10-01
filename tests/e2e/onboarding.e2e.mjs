@@ -161,3 +161,33 @@ test('sign-up: name, email and password; the invite code travels with it', async
   assert.equal(sent[0].data.invite_code, 'abc123');
   await page.close();
 });
+
+test('the main address opens the new app; the previous version is linked at /old/', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await mockSupabase(page, newUserDb());
+  await page.goto(server.base + '/');
+  await page.waitForSelector('.login');
+  assert.equal(new URL(page.url()).pathname, '/app/');
+  assert.equal(await page.locator('a[href="/old/"]').count(), 1);
+  await page.close();
+});
+
+test('a password-reset link asks for a new password', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const db = makeFakeDb();
+  const updates = [];
+  await mockSupabase(page, db);
+  await page.route('**/auth/v1/user**', (r) => {
+    if (r.request().method() === 'PUT') updates.push(JSON.parse(r.request().postData()));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'u1', email: 'yossi@example.com', aud: 'authenticated' }) });
+  });
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#type=recovery');
+  await page.reload();
+  await page.waitForSelector('text=סיסמה חדשה');
+  await page.fill('input[type="password"]', 'new-password-1');
+  await page.click('text=לשמור ולהיכנס');
+  await page.waitForSelector('.hero');
+  assert.equal(updates[0].password, 'new-password-1');
+  await page.close();
+});
