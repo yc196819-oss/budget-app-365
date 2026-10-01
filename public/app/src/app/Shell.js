@@ -69,7 +69,7 @@ export function Shell({ tab, session }) {
       <button type="button" class="ask-fab" onClick=${() => setOverlay('advisor')}><span class="orb"><${Icon} name="spark" size=${18} stroke=${2.2} /></span>שאל את היועץ</button>
       <${BottomNav} tab=${tab} onAdd=${() => setOverlay('add')} />
 
-      ${overlay === 'profile' && html`<${ProfileSheet} profile=${profile} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
+      ${overlay === 'profile' && html`<${ProfileSheet} profile=${profile} hid=${session.household ? session.household.household_id : null} userId=${session.user.id} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
       ${overlay === 'add' && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => setOverlay('import')} />`}
       ${overlay === 'learn' && html`<${LearnSheet} userId=${session.user.id} householdId=${session.household ? session.household.household_id : null} onClose=${close} />`}
       ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} data=${data} onClose=${close} />`}

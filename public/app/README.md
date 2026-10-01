@@ -65,12 +65,20 @@ Learning corner: 116 lessons in 13 topics (src/content/learning), one a day
 with a 2-question quiz and a streak. Progress is per person in
 user_settings.learning (own row by RLS), with a copy on the device.
 
+New users: sign-up on the login screen, then (with no household yet) either
+an invite (/app/?invite=CODE, kept through sign-up and email confirmation, the
+same "pendingInvite" key the current app uses) or five short steps: name and
+solo/together, what is part of life (categories), cards and billing days,
+income, fixed costs and saving (first budgets and an emergency fund goal), and
+the AI switch. Everything is created in the same tables and shapes as the
+current app; the partner gets a one-time link valid for 7 days.
+
 Rules:
 - One home per entity, max depth 2 (tab, then one sheet), no sheet on top of a sheet.
 - Same tabs in the same order on mobile and desktop.
 - Anything that computes numbers goes in `src/domain/` as a pure function, with tests in `tests/`.
 
-Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home (done), 3 plans (done), 4 assets (done), 5 advisor and learning (done), 6 onboarding.
+Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home (done), 3 plans (done), 4 assets (done), 5 advisor and learning (done), 6 onboarding (done).
 
 Tests:
 - `npm test`: pure logic and the server (no browser).

@@ -8,6 +8,7 @@ import { clearSensitiveLocal } from '../lib/storage.js';
 export function useSession() {
   const [state, setState] = useState({ loading: true, user: null, household: null });
 
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let alive = true;
     const load = async (session) => {
@@ -23,7 +24,7 @@ export function useSession() {
     sb.auth.getSession().then(({ data }) => load(data.session));
     const { data: sub } = sb.auth.onAuthStateChange((_event, session) => load(session));
     return () => { alive = false; sub.subscription.unsubscribe(); };
-  }, []);
+  }, [tick]);
 
   const signOut = async () => {
     clearSensitiveLocal();
@@ -31,5 +32,8 @@ export function useSession() {
     try { await sb.auth.signOut(); } catch (_err) { /* the local state is already cleared */ }
   };
 
-  return { ...state, signOut };
+  // After creating or joining a household.
+  const refresh = () => setTick((t) => t + 1);
+
+  return { ...state, signOut, refresh };
 }
