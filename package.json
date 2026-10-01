@@ -4,7 +4,7 @@
   "description": "",
   "main": "budget-ai-server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test \"tests/**/*.test.*\"",
     "start": "node budget-ai-server.js",
     "start:ai": "node budget-ai-server.js"
   },
@@ -19,7 +19,9 @@
     "express": "^5.2.1",
     "express-rate-limit": "^7.4.1",
     "googleapis": "^173.0.0",
+    "htm": "^3.1.1",
     "nodemailer": "^6.10.1",
+    "preact": "^10.29.8",
     "web-push": "^3.6.7"
   }
 }

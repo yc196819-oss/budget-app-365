@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
@@ -59,6 +61,48 @@ app.use(cors((req, callback) => {
   callback(null, { origin: allow });
 }));
 app.use(express.json({ limit: '2mb' }));
+
+// ═══ security headers ═══
+// Applied to every response. The strict Content-Security-Policy only covers
+// the new app under /app: the current app (public/index.html) relies on
+// inline scripts, inline handlers and several CDNs, so a strict CSP would
+// break it. It still gets the other headers.
+const NEW_APP_DIR = path.join(PUBLIC_DIR, 'app');
+function inlineScriptHash(file, type) {
+  try {
+    const html = fs.readFileSync(file, 'utf8');
+    const m = html.match(new RegExp('<script type="' + type + '">([\\s\\S]*?)</script>'));
+    return m ? "'sha256-" + crypto.createHash('sha256').update(m[1]).digest('base64') + "'" : '';
+  } catch (_err) {
+    return '';
+  }
+}
+const NEW_APP_CSP = [
+  "default-src 'self'",
+  ("script-src 'self' " + inlineScriptHash(path.join(NEW_APP_DIR, 'index.html'), 'importmap')).trim(),
+  "style-src 'self' https://fonts.googleapis.com",
+  "font-src https://fonts.gstatic.com",
+  "img-src 'self' data:",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'"
+].join('; ');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+  if (req.path === '/app' || req.path.startsWith('/app/')) {
+    res.setHeader('Content-Security-Policy', NEW_APP_CSP);
+  }
+  next();
+});
 
 // ═══ auth: every route that touches a user's or household's data must
 // verify the caller's Supabase session token server-side instead of
@@ -1797,7 +1841,28 @@ app.post('/api/import/commit', requireAuth, aiLimiter, async (req, res) => {
 // Serves the frontend from this same service, so there's only one Render
 // service (and one cold-start) instead of two. Registered after every /api/*
 // route above so those still take priority.
+// The new app (public/app) loads its few libraries from this server instead of
+// a CDN, so its CSP can stay 'self'-only. Only these exact files are exposed.
+const APP_VENDOR_FILES = {
+  'preact.js': 'node_modules/preact/dist/preact.module.js',
+  'hooks.js': 'node_modules/preact/hooks/dist/hooks.module.js',
+  'htm.js': 'node_modules/htm/dist/htm.module.js',
+  'supabase.js': 'node_modules/@supabase/supabase-js/dist/umd/supabase.js'
+};
+app.get('/app/vendor/:file', (req, res) => {
+  const rel = APP_VENDOR_FILES[req.params.file];
+  if (!rel) return res.status(404).end();
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  return res.sendFile(path.join(__dirname, rel));
+});
+
 app.use(express.static(PUBLIC_DIR));
+// The new app uses hash routes (/app/#/money), so every other GET under /app
+// gets its shell.
+app.use('/app', (req, res, next) => {
+  if (req.method !== 'GET') return next();
+  return res.sendFile(path.join(NEW_APP_DIR, 'index.html'));
+});
 app.get('/app-config.js', (req, res) => {
   res.type('application/javascript');
   res.send(`window.__APP_CONFIG = { API_BASE: '' };`);
