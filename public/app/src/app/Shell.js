@@ -15,6 +15,7 @@ import { PlansScreen } from '../screens/plans/PlansScreen.js';
 import { AssetsScreen } from '../screens/assets/AssetsScreen.js';
 import { ProfileSheet } from '../screens/profile/ProfileSheet.js';
 import { AddSheet } from '../screens/add/AddSheet.js';
+import { ImportSheet } from '../screens/import/ImportSheet.js';
 import { ToastHost } from '../components/ToastHost.js';
 import { useHousehold } from '../data/useHousehold.js';
 
@@ -26,7 +27,7 @@ export function applyTheme(theme) {
 }
 
 export function Shell({ tab, session }) {
-  // One overlay at a time: 'profile' | 'add' | 'advisor' | null.
+  // One overlay at a time: 'profile' | 'add' | 'import' | 'advisor' | null.
   const [overlay, setOverlay] = useState(null);
   const [theme, setTheme] = useState(() => readLocal('theme', ''));
   const data = useHousehold(session.household?.household_id, session.user.id);
@@ -48,7 +49,7 @@ export function Shell({ tab, session }) {
 
   return html`
     <div class="shell">
-      <${Sidebar} tab=${tab} profile=${profile} onAdd=${() => setOverlay('add')} onProfile=${() => setOverlay('profile')} />
+      <${Sidebar} tab=${tab} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => setOverlay('import') : null} onProfile=${() => setOverlay('profile')} />
       <main class="shell-main">
         <header class="topbar">
           <div class="topbar-title"><small>${dateLabel(new Date())}</small><h1>${title}</h1></div>
@@ -56,7 +57,7 @@ export function Shell({ tab, session }) {
             <button type="button" class="icon-btn only-mobile" aria-label="פרופיל והגדרות" onClick=${() => setOverlay('profile')}>${profile.initials}</button>
           </div>
         </header>
-        ${session.household ? html`<${Screen} key=${tab} data=${data} onAdd=${() => setOverlay('add')} />`
+        ${session.household ? html`<${Screen} key=${tab} data=${data} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
       <${AdvisorRail} />
@@ -64,7 +65,8 @@ export function Shell({ tab, session }) {
       <${BottomNav} tab=${tab} onAdd=${() => setOverlay('add')} />
 
       ${overlay === 'profile' && html`<${ProfileSheet} profile=${profile} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
-      ${overlay === 'add' && session.household && html`<${AddSheet} data=${data} onClose=${close} />`}
+      ${overlay === 'add' && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => setOverlay('import')} />`}
+      ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} data=${data} onClose=${close} />`}
       ${overlay === 'advisor' && html`<${Sheet} title="היועץ" onClose=${close}>
         <${SoonCard} stage="שלב 5" title="יועץ שמכיר את המספרים שלכם" items=${['תובנה אחת חשובה לכל מסך', 'תשובות מחושבות, עם כפתורי פעולה', 'שאלה בכתב או בהקלטה']} />
       <//>`}

@@ -63,6 +63,14 @@ test('vendor route serves only the allowed files', async () => {
   assert.notEqual(traversal.status, 200);
 });
 
+test('pdf.js and its worker are served as JavaScript modules', async () => {
+  for (const f of ['pdf.js', 'pdf.worker.js']) {
+    const res = await fetch(BASE + '/app/vendor/' + f);
+    assert.equal(res.status, 200, f);
+    assert.match(res.headers.get('content-type'), /javascript/, f);
+  }
+});
+
 test('protected API routes still require a session', async () => {
   const res = await fetch(BASE + '/api/ai/advice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.ok(res.status === 401 || res.status === 503);

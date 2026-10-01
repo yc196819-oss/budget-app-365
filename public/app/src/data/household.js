@@ -11,7 +11,7 @@ const PAGE = 1000;
 const MONTHS_BACK = 23;
 const DELETE_DELAY_MS = 5000;
 
-const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, hidden: new Set() };
+const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], hidden: new Set() };
 const listeners = new Set();
 const pendingDeletes = new Map();
 
@@ -29,7 +29,9 @@ export function snapshot() {
     txs: state.txs.filter((t) => !state.hidden.has(t.id)),
     categories: state.categories,
     budgets: state.budgets,
-    members: state.members
+    members: state.members,
+    accounts: state.accounts,
+    cards: state.cards
   };
 }
 
@@ -56,13 +58,16 @@ export async function load(hid, userId, { force = false } = {}) {
   try {
     const now = new Date();
     const since = isoDate(new Date(now.getFullYear(), now.getMonth() - MONTHS_BACK, 1));
-    const [txs, cats, budgets, mems] = await Promise.all([
+    const [txs, cats, budgets, mems, accounts, cards] = await Promise.all([
       fetchAllTransactions(hid, since),
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
-      sb.from('memberships').select('user_id,display_name').eq('household_id', hid)
+      sb.from('memberships').select('user_id,display_name').eq('household_id', hid),
+      sb.from('bank_accounts').select('id,name,balance,balance_updated_at').eq('household_id', hid),
+      sb.from('credit_cards').select('id,name,bank_account_id,billing_day').eq('household_id', hid)
     ]);
     for (const r of [cats, budgets, mems]) if (r.error) throw r.error;
+    // Accounts and cards only add to the home screen: without them it still works.
     if (state.hid !== hid) return;
     Object.assign(state, {
       status: 'ready',
@@ -70,6 +75,8 @@ export async function load(hid, userId, { force = false } = {}) {
       categories: cats.data || [],
       budgets: budgets.data || [],
       members: Object.fromEntries((mems.data || []).map((m) => [m.user_id, m.display_name || ''])),
+      accounts: accounts.error ? [] : accounts.data || [],
+      cards: cards.error ? [] : cards.data || [],
       hidden: new Set()
     });
   } catch (err) {
@@ -97,6 +104,47 @@ export async function addTransaction({ type = 'expense', amount, description, ca
   state.txs = [data, ...state.txs];
   emit();
   return data;
+}
+
+// The bank balance is typed in by hand and shared by the household.
+export async function setBalance(accountId, balance) {
+  const patch = { balance, balance_updated_at: new Date().toISOString(), balance_updated_by: state.userId };
+  const { error } = await sb.from('bank_accounts').update(patch).eq('id', accountId).eq('household_id', state.hid);
+  if (error) throw error;
+  state.accounts = state.accounts.map((a) => (a.id === accountId ? { ...a, ...patch } : a));
+  emit();
+}
+
+// Saves the lines of an imported statement. Returns the new rows.
+export async function addImported(rows) {
+  const added = [];
+  for (let i = 0; i < rows.length; i += 500) {
+    const chunk = rows.slice(i, i + 500).map((r) => ({ ...r, household_id: state.hid, created_by: state.userId }));
+    const { data, error } = await sb.from('transactions').insert(chunk).select();
+    if (error) {
+      // Keep the store in step with what did get saved before the failure.
+      if (added.length) { state.txs = [...added, ...state.txs]; emit(); }
+      const err = new Error(error.message || 'insert failed');
+      err.saved = added;
+      throw err;
+    }
+    added.push(...data);
+  }
+  state.txs = [...added, ...state.txs];
+  emit();
+  return added;
+}
+
+// Undo of an import.
+export async function removeMany(ids) {
+  for (let i = 0; i < ids.length; i += 200) {
+    const part = ids.slice(i, i + 200);
+    const { error } = await sb.from('transactions').delete().in('id', part).eq('household_id', state.hid);
+    if (error) throw error;
+  }
+  const gone = new Set(ids);
+  state.txs = state.txs.filter((t) => !gone.has(t.id));
+  emit();
 }
 
 // Changes the category of several transactions at once and returns what is

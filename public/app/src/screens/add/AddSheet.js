@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { CatIcon } from '../../components/CatIcon.js';
 import { Segmented } from '../../components/Segmented.js';
+import { Icon } from '../../components/Icon.js';
 import { parseQuickAdd, guessCategory, frequentMerchants } from '../../domain/money.js';
 import { money } from '../../domain/format.js';
 import { addTransaction, deleteNow } from '../../data/household.js';
@@ -11,7 +12,7 @@ import { showToast } from '../../lib/toast.js';
 // Free text ("46 קפה בארומה"), Enter adds. The category is taken from the
 // last time this merchant appeared. One-tap buttons for what the household
 // buys most often.
-export function AddSheet({ data, onClose }) {
+export function AddSheet({ data, onClose, onImport }) {
   const [text, setText] = useState('');
   const [type, setType] = useState('expense');
   const [busy, setBusy] = useState(false);
@@ -62,5 +63,7 @@ export function AddSheet({ data, onClose }) {
         </button>`)}
       </div>
     </div>`}
+    ${onImport && html`<button type="button" class="btn-text" style="color:var(--accent);display:flex;align-items:center;justify-content:center;gap:6px" onClick=${onImport}>
+      <${Icon} name="upload" size=${17} />או: העלאת פירוט חודשי של כרטיס</button>`}
   <//>`;
 }

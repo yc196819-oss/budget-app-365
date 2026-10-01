@@ -8,7 +8,7 @@ import { money, signed } from '../../domain/format.js';
 
 const FILTERS = [{ key: 'all', label: 'הכול' }, { key: 'expense', label: 'הוצאות' }, { key: 'income', label: 'הכנסות' }, { key: 'fixed', label: 'קבועות' }];
 
-export function ListView({ txs, months, period, index, categoriesById, onOpen, onAdd }) {
+export function ListView({ txs, months, period, index, categoriesById, onOpen, onAdd, onImport }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [shownMonths, setShownMonths] = useState(2);
@@ -33,8 +33,9 @@ export function ListView({ txs, months, period, index, categoriesById, onOpen, o
   if (!inPeriod.length) {
     return html`<div class="card empty">
       <b style="font-size:17px;color:var(--text)">${period === 'year' ? 'עוד אין תנועות ב-12 החודשים האחרונים' : 'אין תנועות בחודש הזה'}</b>
-      <span>אפשר להוסיף הוצאה עכשיו. העלאת פירוט כרטיס תגיע בשלב הבא.</span>
-      <button type="button" class="btn" onClick=${onAdd}><${Icon} name="plus" />הוספת הוצאה</button>
+      <span>הדרך הכי מהירה: להעלות את הפירוט מהאתר של חברת האשראי. לוקח דקה.</span>
+      <button type="button" class="btn" onClick=${onImport}><${Icon} name="upload" />העלאת פירוט כרטיס</button>
+      <button type="button" class="btn btn-ghost" onClick=${onAdd}><${Icon} name="plus" />הוספת הוצאה</button>
     </div>`;
   }
 
@@ -57,6 +58,7 @@ export function ListView({ txs, months, period, index, categoriesById, onOpen, o
       <div class="list">${g.items.map((tx) => html`<${TxRow} key=${tx.id} tx=${tx} categoriesById=${categoriesById} showDate=${period === 'year'} onOpen=${onOpen} />`)}</div>
     </div>`)}
     ${more > 0 && html`<button type="button" class="btn btn-ghost" onClick=${() => setShownMonths(shownMonths + 3)}>להציג עוד ${Math.min(3, more)} חודשים</button>`}
+    <button type="button" class="btn btn-dashed" onClick=${onImport}><${Icon} name="upload" size=${18} />העלאת פירוט כרטיס</button>
   </div>`;
 }
 export { Segmented };
