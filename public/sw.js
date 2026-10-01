@@ -1,7 +1,7 @@
 // Minimal service worker: exists so the browser offers "add to home screen",
 // but does NOT cache dynamic data — this is a live financial app, showing a
 // stale balance offline would be actively misleading.
-const SHELL_CACHE = 'budget-app-shell-v19';
+const SHELL_CACHE = 'budget-app-shell-v20';
 // '/' now redirects to the new app, and a redirect cannot be cached as a shell.
 const SHELL_FILES = ['/app/', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
 
@@ -18,7 +18,10 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
+  // Only page loads fall back to the cached shell when offline. Everything
+  // else (modules, the API, Supabase) goes straight to the network without
+  // passing through the worker.
+  if (e.request.method !== 'GET' || e.request.mode !== 'navigate') return;
   e.respondWith(
     fetch(e.request).catch(() => caches.match(e.request))
   );
@@ -42,8 +45,9 @@ self.addEventListener('notificationclick', (e) => {
   const url = (e.notification.data && e.notification.data.url) || '/';
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsArr) => {
+      // An open window goes to the notification's screen (e.g. /app/#/together).
       const existing = clientsArr.find((c) => c.url.includes(self.location.origin));
-      if (existing) return existing.focus();
+      if (existing) return (existing.navigate ? existing.navigate(url).catch(() => existing) : Promise.resolve(existing)).then((c) => (c || existing).focus());
       return self.clients.openWindow(url);
     })
   );

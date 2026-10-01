@@ -1,9 +1,10 @@
-// The four tabs, in the same order on mobile and desktop. Hash routing
+// The five tabs, in the same order on mobile and desktop. Hash routing
 // (#/money) so the server only ever serves one HTML file.
 
 export const TABS = [
   { key: 'home', label: 'בית', icon: 'home' },
   { key: 'money', label: 'כסף', icon: 'money' },
+  { key: 'together', label: 'ביחד', icon: 'together' },
   { key: 'plans', label: 'תוכניות', icon: 'plans' },
   { key: 'assets', label: 'נכסים', icon: 'assets' }
 ];

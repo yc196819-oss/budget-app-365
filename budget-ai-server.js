@@ -11,6 +11,7 @@ const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
 const { claudeRequest, isRetryable } = require('./server/claude');
 const learn = require('./server/learn');
+const decisionsPush = require('./server/decisions');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1121,6 +1122,7 @@ function buildChatPrompt(summary, history, message, authorName, fixContext) {
 הנתונים (JSON) כוללים categorySpendingHistory ברמת משק הבית, personalCategoryBreakdown של המשתמש, תקציבים, יעדים ומשימות. ענה על סמך המספרים בפועל, 2-6 משפטים, בלי markdown ובלי כותרות.
 בהחלטות גדולות (משכנתא, השקעות) תן מידע, חישובים ושאלות לבדיקה, וציין שכדאי להתייעץ עם יועץ מורשה; אל תמליץ על נייר ערך או מוצר ספציפי.
 אם בנתונים יש memories (החלטות והעדפות שבני הזוג קבעו בעבר): התחשב בהן כעובדה, אל תציע משהו שסותר אותן אלא אם שואלים, ואם משהו השתנה — שאל.
+אם בנתונים יש sharedDecisions (קניות שבני הזוג מחליטים עליהן יחד, עם הסטטוס): כשזה רלוונטי, עזור להחליט לפי המספרים, הצג את השיקולים של שני הצדדים ואל תיקח צד.
 אם בנתונים יש feelings (איך בני הזוג מרגישים השבוע עם הכסף): כשמישהו "stressed" — טון רגוע, צעד אחד קטן בכל פעם, הזכר מה כבר הולך טוב; כשכולם "calm" — אפשר להציע יעד גדול יותר. אל תכתוב "ראיתי שאתה לחוץ" אלא אם שאלו.
 בסוף התשובה, בשורה נפרדת, כתוב בדיוק: ${SUGG_MARK} ואחריו 2-3 שאלות המשך קצרות (עד 5 מילים כל אחת) מופרדות ב-|.
 ${fixContext || ''}
@@ -1266,11 +1268,53 @@ app.post('/api/tasks/remind-due', async (req, res) => {
       } catch (_e) { /* no subscription for this user – the in-app list still shows it */ }
       await supabaseAdmin.from('advisor_tasks').update({ last_reminded_on: today }).in('id', list.map((t) => t.id));
     }
-    return res.json({ ok: true, today, dueTasks: due.length, usersNotified: sentUsers });
+    let decisionReminders = 0;
+    try { decisionReminders = await remindDecisions(); } catch (e) { console.warn('decision reminders', e.message); }
+    return res.json({ ok: true, today, dueTasks: due.length, usersNotified: sentUsers, decisionReminders });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+// ═══ "מחליטים ביחד": tell the partners about a card or an answer ═══
+const decisionLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip });
+app.post('/api/decisions/notify', requireAuth, decisionLimiter, async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase not configured' });
+    const { decisionId, event } = req.body || {};
+    if (!decisionId || !['opened', 'answered', 'bought', 'withdrawn'].includes(event)) return res.status(400).json({ error: 'bad request' });
+    const { data: decision } = await supabaseAdmin.from('shared_decisions').select('*').eq('id', decisionId).maybeSingle();
+    if (!decision || !(await isHouseholdMember(req.authUserId, decision.household_id))) return res.status(404).json({ error: 'not found' });
+    const [{ data: members }, { data: vote }] = await Promise.all([
+      supabaseAdmin.from('memberships').select('user_id,display_name').eq('household_id', decision.household_id),
+      supabaseAdmin.from('decision_votes').select('vote,note').eq('decision_id', decisionId).eq('user_id', req.authUserId).maybeSingle()
+    ]);
+    let sent = 0;
+    for (const m of decisionsPush.messagesFor(event, { decision, actorId: req.authUserId, members: members || [], vote })) {
+      try { await sendPushToUser(m.to, m); sent += 1; } catch (_e) { /* no subscription on that phone: the badge in the app still shows it */ }
+    }
+    return res.json({ ok: true, sent });
+  } catch (err) {
+    console.error('decisions/notify failed:', err.message);
+    return res.status(500).json({ ok: false });
+  }
+});
+
+// Once a day (with the task reminders): cards nobody answered for a day.
+async function remindDecisions() {
+  const { data: decisions, error } = await supabaseAdmin.from('shared_decisions').select('id,household_id,created_by,title,amount,status,created_at,reminded_at').eq('status', 'open').is('reminded_at', null);
+  if (error || !decisions || !decisions.length) return 0;
+  const hids = [...new Set(decisions.map((d) => d.household_id))];
+  const [{ data: votes }, { data: members }] = await Promise.all([
+    supabaseAdmin.from('decision_votes').select('decision_id,user_id').in('decision_id', decisions.map((d) => d.id)),
+    supabaseAdmin.from('memberships').select('household_id,user_id').in('household_id', hids)
+  ]);
+  const list = decisionsPush.reminders({ decisions, votes: votes || [], members: members || [] });
+  for (const m of list) { try { await sendPushToUser(m.to, m); } catch (_e) { /* no subscription */ } }
+  const ids = [...new Set(list.map((m) => m.decisionId))];
+  if (ids.length) await supabaseAdmin.from('shared_decisions').update({ reminded_at: new Date().toISOString() }).in('id', ids);
+  return list.length;
+}
 
 app.get('/api/market/quote', requireAuth, async (req, res) => {
   try {

@@ -108,3 +108,14 @@ test('the new app shell preloads every module, and every preloaded file exists',
     assert.match(r.headers.get('content-type'), /javascript/, l);
   }
 });
+
+test('the service worker only handles page loads, so API and data requests never pass through it', async () => {
+  const sw = await (await fetch(BASE + '/sw.js')).text();
+  assert.match(sw, /e\.request\.mode !== 'navigate'/);
+  assert.match(sw, /existing\.navigate/);
+});
+
+test('decision notifications need a signed-in member', async () => {
+  const res = await fetch(BASE + '/api/decisions/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"decisionId":"x","event":"opened"}' });
+  assert.ok(res.status === 401 || res.status === 503, String(res.status));
+});

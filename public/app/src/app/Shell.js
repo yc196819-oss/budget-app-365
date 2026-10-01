@@ -14,6 +14,9 @@ import { HomeScreen } from '../screens/home/HomeScreen.js';
 import { MoneyScreen } from '../screens/money/MoneyScreen.js';
 import { PlansScreen } from '../screens/plans/PlansScreen.js';
 import { AssetsScreen } from '../screens/assets/AssetsScreen.js';
+import { TogetherScreen } from '../screens/together/TogetherScreen.js';
+import { useDecisions } from '../data/useDecisions.js';
+import { pendingCount } from '../domain/decisions.js';
 import { ProfileSheet } from '../screens/profile/ProfileSheet.js';
 import { AddSheet } from '../screens/add/AddSheet.js';
 import { ImportSheet } from '../screens/import/ImportSheet.js';
@@ -23,7 +26,7 @@ import { useHousehold } from '../data/useHousehold.js';
 import { useMedia } from '../lib/useMedia.js';
 import { AdvisorPanel } from '../screens/advisor/AdvisorPanel.js';
 
-const SCREENS = { home: HomeScreen, money: MoneyScreen, plans: PlansScreen, assets: AssetsScreen };
+const SCREENS = { home: HomeScreen, money: MoneyScreen, together: TogetherScreen, plans: PlansScreen, assets: AssetsScreen };
 
 export function applyTheme(theme) {
   if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
@@ -37,6 +40,9 @@ export function Shell({ tab, session }) {
   const data = useHousehold(session.household?.household_id, session.user.id);
   // The desktop rail and the mobile sheet hold the same advisor; only one is mounted.
   const desktop = useMedia('(min-width: 1024px)');
+  // Shared decisions: the "together" tab shows how many wait for my answer.
+  const dec = useDecisions(session.household?.household_id);
+  const badges = { together: dec.status === 'ready' ? pendingCount(dec.decisions, dec.votes, session.user.id, Object.keys(data.members || {})) : 0 };
 
   const profile = {
     name: session.household?.display_name || session.user.email.split('@')[0],
@@ -55,7 +61,7 @@ export function Shell({ tab, session }) {
 
   return html`
     <div class="shell">
-      <${Sidebar} tab=${tab} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => setOverlay('import') : null} onLearn=${() => setOverlay('learn')} onProfile=${() => setOverlay('profile')} />
+      <${Sidebar} tab=${tab} badges=${badges} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => setOverlay('import') : null} onLearn=${() => setOverlay('learn')} onProfile=${() => setOverlay('profile')} />
       <main class="shell-main">
         <header class="topbar">
           <div class="topbar-title"><small>${dateLabel(new Date())}</small><h1>${title}</h1></div>
@@ -63,12 +69,12 @@ export function Shell({ tab, session }) {
             <button type="button" class="icon-btn only-mobile" aria-label="פרופיל והגדרות" onClick=${() => setOverlay('profile')}>${profile.initials}</button>
           </div>
         </header>
-        ${session.household ? html`<${Screen} key=${tab} data=${data} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} onLearn=${() => setOverlay('learn')} userId=${session.user.id} />`
+        ${session.household ? html`<${Screen} key=${tab} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} onLearn=${() => setOverlay('learn')} userId=${session.user.id} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
       ${desktop && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} />`}
       <button type="button" class="ask-fab" onClick=${() => setOverlay('advisor')}><span class="orb"><${Icon} name="spark" size=${18} stroke=${2.2} /></span>שאל את היועץ</button>
-      <${BottomNav} tab=${tab} onAdd=${() => setOverlay('add')} />
+      <${BottomNav} tab=${tab} badges=${badges} onAdd=${() => setOverlay('add')} />
 
       ${overlay === 'profile' && html`<${ProfileSheet} profile=${profile} hid=${session.household ? session.household.household_id : null} userId=${session.user.id} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
       ${overlay === 'add' && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => setOverlay('import')} />`}
