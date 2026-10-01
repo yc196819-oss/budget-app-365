@@ -114,9 +114,17 @@ export async function mockSupabase(page, db, calls = []) {
     }
     if (method === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
-      const rows = (Array.isArray(body) ? body : [body]).map((r, i) => ({ id: 'new' + (table.length + 1 + i), created_at: new Date().toISOString(), ...r }));
-      table.push(...rows);
-      return reply(rows);
+      const conflict = url.searchParams.get('on_conflict');
+      const out = [];
+      for (const r of Array.isArray(body) ? body : [body]) {
+        // upsert: merge into the row with the same conflict columns
+        const hit = conflict && table.find((x) => conflict.split(',').every((k) => String(x[k]) === String(r[k])));
+        if (hit) { Object.assign(hit, r); out.push(hit); continue; }
+        const row = { id: 'new' + (table.length + 1), created_at: new Date().toISOString(), ...r };
+        table.push(row);
+        out.push(row);
+      }
+      return reply(out);
     }
     if (method === 'PATCH') {
       const body = JSON.parse(req.postData() || '{}');

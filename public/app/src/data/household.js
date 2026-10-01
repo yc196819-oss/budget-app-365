@@ -11,7 +11,7 @@ const PAGE = 1000;
 const MONTHS_BACK = 23;
 const DELETE_DELAY_MS = 5000;
 
-const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], hidden: new Set() };
+const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], goals: [], installments: [], hidden: new Set() };
 const listeners = new Set();
 const pendingDeletes = new Map();
 
@@ -24,6 +24,7 @@ export function subscribe(fn) {
 
 export function snapshot() {
   return {
+    hid: state.hid,
     status: state.status,
     error: state.error,
     txs: state.txs.filter((t) => !state.hidden.has(t.id)),
@@ -31,7 +32,9 @@ export function snapshot() {
     budgets: state.budgets,
     members: state.members,
     accounts: state.accounts,
-    cards: state.cards
+    cards: state.cards,
+    goals: state.goals,
+    installments: state.installments
   };
 }
 
@@ -58,16 +61,18 @@ export async function load(hid, userId, { force = false } = {}) {
   try {
     const now = new Date();
     const since = isoDate(new Date(now.getFullYear(), now.getMonth() - MONTHS_BACK, 1));
-    const [txs, cats, budgets, mems, accounts, cards] = await Promise.all([
+    const [txs, cats, budgets, mems, accounts, cards, goals, installments] = await Promise.all([
       fetchAllTransactions(hid, since),
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
       sb.from('memberships').select('user_id,display_name').eq('household_id', hid),
       sb.from('bank_accounts').select('id,name,balance,balance_updated_at').eq('household_id', hid),
-      sb.from('credit_cards').select('id,name,bank_account_id,billing_day').eq('household_id', hid)
+      sb.from('credit_cards').select('id,name,bank_account_id,billing_day').eq('household_id', hid),
+      sb.from('goals').select('*').eq('household_id', hid),
+      sb.from('installments').select('*').eq('household_id', hid)
     ]);
     for (const r of [cats, budgets, mems]) if (r.error) throw r.error;
-    // Accounts and cards only add to the home screen: without them it still works.
+    // Accounts, cards, goals and installments add to home and plans: without them both still work.
     if (state.hid !== hid) return;
     Object.assign(state, {
       status: 'ready',
@@ -77,6 +82,8 @@ export async function load(hid, userId, { force = false } = {}) {
       members: Object.fromEntries((mems.data || []).map((m) => [m.user_id, m.display_name || ''])),
       accounts: accounts.error ? [] : accounts.data || [],
       cards: cards.error ? [] : cards.data || [],
+      goals: goals.error ? [] : goals.data || [],
+      installments: installments.error ? [] : installments.data || [],
       hidden: new Set()
     });
   } catch (err) {
@@ -112,6 +119,45 @@ export async function setBalance(accountId, balance) {
   const { error } = await sb.from('bank_accounts').update(patch).eq('id', accountId).eq('household_id', state.hid);
   if (error) throw error;
   state.accounts = state.accounts.map((a) => (a.id === accountId ? { ...a, ...patch } : a));
+  emit();
+}
+
+// Monthly budget of a category; 0 removes it.
+export async function setBudget(categoryId, amount) {
+  const value = Math.max(0, Math.round(Number(amount) || 0));
+  if (value === 0) {
+    const { error } = await sb.from('category_budgets').delete().eq('household_id', state.hid).eq('category_id', categoryId);
+    if (error) throw error;
+    state.budgets = state.budgets.filter((b) => b.category_id !== categoryId);
+  } else {
+    const row = { household_id: state.hid, category_id: categoryId, monthly_amount: value, created_by: state.userId };
+    const { error } = await sb.from('category_budgets').upsert(row, { onConflict: 'household_id,category_id' });
+    if (error) throw error;
+    state.budgets = state.budgets.some((b) => b.category_id === categoryId)
+      ? state.budgets.map((b) => (b.category_id === categoryId ? { ...b, monthly_amount: value } : b))
+      : [...state.budgets, { category_id: categoryId, monthly_amount: value }];
+  }
+  emit();
+}
+
+// Goals double as plans: a holiday or a planned expense is a goal with a
+// target date and a list of items, the same shape the current app uses.
+export async function saveGoal(goal) {
+  const { id, ...fields } = goal;
+  const q = id
+    ? sb.from('goals').update(fields).eq('id', id).eq('household_id', state.hid)
+    : sb.from('goals').insert({ saved_amount: 0, ...fields, household_id: state.hid, created_by: state.userId });
+  const { data, error } = await q.select().single();
+  if (error) throw error;
+  state.goals = id ? state.goals.map((g) => (g.id === id ? data : g)) : [...state.goals, data];
+  emit();
+  return data;
+}
+
+export async function deleteGoal(id) {
+  const { error } = await sb.from('goals').delete().eq('id', id).eq('household_id', state.hid);
+  if (error) throw error;
+  state.goals = state.goals.filter((g) => g.id !== id);
   emit();
 }
 
