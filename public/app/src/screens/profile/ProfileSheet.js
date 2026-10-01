@@ -3,8 +3,9 @@ import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
 import { setAiEnabled } from '../../lib/settings.js';
 import { useAiSetting } from '../advisor/useAiSetting.js';
+import { InviteButton } from '../../components/InviteButton.js';
 
-export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose }) {
+export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid, userId }) {
   const aiOn = useAiSetting();
   return html`
     <${Sheet} title="פרופיל והגדרות" onClose=${onClose}>
@@ -20,6 +21,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose }) {
           <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, נשלח סיכום של המספרים (לא שמות בתי עסק מלאים או פרטי חשבון). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>
         <input type="checkbox" role="switch" checked=${aiOn} onChange=${(e) => setAiEnabled(e.target.checked)} aria-label="היועץ והצעות AI" />
       </label>
+      ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
       <a class="btn btn-ghost" href="/" style="text-decoration:none">לגרסה הנוכחית של האפליקציה</a>
       <button type="button" class="btn btn-ghost" style="color:var(--danger)" onClick=${onSignOut}><${Icon} name="logout" />יציאה</button>

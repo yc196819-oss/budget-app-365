@@ -102,3 +102,20 @@
 .login { min-height: 100vh; max-width: 440px; margin: 0 auto; padding: 32px 22px; display: flex; flex-direction: column; justify-content: center; gap: 22px; }
 .brand-login { display: flex; align-items: center; gap: 10px; }
 .brand-login .brand-mark { width: 38px; height: 38px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; }
+
+/* onboarding */
+.onb { justify-content: flex-start; padding-top: 40px; gap: 18px; }
+.onb-head { display: flex; flex-direction: column; gap: 8px; }
+.onb-bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.onb-bars span { height: 5px; border-radius: 999px; background: var(--surface-2); }
+.onb-bars span.on { background: var(--accent); }
+.onb-body { gap: 14px; }
+.onb-nav { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; margin-top: auto; position: sticky; bottom: 0; padding: 12px 0 16px; background: var(--bg); }
+.onb-nav .btn-text { justify-self: center; }
+.onb-perk { display: flex; gap: 12px; align-items: center; }
+.onb-perk > span:first-child { font-size: 22px; }
+.onb-perk span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.onb-perk small { color: var(--muted); font-size: 13px; }
+.onb-fixed .input { width: 110px; height: 40px; }
+.onb-check { width: 64px; height: 64px; border-radius: 50%; background: var(--income-tint); color: var(--income); display: flex; align-items: center; justify-content: center; }
+.field-label { font-size: 14px; font-weight: 700; color: var(--muted); }
