@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Loading } from '../../components/Loading.js';
 import { useState } from 'preact/hooks';
 import { Segmented } from '../../components/Segmented.js';
 import { routeView } from '../../domain/routes.js';
@@ -12,7 +13,7 @@ export function PlansScreen({ data }) {
   const [view, setView] = useState(() => (VIEWS.some((v) => v.key === routeView(location.hash)) ? routeView(location.hash) : 'months'));
   const sheet = usePlanSheet();
 
-  if (data.status === 'loading' || data.status === 'idle') return html`<div class="card empty" role="status">טוען…</div>`;
+  if (data.status === 'loading' || data.status === 'idle') return html`<${Loading} label="טוען…" />`;
   if (data.status === 'error') {
     return html`<div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו לטעון את הנתונים</b><span>${data.error}</span>
       <button type="button" class="btn btn-ghost" onClick=${data.reload}>לנסות שוב</button></div>`;

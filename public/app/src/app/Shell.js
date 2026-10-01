@@ -1,4 +1,5 @@
 import { html } from '../lib/html.js';
+import { Loading } from '../components/Loading.js';
 import { useState } from 'preact/hooks';
 import { TABS } from '../domain/routes.js';
 import { dateLabel, initials } from '../domain/format.js';
@@ -74,7 +75,7 @@ export function Shell({ tab, session }) {
       ${overlay === 'learn' && html`<${LearnSheet} userId=${session.user.id} householdId=${session.household ? session.household.household_id : null} onClose=${close} />`}
       ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} data=${data} onClose=${close} />`}
       ${overlay === 'advisor' && !desktop && html`<${Sheet} title="היועץ" onClose=${close}>
-        ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} />` : html`<div class="card muted">טוען…</div>`}
+        ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} />` : html`<${Loading} />`}
       <//>`}
       <${ToastHost} />
     </div>`;

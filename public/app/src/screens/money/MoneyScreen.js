@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Loading } from '../../components/Loading.js';
 import { useMemo, useState } from 'preact/hooks';
 import { Segmented } from '../../components/Segmented.js';
 import { PeriodBar } from './PeriodBar.js';
@@ -20,7 +21,7 @@ export function MoneyScreen({ data, onAdd, onImport }) {
   // One sheet at a time: { kind: 'tx', id } | { kind: 'cat', id } | null
   const [sheet, setSheet] = useState(null);
 
-  if (data.status === 'loading' || data.status === 'idle') return html`<div class="card empty" role="status">טוען את התנועות…</div>`;
+  if (data.status === 'loading' || data.status === 'idle') return html`<${Loading} label="טוען את התנועות…" />`;
   if (data.status === 'error') {
     return html`<div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו לטעון את התנועות</b><span>${data.error}</span>
       <button type="button" class="btn btn-ghost" onClick=${data.reload}>לנסות שוב</button></div>`;
