@@ -46,12 +46,18 @@ Holiday plans and the quarterly check-in are saved as goals with a date and
 plan items, the same shape the current app uses, so no schema change.
 The check-in's "answered this quarter" mark is kept on the device.
 
+Assets: net worth from bank balances, investments (live price × units through
+the server's /api/market/quotes when there is a symbol, else the value typed
+in), pension and study funds (long term), loans both ways, installments left
+and card charges not taken yet. Accounts, investments and loans are added and
+edited here, in the same tables the current app uses.
+
 Rules:
 - One home per entity, max depth 2 (tab, then one sheet), no sheet on top of a sheet.
 - Same tabs in the same order on mobile and desktop.
 - Anything that computes numbers goes in `src/domain/` as a pure function, with tests in `tests/`.
 
-Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home (done), 3 plans (done), 4 assets, 5 advisor and learning, 6 onboarding.
+Stages: 0 skeleton, 1 money (done), 1b card statement upload (done), 2 home (done), 3 plans (done), 4 assets (done), 5 advisor and learning, 6 onboarding.
 
 Tests:
 - `npm test`: pure logic and the server (no browser).

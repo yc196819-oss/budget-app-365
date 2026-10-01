@@ -167,3 +167,9 @@
 .budget-row + .budget-row { border-top: 1px solid var(--line); }
 .budget-edit { display: flex; justify-content: space-between; align-items: center; padding: 0 14px 12px; font-size: 14px; color: var(--muted); }
 .goal-head { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; padding: 0; text-align: right; width: 100%; font-size: 20px; }
+
+/* assets */
+.hero-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hero-boxes > div { padding: 10px 12px; border-radius: var(--radius-m); background: var(--hero-track); display: flex; flex-direction: column; gap: 2px; }
+.hero-boxes small { font-size: 12px; font-weight: 700; color: var(--hero-muted); }
+.hero-boxes b { font-size: 17px; }
