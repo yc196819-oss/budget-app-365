@@ -1,4 +1,4 @@
-# The new app (stage 0: skeleton)
+# The new app
 
 Served at `/app/`. The current app (`public/index.html`) keeps working at `/`
 until the new one replaces it.
@@ -18,7 +18,8 @@ public/app/
     components/  shared UI: Icon, BottomNav, Sidebar, AdvisorRail, Sheet, SoonCard
     screens/     one folder per screen: auth, home, money, plans, assets, profile
     domain/      pure logic (formatting, routes; later budget and forecast), unit-tested
-    lib/         html (Preact + htm), Supabase client, api (server calls), storage
+    data/        household data store (Supabase reads and writes, undo)
+    lib/         html (Preact + htm), Supabase client, api (server calls), storage, toast
 ```
 
 Rules:
@@ -26,6 +27,10 @@ Rules:
 - Same tabs in the same order on mobile and desktop.
 - Anything that computes numbers goes in `src/domain/` as a pure function, with tests in `tests/`.
 
-Stages: 0 skeleton (this), 1 money, 2 home, 3 plans, 4 assets, 5 advisor and learning, 6 onboarding.
+Stages: 0 skeleton, 1 money (done), 2 home, 3 plans, 4 assets, 5 advisor and learning, 6 onboarding.
 
-Run the tests with `npm test`.
+Tests:
+- `npm test`: pure logic and the server (no browser).
+- `npm run test:e2e`: the app in Chromium against a fake in-memory Supabase (`tests/e2e/helpers.mjs`). Locally, if Playwright's browser is not installed, point `CHROMIUM_PATH` at a Chromium binary.
+
+Both run in GitHub Actions on every pull request and every push to main.

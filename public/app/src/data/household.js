@@ -1,0 +1,169 @@
+import { sb } from '../lib/supabase.js';
+import { showToast } from '../lib/toast.js';
+import { isoDate } from '../domain/money.js';
+
+// Household data for the new app: transactions of the last ~2 years (enough
+// for 12 months plus expenses spread over a year), categories, monthly
+// budgets and member names. Loaded once per household and shared by all
+// screens through useHousehold().
+
+const PAGE = 1000;
+const MONTHS_BACK = 23;
+const DELETE_DELAY_MS = 5000;
+
+const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, hidden: new Set() };
+const listeners = new Set();
+const pendingDeletes = new Map();
+
+function emit() { listeners.forEach((fn) => fn()); }
+
+export function subscribe(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+export function snapshot() {
+  return {
+    status: state.status,
+    error: state.error,
+    txs: state.txs.filter((t) => !state.hidden.has(t.id)),
+    categories: state.categories,
+    budgets: state.budgets,
+    members: state.members
+  };
+}
+
+async function fetchAllTransactions(hid, since) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from('transactions')
+      .select('*')
+      .eq('household_id', hid)
+      .gte('tx_date', since)
+      .order('tx_date', { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < PAGE) return rows;
+  }
+}
+
+export async function load(hid, userId, { force = false } = {}) {
+  if (!hid) return;
+  if (!force && state.hid === hid && (state.status === 'ready' || state.status === 'loading')) return;
+  Object.assign(state, { hid, userId, status: 'loading', error: null });
+  emit();
+  try {
+    const now = new Date();
+    const since = isoDate(new Date(now.getFullYear(), now.getMonth() - MONTHS_BACK, 1));
+    const [txs, cats, budgets, mems] = await Promise.all([
+      fetchAllTransactions(hid, since),
+      sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
+      sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
+      sb.from('memberships').select('user_id,display_name').eq('household_id', hid)
+    ]);
+    for (const r of [cats, budgets, mems]) if (r.error) throw r.error;
+    if (state.hid !== hid) return;
+    Object.assign(state, {
+      status: 'ready',
+      txs,
+      categories: cats.data || [],
+      budgets: budgets.data || [],
+      members: Object.fromEntries((mems.data || []).map((m) => [m.user_id, m.display_name || ''])),
+      hidden: new Set()
+    });
+  } catch (err) {
+    Object.assign(state, { status: 'error', error: err.message || String(err) });
+  }
+  emit();
+}
+
+export async function addTransaction({ type = 'expense', amount, description, category_id = null, subcategory_id = null, tx_date }) {
+  const row = {
+    household_id: state.hid,
+    created_by: state.userId,
+    type,
+    amount,
+    description: description || '(ללא תיאור)',
+    tx_date: tx_date || isoDate(new Date()),
+    category_id,
+    subcategory_id,
+    nature: 'variable',
+    spread: 'month',
+    source: 'manual'
+  };
+  const { data, error } = await sb.from('transactions').insert(row).select().single();
+  if (error) throw error;
+  state.txs = [data, ...state.txs];
+  emit();
+  return data;
+}
+
+// Changes the category of several transactions at once and returns what is
+// needed to undo it.
+export async function setCategory(ids, category_id, subcategory_id = null) {
+  const before = state.txs.filter((t) => ids.includes(t.id)).map((t) => ({ id: t.id, category_id: t.category_id || null, subcategory_id: t.subcategory_id || null }));
+  const { error } = await sb.from('transactions').update({ category_id, subcategory_id }).in('id', ids).eq('household_id', state.hid);
+  if (error) throw error;
+  state.txs = state.txs.map((t) => (ids.includes(t.id) ? { ...t, category_id, subcategory_id } : t));
+  emit();
+  return before;
+}
+
+export async function restoreCategories(before) {
+  const groups = new Map();
+  for (const b of before) {
+    const k = (b.category_id || '') + '|' + (b.subcategory_id || '');
+    if (!groups.has(k)) groups.set(k, { category_id: b.category_id, subcategory_id: b.subcategory_id, ids: [] });
+    groups.get(k).ids.push(b.id);
+  }
+  for (const g of groups.values()) {
+    const { error } = await sb.from('transactions').update({ category_id: g.category_id, subcategory_id: g.subcategory_id }).in('id', g.ids).eq('household_id', state.hid);
+    if (error) throw error;
+  }
+  const map = new Map(before.map((b) => [b.id, b]));
+  state.txs = state.txs.map((t) => (map.has(t.id) ? { ...t, ...map.get(t.id) } : t));
+  emit();
+}
+
+// Hides the transaction right away and deletes it only after the undo window.
+export function deleteWithUndo(id) {
+  state.hidden.add(id);
+  emit();
+  const timer = setTimeout(async () => {
+    pendingDeletes.delete(id);
+    const { error } = await sb.from('transactions').delete().eq('id', id).eq('household_id', state.hid);
+    if (error) {
+      state.hidden.delete(id);
+      emit();
+      showToast('המחיקה נכשלה. התנועה חזרה לרשימה.');
+      return;
+    }
+    state.txs = state.txs.filter((t) => t.id !== id);
+    state.hidden.delete(id);
+    emit();
+  }, DELETE_DELAY_MS);
+  pendingDeletes.set(id, timer);
+  return () => {
+    clearTimeout(pendingDeletes.get(id));
+    pendingDeletes.delete(id);
+    state.hidden.delete(id);
+    emit();
+  };
+}
+
+// Leaving the page during the undo window still deletes.
+window.addEventListener('pagehide', () => {
+  for (const [id, timer] of pendingDeletes) {
+    clearTimeout(timer);
+    sb.from('transactions').delete().eq('id', id).eq('household_id', state.hid);
+  }
+});
+
+// Used to undo an add: removes it right away.
+export async function deleteNow(id) {
+  const { error } = await sb.from('transactions').delete().eq('id', id).eq('household_id', state.hid);
+  if (error) throw error;
+  state.txs = state.txs.filter((t) => t.id !== id);
+  emit();
+}
