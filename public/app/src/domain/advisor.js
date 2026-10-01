@@ -24,7 +24,7 @@ export function parseReply(raw) {
 // What the advisor gets: six months of income and spending, categories with
 // their trend, budgets against spending, goals, decisions the household
 // already made (memories), the forecast and the screen the person is on.
-export function buildSummary({ txs, categories, budgets, goals = [], installments = [], userId, userName, memories = [], today = new Date(), screen = 'home' }) {
+export function buildSummary({ txs, categories, budgets, goals = [], installments = [], income = [], userId, userName, memories = [], today = new Date(), screen = 'home' }) {
   const months = monthsBack(today, 6);
   const label = (mo) => MONTH_NAMES[mo.m] + ' ' + mo.y;
   const cur = months[months.length - 1];
@@ -68,6 +68,8 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
     budgetsVsActual,
     savingsGoals,
     memories: memories.slice(0, 30).map((m) => m.text),
+    // What the household said it expects to earn each month (0 = not set).
+    expectedMonthlyIncome: round((Array.isArray(income) ? income : []).reduce((s, l) => s + (Number(l && l.amount) || 0), 0)),
     thisMonth: { budget: round(plan.budget), spent: round(plan.spent), projectedEnd: plan.canForecast ? round(plan.projectedEnd) : null, daysLeft: plan.daysLeft },
     comingMonths: { verdict: v.title, months: fc.months.map((m) => ({ month: m.name, net: round(m.net) })) }
   };

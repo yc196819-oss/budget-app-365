@@ -11,7 +11,7 @@ const PAGE = 1000;
 const MONTHS_BACK = 23;
 const DELETE_DELAY_MS = 5000;
 
-const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], goals: [], installments: [], loans: [], investments: [], hidden: new Set() };
+const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], goals: [], installments: [], loans: [], investments: [], income: [], hidden: new Set() };
 const listeners = new Set();
 const pendingDeletes = new Map();
 
@@ -36,7 +36,8 @@ export function snapshot() {
     goals: state.goals,
     installments: state.installments,
     loans: state.loans,
-    investments: state.investments
+    investments: state.investments,
+    income: state.income
   };
 }
 
@@ -63,7 +64,7 @@ export async function load(hid, userId, { force = false } = {}) {
   try {
     const now = new Date();
     const since = isoDate(new Date(now.getFullYear(), now.getMonth() - MONTHS_BACK, 1));
-    const [txs, cats, budgets, mems, accounts, cards, goals, installments, loans, investments] = await Promise.all([
+    const [txs, cats, budgets, mems, accounts, cards, goals, installments, loans, investments, household] = await Promise.all([
       fetchAllTransactions(hid, since),
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
@@ -73,7 +74,8 @@ export async function load(hid, userId, { force = false } = {}) {
       sb.from('goals').select('*').eq('household_id', hid),
       sb.from('installments').select('*').eq('household_id', hid),
       sb.from('loans').select('*').eq('household_id', hid),
-      sb.from('investments').select('*').eq('household_id', hid)
+      sb.from('investments').select('*').eq('household_id', hid),
+      sb.from('households').select('income_expectations').eq('id', hid).maybeSingle()
     ]);
     for (const r of [cats, budgets, mems]) if (r.error) throw r.error;
     // Accounts, cards, goals, installments, loans and investments add to home,
@@ -91,6 +93,7 @@ export async function load(hid, userId, { force = false } = {}) {
       installments: installments.error ? [] : installments.data || [],
       loans: loans.error ? [] : loans.data || [],
       investments: investments.error ? [] : investments.data || [],
+      income: !household.error && household.data && Array.isArray(household.data.income_expectations) ? household.data.income_expectations : [],
       hidden: new Set()
     });
   } catch (err) {
@@ -170,7 +173,7 @@ export async function deleteGoal(id) {
 
 // Insert or update a row of a household table (accounts, investments, loans)
 // and keep the store in step.
-const LISTS = { bank_accounts: 'accounts', investments: 'investments', loans: 'loans' };
+const LISTS = { bank_accounts: 'accounts', investments: 'investments', loans: 'loans', installments: 'installments' };
 export async function saveRow(table, row) {
   const key = LISTS[table];
   if (!key) throw new Error('unknown table ' + table);
@@ -183,6 +186,19 @@ export async function saveRow(table, row) {
   state[key] = id ? state[key].map((r) => (r.id === id ? data : r)) : [...state[key], data];
   emit();
   return data;
+}
+
+// The monthly net income the household expects (households.income_expectations,
+// the lines the previous app edits). The approved total becomes one line,
+// keeping its name when there was a single line.
+export async function setIncome(amount) {
+  const value = Math.max(0, Math.round(Number(amount) || 0));
+  const label = state.income.length === 1 && state.income[0] && state.income[0].label ? state.income[0].label : 'הכנסה חודשית נטו';
+  const next = [{ label, amount: value }];
+  const { error } = await sb.from('households').update({ income_expectations: next }).eq('id', state.hid);
+  if (error) throw error;
+  state.income = next;
+  emit();
 }
 
 export async function deleteRow(table, id) {

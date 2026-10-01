@@ -4,9 +4,15 @@ import { Icon } from '../../components/Icon.js';
 import { setAiEnabled } from '../../lib/settings.js';
 import { useAiSetting } from '../advisor/useAiSetting.js';
 import { InviteButton } from '../../components/InviteButton.js';
+import { useState } from 'preact/hooks';
+import { MemoriesView } from './MemoriesView.js';
 
 export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid, userId }) {
   const aiOn = useAiSetting();
+  const [view, setView] = useState('main');
+  if (view === 'memories') {
+    return html`<${Sheet} title="מה היועץ יודע עלינו" onClose=${onClose}><${MemoriesView} hid=${hid} userId=${userId} onBack=${() => setView('main')} /><//>`;
+  }
   return html`
     <${Sheet} title="פרופיל והגדרות" onClose=${onClose}>
       <div class="card" style="display:flex;align-items:center;gap:14px">
@@ -21,6 +27,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
           <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, נשלח סיכום של המספרים (לא שמות בתי עסק מלאים או פרטי חשבון). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>
         <input type="checkbox" role="switch" checked=${aiOn} onChange=${(e) => setAiEnabled(e.target.checked)} aria-label="היועץ והצעות AI" />
       </label>
+      ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}>🧠 מה היועץ יודע עלינו</button>`}
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
       <a class="btn btn-ghost" href="/old/" style="text-decoration:none">לגרסה הקודמת של האפליקציה</a>
