@@ -6,6 +6,15 @@ import { listConversations, openConversation, createConversation, addMessage, se
 import { setAiEnabled } from '../../lib/settings.js';
 import { canListen, listen, canSpeak, speak, stopSpeaking } from '../../lib/speech.js';
 import { useAiSetting } from './useAiSetting.js';
+import { LearnReview } from './LearnReview.js';
+import { normalizeItems, learnContext, learnMessages, worthLearning } from '../../domain/learn.js';
+import { askLearnings, applyLearnings } from '../../data/learn.js';
+import { readLocal, writeLocal } from '../../lib/storage.js';
+
+// How many messages of a conversation were already looked at for learning,
+// so the "save what I learned?" offer does not repeat for the same messages.
+const learnedFrom = (id) => Number(readLocal('learned:' + id, 0)) || 0;
+const markLearned = (id, n) => writeLocal('learned:' + id, n);
 
 const when = (iso) => { const d = new Date(iso); return d.getDate() + '.' + (d.getMonth() + 1); };
 
@@ -26,6 +35,9 @@ export function AdvisorPanel({ data, session, screen }) {
   const [suggestions, setSuggestions] = useState([]);
   const [listening, setListening] = useState(null);
   const [speaking, setSpeaking] = useState(null);
+  // "What I learned": null, or { status: loading|review|saving|done|error, items, result, error }
+  const [learn, setLearn] = useState(null);
+  const [offer, setOffer] = useState(false);
   const memories = useRef(null);
   const logRef = useRef(null);
   const abort = useRef(null);
@@ -38,14 +50,14 @@ export function AdvisorPanel({ data, session, screen }) {
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [conv]);
 
   const open = async (id) => {
-    setError(''); setSuggestions([]);
+    setError(''); setSuggestions([]); setLearn(null); setOffer(false);
     try { setConv(await openConversation(id)); } catch (_err) { setError('לא הצלחנו לפתוח את השיחה. נסו שוב.'); }
   };
 
   const send = async (text) => {
     const msg = String(text || '').trim();
     if (!msg || busy || !aiOn) return;
-    setBusy(true); setError(''); setSuggestions([]); setDraft('');
+    setBusy(true); setError(''); setSuggestions([]); setDraft(''); setOffer(false);
     let c = conv;
     try {
       if (!c || !c.id) {
@@ -72,6 +84,8 @@ export function AdvisorPanel({ data, session, screen }) {
       setSuggestions(reply.suggestions);
       // The full reply is saved, with the follow-ups, as the current app does.
       await addMessage({ conversationId: c.id, hid, userId: me, role: 'ai', text: raw || finalText });
+      // Offer to save what was said, when the person mentioned an amount or a decision.
+      if (worthLearning([...c.messages.slice(0, -1)], learnedFrom(c.id))) setOffer(true);
       refresh();
     } catch (err) {
       setConv((cur) => cur && { ...cur, messages: cur.messages.filter((m) => !m.pending) });
@@ -80,6 +94,31 @@ export function AdvisorPanel({ data, session, screen }) {
     abort.current = null;
     setBusy(false);
   };
+
+  const startLearn = async () => {
+    setOffer(false); setError('');
+    setLearn({ status: 'loading' });
+    try {
+      if (!memories.current) memories.current = await loadMemories(hid).catch(() => []);
+      const ctx = { ...data, memories: memories.current };
+      const raw = await askLearnings({ messages: learnMessages(conv.messages, memberName), context: learnContext(ctx) });
+      setLearn({ status: 'review', items: normalizeItems(raw, ctx) });
+    } catch (err) {
+      setLearn({ status: 'error', error: err.message || 'משהו השתבש. נסו שוב.' });
+    }
+  };
+  const applyLearn = async (chosen) => {
+    setLearn((l) => ({ ...l, status: 'saving' }));
+    const result = await applyLearnings(chosen, { hid, userId: me, conversationId: conv.id });
+    markLearned(conv.id, conv.messages.length);
+    memories.current = null;
+    setLearn({ status: 'done', result });
+  };
+  const closeLearn = () => {
+    if (learn && learn.status === 'review') markLearned(conv.id, conv.messages.length);
+    setLearn(null);
+  };
+  const dismissOffer = () => { markLearned(conv.id, conv.messages.length); setOffer(false); };
 
   const mic = () => {
     if (listening) { listening(); setListening(null); return; }
@@ -107,10 +146,13 @@ export function AdvisorPanel({ data, session, screen }) {
     const mine = conv.user_id === me;
     return html`<div class="adv">
       <div class="adv-bar">
-        <button type="button" class="btn-text" onClick=${() => { stopSpeaking(); setConv(null); setSuggestions([]); refresh(); }}>‹ כל השיחות</button>
+        <button type="button" class="btn-text" onClick=${() => { stopSpeaking(); setConv(null); setSuggestions([]); setLearn(null); setOffer(false); refresh(); }}>‹ כל השיחות</button>
+        <span style="flex:1"></span>
+        ${conv.id && aiOn && !learn && conv.messages.some((m) => m.role === 'user') && html`<button type="button" class="chip learn-btn" disabled=${busy} onClick=${startLearn}>💡 מה למדתי</button>`}
         ${conv.id && mine && html`<button type="button" class="chip" aria-pressed=${String(conv.is_private)} onClick=${togglePrivate}>${conv.is_private ? '🔒 פרטית' : '👥 משותפת'}</button>`}
       </div>
       ${!mine && html`<span class="faint" style="font-size:12px">שיחה ש${memberName(conv.user_id)} פתח/ה. אפשר להמשיך אותה.</span>`}
+      ${learn ? html`<${LearnReview} state=${learn} onChange=${(items) => setLearn((l) => ({ ...l, items }))} onApply=${applyLearn} onCancel=${closeLearn} onRetry=${startLearn} />` : html`
       <div class="adv-log" ref=${logRef} aria-live="polite">
         ${conv.messages.length === 0 && html`<div class="muted" style="font-size:14px;text-align:center;padding:16px 0">שאלו כל דבר על הכסף שלכם</div>`}
         ${conv.messages.map((m, i) => html`<div class=${'adv-msg ' + (m.role === 'user' ? (m.author_id === me ? 'me' : 'partner') : 'ai')} key=${m.id || i}>
@@ -123,7 +165,9 @@ export function AdvisorPanel({ data, session, screen }) {
       </div>
       ${suggestions.length > 0 && html`<div class="chips">${suggestions.map((s) => html`<button type="button" class="chip" disabled=${busy || !aiOn} onClick=${() => send(s)}>${s}</button>`)}</div>`}
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
-      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => send(draft)} onMic=${canListen() ? mic : null} listening=${!!listening} />`}
+      ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>💡 סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>
+        <div class="learn-actions"><button type="button" class="btn" onClick=${startLearn}>לבדוק מה למדתי</button><button type="button" class="btn-text" onClick=${dismissOffer}>לא עכשיו</button></div></div>`}
+      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => send(draft)} onMic=${canListen() ? mic : null} listening=${!!listening} />`}`}
     </div>`;
   }
 

@@ -10,6 +10,7 @@ const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
 const { claudeRequest, isRetryable } = require('./server/claude');
+const learn = require('./server/learn');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1553,6 +1554,20 @@ app.post('/api/ai/extract-memories', requireAuth, aiLimiter, aiQuota, async (req
     return res.json({ memories });
   } catch (err) {
     return res.status(err.statusCode || 502).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
+// ═══ what the advisor learned from a conversation: approvable updates ═══
+app.post('/api/ai/learn-from-chat', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  try {
+    const { messages, context } = req.body || {};
+    const convo = learn.convoText(messages);
+    if (!convo) return res.json({ items: [] });
+    const ai = await generateWithFallback({ prompt: learn.learnPrompt(context, israelToday()), text: convo });
+    return res.json({ items: learn.pickItems(learn.parseLoose(ai.output)) });
+  } catch (err) {
+    console.error('learn-from-chat failed:', err.message);
+    return res.status(err.statusCode || 502).json({ error: 'לא הצלחנו לקרוא את השיחה כרגע. נסו שוב בעוד דקה.' });
   }
 });
 
