@@ -33,3 +33,41 @@ test('no amount or nothing but an amount: nothing to add', () => {
   assert.equal(parseSpoken('80 שקל'), null);
   assert.equal(parseSpoken(''), null);
 });
+
+test('a long recording is split into separate transactions', async () => {
+  const { splitSpoken } = await import('../public/app/src/domain/voice.js');
+  const pick = (r) => r.items.map((i) => [i.type, i.amount, i.description, i.daysAgo]);
+  assert.deepEqual(pick(splitSpoken('שילמתי 80 שקל בסופר ו-46 על קפה ו200 דלק')), [['expense', 80, 'סופר', 0], ['expense', 46, 'קפה', 0], ['expense', 200, 'דלק', 0]]);
+  assert.deepEqual(pick(splitSpoken('סופר 80 קפה 46')), [['expense', 80, 'סופר', 0], ['expense', 46, 'קפה', 0]]);
+  assert.deepEqual(pick(splitSpoken('לחם 12 ובית קפה 30')), [['expense', 12, 'לחם', 0], ['expense', 30, 'בית קפה', 0]]);
+  // Type and day carry over until said otherwise.
+  assert.deepEqual(pick(splitSpoken('אתמול קניתי לחם ב-12 וחלב ב-8, ואז קיבלתי משכורת 21 אלף')), [['expense', 12, 'לחם', 1], ['expense', 8, 'חלב', 1], ['income', 21000, 'משכורת', 1]]);
+  assert.deepEqual(pick(splitSpoken('קיבלתי 500 מאמא ו300 מאבא')), [['income', 500, 'מאמא', 0], ['income', 300, 'מאבא', 0]]);
+  assert.deepEqual(pick(splitSpoken('שילמתי שמונים שקל בסופר, מאה וחמישים בפארם. ובונוס אלפיים')), [['expense', 80, 'סופר', 0], ['expense', 150, 'בפארם', 0], ['income', 2000, 'בונוס', 0]]);
+  // Thousands separators and decimals are not cut.
+  assert.deepEqual(pick(splitSpoken('קניתי מקרר ב-1,500 שקל')), [['expense', 1500, 'מקרר', 0]]);
+  assert.deepEqual(pick(splitSpoken('46 קפה בארומה')), [['expense', 46, 'קפה בארומה', 0]]);
+  assert.deepEqual(splitSpoken('').items, []);
+});
+
+test('the day is understood: yesterday and the day before', () => {
+  assert.equal(parseSpoken('אתמול שילמתי 30 על חניה', { details: true }).daysAgo, 1);
+  assert.equal(parseSpoken('שלשום 30 חניה', { details: true }).daysAgo, 2);
+  assert.equal(parseSpoken('30 חניה', { details: true }).daysAgo, null);
+  assert.equal(parseSpoken('אתמול שילמתי 30 על חניה').description, 'חניה');
+});
+
+test('review cards: category guessed per kind, dates from the words, and back to transactions', async () => {
+  const { toReviewItems, reviewToTx, reviewValid } = await import('../public/app/src/domain/voice.js');
+  const guess = (desc, type) => (desc === 'קפה' && type === 'expense' ? { category_id: 'food', subcategory_id: 'cafe' } : desc === 'משכורת' ? { category_id: 'sal', subcategory_id: null } : null);
+  const today = new Date(2026, 9, 1);
+  const cards = toReviewItems([{ amount: 46, description: 'קפה', type: 'expense', daysAgo: 1 }, { amount: 21000, description: 'משכורת', type: 'income', daysAgo: 0 }, { amount: 30, description: 'חניה', type: 'expense', daysAgo: 2 }], guess, today);
+  assert.deepEqual(cards.map((c) => [c.catId, c.date]), [['cafe', '2026-09-30'], ['sal', '2026-10-01'], ['', '2026-09-29']]);
+  const cats = [{ id: 'food', parent_id: null }, { id: 'cafe', parent_id: 'food' }, { id: 'sal', parent_id: null }];
+  assert.deepEqual(reviewToTx(cards[0], cats), { type: 'expense', amount: 46, description: 'קפה', tx_date: '2026-09-30', category_id: 'food', subcategory_id: 'cafe' });
+  assert.deepEqual(reviewToTx(cards[1], cats), { type: 'income', amount: 21000, description: 'משכורת', tx_date: '2026-10-01', category_id: 'sal', subcategory_id: null });
+  assert.equal(reviewToTx(cards[2], cats).category_id, null);
+  assert.equal(reviewValid(cards[0]), true);
+  assert.equal(reviewValid({ ...cards[0], amount: 0 }), false);
+  assert.equal(reviewValid({ ...cards[0], description: ' ' }), false);
+});

@@ -286,3 +286,15 @@ textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: 
 .add-mic { width: 48px; height: 48px; flex: none; font-size: 20px; }
 .add-mic.on { background: var(--danger-tint); box-shadow: 0 0 0 0 var(--danger); animation: mic-pulse 1.2s ease-out infinite; }
 @keyframes mic-pulse { 0% { box-shadow: 0 0 0 0 rgba(242, 147, 132, .55); } 100% { box-shadow: 0 0 0 14px rgba(242, 147, 132, 0); } }
+
+/* ── voice review ── */
+.review-item { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-inline-start: 4px solid var(--danger); }
+.review-item.income { border-inline-start-color: var(--income); }
+.review-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.review-row { display: flex; gap: 10px; }
+.review-row .field { min-width: 0; }
+.seg-sm button { height: 32px; font-size: 13px; padding: 0 12px; }
+.review-actions { position: sticky; bottom: -26px; background: var(--bg); padding: 12px 0 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; z-index: 1; }
+.review-actions .btn { flex: 1; white-space: nowrap; }
+.review-actions .btn:first-child { flex: 2; }
+.listen-card { display: flex; align-items: center; gap: 10px; font-size: 14px; line-height: 1.5; border: 1px solid var(--danger); }
