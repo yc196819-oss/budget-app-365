@@ -7,11 +7,14 @@ export function canListen() {
 
 // Starts listening in Hebrew; calls onText with the final text and, when
 // given, onInterim with the words heard so far. Returns stop().
-export function listen({ onText, onInterim, onEnd, onError }) {
+// With continuous, onText is called for each finished phrase.
+export function listen({ onText, onInterim, onEnd, onError, continuous = false }) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const r = new SR();
   r.lang = 'he-IL';
   r.interimResults = !!onInterim;
+  // Continuous: keeps listening through pauses until stop() (a long recording).
+  r.continuous = continuous;
   r.maxAlternatives = 1;
   r.onresult = (e) => {
     let final = '';

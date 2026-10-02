@@ -50,7 +50,7 @@
 /* sheets and dialogs */
 .scrim { position: fixed; inset: 0; z-index: 20; background: var(--scrim); animation: fade-in .25s ease; }
 .sheet {
-  position: fixed; inset-inline: 0; bottom: 0; z-index: 21; max-height: 88vh; overflow-y: auto;
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 21; max-height: 88vh; max-height: 88dvh; overflow-y: auto;
   background: var(--bg); border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 10px 18px 26px;
   display: flex; flex-direction: column; gap: 14px; animation: sheet-in .4s cubic-bezier(.22, 1, .36, 1);
 }
