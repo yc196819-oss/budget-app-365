@@ -279,3 +279,10 @@
 .vote-icon { font-size: 22px; }
 .hint { font-size: 13px; color: var(--muted); line-height: 1.5; }
 textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: vertical; font-family: inherit; }
+
+/* ── add by voice ── */
+.add-input { display: flex; gap: 8px; align-items: center; }
+.add-input .input { flex: 1; min-width: 0; }
+.add-mic { width: 48px; height: 48px; flex: none; font-size: 20px; }
+.add-mic.on { background: var(--danger-tint); box-shadow: 0 0 0 0 var(--danger); animation: mic-pulse 1.2s ease-out infinite; }
+@keyframes mic-pulse { 0% { box-shadow: 0 0 0 0 rgba(242, 147, 132, .55); } 100% { box-shadow: 0 0 0 14px rgba(242, 147, 132, 0); } }
