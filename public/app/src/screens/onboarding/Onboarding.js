@@ -1,6 +1,5 @@
 import { html } from '../../lib/html.js';
 import { useState } from 'preact/hooks';
-import { Icon } from '../../components/Icon.js';
 import { createHousehold } from '../../data/onboarding.js';
 import { firstPicture } from '../../domain/onboarding.js';
 import { setAiEnabled } from '../../lib/settings.js';
@@ -38,7 +37,7 @@ export function Onboarding({ session }) {
 
   if (stage === 'welcome') {
     return html`<main class="login onb">
-      <div class="brand-login"><span class="brand-mark"><${Icon} name="spark" size=${20} stroke=${2.2} /></span><b class="display" style="font-size:22px">התקציב שלנו</b></div>
+      <div class="brand-login"><img class="brand-mark" src="/icon.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
       <h1 class="display" style="font-size:34px;line-height:1.15;margin:0">לדעת בכל רגע כמה נשאר להוציא</h1>
       <div class="stack" style="gap:10px">
         ${[['⚡', 'כל הוצאה במקום אחד', 'הקלדה מהירה או העלאת פירוט מחברת האשראי'], ['✨', 'יועץ שמכיר את המספרים', 'תשובות קצרות, מחושבות מהנתונים שלכם'], ['👥', 'ביחד עם בן/בת הזוג', 'תקציב אחד, שני טלפונים']].map(([i, t, d]) => html`<div class="card onb-perk"><span aria-hidden="true">${i}</span><span><b>${t}</b><small>${d}</small></span></div>`)}

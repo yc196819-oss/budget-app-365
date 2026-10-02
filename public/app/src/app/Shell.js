@@ -1,6 +1,6 @@
 import { html } from '../lib/html.js';
 import { Loading } from '../components/Loading.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { TABS } from '../domain/routes.js';
 import { dateLabel, initials } from '../domain/format.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
@@ -17,6 +17,8 @@ import { AssetsScreen } from '../screens/assets/AssetsScreen.js';
 import { TogetherScreen } from '../screens/together/TogetherScreen.js';
 import { useDecisions } from '../data/useDecisions.js';
 import { pendingCount } from '../domain/decisions.js';
+import { shortcut, isTyping } from '../domain/shortcuts.js';
+import { hrefFor } from '../domain/routes.js';
 import { ProfileSheet } from '../screens/profile/ProfileSheet.js';
 import { AddSheet } from '../screens/add/AddSheet.js';
 import { ImportSheet } from '../screens/import/ImportSheet.js';
@@ -55,6 +57,22 @@ export function Shell({ tab, session }) {
     const next = effectiveTheme === 'light' ? 'dark' : 'light';
     setTheme(next); writeLocal('theme', next); applyTheme(next);
   };
+  // Desktop shortcuts: N add, U import, / ask the advisor, 1-5 tabs.
+  useEffect(() => {
+    if (!desktop) return undefined;
+    const onKey = (e) => {
+      if (overlay || document.querySelector('.sheet')) return;
+      const action = shortcut({ code: e.code, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, typing: isTyping(e.target) });
+      if (!action) return;
+      e.preventDefault();
+      if (action === 'add') setOverlay('add');
+      else if (action === 'import' && session.household) setOverlay('import');
+      else if (action === 'advisor') document.querySelector('.rail input[aria-label="שאלה ליועץ"]')?.focus();
+      else if (action.startsWith('tab:')) location.hash = hrefFor(action.slice(4));
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [desktop, overlay, session.household]);
   const Screen = SCREENS[tab];
   const title = TABS.find((t) => t.key === tab).label;
   const close = () => setOverlay(null);

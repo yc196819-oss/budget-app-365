@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { outcome, waitingOn, needsMyAnswer, voteValid, needsCard, groups, pendingCount, monthIndex, impact, findPurchase, wantedLabel, endOfMonth, forAdvisor } from '../public/app/src/domain/decisions.js';
+import { roomText, signedMoney, outcome, waitingOn, needsMyAnswer, voteValid, needsCard, groups, pendingCount, monthIndex, impact, findPurchase, wantedLabel, endOfMonth, forAdvisor } from '../public/app/src/domain/decisions.js';
 
 const members = ['u1', 'u2'];
 const d = (o = {}) => ({ id: 'd1', created_by: 'u2', title: 'מכונת כביסה', amount: 2400, status: 'open', created_at: '2026-10-01T10:00:00Z', ...o });
@@ -99,4 +99,11 @@ test('a purchase that seems to have happened is found, near the amount, after th
 test('the advisor sees open decisions with their status, nothing else', () => {
   const out = forAdvisor([d({ note: 'פרטי' }), d({ id: 'x', status: 'bought' })], [v('approve')], members);
   assert.deepEqual(out, [{ title: 'מכונת כביסה', amount: 2400, wantedBy: null, status: 'approved' }]);
+});
+
+test('the month\'s room reads as left or exceeded, with a sign on balances', () => {
+  assert.equal(roomText(1606), 'נשארים ₪1,606');
+  assert.equal(roomText(-4006), 'חריגה של ₪4,006');
+  assert.equal(signedMoney(-5343), '−₪5,343');
+  assert.equal(signedMoney(7743), '₪7,743');
 });

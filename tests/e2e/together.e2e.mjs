@@ -44,7 +44,8 @@ test('the partner\'s card waits for my answer: badge on the tab, the reason, the
   assert.match(card, /דני רוצה/);
   assert.match(card, /למה: הישנה נשברה/);
   assert.match(card, /בסוף .* בחשבון/);
-  assert.match(card, /עוד לא ענה\/תה/);
+  assert.match(card, /את\/ה: עוד לא ענית/);
+  assert.match(card, /החודש: (נשארים|חריגה של) ₪/);
   assert.match(await page.locator('.agreement').textContent(), /מעל ₪500 .*עד ₪400 בחודש בלי לשאול/);
   assert.deepEqual(errors, []);
   await page.close();
@@ -180,5 +181,24 @@ test('mobile bar: the "+" stays in the exact middle, all five tabs on one row', 
   const xs = await page.locator('.bottom-nav .nav-item').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().x));
   assert.ok(xs[0] > add.x && xs[1] > add.x && xs[2] < add.x && xs[4] < add.x);
   assert.deepEqual(items.map((i) => i.href), ['#/home', '#/money', '#/together', '#/plans', '#/assets']);
+  await page.close();
+});
+
+test('desktop keyboard shortcuts: N adds, 1-5 switch tabs, / asks the advisor; not while typing', async () => {
+  const { page } = await open({ hash: '#/home', width: 1280 });
+  await page.waitForSelector('.hero');
+  await page.keyboard.press('Digit3');
+  await page.waitForSelector('.together');
+  assert.match(page.url(), /#\/together$/);
+  await page.keyboard.press('Slash');
+  assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('aria-label')), 'שאלה ליועץ');
+  await page.keyboard.type('n3');
+  assert.match(page.url(), /#\/together$/, 'typing in the advisor box is just typing');
+  assert.equal(await page.locator('.sheet').count(), 0);
+  await page.evaluate(() => document.activeElement.blur());
+  await page.keyboard.press('KeyN');
+  await page.waitForSelector('.sheet');
+  await page.keyboard.press('Digit1');
+  assert.match(page.url(), /#\/together$/, 'no tab switch while a sheet is open');
   await page.close();
 });
