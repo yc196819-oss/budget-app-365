@@ -157,3 +157,20 @@ export function reviewToTx(item, categories) {
     subcategory_id: c && c.parent_id ? c.id : null
   };
 }
+
+// The finished phrases of a recording, joined once. Chrome on Android sends
+// each phrase again with the earlier words in front ("80 בסופר",
+// "80 בסופר ו-46 קפה"), so a phrase that extends the previous one replaces
+// it, and one already contained is skipped.
+export function mergeFinals(list) {
+  const out = [];
+  for (const raw of list) {
+    const t = String(raw || '').trim();
+    if (!t) continue;
+    const last = out[out.length - 1];
+    if (last && t.startsWith(last)) out[out.length - 1] = t;
+    else if (last && last.startsWith(t)) continue;
+    else out.push(t);
+  }
+  return out.join(' ');
+}

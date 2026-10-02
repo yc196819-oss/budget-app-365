@@ -16,7 +16,8 @@ import { PlansScreen } from '../screens/plans/PlansScreen.js';
 import { AssetsScreen } from '../screens/assets/AssetsScreen.js';
 import { TogetherScreen } from '../screens/together/TogetherScreen.js';
 import { useDecisions } from '../data/useDecisions.js';
-import { pendingCount } from '../domain/decisions.js';
+import { pendingCount, unreadTotal } from '../domain/decisions.js';
+import { seenAt } from '../data/decisions.js';
 import { shortcut, isTyping } from '../domain/shortcuts.js';
 import { hrefFor } from '../domain/routes.js';
 import { ProfileSheet } from '../screens/profile/ProfileSheet.js';
@@ -44,7 +45,8 @@ export function Shell({ tab, session }) {
   const desktop = useMedia('(min-width: 1024px)');
   // Shared decisions: the "together" tab shows how many wait for my answer.
   const dec = useDecisions(session.household?.household_id);
-  const badges = { together: dec.status === 'ready' ? pendingCount(dec.decisions, dec.votes, session.user.id, Object.keys(data.members || {})) : 0 };
+  // Answers waiting for me, plus cards with new messages in their conversation.
+  const badges = { together: dec.status === 'ready' ? pendingCount(dec.decisions, dec.votes, session.user.id, Object.keys(data.members || {})) + unreadTotal(dec.decisions, dec.messages || [], session.user.id, seenAt) : 0 };
 
   const profile = {
     name: session.household?.display_name || session.user.email.split('@')[0],

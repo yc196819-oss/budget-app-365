@@ -1282,15 +1282,18 @@ app.post('/api/decisions/notify', requireAuth, decisionLimiter, async (req, res)
   try {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase not configured' });
     const { decisionId, event } = req.body || {};
-    if (!decisionId || !['opened', 'answered', 'bought', 'withdrawn'].includes(event)) return res.status(400).json({ error: 'bad request' });
+    if (!decisionId || !['opened', 'answered', 'message', 'advisor', 'bought', 'withdrawn'].includes(event)) return res.status(400).json({ error: 'bad request' });
     const { data: decision } = await supabaseAdmin.from('shared_decisions').select('*').eq('id', decisionId).maybeSingle();
     if (!decision || !(await isHouseholdMember(req.authUserId, decision.household_id))) return res.status(404).json({ error: 'not found' });
-    const [{ data: members }, { data: vote }] = await Promise.all([
+    const [{ data: members }, { data: vote }, { data: last }] = await Promise.all([
       supabaseAdmin.from('memberships').select('user_id,display_name').eq('household_id', decision.household_id),
-      supabaseAdmin.from('decision_votes').select('vote,note').eq('decision_id', decisionId).eq('user_id', req.authUserId).maybeSingle()
+      supabaseAdmin.from('decision_votes').select('vote,note').eq('decision_id', decisionId).eq('user_id', req.authUserId).maybeSingle(),
+      // The newest message the caller wrote (or asked the advisor for) in the card's conversation.
+      supabaseAdmin.from('decision_messages').select('role,text').eq('decision_id', decisionId).eq('author_id', req.authUserId).eq('role', event === 'advisor' ? 'ai' : 'user').order('created_at', { ascending: false }).limit(1)
     ]);
+    const message = (event === 'message' || event === 'advisor') && last && last[0] ? last[0] : null;
     let sent = 0;
-    for (const m of decisionsPush.messagesFor(event, { decision, actorId: req.authUserId, members: members || [], vote })) {
+    for (const m of decisionsPush.messagesFor(event, { decision, actorId: req.authUserId, members: members || [], vote, message })) {
       try { await sendPushToUser(m.to, m); sent += 1; } catch (_e) { /* no subscription on that phone: the badge in the app still shows it */ }
     }
     return res.json({ ok: true, sent });

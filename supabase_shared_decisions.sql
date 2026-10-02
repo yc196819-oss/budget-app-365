@@ -59,3 +59,26 @@ create policy decision_votes_write on public.decision_votes for all to authentic
     household_id in (select public.my_households()) and user_id = auth.uid()
     and exists (select 1 from public.shared_decisions d where d.id = decision_id and d.household_id = decision_votes.household_id)
   );
+
+-- A conversation on each card: the partners and the advisor. A person writes
+-- their own messages (author_id = themselves); an advisor message (role
+-- 'ai') records who asked for it. Messages are not edited or deleted.
+create table if not exists public.decision_messages (
+  id uuid primary key default gen_random_uuid(),
+  decision_id uuid not null references public.shared_decisions(id) on delete cascade,
+  household_id uuid not null references public.households(id) on delete cascade,
+  role text not null check (role in ('user', 'ai')),
+  author_id uuid not null default auth.uid(),
+  text text not null check (char_length(text) between 1 and 4000),
+  created_at timestamptz not null default now()
+);
+create index if not exists decision_messages_decision_idx on public.decision_messages (decision_id, created_at);
+create index if not exists decision_messages_household_idx on public.decision_messages (household_id, created_at desc);
+alter table public.decision_messages enable row level security;
+create policy decision_messages_select on public.decision_messages for select to authenticated
+  using (household_id in (select public.my_households()));
+create policy decision_messages_insert on public.decision_messages for insert to authenticated
+  with check (
+    household_id in (select public.my_households()) and author_id = auth.uid()
+    and exists (select 1 from public.shared_decisions d where d.id = decision_id and d.household_id = decision_messages.household_id)
+  );

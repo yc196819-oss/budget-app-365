@@ -34,3 +34,16 @@ test('reminders: once, a day after opening, only to whoever has not answered', (
   assert.deepEqual(list.map((m) => [m.decisionId, m.to]), [['d1', 'u1']]);
   assert.match(list[0].title, /מחכה לתשובה שלך: מכונת כביסה/);
 });
+
+test('a message on the card and the advisor joining go to the other partner', () => {
+  const [m, ...rest] = messagesFor('message', { decision, actorId: 'u1', members, message: { role: 'user', text: 'אולי נחכה לחודש הבא?' } });
+  assert.equal(rest.length, 0);
+  assert.equal(m.to, 'u2');
+  assert.equal(m.title, '💬 יוסי על מכונת כביסה');
+  assert.equal(m.body, 'אולי נחכה לחודש הבא?');
+  const [a] = messagesFor('advisor', { decision, actorId: 'u1', members, message: { role: 'ai', text: 'ההמלצה שלי: לחכות לדצמבר.' } });
+  assert.equal(a.to, 'u2');
+  assert.equal(a.title, '🤖 היועץ הצטרף לשיחה על: מכונת כביסה');
+  assert.match(a.body, /לחכות לדצמבר/);
+  assert.deepEqual(messagesFor('message', { decision, actorId: 'u1', members, message: null }), []);
+});

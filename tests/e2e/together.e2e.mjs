@@ -202,3 +202,59 @@ test('desktop keyboard shortcuts: N adds, 1-5 switch tabs, / asks the advisor; n
   assert.match(page.url(), /#\/together$/, 'no tab switch while a sheet is open');
   await page.close();
 });
+
+test('a conversation for three on the card: write to each other, then invite the advisor', async () => {
+  const { page, db, notified } = await open();
+  const asked = [];
+  await page.route('**/api/ai/advice-chat-stream', (r) => {
+    asked.push(JSON.parse(r.request().postData()));
+    const body = ['לפי המספרים, ', 'החודש כבר חרגתם מהתקציב.', '\nההמלצה שלי: לחכות לחודש הבא.', '\n@@הצעות: למה? | ומה עם הבונוס?']
+      .map((x) => 'data: ' + JSON.stringify({ delta: x }) + '\n\n').join('') + 'data: {"done":true}\n\n';
+    return r.fulfill({ status: 200, contentType: 'text/event-stream', body });
+  });
+  await page.waitForSelector('.decision');
+  await page.click('.dchat-toggle');
+  await page.fill('input[aria-label="הודעה על הכרטיס"]', 'אולי נחכה לבונוס בדצמבר?');
+  await page.click('.dchat-compose button[type="submit"]');
+  await page.waitForSelector('.dmsg.me:has-text("אולי נחכה לבונוס בדצמבר?")');
+  const mine = db.tables.decision_messages.find((m) => m.role === 'user');
+  assert.deepEqual([mine.decision_id, mine.household_id, mine.author_id, mine.text], ['d1', 'h1', 'u1', 'אולי נחכה לבונוס בדצמבר?']);
+  assert.deepEqual(notified.at(-1), { decisionId: 'd1', event: 'message' });
+
+  await page.click('.dchat button:has-text("להזמין את היועץ לשיחה")');
+  await page.waitForSelector('.dmsg.ai:has-text("ההמלצה שלי: לחכות לחודש הבא.")');
+  const q = asked[0];
+  assert.match(q.message, /דני רוצה לקנות: מכונת כביסה, ב-₪2,400/);
+  assert.match(q.message, /התייחס למה שנאמר, ובעיקר להודעה האחרונה/);
+  assert.deepEqual(q.history, [{ role: 'user', text: 'אולי נחכה לבונוס בדצמבר?', author: 'יוסי ודני' }]);
+  assert.equal(q.summary.screen, 'together');
+  const ai = db.tables.decision_messages.find((m) => m.role === 'ai');
+  assert.equal(ai.text, 'לפי המספרים, החודש כבר חרגתם מהתקציב.\nההמלצה שלי: לחכות לחודש הבא.');
+  assert.equal(ai.author_id, 'u1');
+  assert.deepEqual(notified.at(-1), { decisionId: 'd1', event: 'advisor' });
+  assert.doesNotMatch(await page.locator('.dchat').textContent(), /@@/);
+  assert.match(await page.locator('.dchat').textContent(), /לשאול את היועץ שוב/);
+  await page.close();
+});
+
+test('new messages from the partner: the conversation opens by itself and the tab shows it', async () => {
+  const { page } = await open({ hash: '#/home', prep: (db) => {
+    db.tables.decision_messages = [
+      { id: 'm1', decision_id: 'd1', household_id: 'h1', role: 'user', author_id: 'u2', text: 'זה ממש דחוף, הישנה מציפה את המטבח', created_at: new Date(Date.now() - 600e3).toISOString() },
+      { id: 'm2', decision_id: 'd1', household_id: 'h1', role: 'ai', author_id: 'u2', text: 'ההמלצה שלי: לקנות בתנאי שתקצצו 300 באוכל בחוץ.', created_at: new Date(Date.now() - 300e3).toISOString() }
+    ];
+  } });
+  await page.waitForSelector('.hero');
+  // One answer waiting for me + one card with new messages.
+  await page.waitForFunction(() => (document.querySelector('.nav-item[href="#/together"] .nav-badge') || {}).textContent === '2');
+  await page.click('.nav-item[href="#/together"]');
+  await page.waitForSelector('.dchat.open');
+  const t = await page.locator('.dchat-log').textContent();
+  assert.match(t, /דני/);
+  assert.match(t, /הישנה מציפה את המטבח/);
+  assert.match(t, /היועץ · לבקשת דני/);
+  assert.match(t, /לקנות בתנאי שתקצצו 300/);
+  // Seen: only the answer still waits.
+  await page.waitForFunction(() => (document.querySelector('.nav-item[href="#/together"] .nav-badge') || {}).textContent === '1');
+  await page.close();
+});
