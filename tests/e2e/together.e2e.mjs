@@ -258,3 +258,23 @@ test('new messages from the partner: the conversation opens by itself and the ta
   await page.waitForFunction(() => (document.querySelector('.nav-item[href="#/together"] .nav-badge') || {}).textContent === '1');
   await page.close();
 });
+
+test('I can delete my own messages (two taps), not my partner\'s or the advisor\'s', async () => {
+  const { page, db } = await open({ prep: (db) => {
+    db.tables.decision_messages = [
+      { id: 'mine', decision_id: 'd1', household_id: 'h1', role: 'user', author_id: 'u1', text: 'טעות שלי, תתעלם', created_at: new Date(Date.now() - 900e3).toISOString() },
+      { id: 'his', decision_id: 'd1', household_id: 'h1', role: 'user', author_id: 'u2', text: 'נו?', created_at: new Date(Date.now() - 600e3).toISOString() },
+      { id: 'ai', decision_id: 'd1', household_id: 'h1', role: 'ai', author_id: 'u1', text: 'ההמלצה שלי: לחכות.', created_at: new Date(Date.now() - 300e3).toISOString() }
+    ];
+  } });
+  await page.waitForSelector('.dchat.open');
+  assert.equal(await page.locator('.dmsg-x').count(), 1, 'only on my own message');
+  await page.click('.dmsg.me .dmsg-x');
+  await page.click('.dmsg.me button:has-text("ביטול")');
+  assert.equal(db.tables.decision_messages.length, 3);
+  await page.click('.dmsg.me .dmsg-x');
+  await page.click('.dmsg.me button:has-text("כן, למחוק")');
+  await page.waitForFunction(() => !document.querySelector('.dmsg.me'));
+  assert.deepEqual(db.tables.decision_messages.map((m) => m.id), ['his', 'ai']);
+  await page.close();
+});

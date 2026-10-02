@@ -15,7 +15,7 @@ export function Onboarding({ session }) {
   const meta = session.user.user_metadata || {};
   const [stage, setStage] = useState('welcome'); // welcome | setup | saving | done
   const [step, setStep] = useState(1);
-  const [a, setA] = useState(() => ({ ...INITIAL, name: meta.display_name || '' }));
+  const [a, setA] = useState(() => ({ ...INITIAL, name: meta.display_name || (meta.full_name || meta.name || '').split(' ')[0] || '' }));
   const [error, setError] = useState('');
   const [created, setCreated] = useState(null);
   const set = (patch) => setA((cur) => ({ ...cur, ...patch }));

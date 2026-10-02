@@ -318,3 +318,6 @@ textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: 
 .dchat-compose { display: flex; gap: 8px; }
 .dchat-compose .input { flex: 1; min-width: 0; }
 .advisor-ask { align-self: flex-start; color: var(--accent); font-weight: 800; }
+.dmsg-x { align-self: flex-end; border: 0; background: transparent; color: inherit; opacity: .6; font-size: 11px; font-weight: 700; padding: 0; }
+.dmsg-del { display: flex; gap: 12px; align-self: flex-end; }
+.dmsg.me .btn-text { color: inherit; font-size: 12px; }

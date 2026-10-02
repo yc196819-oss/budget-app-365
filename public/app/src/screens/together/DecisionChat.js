@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { threadFor, unreadCount } from '../../domain/decisions.js';
-import { sendMessage, askAdvisor, markSeen, seenAt } from '../../data/decisions.js';
+import { sendMessage, askAdvisor, markSeen, seenAt, deleteMessage } from '../../data/decisions.js';
 import { useAiSetting } from '../advisor/useAiSetting.js';
 
 const time = (iso) => { const d = new Date(iso); return d.getDate() + '.' + (d.getMonth() + 1) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -19,6 +19,8 @@ export function DecisionChat({ d, dec, data, userId, memberIds, nameOf }) {
   const [sending, setSending] = useState(false);
   const [live, setLive] = useState(null); // null | '' (thinking) | the advisor's words so far
   const [error, setError] = useState('');
+  // The message waiting for "yes, delete" (two taps, so nothing goes by accident).
+  const [confirmDel, setConfirmDel] = useState(null);
   const logRef = useRef(null);
   const thinking = live !== null;
 
@@ -39,6 +41,11 @@ export function DecisionChat({ d, dec, data, userId, memberIds, nameOf }) {
     setLive(null);
   };
 
+  const remove = async (id) => {
+    setConfirmDel(null); setError('');
+    try { await deleteMessage(id); } catch (_err) { setError('המחיקה נכשלה. נסו שוב.'); }
+  };
+
   const label = thread.length ? 'שיחה · ' + thread.length + (thread.length === 1 ? ' הודעה' : ' הודעות') : 'לדבר על זה';
   return html`<div class=${'dchat' + (open ? ' open' : '')}>
     <button type="button" class="dchat-toggle" aria-expanded=${String(open)} onClick=${() => setOpen(!open)}>
@@ -52,6 +59,9 @@ export function DecisionChat({ d, dec, data, userId, memberIds, nameOf }) {
           return html`<div class=${'dmsg ' + who} key=${m.id}>
             <small>${m.role === 'ai' ? '🤖 היועץ' + (m.author_id ? ' · לבקשת ' + nameOf(m.author_id) : '') : who === 'me' ? 'את/ה' : nameOf(m.author_id)} · ${time(m.created_at)}</small>
             <span>${m.text}</span>
+            ${who === 'me' && (confirmDel === m.id
+              ? html`<span class="dmsg-del"><button type="button" class="btn-text" onClick=${() => remove(m.id)}>כן, למחוק</button><button type="button" class="btn-text" onClick=${() => setConfirmDel(null)}>ביטול</button></span>`
+              : html`<button type="button" class="dmsg-x" aria-label=${'למחוק את ההודעה: ' + m.text} onClick=${() => setConfirmDel(m.id)}>מחיקה</button>`)}
           </div>`;
         })}
         ${thinking && html`<div class="dmsg ai"><small>🤖 היועץ</small>${live ? html`<span class="adv-streaming">${live}</span>` : html`<span class="adv-thinking"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>בודק את המספרים…</span>`}</div>`}

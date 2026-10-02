@@ -62,7 +62,8 @@ create policy decision_votes_write on public.decision_votes for all to authentic
 
 -- A conversation on each card: the partners and the advisor. A person writes
 -- their own messages (author_id = themselves); an advisor message (role
--- 'ai') records who asked for it. Messages are not edited or deleted.
+-- 'ai') records who asked for it. Messages are not edited; a person can
+-- delete their own.
 create table if not exists public.decision_messages (
   id uuid primary key default gen_random_uuid(),
   decision_id uuid not null references public.shared_decisions(id) on delete cascade,
@@ -77,6 +78,9 @@ create index if not exists decision_messages_household_idx on public.decision_me
 alter table public.decision_messages enable row level security;
 create policy decision_messages_select on public.decision_messages for select to authenticated
   using (household_id in (select public.my_households()));
+-- A person can delete their own messages (not the advisor's, not the partner's).
+create policy decision_messages_delete on public.decision_messages for delete to authenticated
+  using (household_id in (select public.my_households()) and author_id = auth.uid() and role = 'user');
 create policy decision_messages_insert on public.decision_messages for insert to authenticated
   with check (
     household_id in (select public.my_households()) and author_id = auth.uid()

@@ -143,6 +143,14 @@ async function addMessage(row) {
   return data;
 }
 
+// My own message only (the database allows nothing else).
+export async function deleteMessage(id) {
+  const { error } = await sb.from('decision_messages').delete().eq('id', id).eq('household_id', state.hid);
+  if (error) throw error;
+  state.messages = state.messages.filter((m) => m.id !== id);
+  emit();
+}
+
 export async function sendMessage({ decision, userId, text }) {
   const msg = await addMessage({ decision_id: decision.id, role: 'user', author_id: userId, text });
   notify(decision.id, 'message');
