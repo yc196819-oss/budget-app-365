@@ -5,14 +5,24 @@ export function canListen() {
   return typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 }
 
-// Starts listening in Hebrew; calls onText with the final text. Returns stop().
-export function listen({ onText, onEnd, onError }) {
+// Starts listening in Hebrew; calls onText with the final text and, when
+// given, onInterim with the words heard so far. Returns stop().
+export function listen({ onText, onInterim, onEnd, onError }) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const r = new SR();
   r.lang = 'he-IL';
-  r.interimResults = false;
+  r.interimResults = !!onInterim;
   r.maxAlternatives = 1;
-  r.onresult = (e) => { const t = e.results[0] && e.results[0][0] ? e.results[0][0].transcript : ''; if (t) onText(t); };
+  r.onresult = (e) => {
+    let final = '';
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) final += res[0].transcript; else interim += res[0].transcript;
+    }
+    if (interim && onInterim) onInterim(interim);
+    if (final.trim()) onText(final.trim());
+  };
   r.onerror = (e) => onError && onError(e.error || 'error');
   r.onend = () => onEnd && onEnd();
   r.start();
