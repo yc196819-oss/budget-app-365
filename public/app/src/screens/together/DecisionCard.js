@@ -1,6 +1,6 @@
 import { html } from '../../lib/html.js';
 import { money, shortDate } from '../../domain/format.js';
-import { VOTES, STATUS, outcome, votesFor, answerers, needsMyAnswer, isClosed, impact, findPurchase, wantedLabel } from '../../domain/decisions.js';
+import { VOTES, STATUS, roomText, signedMoney, outcome, votesFor, answerers, needsMyAnswer, isClosed, impact, findPurchase, wantedLabel } from '../../domain/decisions.js';
 import { close } from '../../data/decisions.js';
 import { showToast } from '../../lib/toast.js';
 
@@ -30,15 +30,15 @@ export function DecisionCard({ d, data, dec, userId, memberIds, nameOf, onAnswer
     </div>
     ${d.note && html`<p class="decision-note"><span class="faint">למה: </span>${d.note}</p>`}
     ${fx && html`<div class=${'decision-impact' + (fx.turnsNegative || (fx.roomAfter !== null && fx.roomAfter < 0) ? ' warn' : '')}>
-      ${fx.roomBefore !== null && html`<span>החודש נשארים <b class="num">${money(fx.roomBefore)}</b> ← <b class="num">${money(fx.roomAfter)}</b></span>`}
-      ${fx.hasBalance && html`<span>בסוף ${fx.month} בחשבון: <b class="num">${money(fx.endBefore)}</b> ← <b class="num">${money(fx.endAfter)}</b></span>`}
+      ${fx.roomBefore !== null && html`<span>החודש: <b class="num">${roomText(fx.roomBefore)}</b> ← <b class="num">${roomText(fx.roomAfter)}</b></span>`}
+      ${fx.hasBalance && html`<span>בסוף ${fx.month} בחשבון: <b class="num">${signedMoney(fx.endBefore)}</b> ← <b class="num">${signedMoney(fx.endAfter)}</b></span>`}
       ${fx.turnsNegative && html`<b>הקנייה מכניסה את החשבון למינוס ב${fx.month}</b>`}
     </div>`}
     <div class="answers">
       ${answerers(d, memberIds).map((id) => {
         const v = votes.find((x) => x.user_id === id);
         return html`<div class="answer" key=${id}>
-          <span class="answer-who">${v ? VOTES[v.vote].icon : '…'} <b>${nameOf(id)}</b>: ${v ? VOTES[v.vote].label : 'עוד לא ענה/תה'}</span>
+          <span class="answer-who">${v ? VOTES[v.vote].icon : '…'} <b>${nameOf(id)}</b>: ${v ? VOTES[v.vote].label : id === userId ? 'עוד לא ענית' : 'עוד לא ענה/תה'}</span>
           ${v && v.note && html`<span class="answer-note">${v.note}</span>`}
         </div>`;
       })}

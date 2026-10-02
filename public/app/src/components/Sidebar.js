@@ -6,7 +6,7 @@ import { Icon } from './Icon.js';
 export function Sidebar({ tab, onAdd, onImport, onLearn, onProfile, profile, badges = {} }) {
   return html`
     <aside class="sidebar">
-      <div class="brand"><span class="brand-mark"><${Icon} name="spark" size=${19} stroke=${2.2} /></span>התקציב שלנו</div>
+      <div class="brand"><img class="brand-mark" src="/icon.svg" alt="" />התקציב שלנו</div>
       <nav aria-label="ניווט ראשי" class="stack" style="gap:4px">
         ${TABS.map((t) => html`
           <a class="side-item" href=${hrefFor(t.key)} aria-current=${tab === t.key ? 'page' : 'false'}>
@@ -14,8 +14,8 @@ export function Sidebar({ tab, onAdd, onImport, onLearn, onProfile, profile, bad
           </a>`)}
       </nav>
       <div class="side-sep"></div>
-      <button type="button" class="btn" onClick=${onAdd}><${Icon} name="plus" size=${19} stroke=${2.6} />הוספת הוצאה</button>
-      ${onImport && html`<button type="button" class="btn btn-ghost" style="margin-top:6px" onClick=${onImport}><${Icon} name="upload" size=${18} />העלאת פירוט</button>`}
+      <button type="button" class="btn" onClick=${onAdd}><${Icon} name="plus" size=${19} stroke=${2.6} />הוספת הוצאה<kbd title="קיצור מקלדת">N</kbd></button>
+      ${onImport && html`<button type="button" class="btn btn-ghost" style="margin-top:6px" onClick=${onImport}><${Icon} name="upload" size=${18} />העלאת פירוט<kbd title="קיצור מקלדת">U</kbd></button>`}
       ${onLearn && html`<button type="button" class="side-item" style="border:0;background:transparent;margin-top:8px" onClick=${onLearn}><${Icon} name="book" />פינת הלמידה</button>`}
       <div class="side-spacer"></div>
       <button type="button" class="side-profile" onClick=${onProfile}>

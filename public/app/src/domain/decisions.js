@@ -9,6 +9,7 @@
 import { monthPlan } from './home.js';
 import { forecast } from './forecast.js';
 import { MONTH_NAMES, parseDate } from './money.js';
+import { money } from './format.js';
 
 export const VOTES = {
   approve: { icon: '✅', label: 'מאשר/ת', tone: 'var(--income)' },
@@ -137,6 +138,14 @@ export function wantedLabel(wantedBy, today) {
   const i = monthIndex(wantedBy, today);
   const w = parseDate(wantedBy);
   return i === 0 ? 'החודש' : i === 1 ? 'בחודש הבא' : 'ב' + MONTH_NAMES[w.m];
+}
+
+// The month's room: what is left, or by how much the budget is exceeded.
+export function roomText(n) {
+  return n < 0 ? 'חריגה של ' + money(n) : 'נשארים ' + money(n);
+}
+export function signedMoney(n) {
+  return (n < 0 ? '−' : '') + money(n);
 }
 
 export function endOfMonth(today, plus = 0) {

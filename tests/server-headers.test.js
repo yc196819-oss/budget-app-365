@@ -119,3 +119,17 @@ test('decision notifications need a signed-in member', async () => {
   const res = await fetch(BASE + '/api/decisions/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"decisionId":"x","event":"opened"}' });
   assert.ok(res.status === 401 || res.status === 503, String(res.status));
 });
+
+test('the logo and the manifest: installable from the new app, on phone and desktop', async () => {
+  const icon = await (await fetch(BASE + '/icon.svg')).text();
+  assert.match(icon, /id="egg"/);
+  assert.doesNotMatch(icon, /<text/, 'no font-dependent text in the logo');
+  const m = await (await fetch(BASE + '/manifest.json')).json();
+  assert.equal(m.start_url, '/app/');
+  assert.equal(m.name, 'התקציב שלנו');
+  assert.equal(m.orientation, undefined, 'no portrait lock, so it installs on desktop too');
+  for (const i of m.icons) assert.equal((await fetch(BASE + i.src)).status, 200, i.src);
+  const shell = await (await fetch(BASE + '/app/')).text();
+  assert.match(shell, /<link rel="manifest" href="\/manifest.json">/);
+  assert.match(shell, /<link rel="apple-touch-icon" href="\/icon-180.png">/);
+});

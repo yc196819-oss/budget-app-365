@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { Segmented } from '../../components/Segmented.js';
 import { money } from '../../domain/format.js';
-import { impact, needsCard, endOfMonth } from '../../domain/decisions.js';
+import { impact, needsCard, endOfMonth, roomText, signedMoney } from '../../domain/decisions.js';
 import { createDecision } from '../../data/decisions.js';
 import { showToast } from '../../lib/toast.js';
 
@@ -54,8 +54,8 @@ export function NewDecisionSheet({ data, threshold, userId, onClose }) {
         </select></label>
       <label class="field"><span>למה זה חשוב לי</span><textarea class="input" rows="3" maxlength="500" value=${note} onInput=${(e) => setNote(e.target.value)} placeholder="כמה מילים שיעזרו להבין"></textarea></label>
       ${fx && html`<div class=${'decision-impact' + (fx.turnsNegative || (fx.roomAfter !== null && fx.roomAfter < 0) ? ' warn' : '')}>
-        ${fx.roomBefore !== null && html`<span>החודש נשארים <b class="num">${money(fx.roomBefore)}</b> ← <b class="num">${money(fx.roomAfter)}</b></span>`}
-        ${fx.hasBalance && html`<span>בסוף ${fx.month} בחשבון: <b class="num">${money(fx.endBefore)}</b> ← <b class="num">${money(fx.endAfter)}</b></span>`}
+        ${fx.roomBefore !== null && html`<span>החודש: <b class="num">${roomText(fx.roomBefore)}</b> ← <b class="num">${roomText(fx.roomAfter)}</b></span>`}
+        ${fx.hasBalance && html`<span>בסוף ${fx.month} בחשבון: <b class="num">${signedMoney(fx.endBefore)}</b> ← <b class="num">${signedMoney(fx.endAfter)}</b></span>`}
         ${fx.turnsNegative && html`<b>הקנייה מכניסה את החשבון למינוס ב${fx.month}</b>`}
       </div>`}
       <button type="submit" class="btn" disabled=${busy || !ok}>${busy ? 'שולח…' : 'לשלוח לאישור'}</button>

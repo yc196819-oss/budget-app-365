@@ -32,25 +32,29 @@ export function TogetherScreen({ data, dec, userId }) {
   const section = (title, list, hint) => list.length > 0 && html`<section class="stack" style="gap:10px">
     <div class="sec-title"><b>${title}</b>${hint && html`<span class="faint">${hint}</span>`}</div>${list.map(card)}</section>`;
 
-  return html`<div class="stack together">
-    <div class="card agreement">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-        <span class="stack" style="gap:4px"><b style="font-size:16px">ההסכם שלנו</b>
-          <span class="muted" style="font-size:14px;line-height:1.5">קנייה מעל <b class="num">${money(dec.threshold)}</b> מחליטים ביחד.${dec.allowance ? html` כל אחד מוציא עד <b class="num">${money(dec.allowance)}</b> בחודש בלי לשאול.` : ''}</span></span>
-        <button type="button" class="btn-text" onClick=${() => setSheet({ kind: 'agreement' })}>לשנות</button>
+  return html`<div class="together">
+    <aside class="stack together-side">
+      <div class="card agreement">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <span class="stack" style="gap:4px"><b style="font-size:16px">ההסכם שלנו</b>
+            <span class="muted" style="font-size:14px;line-height:1.5">קנייה מעל <b class="num">${money(dec.threshold)}</b> מחליטים ביחד.${dec.allowance ? html` כל אחד מוציא עד <b class="num">${money(dec.allowance)}</b> בחודש בלי לשאול.` : ''}</span></span>
+          <button type="button" class="btn-text" onClick=${() => setSheet({ kind: 'agreement' })}>לשנות</button>
+        </div>
       </div>
+      <button type="button" class="btn" onClick=${() => setSheet({ kind: 'new' })}>+ אני רוצה לקנות משהו</button>
+      ${partners.length === 0 && html`<div class="card stack"><b>מחליטים ביחד עובד כששניכם באפליקציה</b>
+        <span class="muted" style="font-size:14px">הזמינו את בן/בת הזוג, ואז כל כרטיס יגיע אליהם לאישור עם התראה.</span>
+        <${InviteButton} hid=${data.hid} userId=${userId} /></div>`}
+    </aside>
+    <div class="stack together-main">
+      ${section('מחכה לתשובה שלך', g.mine)}
+      ${section('נדבר על זה', g.talk, 'לרבע השעה הזוגית של השבוע')}
+      ${section('מחכה לתשובה', g.waiting)}
+      ${section('אושר, עוד לא נקנה', g.approved)}
+      ${dec.decisions.length === 0 && html`<div class="card empty"><b style="color:var(--text)">עוד אין כרטיסים</b>
+        <span>רוצים לקנות משהו מעל ${money(dec.threshold)}? פתחו כרטיס, ובן/בת הזוג יקבלו אותו לאישור.</span></div>`}
+      ${g.history.length > 0 && html`<details class="history"><summary>היסטוריה (${g.history.length})</summary><div class="stack" style="gap:10px;margin-top:10px">${g.history.map(card)}</div></details>`}
     </div>
-    <button type="button" class="btn" onClick=${() => setSheet({ kind: 'new' })}>+ אני רוצה לקנות משהו</button>
-    ${partners.length === 0 && html`<div class="card stack"><b>מחליטים ביחד עובד כששניכם באפליקציה</b>
-      <span class="muted" style="font-size:14px">הזמינו את בן/בת הזוג, ואז כל כרטיס יגיע אליהם לאישור עם התראה.</span>
-      <${InviteButton} hid=${data.hid} userId=${userId} /></div>`}
-    ${section('מחכה לתשובה שלך', g.mine)}
-    ${section('נדבר על זה', g.talk, 'לרבע השעה הזוגית של השבוע')}
-    ${section('מחכה לתשובה', g.waiting)}
-    ${section('אושר, עוד לא נקנה', g.approved)}
-    ${dec.decisions.length === 0 && html`<div class="card empty"><b style="color:var(--text)">עוד אין כרטיסים</b>
-      <span>רוצים לקנות משהו מעל ${money(dec.threshold)}? פתחו כרטיס, ובן/בת הזוג יקבלו אותו לאישור.</span></div>`}
-    ${g.history.length > 0 && html`<details class="history"><summary>היסטוריה (${g.history.length})</summary><div class="stack" style="gap:10px;margin-top:10px">${g.history.map(card)}</div></details>`}
 
     ${sheet && sheet.kind === 'new' && html`<${NewDecisionSheet} data=${data} threshold=${dec.threshold} userId=${userId} onClose=${close} />`}
     ${sheet && sheet.kind === 'answer' && html`<${AnswerSheet} decision=${sheet.decision} votes=${dec.votes} userId=${userId} memberIds=${memberIds} nameOf=${nameOf} onClose=${close} />`}

@@ -1,7 +1,6 @@
 import { html } from '../../lib/html.js';
 import { useState } from 'preact/hooks';
 import { sb } from '../../lib/supabase.js';
-import { Icon } from '../../components/Icon.js';
 
 // After the link in a password-reset email: choose a new password.
 export function NewPassword({ onDone }) {
@@ -19,7 +18,7 @@ export function NewPassword({ onDone }) {
     onDone();
   };
   return html`<main class="login">
-    <div class="brand-login"><span class="brand-mark"><${Icon} name="spark" size=${20} stroke=${2.2} /></span><b class="display" style="font-size:22px">התקציב שלנו</b></div>
+    <div class="brand-login"><img class="brand-mark" src="/icon.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
     <h1 class="display" style="font-size:30px;margin:0">סיסמה חדשה</h1>
     <form class="stack" onSubmit=${save} noValidate>
       <label class="field"><span>סיסמה חדשה (8 תווים לפחות)</span>
