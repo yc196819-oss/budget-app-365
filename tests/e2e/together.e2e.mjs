@@ -165,3 +165,20 @@ test('the profile has a notifications switch for this device', async () => {
   assert.match(await page.locator('.sheet').textContent(), /התראות(כבויות|פועלות|נחסמו|הדפדפן הזה)/);
   await page.close();
 });
+
+test('mobile bar: the "+" stays in the exact middle, all five tabs on one row', async () => {
+  const { page } = await open({ hash: '#/home' });
+  await page.waitForSelector('.hero');
+  const add = await page.locator('.nav-add').boundingBox();
+  const vw = page.viewportSize().width;
+  assert.ok(Math.abs(add.x + add.width / 2 - vw / 2) <= 2, 'plus centered: ' + (add.x + add.width / 2));
+  const items = await page.locator('.bottom-nav .nav-item').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { y: Math.round(r.top), w: r.width, href: e.getAttribute('href') }; }));
+  assert.equal(items.length, 5);
+  assert.equal(new Set(items.map((i) => i.y)).size, 1, 'one row');
+  assert.ok(items.every((i) => i.w >= 44), 'each tab is tappable');
+  // RTL: home and money on the right of the plus, together/plans/assets on the left.
+  const xs = await page.locator('.bottom-nav .nav-item').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().x));
+  assert.ok(xs[0] > add.x && xs[1] > add.x && xs[2] < add.x && xs[4] < add.x);
+  assert.deepEqual(items.map((i) => i.href), ['#/home', '#/money', '#/together', '#/plans', '#/assets']);
+  await page.close();
+});
