@@ -159,3 +159,48 @@ export function forAdvisor(decisions, votes, memberIds) {
     title: d.title, amount: Number(d.amount) || 0, wantedBy: d.wanted_by || null, status: outcome(d, votes, memberIds)
   }));
 }
+
+// The advisor joins the couple's conversation on one card: the question it
+// is asked, with the purchase, why it is wanted, each partner's answer and
+// what it does to the numbers. It is asked to weigh both sides, not to take
+// one, and to end with a clear recommendation.
+export function advisorQuestion(d, votes, memberIds, nameOf, fx, today = new Date(), hasThread = false) {
+  const lines = [
+    `בני הזוג מתלבטים יחד על קנייה ומבקשים שתצטרף לשיחה ותגיד את דעתך לפי הנתונים.`,
+    `${nameOf(d.created_by)} רוצה לקנות: ${d.title}, ב-${money(d.amount)}, ${wantedLabel(d.wanted_by, today)}.`,
+    d.note ? `למה זה חשוב לו/לה: ${d.note}` : null
+  ];
+  for (const id of answerers(d, memberIds)) {
+    const v = votesFor(d, votes).find((x) => x.user_id === id);
+    lines.push(v ? `${nameOf(id)} ענה/תה: ${VOTES[v.vote].label}${v.note ? ' — ' + v.note : ''}` : `${nameOf(id)} עוד לא ענה/תה.`);
+  }
+  if (fx) {
+    if (fx.roomBefore !== null) lines.push(`בתקציב החודש: ${roomText(fx.roomBefore)} לפני הקנייה, ${roomText(fx.roomAfter)} אחריה.`);
+    if (fx.hasBalance) lines.push(`בחשבון בסוף ${fx.month}: ${signedMoney(fx.endBefore)} בלי הקנייה, ${signedMoney(fx.endAfter)} איתה.${fx.turnsNegative ? ' הקנייה מכניסה את החשבון למינוס.' : ''}`);
+  }
+  if (hasThread) lines.push('בני הזוג כבר מדברים על זה (השיחה מופיעה למעלה). התייחס למה שנאמר, ובעיקר להודעה האחרונה, בלי לחזור על מה שכבר אמרת.');
+  lines.push('תן דעה מאוזנת ב-3 עד 5 משפטים, על סמך המספרים בנתונים (תקציב, תחזית, יעדים, החלטות קודמות). הצג את השיקולים של שני הצדדים ואל תיקח צד. סיים בשורה שמתחילה ב"ההמלצה שלי:" — לקנות עכשיו, לחכות (ועד מתי), או לקנות בתנאי (איזה).');
+  return lines.filter(Boolean).join('\n');
+}
+
+// ── the conversation on a card: the partners and the advisor ──
+//   message { id, decision_id, role: 'user'|'ai', author_id, text, created_at }
+
+export function threadFor(d, messages) {
+  return messages.filter((m) => m.decision_id === d.id).sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+}
+
+// Messages I have not seen: written by someone else, or the advisor's answer
+// to someone else, after I last opened the conversation.
+export function unreadCount(d, messages, me, seenAt) {
+  return threadFor(d, messages).filter((m) => m.author_id !== me && (!seenAt || m.created_at > seenAt)).length;
+}
+
+export function unreadTotal(decisions, messages, me, seenOf) {
+  return decisions.filter((d) => !isClosed(d) && unreadCount(d, messages, me, seenOf(d.id)) > 0).length;
+}
+
+// The conversation as the advisor gets it (the last 20 messages, with names).
+export function threadHistory(thread, nameOf) {
+  return thread.slice(-20).map((m) => (m.role === 'ai' ? { role: 'ai', text: m.text } : { role: 'user', text: m.text, author: nameOf(m.author_id) }));
+}

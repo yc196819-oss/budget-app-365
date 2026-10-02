@@ -297,4 +297,27 @@ textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: 
 .review-actions { position: sticky; bottom: -26px; background: var(--bg); padding: 12px 0 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; z-index: 1; }
 .review-actions .btn { flex: 1; white-space: nowrap; }
 .review-actions .btn:first-child { flex: 2; }
-.listen-card { display: flex; align-items: center; gap: 10px; font-size: 14px; line-height: 1.5; border: 1px solid var(--danger); }
+.listen-card { display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.6; border: 1px solid var(--danger); }
+.listen-head { display: flex; align-items: center; gap: 10px; }
+.listen-stop { margin-inline-start: auto; flex: none; height: 38px; padding: 0 14px; background: var(--danger); color: #fff; }
+.live-transcript { max-height: 40vh; min-height: 3.2em; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+.live-transcript .interim { color: var(--faint); }
+
+/* ── the conversation on a shared decision ── */
+.dchat { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.dchat-toggle { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: var(--text); font-weight: 800; font-size: 14px; padding: 4px 0; text-align: right; }
+.dchat-toggle > span:first-child { flex: 1; }
+.dchat-body { display: flex; flex-direction: column; gap: 8px; }
+.dchat-log { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; padding: 2px; }
+.dmsg { max-width: 85%; padding: 8px 12px; border-radius: 16px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+.dmsg small { font-size: 11px; font-weight: 800; color: var(--muted); }
+.dmsg.me { align-self: flex-start; background: var(--accent); color: var(--accent-ink); border-end-start-radius: 6px; }
+.dmsg.me small { color: inherit; opacity: .75; }
+.dmsg.partner { align-self: flex-end; background: var(--surface-2); border-end-end-radius: 6px; }
+.dmsg.ai { align-self: stretch; max-width: none; background: var(--accent-tint); border: 1px solid var(--line); }
+.dchat-compose { display: flex; gap: 8px; }
+.dchat-compose .input { flex: 1; min-width: 0; }
+.advisor-ask { align-self: flex-start; color: var(--accent); font-weight: 800; }
+.dmsg-x { align-self: flex-end; border: 0; background: transparent; color: inherit; opacity: .6; font-size: 11px; font-weight: 700; padding: 0; }
+.dmsg-del { display: flex; gap: 12px; align-self: flex-end; }
+.dmsg.me .btn-text { color: inherit; font-size: 12px; }

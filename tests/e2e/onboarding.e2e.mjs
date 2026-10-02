@@ -191,3 +191,31 @@ test('a password-reset link asks for a new password', async () => {
   assert.equal(updates[0].password, 'new-password-1');
   await page.close();
 });
+
+test('sign in with Google: the button is there, and Google returns to the main address', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await mockSupabase(page, newUserDb());
+  await page.goto(server.base + '/app/');
+  await page.waitForSelector('.login');
+  assert.match(await page.locator('.btn-google').textContent(), /כניסה עם Google/);
+  await page.click('.seg button:has-text("הרשמה")');
+  assert.match(await page.locator('.btn-google').textContent(), /הרשמה עם Google/);
+  const req = page.waitForRequest((r) => r.url().includes('/auth/v1/authorize'));
+  await page.click('.btn-google');
+  const url = new URL((await req).url());
+  assert.equal(url.searchParams.get('provider'), 'google');
+  assert.equal(url.searchParams.get('redirect_to'), server.base + '/');
+  assert.equal(url.searchParams.get('prompt'), 'select_account');
+  await page.close();
+});
+
+test('coming back from Google to the main address keeps the sign-in in the URL on the way to /app/', async () => {
+  const page = await browser.newPage();
+  await page.route('**/*.supabase.co/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  const res = [];
+  page.on('response', (r) => { if (r.url().startsWith(server.base)) res.push([r.status(), r.url()]); });
+  await page.goto(server.base + '/?code=abc#state=1', { waitUntil: 'commit' });
+  assert.deepEqual(res[0], [302, server.base + '/?code=abc']);
+  assert.match(page.url(), /\/app\/\?code=abc#state=1$/);
+  await page.close();
+});

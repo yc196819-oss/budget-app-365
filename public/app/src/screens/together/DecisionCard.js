@@ -2,6 +2,7 @@ import { html } from '../../lib/html.js';
 import { money, shortDate } from '../../domain/format.js';
 import { VOTES, STATUS, roomText, signedMoney, outcome, votesFor, answerers, needsMyAnswer, isClosed, impact, findPurchase, wantedLabel } from '../../domain/decisions.js';
 import { close } from '../../data/decisions.js';
+import { DecisionChat } from './DecisionChat.js';
 import { showToast } from '../../lib/toast.js';
 
 // One purchase: who wants it, why, what it does to the money, and each
@@ -43,6 +44,7 @@ export function DecisionCard({ d, data, dec, userId, memberIds, nameOf, onAnswer
         </div>`;
       })}
     </div>
+    <${DecisionChat} d=${d} dec=${dec} data=${data} userId=${userId} memberIds=${memberIds} nameOf=${nameOf} />
     ${bought && html`<div class="decision-match"><span>נראה שזה נקנה: ${bought.description} · ${shortDate(bought.tx_date)} · <span class="num">${money(bought.amount)}</span></span>
       <button type="button" class="btn-text" onClick=${() => finish('bought', bought.id)}>כן, לסגור</button></div>`}
     ${!isClosed(d) && html`<div class="decision-actions">

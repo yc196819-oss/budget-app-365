@@ -6,8 +6,9 @@ const LABEL = { approve: 'מאשר/ת', not_now: 'לא עכשיו', talk: 'בו�
 const money = (n) => '₪' + Math.round(Number(n) || 0).toLocaleString('en-US');
 const URL = '/app/#/together';
 
-// event: opened | answered | bought | withdrawn. Returns [{ to, title, body, url }].
-function messagesFor(event, { decision, actorId, members, vote }) {
+// event: opened | answered | message | advisor | bought | withdrawn.
+// message: the newest conversation message, for 'message' and 'advisor'. Returns [{ to, title, body, url }].
+function messagesFor(event, { decision, actorId, members, vote, message }) {
   const name = (id) => (members.find((m) => m.user_id === id) || {}).display_name || 'בן/בת הזוג';
   const others = members.map((m) => m.user_id).filter((id) => id !== actorId);
   const d = decision;
@@ -21,6 +22,10 @@ function messagesFor(event, { decision, actorId, members, vote }) {
     }
     case 'bought':
       return others.map((to) => ({ to, title: `🛍️ ${d.title} נקנה`, body: money(d.amount), url: URL }));
+    case 'message':
+      return message ? others.map((to) => ({ to, title: `💬 ${name(actorId)} על ${d.title}`, body: String(message.text).slice(0, 140), url: URL })) : [];
+    case 'advisor':
+      return message ? others.map((to) => ({ to, title: `🤖 היועץ הצטרף לשיחה על: ${d.title}`, body: String(message.text).slice(0, 140), url: URL })) : [];
     case 'withdrawn':
       return others.map((to) => ({ to, title: `↩️ ${name(actorId)} ביטל/ה את הבקשה: ${d.title}`, body: '', url: URL }));
     default:

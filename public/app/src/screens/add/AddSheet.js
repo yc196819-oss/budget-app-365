@@ -30,7 +30,18 @@ export function AddSheet({ data, onClose, onImport }) {
   const [review, setReview] = useState(null);
   const inputRef = useRef(null);
   const stopRef = useRef(null);
-  const spoken = useRef('');
+  const liveRef = useRef(null);
+  // The recording: earlier sessions (phones stop listening after a pause and
+  // we start again), the current session's final words, what is still being
+  // recognized, and whether the person pressed stop.
+  const earlier = useRef('');
+  const [sessionText, setSessionText] = useState('');
+  const session = useRef('');
+  const stopAsked = useRef(false);
+  const failed = useRef(false);
+  const restarts = useRef(0);
+  const transcript = (earlier.current + ' ' + sessionText).trim();
+  useEffect(() => { if (liveRef.current) liveRef.current.scrollTop = liveRef.current.scrollHeight; }, [sessionText, heard]);
   useEffect(() => { inputRef.current && inputRef.current.focus(); return () => stopRef.current && stopRef.current(); }, []);
 
   const byId = new Map(data.categories.map((c) => [c.id, c]));
@@ -59,21 +70,40 @@ export function AddSheet({ data, onClose, onImport }) {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   };
 
+  const startSession = () => {
+    session.current = ''; setSessionText(''); setHeard('');
+    stopRef.current = listen({
+      continuous: true,
+      onInterim: setHeard,
+      onText: (t) => { session.current = t; setSessionText(t); },
+      onEnd: () => {
+        stopRef.current = null;
+        earlier.current = (earlier.current + ' ' + session.current).trim();
+        session.current = ''; setSessionText(''); setHeard('');
+        // The phone stopped by itself after a pause: keep listening until ⏹.
+        if (!stopAsked.current && !failed.current && restarts.current < 30) {
+          restarts.current += 1;
+          try { startSession(); return; } catch (_err) { /* fall through and finish */ }
+        }
+        setListening(false);
+        const said = earlier.current.trim();
+        earlier.current = '';
+        if (said) openReview(said);
+      },
+      onError: (e) => {
+        if (e === 'no-speech' && !stopAsked.current) return; // a pause: onEnd restarts
+        failed.current = true;
+        setVoiceError(e === 'not-allowed' || e === 'service-not-allowed' ? 'צריך לאשר גישה למיקרופון בהגדרות הדפדפן.' : e === 'no-speech' ? 'לא שמעתי. לחצו ונסו שוב.' : 'לא הצלחתי לשמוע. נסו שוב או כתבו בתיבה.');
+      }
+    });
+  };
+
   const mic = () => {
-    if (listening) { stopRef.current && stopRef.current(); return; }
-    setVoiceError(''); setHeard(''); spoken.current = '';
+    if (listening) { stopAsked.current = true; stopRef.current && stopRef.current(); return; }
+    setVoiceError(''); earlier.current = ''; stopAsked.current = false; failed.current = false; restarts.current = 0;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     try {
-      stopRef.current = listen({
-        continuous: true,
-        onInterim: setHeard,
-        onText: (t) => { spoken.current = (spoken.current + ' ' + t).trim(); setHeard(''); },
-        onEnd: () => {
-          setListening(false); stopRef.current = null; setHeard('');
-          const said = spoken.current.trim();
-          if (said) openReview(said);
-        },
-        onError: (e) => { setVoiceError(e === 'not-allowed' || e === 'service-not-allowed' ? 'צריך לאשר גישה למיקרופון בהגדרות הדפדפן.' : e === 'no-speech' ? 'לא שמעתי. לחצו ונסו שוב.' : 'לא הצלחתי לשמוע. נסו שוב או כתבו בתיבה.'); }
-      });
+      startSession();
       setListening(true);
     } catch (_err) {
       setVoiceError('לא הצלחתי להפעיל את המיקרופון. אפשר להכתיב עם המיקרופון שבמקלדת.');
@@ -101,13 +131,13 @@ export function AddSheet({ data, onClose, onImport }) {
   };
 
   if (review) {
-    return html`<${Sheet} title="בדיקה לפני הוספה" onClose=${onClose}>
+    return html`<${Sheet} title="בדיקה לפני הוספה" onClose=${onClose} full=${true}>
       <${VoiceReview} items=${review.items} unclear=${review.unclear} categories=${data.categories} busy=${busy}
         onChange=${(items) => setReview({ ...review, items })}
         onSave=${() => saveAll(review.items.map((it) => reviewToTx(it, data.categories)))}
         onCancel=${() => { setReview(null); setVoiceError(''); }}
         onMore=${canListen() ? mic : null} />
-      ${listening && html`<span class="hint" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> מקשיב… ${heard} <button type="button" class="btn-text" onClick=${mic}>לסיים</button></span>`}
+      ${listening && html`<${LiveTranscript} text=${transcript} interim=${heard} liveRef=${liveRef} onStop=${mic} />`}
     <//>`;
   }
 
@@ -115,13 +145,12 @@ export function AddSheet({ data, onClose, onImport }) {
     <${Segmented} label="סוג" value=${kind} onChange=${(k) => { setType(k); setChosen(true); }} options=${[{ key: 'expense', label: 'הוצאה' }, { key: 'income', label: 'הכנסה' }]} />
     <label class="field"><span>סכום ומה ${kind === 'income' ? 'נכנס' : 'קניתם'}, בכל סדר${canListen() ? ', או בקול' : ''}</span>
       <span class="add-input">
-        <input ref=${inputRef} class="input" value=${listening && heard ? (spoken.current + ' ' + heard).trim() : listening ? spoken.current : text} onInput=${(e) => setText(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') fromText(); }}
-          placeholder=${listening ? 'מקשיב…' : kind === 'income' ? 'למשל: 500 החזר מביטוח לאומי' : 'למשל: 46 קפה בארומה'} enterkeyhint="done" readOnly=${listening} />
+        <input ref=${inputRef} class="input" value=${text} onInput=${(e) => setText(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') fromText(); }}
+          placeholder=${kind === 'income' ? 'למשל: 500 החזר מביטוח לאומי' : 'למשל: 46 קפה בארומה'} enterkeyhint="done" disabled=${listening} />
         ${canListen() && html`<button type="button" class=${'icon-btn add-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'לסיים הקלטה' : 'להוסיף בקול'} aria-pressed=${String(listening)} onClick=${mic}>${listening ? '⏹' : '🎙️'}</button>`}
       </span>
     </label>
-    ${listening && html`<div class="card listen-card" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span>מקשיב… אפשר לומר כמה תנועות ברצף, למשל: "80 בסופר, 46 קפה, וקיבלתי משכורת 21 אלף". בסיום לחצו ⏹.</span></div>`}
+    ${listening && html`<${LiveTranscript} text=${transcript} interim=${heard} liveRef=${liveRef} onStop=${mic} />`}
     ${voiceError && html`<span class="hint" role="alert" style="color:var(--danger)">${voiceError}</span>`}
     ${!canListen() && html`<span class="hint">להוספה בקול: לחצו על המיקרופון שבמקלדת של הטלפון ודברו. אפשר כמה תנועות ברצף.</span>`}
     ${!listening && split.items.length > 1 && html`<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
@@ -144,4 +173,16 @@ export function AddSheet({ data, onClose, onImport }) {
     ${onImport && html`<button type="button" class="btn-text" style="color:var(--accent);display:flex;align-items:center;justify-content:center;gap:6px" onClick=${onImport}>
       <${Icon} name="upload" size=${17} />או: העלאת פירוט חודשי של כרטיס</button>`}
   <//>`;
+}
+
+// Everything heard so far, all of it (not one line), the words still being
+// recognized in a lighter shade, and a clear stop button.
+function LiveTranscript({ text, interim, liveRef, onStop }) {
+  return html`<div class="card listen-card" role="status" aria-live="polite">
+    <div class="listen-head"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><b>מקשיב…</b>
+      <button type="button" class="btn listen-stop" onClick=${onStop}>⏹ סיימתי</button></div>
+    <div class="live-transcript" ref=${liveRef}>
+      ${text || interim ? html`${text}${interim ? html` <span class="interim">${interim}</span>` : ''}` : html`<span class="faint">אפשר לומר כמה תנועות ברצף, למשל: "80 בסופר, 46 קפה, וקיבלתי משכורת 21 אלף". בסיום לחצו "סיימתי".</span>`}
+    </div>
+  </div>`;
 }

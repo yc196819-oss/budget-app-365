@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { roomText, signedMoney, outcome, waitingOn, needsMyAnswer, voteValid, needsCard, groups, pendingCount, monthIndex, impact, findPurchase, wantedLabel, endOfMonth, forAdvisor } from '../public/app/src/domain/decisions.js';
+import { advisorQuestion, threadFor, unreadCount, unreadTotal, threadHistory, roomText, signedMoney, outcome, waitingOn, needsMyAnswer, voteValid, needsCard, groups, pendingCount, monthIndex, impact, findPurchase, wantedLabel, endOfMonth, forAdvisor } from '../public/app/src/domain/decisions.js';
 
 const members = ['u1', 'u2'];
 const d = (o = {}) => ({ id: 'd1', created_by: 'u2', title: 'מכונת כביסה', amount: 2400, status: 'open', created_at: '2026-10-01T10:00:00Z', ...o });
@@ -106,4 +106,37 @@ test('the month\'s room reads as left or exceeded, with a sign on balances', () 
   assert.equal(roomText(-4006), 'חריגה של ₪4,006');
   assert.equal(signedMoney(-5343), '−₪5,343');
   assert.equal(signedMoney(7743), '₪7,743');
+});
+
+test('the advisor is asked with the purchase, the reasons, both answers and the numbers', () => {
+  const nameOf = (id) => ({ u1: 'יוסי', u2: 'דני' }[id]);
+  const fx = { roomBefore: 1200, roomAfter: -1200, hasBalance: true, month: 'אוקטובר', endBefore: 3000, endAfter: 600, turnsNegative: false };
+  const q = advisorQuestion(d({ note: 'הישנה נשברה' }), [v('not_now', 'u1', 'd1', 'אחרי החגים')], members, nameOf, fx, new Date(2026, 9, 1));
+  assert.match(q, /דני רוצה לקנות: מכונת כביסה, ב-₪2,400, החודש/);
+  assert.match(q, /למה זה חשוב לו\/לה: הישנה נשברה/);
+  assert.match(q, /יוסי ענה\/תה: לא עכשיו — אחרי החגים/);
+  assert.match(q, /נשארים ₪1,200 לפני הקנייה, חריגה של ₪1,200 אחריה/);
+  assert.match(q, /₪3,000 בלי הקנייה, ₪600 איתה/);
+  assert.match(q, /אל תיקח צד/);
+  assert.match(q, /ההמלצה שלי:/);
+  assert.match(advisorQuestion(d(), [], members, nameOf, null), /יוסי עוד לא ענה\/תה/);
+});
+
+test('the conversation on a card: order, unread, and what the advisor gets', () => {
+  const msgs = [
+    { id: 'm2', decision_id: 'd1', role: 'user', author_id: 'u2', text: 'נו?', created_at: '2026-10-01T10:05:00Z' },
+    { id: 'm1', decision_id: 'd1', role: 'user', author_id: 'u1', text: 'אולי נחכה?', created_at: '2026-10-01T10:00:00Z' },
+    { id: 'm3', decision_id: 'd1', role: 'ai', author_id: 'u2', text: 'ההמלצה שלי: לחכות.', created_at: '2026-10-01T10:06:00Z' },
+    { id: 'x', decision_id: 'other', role: 'user', author_id: 'u2', text: 'x', created_at: '2026-10-01T09:00:00Z' }
+  ];
+  assert.deepEqual(threadFor(d(), msgs).map((m) => m.id), ['m1', 'm2', 'm3']);
+  assert.equal(unreadCount(d(), msgs, 'u1', ''), 2, 'the partner\'s message and the advisor answer they asked for');
+  assert.equal(unreadCount(d(), msgs, 'u1', '2026-10-01T10:05:00Z'), 1);
+  assert.equal(unreadCount(d(), msgs, 'u2', ''), 1, 'my own and the advisor answer I asked for are read');
+  assert.equal(unreadTotal([d(), d({ id: 'other' }), d({ id: 'z', status: 'bought' })], msgs, 'u1', () => ''), 2);
+  const nameOf = (id) => ({ u1: 'יוסי', u2: 'דני' }[id]);
+  assert.deepEqual(threadHistory(threadFor(d(), msgs), nameOf), [
+    { role: 'user', text: 'אולי נחכה?', author: 'יוסי' }, { role: 'user', text: 'נו?', author: 'דני' }, { role: 'ai', text: 'ההמלצה שלי: לחכות.' }
+  ]);
+  assert.match(advisorQuestion(d(), [], members, nameOf, null, new Date(), true), /התייחס למה שנאמר, ובעיקר להודעה האחרונה/);
 });

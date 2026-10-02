@@ -71,3 +71,11 @@ test('review cards: category guessed per kind, dates from the words, and back to
   assert.equal(reviewValid({ ...cards[0], amount: 0 }), false);
   assert.equal(reviewValid({ ...cards[0], description: ' ' }), false);
 });
+
+test('a recording is joined once, even when the phone re-sends earlier words', async () => {
+  const { mergeFinals } = await import('../public/app/src/domain/voice.js');
+  assert.equal(mergeFinals(['80 בסופר', '46 קפה']), '80 בסופר 46 קפה');
+  assert.equal(mergeFinals(['80 בסופר', '80 בסופר ו-46 קפה', '80 בסופר ו-46 קפה ו-200 דלק']), '80 בסופר ו-46 קפה ו-200 דלק');
+  assert.equal(mergeFinals(['80 בסופר ו-46 קפה', '80 בסופר']), '80 בסופר ו-46 קפה');
+  assert.equal(mergeFinals(['', ' 30 חניה ']), '30 חניה');
+});

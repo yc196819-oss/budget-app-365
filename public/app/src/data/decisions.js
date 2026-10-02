@@ -1,13 +1,16 @@
 import { sb } from '../lib/supabase.js';
 import { CONFIG } from '../config.js';
-import { outcome } from '../domain/decisions.js';
+import { outcome, advisorQuestion, impact, forAdvisor, threadFor, threadHistory } from '../domain/decisions.js';
+import { readLocal, writeLocal } from '../lib/storage.js';
+import { buildSummary, parseReply } from '../domain/advisor.js';
+import { streamReply, loadMemories } from './advisor.js';
 import { saveGoal, deleteGoal } from './household.js';
 
 // Shared decisions and the partners' answers, loaded per household and
 // shared by the tab badge and the screen. Refreshed when the app comes back
 // to the foreground, so an answer given on the other phone shows up.
 
-const state = { hid: null, status: 'idle', decisions: [], votes: [], threshold: 500, allowance: null, missing: false };
+const state = { hid: null, status: 'idle', decisions: [], votes: [], messages: [], threshold: 500, allowance: null, missing: false };
 const listeners = new Set();
 const emit = () => listeners.forEach((fn) => fn());
 
@@ -16,12 +19,13 @@ export function snapshot() { return { ...state }; }
 
 export async function load(hid) {
   if (!hid) return;
-  if (state.hid !== hid) Object.assign(state, { hid, status: 'loading', decisions: [], votes: [] });
+  if (state.hid !== hid) Object.assign(state, { hid, status: 'loading', decisions: [], votes: [], messages: [] });
   emit();
-  const [d, v, h] = await Promise.all([
+  const [d, v, h, msgs] = await Promise.all([
     sb.from('shared_decisions').select('*').eq('household_id', hid).order('created_at', { ascending: false }).limit(100),
     sb.from('decision_votes').select('*').eq('household_id', hid),
-    sb.from('households').select('decision_threshold,personal_allowance').eq('id', hid).maybeSingle()
+    sb.from('households').select('decision_threshold,personal_allowance').eq('id', hid).maybeSingle(),
+    sb.from('decision_messages').select('*').eq('household_id', hid).order('created_at', { ascending: false }).limit(500)
   ]);
   if (state.hid !== hid) return;
   if (d.error) {
@@ -33,6 +37,8 @@ export async function load(hid) {
       missing: false,
       decisions: d.data || [],
       votes: v.error ? [] : v.data || [],
+      // The conversations come with supabase_shared_decisions.sql; without them the cards still work.
+      messages: msgs.error ? [] : msgs.data || [],
       threshold: h.data && h.data.decision_threshold != null ? Number(h.data.decision_threshold) : 500,
       allowance: h.data && h.data.personal_allowance != null ? Number(h.data.personal_allowance) : null
     });
@@ -113,4 +119,60 @@ export async function saveAgreement(hid, { threshold, allowance }) {
   if (error) throw error;
   Object.assign(state, { threshold: patch.decision_threshold, allowance: patch.personal_allowance });
   emit();
+}
+
+// ── the conversation on a card ──
+
+// When I last opened each card's conversation (this device).
+const seenKey = (id) => 'seen:decision:' + id;
+export function seenAt(decisionId) { return readLocal(seenKey(decisionId), ''); }
+export function markSeen(decisionId) {
+  const last = threadFor({ id: decisionId }, state.messages).at(-1);
+  const at = last ? last.created_at : new Date().toISOString();
+  if (seenAt(decisionId) >= at) return;
+  writeLocal(seenKey(decisionId), at);
+  emit();
+}
+
+async function addMessage(row) {
+  const { data, error } = await sb.from('decision_messages').insert({ ...row, household_id: state.hid, text: String(row.text).trim().slice(0, 4000) }).select().single();
+  if (error) throw error;
+  state.messages = [...state.messages, data];
+  markSeen(row.decision_id);
+  emit();
+  return data;
+}
+
+// My own message only (the database allows nothing else).
+export async function deleteMessage(id) {
+  const { error } = await sb.from('decision_messages').delete().eq('id', id).eq('household_id', state.hid);
+  if (error) throw error;
+  state.messages = state.messages.filter((m) => m.id !== id);
+  emit();
+}
+
+export async function sendMessage({ decision, userId, text }) {
+  const msg = await addMessage({ decision_id: decision.id, role: 'user', author_id: userId, text });
+  notify(decision.id, 'message');
+  return msg;
+}
+
+// The advisor joins the conversation: it sees the card, both answers, the
+// conversation so far and the household's current numbers, and answers in
+// the thread for both partners (who are notified). Streams into onDelta.
+export async function askAdvisor({ decision, data, userId, memberIds, onDelta, signal }) {
+  const names = data.members || {};
+  const realName = (id) => names[id] || 'בן/בת הזוג';
+  const thread = threadFor(decision, state.messages);
+  const fx = impact(decision, data, new Date());
+  const memories = await loadMemories(state.hid).catch(() => []);
+  const summary = buildSummary({ ...data, userId, userName: realName(userId), memories, screen: 'together', sharedDecisions: forAdvisor(state.decisions, state.votes, memberIds) });
+  let raw = '';
+  const message = advisorQuestion(decision, state.votes, memberIds, realName, fx, new Date(), thread.length > 0);
+  await streamReply({ summary, history: threadHistory(thread, realName), message, authorName: realName(userId) }, (delta) => { raw += delta; onDelta && onDelta(parseReply(raw).text); }, signal);
+  const text = parseReply(raw).text;
+  if (!text) throw new Error('לא התקבלה תשובה מהיועץ. נסו שוב.');
+  const msg = await addMessage({ decision_id: decision.id, role: 'ai', author_id: userId, text });
+  notify(decision.id, 'advisor');
+  return msg;
 }
