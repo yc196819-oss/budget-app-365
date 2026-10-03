@@ -12,6 +12,7 @@ const webpush = require('web-push');
 const { claudeRequest, isRetryable } = require('./server/claude');
 const learn = require('./server/learn');
 const decisionsPush = require('./server/decisions');
+const fx = require('./server/fx');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1343,6 +1344,34 @@ app.get('/api/market/quote', requireAuth, async (req, res) => {
 });
 
 // ═══ stage 2: market quotes for any holdings ═══
+// ═══ exchange rate for a date (adding an expense in dollars, euros, pounds) ═══
+const fxCache = new Map(); // "USD:2026-09-15" -> { rate, date, source }
+app.get('/api/fx/rate', requireAuth, async (req, res) => {
+  const currency = String(req.query.currency || '').toUpperCase();
+  const date = String(req.query.date || '');
+  if (!fx.validRequest(currency, date, israelToday())) return res.status(400).json({ error: 'bad request' });
+  const key = currency + ':' + date;
+  if (fxCache.has(key)) return res.json(fxCache.get(key));
+  let hit = null;
+  try {
+    const r = await fetch(fx.boiUrl(currency, date));
+    if (r.ok) { const b = fx.parseBoiCsv(await r.text(), date); if (b) hit = { ...b, source: 'boi' }; }
+  } catch (_e) { /* next source */ }
+  if (!hit) {
+    try {
+      const r = await fetch(fx.frankfurterUrl(currency, date));
+      if (r.ok) { const f = fx.parseFrankfurter(await r.json()); if (f) hit = { ...f, source: 'ecb' }; }
+    } catch (_e) { /* next */ }
+  }
+  if (!hit && currency === 'USD' && date === israelToday()) {
+    try { const b = await fetchBoiUsd(); hit = { rate: b.rate, date, source: 'boi' }; } catch (_e) { /* none */ }
+  }
+  if (!hit) return res.status(502).json({ error: 'לא הצלחנו להביא שער לתאריך הזה. אפשר להקליד את הסכום בשקלים.' });
+  // Past days do not change; today's rate may still be published later.
+  if (date < israelToday()) fxCache.set(key, hit);
+  return res.json(hit);
+});
+
 app.get('/api/market/quotes', requireAuth, async (req, res) => {
   try {
     const symbols = String(req.query.symbols || '').split(',').map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z0-9.\-=^]{1,15}$/.test(x)).slice(0, 20);

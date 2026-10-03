@@ -79,3 +79,32 @@ test('a recording is joined once, even when the phone re-sends earlier words', a
   assert.equal(mergeFinals(['80 בסופר ו-46 קפה', '80 בסופר']), '80 בסופר ו-46 קפה');
   assert.equal(mergeFinals(['', ' 30 חניה ']), '30 חניה');
 });
+
+test('dollars, euros and pounds are recognized, with the place after the currency', async () => {
+  const { parseSpoken, splitSpoken, detectCurrency } = await import('../public/app/src/domain/voice.js');
+  assert.deepEqual(parseSpoken('$50 אמזון'), { amount: 50, description: 'אמזון', type: 'expense', currency: 'USD' });
+  assert.deepEqual(parseSpoken('קניתי ב-50 דולר באמזון'), { amount: 50, description: 'אמזון', type: 'expense', currency: 'USD' });
+  assert.deepEqual(parseSpoken('נטפליקס 15.99$'), { amount: 15.99, description: 'נטפליקס', type: 'expense', currency: 'USD' });
+  assert.deepEqual(parseSpoken('מלון בפריז 320 יורו'), { amount: 320, description: 'מלון בפריז', type: 'expense', currency: 'EUR' });
+  assert.deepEqual(parseSpoken('£40 מתנה'), { amount: 40, description: 'מתנה', type: 'expense', currency: 'GBP' });
+  assert.deepEqual(parseSpoken('קיבלתי 1,000 דולר מפרילנס'), { amount: 1000, description: 'מפרילנס', type: 'income', currency: 'USD' });
+  assert.deepEqual(parseSpoken('46 קפה בארומה'), { amount: 46, description: 'קפה בארומה', type: 'expense' }, 'shekels stay as before');
+  assert.equal(detectCurrency('80 שקל'), null);
+  const r = splitSpoken('50 דולר באמזון ו-80 שקל בסופר');
+  assert.deepEqual(r.items.map((i) => [i.amount, i.description, i.currency || 'ILS']), [[50, 'אמזון', 'USD'], [80, 'סופר', 'ILS']]);
+});
+
+test('a foreign card is saved in shekels by the rate of its date, the original amount kept', async () => {
+  const { toReviewItems, reviewToTx, reviewValid, inShekels } = await import('../public/app/src/domain/voice.js');
+  const [card] = toReviewItems([{ amount: 50, description: 'אמזון', type: 'expense', currency: 'USD', daysAgo: 0 }], () => null, new Date(2026, 8, 13));
+  assert.equal(card.currency, 'USD');
+  assert.equal(reviewValid(card), false, 'no rate yet');
+  const withRate = { ...card, rate: 3.688, rateDate: '2026-09-11' };
+  assert.equal(reviewValid(withRate), true);
+  assert.equal(inShekels(withRate), 184.4);
+  const tx = reviewToTx(withRate, []);
+  assert.equal(tx.amount, 184.4);
+  assert.equal(tx.description, 'אמזון ($50, שער 3.688)');
+  assert.equal(tx.tx_date, '2026-09-13');
+  assert.equal(inShekels({ amount: 46, currency: 'ILS' }), 46);
+});

@@ -22,6 +22,24 @@ const DAYS = [[/(^|\s)שלשום(?=\s|$)/, 2], [/(^|\s)אתמול(?=\s|$)/, 1], 
 const FILLER = /(^|\s)(שלשום|אתמול|היום|שילמתי|שילמנו|קניתי|קנינו|הוצאתי|הוצאנו|עלה לי|עלה לנו|עלתה לי|קיבלתי|קיבלנו|נכנס לי|נכנס לנו|נכנסו|נכנסה|נכנס|תוסיף|תוסיפי|להוסיף|הוסף|תרשום|תרשמי|לרשום|בערך|בסך הכל|רק)(?=\s|$)/g;
 const CURRENCY = /(שקלים|שקל|ש"ח|ש״ח|שח|₪|nis)/gi;
 
+// Foreign currencies: an amount in dollars, euros or pounds is converted to
+// shekels by the rate of the transaction's date (see reviewToTx).
+export const CURRENCIES = {
+  ILS: { symbol: '₪', label: 'שקל' },
+  USD: { symbol: '$', label: 'דולר' },
+  EUR: { symbol: '€', label: 'יורו' },
+  GBP: { symbol: '£', label: 'פאונד' }
+};
+const FOREIGN = [
+  ['USD', /\$|דולרים|דולר|dollars?|usd/i, /\$|דולרים|דולר|dollars?|usd/gi],
+  ['EUR', /€|יורו|euros?|\beur\b/i, /€|יורו|euros?|\beur\b/gi],
+  ['GBP', /£|פאונד|לירות שטרלינג|שטרלינג|gbp/i, /£|פאונד|לירות שטרלינג|שטרלינג|gbp/gi]
+];
+export function detectCurrency(text) {
+  const hit = FOREIGN.find(([, re]) => re.test(String(text || '')));
+  return hit ? hit[0] : null;
+}
+
 // Hebrew number words → digits, inside the text ("מאה וחמישים" → "150",
 // "21 אלף" → "21000", "אלף וחמש מאות" → "1500").
 export function wordsToNumbers(text) {
@@ -58,6 +76,7 @@ export function parseSpoken(text, { details = false } = {}) {
   const isIncome = INCOME.test(raw);
   const type = isIncome ? 'income' : 'expense';
   const day = DAYS.find(([re]) => re.test(raw));
+  const currency = detectCurrency(raw);
   let s = wordsToNumbers(raw);
   const m = s.match(/(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?/);
   if (!m) return null;
@@ -66,11 +85,13 @@ export function parseSpoken(text, { details = false } = {}) {
   // "46 בורקס" keeps its letters: only a currency word marks a preposition (below).
   s = s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length);
   // "80 שקל בסופר" / "שקל על דלק": the place after the currency loses its preposition.
-  s = s.replace(/(?:שקלים|שקל|ש"ח|ש״ח|שח|₪)\s+(?:על\s+|ב(?=\S{2,})|ל(?=\S{2,}))/g, ' ');
+  s = s.replace(/(?:שקלים|שקל|ש"ח|ש״ח|שח|₪|דולרים|דולר|יורו|פאונד)\s+(?:על\s+|ב(?=\S{2,})|ל(?=\S{2,}))/g, ' ');
+  for (const [, , all] of FOREIGN) s = s.replace(all, ' ');
   const description = s.replace(CURRENCY, ' ').replace(FILLER, ' ').replace(/^\s*(על|ב|ל)\s+/, ' ').replace(/[.,!?]+$/g, '').replace(/\s+/g, ' ').trim();
   if (!description) return null;
-  if (!details) return { amount, description, type };
-  return { amount, description, type, typeSaid: isIncome || EXPENSE.test(raw), daysAgo: day ? day[1] : null };
+  const cur = currency ? { currency } : {};
+  if (!details) return { amount, description, type, ...cur };
+  return { amount, description, type, ...cur, typeSaid: isIncome || EXPENSE.test(raw), daysAgo: day ? day[1] : null };
 }
 
 const AMOUNT = /^(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?$/;
@@ -118,7 +139,7 @@ export function splitSpoken(text) {
     if (!p) { if (/[\u0590-\u05FFa-z]{2,}/i.test(seg) && /\d/.test(seg)) unclear.push(seg); continue; }
     const type = p.typeSaid ? p.type : lastType;
     const daysAgo = p.daysAgo !== null ? p.daysAgo : lastDay;
-    items.push({ amount: p.amount, description: p.description, type, daysAgo });
+    items.push({ amount: p.amount, description: p.description, type, daysAgo, ...(p.currency ? { currency: p.currency } : {}) });
     lastType = type;
     lastDay = daysAgo;
   }
@@ -136,12 +157,20 @@ export function toReviewItems(items, guess, today = new Date()) {
   return items.map((it, i) => {
     const g = guess(it.description, it.type);
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (it.daysAgo || 0));
-    return { key: 'v' + i + '-' + it.amount, type: it.type, amount: it.amount, description: it.description, catId: g ? g.subcategory_id || g.category_id : '', date: iso(d) };
+    return { key: 'v' + i + '-' + it.amount, type: it.type, amount: it.amount, currency: it.currency || 'ILS', rate: null, rateDate: null, description: it.description, catId: g ? g.subcategory_id || g.category_id : '', date: iso(d) };
   });
 }
 
+// A foreign amount needs its rate before it can be saved.
 export function reviewValid(item) {
-  return Number(item.amount) > 0 && String(item.description || '').trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(item.date || '');
+  const foreign = item.currency && item.currency !== 'ILS';
+  return Number(item.amount) > 0 && String(item.description || '').trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(item.date || '') && (!foreign || Number(item.rate) > 0);
+}
+
+// The amount in shekels: as typed, or the foreign amount × the rate.
+export function inShekels(item) {
+  const a = Number(item.amount) || 0;
+  return Math.round((item.currency && item.currency !== 'ILS' ? a * (Number(item.rate) || 0) : a) * 100) / 100;
 }
 
 // A review card → the transaction to save. catId is a category or a
@@ -150,8 +179,9 @@ export function reviewToTx(item, categories) {
   const c = item.catId ? categories.find((x) => x.id === item.catId) : null;
   return {
     type: item.type === 'income' ? 'income' : 'expense',
-    amount: Math.round(Number(item.amount) * 100) / 100,
-    description: String(item.description).trim(),
+    amount: inShekels(item),
+    // The original foreign amount stays visible: "Amazon ($50, שער 3.688)".
+    description: String(item.description).trim() + (item.currency && item.currency !== 'ILS' ? ` (${CURRENCIES[item.currency].symbol}${Number(item.amount)}, שער ${Number(item.rate)})` : ''),
     tx_date: item.date,
     category_id: c ? c.parent_id || c.id : null,
     subcategory_id: c && c.parent_id ? c.id : null

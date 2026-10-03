@@ -204,3 +204,71 @@ test('Android repeats earlier words in each phrase: they are counted once', asyn
   assert.equal(await page.locator('.review-item').count(), 2);
   await page.close();
 });
+
+// ── amounts in dollars / euros, converted by the rate of the date ──
+async function withRates(page, rates, asked) {
+  await page.route('**/api/fx/rate**', (r) => {
+    const u = new URL(r.request().url());
+    const key = u.searchParams.get('currency') + ':' + u.searchParams.get('date');
+    asked.push(key);
+    const hit = rates[key] || rates[u.searchParams.get('currency')];
+    return hit ? r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(hit) })
+      : r.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'לא הצלחנו להביא שער לתאריך הזה. אפשר להקליד את הסכום בשקלים.' }) });
+  });
+}
+const isoDay = (back = 0) => { const d = new Date(); d.setDate(d.getDate() - back); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+test('an amount in dollars is converted to shekels by the rate of its date; changing the date fetches that day\'s rate', async () => {
+  const { page, db } = await openAdd({ speech: false });
+  const asked = [];
+  await withRates(page, { ['USD:' + isoDay(0)]: { rate: 3.7, date: isoDay(0), source: 'boi' }, ['USD:' + isoDay(3)]: { rate: 3.688, date: isoDay(4), source: 'boi' } }, asked);
+  await page.fill('.sheet input.input', '$50 אמזון');
+  assert.match(await page.locator('.sheet .row').textContent(), /\$50/);
+  assert.match(await page.locator('.sheet').textContent(), /יומר לשקלים לפי השער היציג/);
+  await page.press('.sheet input.input', 'Enter');
+  await page.waitForSelector('.fx-line:has-text("₪185")');
+  assert.match(await page.locator('.fx-line').textContent(), /שער יציג 3\.7 ליום/);
+  // Another date: that day's rate (here the last one before it).
+  await page.fill('.review-item input[type="date"]', isoDay(3));
+  await page.waitForSelector('.fx-line:has-text("3.688")');
+  assert.match(await page.locator('.fx-line').textContent(), /₪184\.40 .*השער האחרון לפני התאריך/);
+  assert.deepEqual(asked, ['USD:' + isoDay(0), 'USD:' + isoDay(3)]);
+  await page.click('.review-actions .btn:has-text("להוסיף")');
+  await page.waitForSelector('.toast');
+  const t = added(db);
+  assert.deepEqual([t.amount, t.description, t.tx_date], [184.4, 'אמזון ($50, שער 3.688)', isoDay(3)]);
+  await page.close();
+});
+
+test('the currency can be chosen by hand, also on the card; saying "דולר" works by voice', async () => {
+  const { page, db } = await openAdd();
+  const asked = [];
+  await withRates(page, { EUR: { rate: 4.1, date: isoDay(0), source: 'boi' }, USD: { rate: 3.7, date: isoDay(0), source: 'boi' } }, asked);
+  await page.selectOption('.sheet .cur-select', 'EUR');
+  await page.fill('.sheet input.input', '320 מלון בפריז');
+  await page.press('.sheet input.input', 'Enter');
+  await page.waitForSelector('.fx-line:has-text("₪1,312")');
+  await page.selectOption('.review-item select[aria-label="מטבע"]', 'ILS');
+  await page.waitForFunction(() => !document.querySelector('.fx-line'));
+  await page.click('.review-actions .btn:has-text("ביטול")');
+  // By voice.
+  await page.selectOption('.sheet .cur-select', 'ILS');
+  await say(page, 'קניתי ב-50 דולר באמזון');
+  await page.waitForSelector('.fx-line:has-text("₪185")');
+  await page.click('.review-actions .btn:has-text("להוסיף")');
+  await page.waitForSelector('.toast');
+  assert.equal(added(db).amount, 185);
+  await page.close();
+});
+
+test('no rate for the date: a clear message, and the card cannot be saved until fixed', async () => {
+  const { page } = await openAdd({ speech: false });
+  await withRates(page, {}, []);
+  await page.fill('.sheet input.input', '£40 מתנה');
+  await page.press('.sheet input.input', 'Enter');
+  await page.waitForSelector('.fx-line.err:has-text("אפשר להקליד את הסכום בשקלים")');
+  assert.equal(await page.locator('.review-actions .btn').first().isDisabled(), true);
+  await page.selectOption('.review-item select[aria-label="מטבע"]', 'ILS');
+  assert.equal(await page.locator('.review-actions .btn').first().isDisabled(), false);
+  await page.close();
+});

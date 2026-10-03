@@ -133,3 +133,8 @@ test('the logo and the manifest: installable from the new app, on phone and desk
   assert.match(shell, /<link rel="manifest" href="\/manifest.json">/);
   assert.match(shell, /<link rel="apple-touch-icon" href="\/icon-180.png">/);
 });
+
+test('the exchange-rate endpoint needs a signed-in user', async () => {
+  const res = await fetch(BASE + '/api/fx/rate?currency=USD&date=2026-09-13');
+  assert.ok(res.status === 401 || res.status === 503, String(res.status));
+});

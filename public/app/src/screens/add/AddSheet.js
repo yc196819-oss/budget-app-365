@@ -5,7 +5,7 @@ import { CatIcon } from '../../components/CatIcon.js';
 import { Segmented } from '../../components/Segmented.js';
 import { Icon } from '../../components/Icon.js';
 import { guessCategory, frequentMerchants } from '../../domain/money.js';
-import { parseSpoken, splitSpoken, toReviewItems, reviewToTx } from '../../domain/voice.js';
+import { parseSpoken, splitSpoken, toReviewItems, reviewToTx, CURRENCIES } from '../../domain/voice.js';
 import { money } from '../../domain/format.js';
 import { addTransaction, deleteNow } from '../../data/household.js';
 import { canListen, listen } from '../../lib/speech.js';
@@ -22,6 +22,8 @@ export function AddSheet({ data, onClose, onImport }) {
   const [type, setType] = useState('expense');
   // Once the person taps expense/income themselves, their choice wins.
   const [chosen, setChosen] = useState(false);
+  // The currency typed amounts are in (dollars, euros… are converted by the date's rate).
+  const [currency, setCurrency] = useState('ILS');
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState('');
@@ -59,8 +61,8 @@ export function AddSheet({ data, onClose, onImport }) {
   const openReview = (said) => {
     const s = splitSpoken(said);
     if (!s.items.length) { setVoiceError('שמעתי: "' + said + '". לא מצאתי סכום. אפשר לתקן בתיבה או להקליט שוב.'); setText(said); return; }
-    // A manual choice of type applies to everything heard.
-    const items = chosen ? s.items.map((it) => ({ ...it, type })) : s.items;
+    // A manual choice of type applies to everything heard; so does a chosen currency.
+    const items = s.items.map((it) => ({ ...it, ...(chosen ? { type } : {}), ...(currency !== 'ILS' && !it.currency ? { currency } : {}) }));
     setReview((prev) => {
       const before = prev ? prev.items : [];
       const fresh = toReviewItems(items, guess).map((it, i) => ({ ...it, key: 'v' + (before.length + i) + '-' + Date.now() }));
@@ -126,14 +128,15 @@ export function AddSheet({ data, onClose, onImport }) {
     }
   };
   const fromText = () => {
-    if (split.items.length > 1) { openReview(text); return; }
+    // Several transactions, or a foreign amount (it needs the date's rate): check first.
+    if (split.items.length > 1 || (parsed && (parsed.currency || currency !== 'ILS'))) { openReview(text); return; }
     if (parsed) saveAll([{ type: kind, amount: parsed.amount, description: parsed.description, category_id: g ? g.category_id : null, subcategory_id: g ? g.subcategory_id : null }]);
   };
 
   if (review) {
     return html`<${Sheet} title="בדיקה לפני הוספה" onClose=${onClose} full=${true}>
       <${VoiceReview} items=${review.items} unclear=${review.unclear} categories=${data.categories} busy=${busy}
-        onChange=${(items) => setReview({ ...review, items })}
+        onChange=${(next) => setReview((r) => ({ ...r, items: typeof next === 'function' ? next(r.items) : next }))}
         onSave=${() => saveAll(review.items.map((it) => reviewToTx(it, data.categories)))}
         onCancel=${() => { setReview(null); setVoiceError(''); }}
         onMore=${canListen() ? mic : null} />
@@ -147,6 +150,9 @@ export function AddSheet({ data, onClose, onImport }) {
       <span class="add-input">
         <input ref=${inputRef} class="input" value=${text} onInput=${(e) => setText(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') fromText(); }}
           placeholder=${kind === 'income' ? 'למשל: 500 החזר מביטוח לאומי' : 'למשל: 46 קפה בארומה'} enterkeyhint="done" disabled=${listening} />
+        <select class="input cur-select" value=${currency} aria-label="מטבע" onChange=${(e) => setCurrency(e.target.value)} disabled=${listening}>
+          ${Object.entries(CURRENCIES).map(([code, c]) => html`<option value=${code}>${c.symbol}</option>`)}
+        </select>
         ${canListen() && html`<button type="button" class=${'icon-btn add-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'לסיים הקלטה' : 'להוסיף בקול'} aria-pressed=${String(listening)} onClick=${mic}>${listening ? '⏹' : '🎙️'}</button>`}
       </span>
     </label>
@@ -158,8 +164,9 @@ export function AddSheet({ data, onClose, onImport }) {
     ${!listening && split.items.length <= 1 && parsed && html`<div class="row" style="background:var(--surface);border-radius:var(--radius-m)">
       <${CatIcon} category=${guessTop || guessCat} />
       <span class="row-main"><b>${parsed.description}</b><span>${guessCat ? guessCat.name + ' · כמו בפעם הקודמת' : 'בלי קטגוריה · אפשר לבחור אחר כך'} · היום</span></span>
-      <span class="amt num">${money(parsed.amount)}</span>
+      <span class="amt num">${parsed.currency || currency !== 'ILS' ? CURRENCIES[parsed.currency || currency].symbol + parsed.amount : money(parsed.amount)}</span>
     </div>`}
+    ${!listening && parsed && (parsed.currency || currency !== 'ILS') && html`<span class="hint">יומר לשקלים לפי השער היציג של יום התנועה. בלחיצה על "להוסיף" תראו את הסכום בשקלים ותוכלו לשנות תאריך.</span>`}
     ${split.items.length <= 1 && html`<button type="button" class="btn" disabled=${!parsed || busy || listening} onClick=${fromText}>${busy ? 'מוסיף…' : 'להוסיף'}</button>`}
     ${quick.length > 0 && !listening && html`<div style="display:flex;flex-direction:column;gap:8px">
       <b style="font-size:13px;color:var(--muted)">בלחיצה אחת · מה שאתם קונים הכי הרבה</b>
