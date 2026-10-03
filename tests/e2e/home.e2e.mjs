@@ -134,3 +134,24 @@ test('while the data loads, a skeleton of the screen shows instead of a blank pa
   assert.equal(await page.locator('.loading').count(), 0);
   await page.close();
 });
+
+test('the month number counts up and lands exactly on the amount; with reduced motion it shows at once', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  await mockSupabase(page, makeFakeDb());
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/home');
+  await page.waitForSelector('.hero-num .countup');
+  const final = await page.locator('.hero-num .sr-only').textContent();
+  assert.match(final, /₪\d/);
+  await page.waitForFunction(() => document.querySelector('.hero-num [aria-hidden="true"]').textContent === document.querySelector('.hero-num .sr-only').textContent);
+  await page.close();
+
+  const still = await browser.newPage({ viewport: { width: 390, height: 900 }, reducedMotion: 'reduce' });
+  await mockSupabase(still, makeFakeDb());
+  await signIn(still, server.base);
+  await still.goto(server.base + '/app/#/home');
+  await still.waitForSelector('.hero-num .countup');
+  assert.equal(await still.locator('.hero-num [aria-hidden="true"]').textContent(), await still.locator('.hero-num .sr-only').textContent());
+  assert.equal(await still.evaluate(() => getComputedStyle(document.querySelector('.hero')).animationName), 'none');
+  await still.close();
+});

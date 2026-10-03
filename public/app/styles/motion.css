@@ -1,0 +1,75 @@
+/* Motion: entrances, feedback and small celebrations. Everything here is
+   switched off for people who asked their device for less motion (see the
+   prefers-reduced-motion rule in base.css). */
+
+:root {
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
+  --out: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* A screen slides in when its tab opens; its cards follow one after another. */
+.shell-main > :not(.topbar) { animation: rise .45s var(--out) both; }
+.shell-main > :not(.topbar) > * { animation: rise .5s var(--out) both; }
+.shell-main > :not(.topbar) > :nth-child(2) { animation-delay: .04s; }
+.shell-main > :not(.topbar) > :nth-child(3) { animation-delay: .08s; }
+.shell-main > :not(.topbar) > :nth-child(4) { animation-delay: .12s; }
+.shell-main > :not(.topbar) > :nth-child(5) { animation-delay: .16s; }
+.shell-main > :not(.topbar) > :nth-child(n+6) { animation-delay: .2s; }
+.topbar h1 { animation: rise .4s var(--out) both; }
+
+/* Bars grow to their value (RTL: from the right). */
+@keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.bar > span, .hero-fill { transform-origin: right center; animation: grow-x .9s var(--out) both .1s; }
+[dir="ltr"] .bar > span { transform-origin: left center; }
+@keyframes grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.fc-up .fc-bar, .strip .col, .period .col { transform-origin: bottom center; animation: grow-y .8s var(--out) both .1s; }
+.fc-down .fc-bar { transform-origin: top center; animation: grow-y .8s var(--out) both .1s; }
+.fc-col:nth-child(2) .fc-bar { animation-delay: .15s; } .fc-col:nth-child(3) .fc-bar { animation-delay: .2s; } .fc-col:nth-child(4) .fc-bar { animation-delay: .25s; } .fc-col:nth-child(5) .fc-bar { animation-delay: .3s; } .fc-col:nth-child(6) .fc-bar { animation-delay: .35s; }
+
+/* Pressing gives a small, quick squeeze. */
+.btn, .chip, .icon-btn, .nav-item, .side-item, .vote-choice, .seg button, .row, .nav-add, .ask-fab, .dchat-toggle {
+  transition: transform .14s ease, background-color .2s ease, color .2s ease, border-color .2s ease, box-shadow .25s ease, filter .2s ease, opacity .2s ease;
+}
+.btn:not(:disabled):active, .chip:not(:disabled):active, .icon-btn:active, .vote-choice:active, .seg button:active, .ask-fab:active { transform: scale(.96); }
+.row:active { transform: scale(.99); }
+.nav-item:active .pill { transform: scale(.9); }
+.nav-item .pill { transition: background-color .25s ease, color .25s ease, transform .15s ease; }
+.nav-add:active { transform: scale(.92) rotate(90deg); }
+.nav-item[aria-current="page"] .pill svg { animation: pop .35s var(--spring); }
+
+/* New things pop in: badges, a chosen answer, a status. */
+@keyframes pop { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+.nav-badge { animation: pop .4s var(--spring) both; }
+.vote-choice.on .vote-icon { animation: pop .35s var(--spring); }
+.status-chip { animation: pop .35s var(--spring) both .1s; }
+.dmsg, .adv-msg, .review-item, .learn-item, .decision { animation: rise .35s var(--out) both; }
+
+/* Toast: springs up. */
+@keyframes toast-in { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: none; } }
+.toast { animation: toast-in .45s var(--spring) both; }
+
+/* The month card gets a soft light sweep when it appears. */
+.hero { position: relative; overflow: hidden; }
+.hero::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .14) 50%, transparent 65%);
+  transform: translateX(120%); animation: sweep 1.4s var(--out) .35s both;
+}
+@keyframes sweep { to { transform: translateX(-120%); } }
+
+/* Bottom sheet keeps its slide; the scrim fades. On desktop, dialogs grow in. */
+@media (min-width: 1024px) {
+  @keyframes dialog-in { from { opacity: 0; transform: translate(-50%, -47%) scale(.97); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+  .sheet { animation: dialog-in .3s var(--out) both; }
+  .toast { transform: none; translate: -50% 0; }
+}
+
+/* Desktop: cards and rows answer the pointer. */
+@media (hover: hover) {
+  .card { transition: box-shadow .25s ease, border-color .25s ease, transform .25s var(--out); }
+  .card.decision:hover, .shell-main .card:has(> button):hover, .hero-btn:hover { box-shadow: 0 10px 28px rgba(0, 0, 0, .10); transform: translateY(-2px); }
+  .hero-btn:hover { box-shadow: 0 14px 34px rgba(0, 0, 0, .22); }
+  .nav-add:hover { transform: rotate(90deg); }
+  .ask-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0, 0, 0, .3); }
+  .side-item:hover svg { transform: translateX(-2px); transition: transform .2s ease; }
+}
