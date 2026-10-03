@@ -158,3 +158,5 @@ kbd { font-family: inherit; font-size: 11px; font-weight: 800; padding: 1px 6px;
 .btn-google { background: var(--surface); color: var(--text); border: 1px solid var(--line); gap: 10px; }
 .or-line { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: 13px; }
 .or-line::before, .or-line::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.refreshing { display: inline-flex; align-items: center; gap: 4px; color: var(--faint); font-weight: 700; margin-inline-start: 8px; }
+.refreshing .spinner { width: 11px; height: 11px; border-width: 1.5px; }

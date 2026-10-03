@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { sb } from '../lib/supabase.js';
-import { clearSensitiveLocal } from '../lib/storage.js';
+import { clearSensitiveLocal, readCache, writeCache } from '../lib/storage.js';
 
 // Session + the household the user belongs to. The session is shared with
 // the current app (same origin, same Supabase storage key), so whoever is
@@ -16,12 +16,21 @@ export function useSession() {
     const load = async (session) => {
       const user = session?.user || null;
       if (!user) { if (alive) setState({ loading: false, user: null, household: null }); return; }
-      const { data } = await sb.from('memberships')
+      // The household seen last time on this device: the app opens with it at
+      // once, and the check below confirms or corrects it.
+      const cached = readCache('member:' + user.id);
+      if (cached && alive) setState({ loading: false, user, household: cached.data });
+      const { data, error } = await sb.from('memberships')
         .select('household_id,display_name,role')
         .eq('user_id', user.id)
         .order('created_at', { ascending: true })
         .limit(1);
-      if (alive) setState({ loading: false, user, household: data && data[0] ? data[0] : null });
+      if (!alive) return;
+      // A failed check (weak connection) must not look like "no household".
+      if (error) { if (!cached) setState({ loading: false, user, household: null, offline: true }); return; }
+      const household = data && data[0] ? data[0] : null;
+      if (household) writeCache('member:' + user.id, household);
+      setState({ loading: false, user, household });
     };
     sb.auth.getSession().then(({ data }) => load(data.session));
     const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
