@@ -321,3 +321,9 @@ textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: 
 .dmsg-x { align-self: flex-end; border: 0; background: transparent; color: inherit; opacity: .6; font-size: 11px; font-weight: 700; padding: 0; }
 .dmsg-del { display: flex; gap: 12px; align-self: flex-end; }
 .dmsg.me .btn-text { color: inherit; font-size: 12px; }
+
+/* ── foreign currency ── */
+.cur-select { width: 64px; flex: none; padding-inline: 8px; text-align: center; }
+.fx-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--muted); padding: 6px 10px; border-radius: 10px; background: var(--surface-2); }
+.fx-line b { color: var(--text); }
+.fx-line.err { color: var(--danger); background: var(--danger-tint); }

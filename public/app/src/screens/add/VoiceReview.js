@@ -1,17 +1,34 @@
 import { html } from '../../lib/html.js';
+import { useEffect } from 'preact/hooks';
 import { money } from '../../domain/format.js';
-import { reviewValid } from '../../domain/voice.js';
+import { reviewValid, inShekels, CURRENCIES } from '../../domain/voice.js';
+import { getRate } from '../../data/fx.js';
 
+// Converted amounts keep their agorot (₪184.40).
+const shekels = (n) => '₪' + Number(n).toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
 const toNumber = (v) => { const n = Number(String(v).replace(/[,₪\s]/g, '')); return Number.isFinite(n) ? n : 0; };
 
 // What was heard, as cards to check before anything is saved: each one can be
 // edited (expense/income, amount, what, category, date) or removed. Only
 // "להוסיף" saves; "ביטול" goes back without saving.
 export function VoiceReview({ items, unclear = [], categories, busy, onChange, onSave, onCancel, onMore }) {
-  const set = (i, patch) => onChange(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
-  const remove = (i) => onChange(items.filter((_, j) => j !== i));
+  const set = (i, patch) => { const key = items[i].key; onChange((cur) => cur.map((it) => (it.key === key ? { ...it, ...patch } : it))); };
+  // Foreign amounts: fetch the rate of each card's date (again when the
+  // currency or the date changes).
+  useEffect(() => {
+    items.forEach((it) => {
+      if (!it.currency || it.currency === 'ILS') return;
+      const want = it.currency + ':' + it.date;
+      if (it.rateKey === want || !/^\d{4}-\d{2}-\d{2}$/.test(it.date || '')) return;
+      onChange((cur) => cur.map((x) => (x.key === it.key ? { ...x, rateKey: want, rate: null, rateDate: null, rateError: '' } : x)));
+      getRate(it.currency, it.date)
+        .then((r) => onChange((cur) => cur.map((x) => (x.key === it.key && x.rateKey === want ? { ...x, rate: r.rate, rateDate: r.date, rateSource: r.source } : x))))
+        .catch((err) => onChange((cur) => cur.map((x) => (x.key === it.key && x.rateKey === want ? { ...x, rateError: err.message } : x))));
+    });
+  }, [items.map((it) => it.key + it.currency + it.date).join('|')]);
+  const remove = (i) => { const key = items[i].key; onChange((cur) => cur.filter((it) => it.key !== key)); };
   const ok = items.length > 0 && items.every(reviewValid);
-  const total = items.reduce((s, it) => s + (it.type === 'income' ? 1 : -1) * toNumber(it.amount), 0);
+  const total = items.reduce((s, it) => s + (it.type === 'income' ? 1 : -1) * inShekels(it), 0);
 
   return html`<div class="stack review" style="gap:12px">
     <div><b style="font-size:16px">${items.length === 1 ? 'זה מה ששמעתי' : 'שמעתי ' + items.length + ' תנועות'}</b>
@@ -29,8 +46,15 @@ export function VoiceReview({ items, unclear = [], categories, busy, onChange, o
         </div>
         <div class="review-row">
           <label class="field" style="flex:2"><span>מה</span><input class="input" value=${it.description} maxlength="80" onInput=${(e) => set(i, { description: e.target.value })} /></label>
-          <label class="field" style="flex:1"><span>סכום (₪)</span><input class="input num" inputmode="decimal" value=${String(it.amount)} onInput=${(e) => set(i, { amount: toNumber(e.target.value) })} /></label>
+          <label class="field" style="flex:1"><span>סכום (${CURRENCIES[it.currency || 'ILS'].symbol})</span><input class="input num" inputmode="decimal" value=${String(it.amount)} onInput=${(e) => set(i, { amount: toNumber(e.target.value) })} /></label>
+          <label class="field" style="flex:none;width:84px"><span>מטבע</span>
+            <select class="input" value=${it.currency || 'ILS'} aria-label="מטבע" onChange=${(e) => set(i, { currency: e.target.value })}>
+              ${Object.entries(CURRENCIES).map(([code, c]) => html`<option value=${code}>${c.symbol} ${c.label}</option>`)}
+            </select></label>
         </div>
+        ${it.currency && it.currency !== 'ILS' && html`<div class=${'fx-line' + (it.rateError ? ' err' : '')} role="status">
+          ${it.rateError ? it.rateError : it.rate ? html`<b class="num">${shekels(inShekels(it))}</b> לפי שער ${it.rateSource === 'ecb' ? '' : 'יציג '}<span class="num">${it.rate}</span> ליום <span class="num">${it.rateDate.split('-').reverse().slice(0, 2).join('.')}</span>${it.rateDate !== it.date ? ' (השער האחרון לפני התאריך)' : ''}` : html`<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> מביא את השער ליום הזה…`}
+        </div>`}
         <div class="review-row">
           <label class="field" style="flex:2"><span>קטגוריה</span>
             <select class="input" value=${it.catId} onChange=${(e) => set(i, { catId: e.target.value })}>
