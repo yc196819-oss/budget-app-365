@@ -1,30 +1,63 @@
-// Minimal service worker: exists so the browser offers "add to home screen",
-// but does NOT cache dynamic data — this is a live financial app, showing a
-// stale balance offline would be actively misleading.
-const SHELL_CACHE = 'budget-app-shell-v20';
-// '/' now redirects to the new app, and a redirect cannot be cached as a shell.
-const SHELL_FILES = ['/app/', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
+// Service worker: makes the app open instantly. The app's own files (the
+// shell, its modules, styles, vendor libraries, icons) are kept on the device
+// and served from there at once, while a fresh copy is fetched in the
+// background (stale-while-revalidate), so a sleeping server never delays the
+// start. Financial data is NOT cached here: the API and Supabase are never
+// intercepted. When a new version of the app arrives, open pages are told so
+// they can offer a refresh.
+const CACHE = 'budget-app-v21';
+const PRECACHE = ['/app/', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
+const STATIC = /^\/(app\/(src|styles|vendor)\/|icon[\w-]*\.(svg|png)$|manifest\.json$)/;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL_FILES)).catch(() => {}));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).catch(() => {}));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== SHELL_CACHE).map((k) => caches.delete(k))))
-  );
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
   self.clients.claim();
 });
 
+async function tellPages(msg) {
+  for (const c of await self.clients.matchAll({ type: 'window' })) c.postMessage(msg);
+}
+
+// Serve from the device if we have it; refresh the stored copy either way.
+async function staleWhileRevalidate(request, cacheKey, { notifyOnChange = false } = {}) {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(cacheKey);
+  const fresh = fetch(request).then(async (res) => {
+    if (res && res.ok && res.type === 'basic') {
+      if (notifyOnChange && cached) {
+        const [a, b] = await Promise.all([cached.clone().text(), res.clone().text()]);
+        if (a !== b) tellPages({ type: 'app-updated' });
+      }
+      await cache.put(cacheKey, res.clone());
+    }
+    return res;
+  }).catch(() => null);
+  if (cached) { fresh.catch(() => {}); return cached; }
+  return (await fresh) || new Response('', { status: 504 });
+}
+
 self.addEventListener('fetch', (e) => {
-  // Only page loads fall back to the cached shell when offline. Everything
-  // else (modules, the API, Supabase) goes straight to the network without
-  // passing through the worker.
-  if (e.request.method !== 'GET' || e.request.mode !== 'navigate') return;
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
-  );
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return; // Supabase, fonts: straight to the network
+  if (req.mode === 'navigate') {
+    // Every page of the new app is the same shell (hash routes).
+    if (url.pathname === '/app' || url.pathname.startsWith('/app/')) {
+      // Arriving from a sign-in or invite link carries parameters: go to the network.
+      if (url.search) return;
+      e.respondWith(staleWhileRevalidate(req, '/app/', { notifyOnChange: true }));
+      return;
+    }
+    e.respondWith(fetch(req).catch(() => caches.match('/app/')));
+    return;
+  }
+  if (STATIC.test(url.pathname)) e.respondWith(staleWhileRevalidate(req, url.pathname));
 });
 
 self.addEventListener('push', (e) => {

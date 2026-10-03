@@ -84,7 +84,7 @@ export function Shell({ tab, session }) {
       <${Sidebar} tab=${tab} badges=${badges} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => setOverlay('import') : null} onLearn=${() => setOverlay('learn')} onProfile=${() => setOverlay('profile')} />
       <main class="shell-main">
         <header class="topbar">
-          <div class="topbar-title"><small>${dateLabel(new Date())}</small><h1>${title}</h1></div>
+          <div class="topbar-title"><small>${dateLabel(new Date())}${data.refreshing && data.status === 'ready' ? html` <span class="refreshing" role="status"><span class="spinner" aria-hidden="true"></span> מתעדכן…</span>` : ''}</small><h1>${title}</h1></div>
           <div class="topbar-actions">
             <button type="button" class="icon-btn only-mobile" aria-label="פרופיל והגדרות" onClick=${() => setOverlay('profile')}>${profile.initials}</button>
           </div>

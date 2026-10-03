@@ -25,6 +25,10 @@ export function App() {
   if (session.loading) return html`<div class="boot" role="status">טוען…</div>`;
   if (!session.user) return html`<${LoginScreen} />`;
   if (session.recovery) return html`<${NewPassword} onDone=${session.doneRecovery} />`;
+  if (!session.household && session.offline) {
+    return html`<main class="login"><div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו להתחבר כרגע</b>
+      <span>בדקו את החיבור לאינטרנט ונסו שוב.</span><button type="button" class="btn" onClick=${session.refresh}>לנסות שוב</button></div></main>`;
+  }
   if (!session.household) {
     const invite = readLocal(PENDING_INVITE, '') || (session.user.user_metadata && session.user.user_metadata.invite_code) || '';
     if (invite && invite !== readLocal(DECLINED_INVITE, '')) return html`<${JoinInvite} code=${invite} session=${session} />`;

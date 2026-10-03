@@ -1,6 +1,7 @@
 import { sb } from '../lib/supabase.js';
 import { showToast } from '../lib/toast.js';
 import { isoDate } from '../domain/money.js';
+import { readCache, writeCache } from '../lib/storage.js';
 
 // Household data for the new app: transactions of the last ~2 years (enough
 // for 12 months plus expenses spread over a year), categories, monthly
@@ -11,11 +12,21 @@ const PAGE = 1000;
 const MONTHS_BACK = 23;
 const DELETE_DELAY_MS = 5000;
 
-const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], goals: [], installments: [], loans: [], investments: [], income: [], hidden: new Set() };
+const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], goals: [], installments: [], loans: [], investments: [], income: [], hidden: new Set(), refreshing: false };
 const listeners = new Set();
 const pendingDeletes = new Map();
 
-function emit() { listeners.forEach((fn) => fn()); }
+// What is kept on the device for an instant start (not the pending deletes).
+const CACHED = ['txs', 'categories', 'budgets', 'members', 'accounts', 'cards', 'goals', 'installments', 'loans', 'investments', 'income'];
+let saveTimer = null;
+function emit() {
+  listeners.forEach((fn) => fn());
+  if (state.status === 'ready' && state.hid) {
+    clearTimeout(saveTimer);
+    const hid = state.hid;
+    saveTimer = setTimeout(() => { if (state.hid === hid && state.status === 'ready') writeCache('household:' + hid, Object.fromEntries(CACHED.map((k) => [k, state[k]]))); }, 800);
+  }
+}
 
 export function subscribe(fn) {
   listeners.add(fn);
@@ -27,6 +38,7 @@ export function snapshot() {
     hid: state.hid,
     status: state.status,
     error: state.error,
+    refreshing: state.refreshing,
     txs: state.txs.filter((t) => !state.hidden.has(t.id)),
     categories: state.categories,
     budgets: state.budgets,
@@ -59,7 +71,12 @@ async function fetchAllTransactions(hid, since) {
 export async function load(hid, userId, { force = false } = {}) {
   if (!hid) return;
   if (!force && state.hid === hid && (state.status === 'ready' || state.status === 'loading')) return;
-  Object.assign(state, { hid, userId, status: 'loading', error: null });
+  if (state.refreshing && state.hid === hid) return;
+  const hadData = state.hid === hid && state.status === 'ready';
+  // Open at once with the last data seen on this device, then refresh.
+  const cached = hadData ? null : readCache('household:' + hid);
+  if (cached) Object.assign(state, { hid, userId, ...cached.data, status: 'ready', error: null, hidden: new Set(), refreshing: true });
+  else Object.assign(state, { hid, userId, status: hadData ? 'ready' : 'loading', error: null, refreshing: true });
   emit();
   try {
     const now = new Date();
@@ -83,6 +100,7 @@ export async function load(hid, userId, { force = false } = {}) {
     if (state.hid !== hid) return;
     Object.assign(state, {
       status: 'ready',
+      refreshing: false,
       txs,
       categories: cats.data || [],
       budgets: budgets.data || [],
@@ -97,7 +115,10 @@ export async function load(hid, userId, { force = false } = {}) {
       hidden: new Set()
     });
   } catch (err) {
-    Object.assign(state, { status: 'error', error: err.message || String(err) });
+    if (state.hid !== hid) return;
+    // With data already on screen, keep it and say so; otherwise show the error.
+    if (state.status === 'ready') { state.refreshing = false; showToast('לא הצלחנו לרענן את הנתונים. מוצגים הנתונים האחרונים.'); }
+    else Object.assign(state, { status: 'error', error: err.message || String(err), refreshing: false });
   }
   emit();
 }

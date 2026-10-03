@@ -9,6 +9,6 @@ export function ToastHost() {
   const undo = () => { hideToast(); toast.undo(); };
   return html`<div class="toast" role="status" key=${toast.id}>
     <span>${toast.message}</span>
-    ${toast.undo && html`<button type="button" onClick=${undo}>ביטול</button>`}
+    ${toast.undo && html`<button type="button" onClick=${undo}>${toast.label || 'ביטול'}</button>`}
   </div>`;
 }

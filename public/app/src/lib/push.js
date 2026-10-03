@@ -5,9 +5,12 @@ import { CONFIG } from '../config.js';
 // same push_subscriptions table the previous version uses, so a phone that
 // already allowed notifications there keeps getting them.
 
-export function registerWorker() {
+// The worker keeps the app's files on the device so it opens at once; when a
+// new version arrives in the background, offer to switch to it.
+export function registerWorker(onUpdate) {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.type === 'app-updated' && onUpdate) onUpdate(); });
 }
 
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
