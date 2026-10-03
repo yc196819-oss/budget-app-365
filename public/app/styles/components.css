@@ -68,7 +68,7 @@
 .month-nav .icon-btn[disabled] { opacity: .3; cursor: default; }
 
 @media (min-width: 1024px) {
-  .toast { inset-inline: auto; left: 50%; transform: translateX(-50%); width: 460px; bottom: 28px; }
+  .toast { inset-inline: auto; left: 50%; translate: -50% 0; width: 460px; bottom: 28px; }
   .money-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 }
 
@@ -323,7 +323,7 @@ textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: 
 .dmsg.me .btn-text { color: inherit; font-size: 12px; }
 
 /* ── foreign currency ── */
-.cur-select { width: 64px; flex: none; padding-inline: 8px; text-align: center; }
+.add-input .cur-select { width: 72px; flex: none; padding-inline: 8px; text-align: center; }
 .fx-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--muted); padding: 6px 10px; border-radius: 10px; background: var(--surface-2); }
 .fx-line b { color: var(--text); }
 .fx-line.err { color: var(--danger); background: var(--danger-tint); }

@@ -133,8 +133,13 @@ kbd { font-family: inherit; font-size: 11px; font-weight: 800; padding: 1px 6px;
 @media (min-width: 1024px) {
   /* Content stays readable on wide screens instead of stretching edge to edge. */
   .shell-main { padding-inline: max(32px, calc((100% - 1160px) / 2)); }
+}
+/* Two columns for "ביחד" only where the cards stay wide enough. */
+@media (min-width: 1500px) {
   .together { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 22px; align-items: start; }
   .together-side { position: sticky; top: 0; }
+}
+@media (min-width: 1024px) {
   .side-item kbd, .sidebar .btn kbd { opacity: .8; }
   .sidebar .btn kbd { color: inherit; border-color: currentColor; background: transparent; }
 }

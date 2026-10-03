@@ -1,6 +1,7 @@
 import { html } from '../../lib/html.js';
 import { money } from '../../domain/format.js';
 import { Icon } from '../../components/Icon.js';
+import { CountUp } from '../../components/CountUp.js';
 
 // "Left to spend this month", with a bar for the budget used and a mark for
 // how far into the month we are.
@@ -11,7 +12,7 @@ export function Hero({ plan, onOpen }) {
     : null;
   return html`<button type="button" class="hero rise hero-btn" onClick=${onOpen} aria-label="פירוט: ${plan.hasBudget ? 'נשאר להוציא החודש' : 'הוצאתם החודש'}">
     <span class="hero-top"><span>${plan.hasBudget ? (over ? 'חרגתם מהתקציב החודש' : 'נשאר להוציא החודש') : 'הוצאתם החודש'}</span><span class="hero-more">פירוט<${Icon} name="back" size=${14} stroke=${2.6} /></span></span>
-    <span class="display num hero-num">${plan.hasBudget ? (over ? '−' : '') + money(plan.remaining) : money(plan.spent)}</span>
+    <span class="display num hero-num"><${CountUp} value=${plan.hasBudget ? plan.remaining : plan.spent} format=${(n) => (n < 0 ? '−' : '') + money(n)} /></span>
     ${plan.hasBudget && html`<span class="hero-track" aria-hidden="true">
       <span class="hero-fill" style=${'width:' + plan.spentPct + '%'}></span>
       <span class="hero-today" style=${'inset-inline-start:' + plan.dayPct + '%'} title="היום בחודש"></span>

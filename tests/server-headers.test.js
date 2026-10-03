@@ -138,3 +138,10 @@ test('the exchange-rate endpoint needs a signed-in user', async () => {
   const res = await fetch(BASE + '/api/fx/rate?currency=USD&date=2026-09-13');
   assert.ok(res.status === 401 || res.status === 503, String(res.status));
 });
+
+test('the app loads its motion styles', async () => {
+  const shell = await (await fetch(BASE + '/app/')).text();
+  assert.match(shell, /<link rel="stylesheet" href=".\/styles\/motion.css">/);
+  const css = await (await fetch(BASE + '/app/styles/motion.css')).text();
+  assert.match(css, /@keyframes grow-x/);
+});
