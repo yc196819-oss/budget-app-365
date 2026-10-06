@@ -74,7 +74,8 @@ test('editing a card sets its limit; the bar warns near the limit; removing arch
   await row.click();
   await page.click('text=להסיר את הכרטיס');
   await page.click('text=כן, להסיר');
-  await page.waitForSelector('.toast');
+  await page.waitForSelector('.toast:has-text("הכרטיס הוסר")');
+  await page.waitForFunction(() => ![...document.querySelectorAll('section')].some((s) => s.textContent.includes('ויזה 4821')));
   assert.equal(db.tables.credit_cards[0].is_active, false, 'archived, not deleted: past purchases keep their card');
   assert.equal(db.tables.credit_cards.length, 1);
   assert.equal(await cardsSection(page).locator('.row').count(), 0);

@@ -101,8 +101,9 @@ test('a household with no transactions gets one clear way in: upload a statement
 test('desktop: two columns, no errors, and missing accounts tables do not break the screen', async () => {
   const db = makeFakeDb();
   const { page, errors } = await open(1280, db);
-  const main = await page.locator('.home-main').boundingBox();
-  const side = await page.locator('.home-side').boundingBox();
+  // Layout position (offsetTop/Left), not the box on screen: the entry
+  // animation still moves the columns for a moment after the page shows.
+  const [main, side] = await page.evaluate(() => ['.home-main', '.home-side'].map((q) => { const el = document.querySelector(q); return { x: el.offsetLeft, y: el.offsetTop }; }));
   assert.ok(Math.abs(main.y - side.y) < 2 && main.x > side.x, 'side by side, main on the right');
   assert.deepEqual(errors, []);
   await page.close();
