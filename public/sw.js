@@ -5,9 +5,9 @@
 // start. Financial data is NOT cached here: the API and Supabase are never
 // intercepted. When a new version of the app arrives, open pages are told so
 // they can offer a refresh.
-const CACHE = 'budget-app-v21';
-const PRECACHE = ['/app/', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
-const STATIC = /^\/(app\/(src|styles|vendor)\/|icon[\w-]*\.(svg|png)$|manifest\.json$)/;
+const CACHE = 'budget-app-v22';
+const PRECACHE = ['/app/', '/manifest.json', '/wallet.svg', '/wallet-192.png', '/wallet-512.png'];
+const STATIC = /^\/(app\/(src|styles|vendor)\/|(icon|wallet)[\w-]*\.(svg|png)$|manifest\.json$)/;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).catch(() => {}));
@@ -66,8 +66,8 @@ self.addEventListener('push', (e) => {
   e.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      icon: '/wallet-192.png',
+      badge: '/wallet-192.png',
       data: { url: data.url || '/' }
     })
   );

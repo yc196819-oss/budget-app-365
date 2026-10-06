@@ -30,7 +30,7 @@ export function JoinInvite({ code, session }) {
   const skip = () => { forget(); session.refresh(); };
 
   return html`<main class="login">
-    <div class="brand-login"><img class="brand-mark" src="/icon.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
+    <div class="brand-login"><img class="brand-mark" src="/wallet.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
     ${!info && html`<div class="boot" role="status" style="min-height:auto">בודקים את ההזמנה…</div>`}
     ${info && info.valid && html`<div class="stack">
       <h1 class="display" style="font-size:32px;line-height:1.15;margin:0">${info.inviter_name} מזמין/ה אתכם להצטרף</h1>

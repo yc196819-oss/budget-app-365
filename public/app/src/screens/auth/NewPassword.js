@@ -18,7 +18,7 @@ export function NewPassword({ onDone }) {
     onDone();
   };
   return html`<main class="login">
-    <div class="brand-login"><img class="brand-mark" src="/icon.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
+    <div class="brand-login"><img class="brand-mark" src="/wallet.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
     <h1 class="display" style="font-size:30px;margin:0">סיסמה חדשה</h1>
     <form class="stack" onSubmit=${save} noValidate>
       <label class="field"><span>סיסמה חדשה (8 תווים לפחות)</span>

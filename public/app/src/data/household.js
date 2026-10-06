@@ -87,7 +87,7 @@ export async function load(hid, userId, { force = false } = {}) {
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
       sb.from('memberships').select('user_id,display_name').eq('household_id', hid),
       sb.from('bank_accounts').select('id,name,balance,balance_updated_at').eq('household_id', hid),
-      sb.from('credit_cards').select('id,name,bank_account_id,billing_day').eq('household_id', hid),
+      sb.from('credit_cards').select('id,name,bank_account_id,billing_day,last4,owner_user_id,credit_limit,is_active').eq('household_id', hid),
       sb.from('goals').select('*').eq('household_id', hid),
       sb.from('installments').select('*').eq('household_id', hid),
       sb.from('loans').select('*').eq('household_id', hid),
@@ -106,7 +106,7 @@ export async function load(hid, userId, { force = false } = {}) {
       budgets: budgets.data || [],
       members: Object.fromEntries((mems.data || []).map((m) => [m.user_id, m.display_name || ''])),
       accounts: accounts.error ? [] : accounts.data || [],
-      cards: cards.error ? [] : cards.data || [],
+      cards: cards.error ? [] : (cards.data || []).filter((c) => c.is_active !== false),
       goals: goals.error ? [] : goals.data || [],
       installments: installments.error ? [] : installments.data || [],
       loans: loans.error ? [] : loans.data || [],
@@ -123,7 +123,7 @@ export async function load(hid, userId, { force = false } = {}) {
   emit();
 }
 
-export async function addTransaction({ type = 'expense', amount, description, category_id = null, subcategory_id = null, tx_date }) {
+export async function addTransaction({ type = 'expense', amount, description, category_id = null, subcategory_id = null, tx_date, paid = {} }) {
   const row = {
     household_id: state.hid,
     created_by: state.userId,
@@ -135,7 +135,9 @@ export async function addTransaction({ type = 'expense', amount, description, ca
     subcategory_id,
     nature: 'variable',
     spread: 'month',
-    source: 'manual'
+    source: 'manual',
+    // The card it was paid with (card_id, account_id, payment_method), if chosen.
+    ...(type === 'income' ? {} : paid)
   };
   const { data, error } = await sb.from('transactions').insert(row).select().single();
   if (error) throw error;
@@ -194,7 +196,7 @@ export async function deleteGoal(id) {
 
 // Insert or update a row of a household table (accounts, investments, loans)
 // and keep the store in step.
-const LISTS = { bank_accounts: 'accounts', investments: 'investments', loans: 'loans', installments: 'installments' };
+const LISTS = { bank_accounts: 'accounts', credit_cards: 'cards', investments: 'investments', loans: 'loans', installments: 'installments' };
 export async function saveRow(table, row) {
   const key = LISTS[table];
   if (!key) throw new Error('unknown table ' + table);
@@ -228,6 +230,14 @@ export async function deleteRow(table, id) {
   const { error } = await sb.from(table).delete().eq('id', id).eq('household_id', state.hid);
   if (error) throw error;
   state[key] = state[key].filter((r) => r.id !== id);
+  emit();
+}
+
+// A card is removed by archiving it: its past purchases keep pointing at it.
+export async function archiveCard(id) {
+  const { error } = await sb.from('credit_cards').update({ is_active: false }).eq('id', id).eq('household_id', state.hid);
+  if (error) throw error;
+  state.cards = state.cards.filter((c) => c.id !== id);
   emit();
 }
 

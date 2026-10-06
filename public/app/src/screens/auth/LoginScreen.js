@@ -62,7 +62,7 @@ export function LoginScreen() {
 
   return html`
     <main class="login">
-      <div class="brand-login"><img class="brand-mark" src="/icon.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
+      <div class="brand-login"><img class="brand-mark" src="/wallet.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
       <h1 class="display" style="font-size:36px;line-height:1.1;margin:0">לדעת בכל רגע כמה נשאר להוציא</h1>
       <div class="seg" role="group" aria-label="כניסה או הרשמה">
         <button type="button" aria-pressed=${String(mode === 'login')} onClick=${() => { setMode('login'); setError(''); setNotice(''); }}>כניסה</button>
