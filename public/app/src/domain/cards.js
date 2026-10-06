@@ -25,10 +25,12 @@ export function billingDayValid(v) {
 }
 
 // "ויזה כאל ••••4821" (the digits are not repeated when the name has them).
+// The dots and digits are isolated left-to-right, so a right-to-left line
+// does not turn them into "4821••••".
 export function cardLabel(card) {
   if (!card) return '';
   const name = card.name || 'כרטיס';
-  return card.last4 && !name.includes(card.last4) ? name + ' ••••' + card.last4 : name;
+  return card.last4 && !name.includes(card.last4) ? name + ' \u2066••••' + card.last4 + '\u2069' : name;
 }
 
 // How much of the limit is used: the purchases not yet charged. Near from 80%.

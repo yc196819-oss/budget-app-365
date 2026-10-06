@@ -331,3 +331,12 @@ textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: 
 .fx-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--muted); padding: 6px 10px; border-radius: 10px; background: var(--surface-2); }
 .fx-line b { color: var(--text); }
 .fx-line.err { color: var(--danger); background: var(--danger-tint); }
+
+/* Install the app */
+.install-card { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--accent-tint); }
+.install-head { display: flex; gap: 12px; align-items: center; }
+.install-icon { width: 48px; height: 48px; border-radius: 12px; flex: none; box-shadow: 0 4px 12px #0003; }
+.install-steps { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.55; }
+.install-actions { display: flex; align-items: center; gap: 12px; }
+.install-actions .btn { flex: 1; }
+.share-glyph { vertical-align: -3px; color: var(--accent); }

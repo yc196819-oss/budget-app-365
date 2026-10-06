@@ -29,7 +29,7 @@ test('billing day is 1–28', () => {
 });
 
 test('label shows the last digits once', () => {
-  assert.equal(cardLabel(card), 'ויזה כאל ••••4821');
+  assert.equal(cardLabel(card), 'ויזה כאל \u2066••••4821\u2069', 'the digits keep their order inside Hebrew text');
   assert.equal(cardLabel({ name: 'ויזה 4821', last4: '4821' }), 'ויזה 4821');
   assert.equal(cardLabel({ name: 'מאסטרקארד' }), 'מאסטרקארד');
   assert.equal(cardLabel(null), '');

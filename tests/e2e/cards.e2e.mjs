@@ -91,7 +91,7 @@ test('an expense records the card it was paid with; "not by card" leaves it out'
   const chips = page.locator('.pay-chips');
   // Two cards and none used yet on this device: nothing is picked for you.
   assert.equal(await chips.locator('[aria-pressed="true"]').textContent(), 'לא בכרטיס');
-  await chips.locator('text=אמקס ••••9912').click();
+  await chips.locator('button', { hasText: '••••9912' }).click();
   await page.fill('.sheet input.input', '120 מסעדה');
   await page.click('.sheet .btn:has-text("להוסיף")');
   await page.waitForSelector('.toast');
