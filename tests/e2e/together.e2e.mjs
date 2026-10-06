@@ -2,6 +2,9 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startServer, launchBrowser, makeFakeDb, mockSupabase, signIn, collectErrors } from './helpers.mjs';
 
+// Waits (up to 2s) for something the page does in the background.
+const until = async (page, ok) => { for (let i = 0; i < 100 && !ok(); i++) await page.waitForTimeout(20); };
+
 let server;
 let browser;
 before(async () => { server = await startServer(); browser = await launchBrowser(); });
@@ -219,6 +222,8 @@ test('a conversation for three on the card: write to each other, then invite the
   await page.waitForSelector('.dmsg.me:has-text("אולי נחכה לבונוס בדצמבר?")');
   const mine = db.tables.decision_messages.find((m) => m.role === 'user');
   assert.deepEqual([mine.decision_id, mine.household_id, mine.author_id, mine.text], ['d1', 'h1', 'u1', 'אולי נחכה לבונוס בדצמבר?']);
+  // The partner is notified after the message shows (it never holds up the screen).
+  await until(page, () => notified.some((n) => n.event === 'message'));
   assert.deepEqual(notified.at(-1), { decisionId: 'd1', event: 'message' });
 
   await page.click('.dchat button:has-text("להזמין את היועץ לשיחה")');
@@ -231,6 +236,7 @@ test('a conversation for three on the card: write to each other, then invite the
   const ai = db.tables.decision_messages.find((m) => m.role === 'ai');
   assert.equal(ai.text, 'לפי המספרים, החודש כבר חרגתם מהתקציב.\nההמלצה שלי: לחכות לחודש הבא.');
   assert.equal(ai.author_id, 'u1');
+  await until(page, () => notified.some((n) => n.event === 'advisor'));
   assert.deepEqual(notified.at(-1), { decisionId: 'd1', event: 'advisor' });
   assert.doesNotMatch(await page.locator('.dchat').textContent(), /@@/);
   assert.match(await page.locator('.dchat').textContent(), /לשאול את היועץ שוב/);

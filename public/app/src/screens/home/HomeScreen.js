@@ -12,6 +12,7 @@ import { WhereMoney } from './WhereMoney.js';
 import { LearnCard } from '../learn/LearnCard.js';
 import { PlanCards } from '../plans/PlanCards.js';
 import { PlanSheets, usePlanSheet } from '../plans/PlanSheets.js';
+import { InstallCard } from '../../components/InstallCard.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
 // what needs attention (one action each) and what is coming up.
@@ -42,6 +43,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
         <button type="button" class="btn" style="width:100%;max-width:320px" onClick=${onImport}>העלאת פירוט כרטיס</button>
         <button type="button" class="btn btn-ghost" style="width:100%;max-width:320px" onClick=${onAdd}>הוספת הוצאה ידנית</button>
       </div>
+      <${InstallCard} />
     </div>`;
   }
 
@@ -56,6 +58,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
   return html`<div class="stack home">
     <div class="home-main stack">
       <${Hero} plan=${plan} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
+      <${InstallCard} />
       <${Attention} items=${items} onAct=${act} />
       <${PlanCards} data=${data} onSheet=${(s) => { setSheet(null); planSheet.open(s); }} />
       <${WhereMoney} top=${top} />

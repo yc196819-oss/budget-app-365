@@ -113,7 +113,7 @@ test('the service worker keeps only the app\'s own files; the API and Supabase n
   const sw = await (await fetch(BASE + '/sw.js')).text();
   assert.match(sw, /url\.origin !== self\.location\.origin\) return/, 'cross-origin (Supabase) is not intercepted');
   const rule = new RegExp(sw.match(/const STATIC = \/(.+)\/;/)[1]);
-  for (const p of ['/app/src/main.js', '/app/styles/base.css', '/app/vendor/preact.js', '/icon.svg', '/icon-192.png', '/manifest.json']) assert.ok(rule.test(p), p);
+  for (const p of ['/app/src/main.js', '/app/styles/base.css', '/app/vendor/preact.js', '/wallet.svg', '/wallet-192.png', '/manifest.json']) assert.ok(rule.test(p), p);
   for (const p of ['/api/ai/advice-chat-stream', '/api/fx/rate', '/api/decisions/notify', '/old/']) assert.equal(rule.test(p), false, p);
   assert.match(sw, /if \(url\.search\) return/, 'sign-in and invite links go to the network');
   assert.match(sw, /app-updated/);
@@ -126,8 +126,8 @@ test('decision notifications need a signed-in member', async () => {
 });
 
 test('the logo and the manifest: installable from the new app, on phone and desktop', async () => {
-  const icon = await (await fetch(BASE + '/icon.svg')).text();
-  assert.match(icon, /id="egg"/);
+  const icon = await (await fetch(BASE + '/wallet.svg')).text();
+  assert.match(icon, /id="wallet"/);
   assert.doesNotMatch(icon, /<text/, 'no font-dependent text in the logo');
   const m = await (await fetch(BASE + '/manifest.json')).json();
   assert.equal(m.start_url, '/app/');
@@ -136,7 +136,7 @@ test('the logo and the manifest: installable from the new app, on phone and desk
   for (const i of m.icons) assert.equal((await fetch(BASE + i.src)).status, 200, i.src);
   const shell = await (await fetch(BASE + '/app/')).text();
   assert.match(shell, /<link rel="manifest" href="\/manifest.json">/);
-  assert.match(shell, /<link rel="apple-touch-icon" href="\/icon-180.png">/);
+  assert.match(shell, /<link rel="apple-touch-icon" href="\/wallet-180.png">/);
 });
 
 test('the exchange-rate endpoint needs a signed-in user', async () => {

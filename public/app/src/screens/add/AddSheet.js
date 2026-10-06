@@ -11,6 +11,8 @@ import { addTransaction, deleteNow } from '../../data/household.js';
 import { canListen, listen } from '../../lib/speech.js';
 import { showToast } from '../../lib/toast.js';
 import { VoiceReview } from './VoiceReview.js';
+import { activeCards, defaultCard, paidWith, cardLabel } from '../../domain/cards.js';
+import { readLocal, writeLocal } from '../../lib/storage.js';
 
 // Free text ("46 קפה בארומה") or voice. A recording can hold several
 // transactions ("80 בסופר, 46 קפה, וקיבלתי משכורת 21 אלף"): they are split
@@ -25,6 +27,10 @@ export function AddSheet({ data, onClose, onImport }) {
   // The currency typed amounts are in (dollars, euros… are converted by the date's rate).
   const [currency, setCurrency] = useState('ILS');
   const [busy, setBusy] = useState(false);
+  // The card an expense was paid with; starts with the one used last.
+  const cards = activeCards(data.cards);
+  const lastCardKey = 'lastCard:' + data.hid;
+  const [cardId, setCardId] = useState(() => defaultCard(cards, readLocal(lastCardKey)));
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState('');
   const [voiceError, setVoiceError] = useState('');
@@ -117,7 +123,9 @@ export function AddSheet({ data, onClose, onImport }) {
     setBusy(true);
     const added = [];
     try {
-      for (const tx of txs) added.push(await addTransaction(tx));
+      const paid = paidWith(cards.find((c) => c.id === cardId));
+      for (const tx of txs) added.push(await addTransaction({ ...tx, paid }));
+      if (cards.length) writeLocal(lastCardKey, cardId || '');
       onClose();
       const undo = () => Promise.all(added.map((r) => deleteNow(r.id))).catch(() => showToast('הביטול נכשל. אפשר למחוק מהרשימה.'));
       showToast(added.length === 1 ? 'נוסף: ' + added[0].description + ' ' + money(added[0].amount) : 'נוספו ' + added.length + ' תנועות', { undo });
@@ -135,6 +143,7 @@ export function AddSheet({ data, onClose, onImport }) {
 
   if (review) {
     return html`<${Sheet} title="בדיקה לפני הוספה" onClose=${onClose} full=${true}>
+      ${!listening && review.items.some((it) => it.type !== 'income') && html`<${PaidWith} cards=${cards} value=${cardId} onChange=${setCardId} />`}
       <${VoiceReview} items=${review.items} unclear=${review.unclear} categories=${data.categories} busy=${busy}
         onChange=${(next) => setReview((r) => ({ ...r, items: typeof next === 'function' ? next(r.items) : next }))}
         onSave=${() => saveAll(review.items.map((it) => reviewToTx(it, data.categories)))}
@@ -158,6 +167,7 @@ export function AddSheet({ data, onClose, onImport }) {
     </label>
     ${listening && html`<${LiveTranscript} text=${transcript} interim=${heard} liveRef=${liveRef} onStop=${mic} />`}
     ${voiceError && html`<span class="hint" role="alert" style="color:var(--danger)">${voiceError}</span>`}
+    ${kind === 'expense' && !listening && html`<${PaidWith} cards=${cards} value=${cardId} onChange=${setCardId} />`}
     ${!canListen() && html`<span class="hint">להוספה בקול: לחצו על המיקרופון שבמקלדת של הטלפון ודברו. אפשר כמה תנועות ברצף.</span>`}
     ${!listening && split.items.length > 1 && html`<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
       <span>נמצאו <b>${split.items.length}</b> תנועות</span><button type="button" class="btn" style="flex:none" onClick=${() => openReview(text)}>לבדוק ולהוסיף</button></div>`}
@@ -180,6 +190,17 @@ export function AddSheet({ data, onClose, onImport }) {
     ${onImport && html`<button type="button" class="btn-text" style="color:var(--accent);display:flex;align-items:center;justify-content:center;gap:6px" onClick=${onImport}>
       <${Icon} name="upload" size=${17} />או: העלאת פירוט חודשי של כרטיס</button>`}
   <//>`;
+}
+
+// Which card paid for the expense (or none: cash, transfer, standing order).
+// Only the card's name and last digits are shown.
+function PaidWith({ cards, value, onChange }) {
+  if (!cards.length) return null;
+  return html`<div class="field"><span>שולם ב</span>
+    <div class="pay-chips" role="group" aria-label="שולם ב">
+      ${cards.map((c) => html`<button type="button" class="chip" aria-pressed=${String(value === c.id)} onClick=${() => onChange(c.id)}>💳 ${cardLabel(c)}</button>`)}
+      <button type="button" class="chip" aria-pressed=${String(!value)} onClick=${() => onChange(null)}>לא בכרטיס</button>
+    </div></div>`;
 }
 
 // Everything heard so far, all of it (not one line), the words still being

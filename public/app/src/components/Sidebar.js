@@ -6,7 +6,7 @@ import { Icon } from './Icon.js';
 export function Sidebar({ tab, onAdd, onImport, onLearn, onProfile, profile, badges = {} }) {
   return html`
     <aside class="sidebar">
-      <div class="brand"><img class="brand-mark" src="/icon.svg" alt="" />התקציב שלנו</div>
+      <div class="brand"><img class="brand-mark" src="/wallet.svg" alt="" />התקציב שלנו</div>
       <nav aria-label="ניווט ראשי" class="stack" style="gap:4px">
         ${TABS.map((t) => html`
           <a class="side-item" href=${hrefFor(t.key)} aria-current=${tab === t.key ? 'page' : 'false'}>
