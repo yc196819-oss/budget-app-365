@@ -1,6 +1,7 @@
 {
   "name": "התקציב שלנו",
   "short_name": "התקציב שלנו",
+  "id": "/app/",
   "description": "התקציב המשפחתי שלכם, עם יועץ AI, תוכניות ומחליטים ביחד",
   "start_url": "/app/",
   "scope": "/",
@@ -40,5 +41,9 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "categories": [
+    "finance",
+    "productivity"
   ]
 }

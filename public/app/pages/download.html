@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>הורדת האפליקציה · התקציב שלנו</title>
+<meta name="description" content="התקציב המשפחתי שלכם בטלפון: כמה נשאר להוציא, יועץ AI, ומחליטים ביחד.">
+<meta name="theme-color" content="#13100E">
+<meta property="og:title" content="התקציב שלנו">
+<meta property="og:description" content="לדעת בכל רגע כמה נשאר להוציא. התקציב המשפחתי, ביחד.">
+<meta property="og:image" content="/wallet-512.png">
+<link rel="icon" href="/wallet.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/wallet-180.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;700;800&family=Frank+Ruhl+Libre:wght@700&display=swap">
+<link rel="stylesheet" href="/app/pages/pages.css">
+<script type="module" src="/app/pages/download.js"></script>
+</head>
+<body>
+<main class="page">
+  <section class="hero">
+    <img src="/wallet-512.png" alt="">
+    <h1>התקציב שלנו</h1>
+    <p class="lead">לדעת בכל רגע כמה נשאר להוציא. התקציב של הבית, ביחד, בטלפון.</p>
+  </section>
+
+  <section class="card" id="install">
+    <button type="button" class="btn" id="install-btn">📲 הורדת האפליקציה</button>
+    <a class="btn btn-ghost" id="play" href="#" hidden>▶ להורדה מ-Google Play</a>
+
+    <div id="steps-ios" hidden>
+      <b>באייפון, בשני צעדים (בספארי):</b>
+      <ol>
+        <li>לוחצים על כפתור השיתוף <svg class="share-glyph" viewBox="0 0 24 24" width="18" height="18" aria-label="שיתוף" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M7 10H5v11h14V10h-2"/></svg> בתחתית המסך</li>
+        <li>בוחרים <b>"הוספה למסך הבית"</b>, ואז <b>"הוסף"</b></li>
+      </ol>
+    </div>
+    <div id="steps-android" hidden>
+      <b>בטלפון אנדרואיד:</b>
+      <ol>
+        <li>פותחים את תפריט הדפדפן <b>⋮</b></li>
+        <li>בוחרים <b>"התקנת אפליקציה"</b> או <b>"הוספה למסך הבית"</b></li>
+      </ol>
+    </div>
+    <div id="steps-desktop" hidden>
+      <b>פתחו את הקישור הזה בטלפון:</b>
+      <div class="url" id="url"></div>
+      <button type="button" class="btn btn-ghost" id="copy">להעתיק את הקישור</button>
+    </div>
+    <p id="installed" class="muted" hidden>✓ האפליקציה מותקנת. אפשר לפתוח אותה ממסך הבית.</p>
+    <a class="btn btn-ghost" href="/app/">או לפתוח בדפדפן</a>
+  </section>
+
+  <section class="card">
+    <ul class="perks">
+      <li>💰 <span><b>כמה נשאר החודש</b>, מחושב מכל ההוצאות וההכנסות</span></li>
+      <li>✨ <span><b>יועץ AI</b> שמכיר את המספרים שלכם ועונה בעברית</span></li>
+      <li>👥 <span><b>ביחד</b>: תקציב אחד, שני טלפונים, והחלטות משותפות על קניות</span></li>
+      <li>🎙️ <span><b>הוספה בקול</b>: "80 בסופר, 46 קפה", והכול נרשם</span></li>
+    </ul>
+  </section>
+
+  <p class="muted"><a href="/privacy">מדיניות פרטיות</a> · <a href="/delete-account">מחיקת חשבון</a></p>
+</main>
+</body>
+</html>

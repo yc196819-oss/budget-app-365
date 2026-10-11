@@ -1,0 +1,25 @@
+/* The public pages (download, privacy, account deletion): the app's dark
+   espresso and gold, no sign-in needed. */
+:root { --bg: #13100E; --surface: #1F1915; --line: #3A2F27; --text: #F7EFE6; --muted: #C9B9A6; --accent: #F2B66D; --ink: #1B130C; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: Assistant, system-ui, sans-serif; line-height: 1.6; }
+a { color: var(--accent); }
+.page { max-width: 560px; margin: 0 auto; padding: 32px 16px 56px; display: flex; flex-direction: column; gap: 18px; }
+.hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 12px; }
+.hero img { width: 112px; height: 112px; border-radius: 26px; box-shadow: 0 18px 40px #000a; }
+h1 { font-family: 'Frank Ruhl Libre', serif; font-size: 34px; line-height: 1.15; margin: 0; }
+h2 { font-size: 19px; margin: 8px 0 0; }
+.lead { color: var(--muted); font-size: 17px; margin: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 54px; border: 0; border-radius: 16px; background: var(--accent); color: var(--ink); font: 800 18px Assistant, sans-serif; text-decoration: none; cursor: pointer; }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 700; font-size: 16px; }
+.btn:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+ol { margin: 0; padding-inline-start: 22px; display: flex; flex-direction: column; gap: 8px; }
+.perks { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.perks li { display: flex; gap: 10px; align-items: flex-start; }
+.muted { color: var(--muted); font-size: 14px; }
+.url { direction: ltr; font: 700 16px ui-monospace, monospace; background: #0004; padding: 10px 12px; border-radius: 12px; word-break: break-all; text-align: center; }
+[hidden] { display: none !important; }
+.share-glyph { vertical-align: -3px; color: var(--accent); }
+.legal h2 { color: var(--accent); }
+.legal p, .legal li { color: var(--text); }
