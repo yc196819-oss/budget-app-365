@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { InstallCard } from '../../components/InstallCard.js';
 import { useState } from 'preact/hooks';
 import { sb } from '../../lib/supabase.js';
 import { readLocal } from '../../lib/storage.js';
@@ -85,6 +86,8 @@ export function LoginScreen() {
         <button class="btn" type="submit" disabled=${busy}>${busy ? '…' : mode === 'register' ? 'הרשמה' : 'כניסה'}</button>
         ${mode === 'login' && html`<button class="btn-text" type="button" onClick=${reset}>שכחתי סיסמה</button>`}
       </form>
+      <${InstallCard} always=${true} />
+      <a class="btn-text" href="/download" style="text-align:center">📲 הורדת האפליקציה לטלפון</a>
       <p class="faint" style="font-size:13px">זו הגרסה החדשה, בבנייה. אפשר לעבור לגרסה הקודמת בכל רגע: <a href="/old/">לגרסה הקודמת</a></p>
     </main>`;
 }

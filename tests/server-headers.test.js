@@ -150,3 +150,32 @@ test('the app loads its motion styles', async () => {
   const css = await (await fetch(BASE + '/app/styles/motion.css')).text();
   assert.match(css, /@keyframes grow-x/);
 });
+
+test('public pages for downloading, privacy and account deletion: no sign-in, strict CSP, no inline code', async () => {
+  for (const [route, text] of [['/download', 'הורדת האפליקציה'], ['/privacy', 'מדיניות פרטיות'], ['/delete-account', 'מחיקת חשבון']]) {
+    const res = await fetch(BASE + route);
+    assert.equal(res.status, 200, route);
+    assert.match(res.headers.get('content-security-policy') || '', /script-src 'self'/, route);
+    const html = await res.text();
+    assert.ok(html.includes(text), route);
+    assert.doesNotMatch(html, /style="|<style|<script>(?!<\/script>)|onclick=/i, route + ': nothing the CSP would block');
+  }
+  assert.equal((await fetch(BASE + '/app/pages/download.js')).status, 200);
+  assert.match(await (await fetch(BASE + '/privacy')).text(), /4 הספרות האחרונות בלבד/);
+});
+
+test('Google Play asset links: none until the signing fingerprint is configured', async () => {
+  const res = await fetch(BASE + '/.well-known/assetlinks.json');
+  assert.equal(res.status, 404);
+});
+
+test('deleting an account needs a signed-in user', async () => {
+  const res = await fetch(BASE + '/api/account/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"confirm":"מחיקה"}' });
+  assert.ok(res.status === 401 || res.status === 503, String(res.status));
+});
+
+test('the manifest has a stable id and the finance category (for stores)', async () => {
+  const m = await (await fetch(BASE + '/manifest.json')).json();
+  assert.equal(m.id, '/app/');
+  assert.ok(m.categories.includes('finance'));
+});

@@ -78,3 +78,64 @@ test('on a computer the home screen does not ask', async () => {
   assert.equal(await page.locator('.install-card').count(), 0);
   await page.close();
 });
+
+test('the public download page: one tap on Android, the two steps on iPhone, the link on a computer', async () => {
+  const android = await browser.newPage({ viewport: { width: 390, height: 844 }, userAgent: ANDROID });
+  const errors = collectErrors(android);
+  await android.route('**/fonts.g*/**', (r) => r.abort());
+  await android.addInitScript(() => {
+    window.addEventListener('load', () => setTimeout(() => {
+      const e = new Event('beforeinstallprompt', { cancelable: true });
+      e.prompt = () => { window.__prompted = true; };
+      e.userChoice = Promise.resolve({ outcome: 'accepted' });
+      window.dispatchEvent(e);
+    }, 50));
+  });
+  await android.goto(server.base + '/download');
+  await android.waitForTimeout(200);
+  await android.click('#install-btn');
+  await android.waitForSelector('#installed:not([hidden])');
+  assert.equal(await android.evaluate(() => window.__prompted), true);
+  assert.deepEqual(errors, []);
+  await android.close();
+
+  const iphone = await browser.newPage({ viewport: { width: 390, height: 844 }, userAgent: IPHONE });
+  await iphone.goto(server.base + '/download');
+  await iphone.click('#install-btn');
+  assert.ok(await iphone.locator('#steps-ios').isVisible());
+  assert.match(await iphone.locator('#steps-ios').textContent(), /הוספה למסך הבית/);
+  await iphone.close();
+
+  const desktop = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await desktop.goto(server.base + '/download');
+  await desktop.click('#install-btn');
+  assert.match(await desktop.locator('#url').textContent(), /\/download$/);
+  await desktop.close();
+});
+
+test('the sign-in screen links to the download page', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, userAgent: IPHONE });
+  await mockSupabase(page, makeFakeDb());
+  await page.goto(server.base + '/app/');
+  await page.waitForSelector('.login');
+  assert.equal(await page.locator('a[href="/download"]').count(), 1);
+  assert.equal(await page.locator('.install-card').count(), 1, 'on an iPhone the install steps are offered right away');
+  await page.close();
+});
+
+test('deleting the account from the profile: the word must be typed, then the account is gone and the app signs out', async () => {
+  const { page } = await open();
+  const deleted = [];
+  await page.route('**/api/account/delete', (r) => { deleted.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=מחיקת החשבון');
+  const go = page.locator('button', { hasText: 'למחוק לצמיתות' });
+  assert.ok(await go.isDisabled());
+  await page.fill('.delete-account input', 'מחק');
+  assert.ok(await go.isDisabled());
+  await page.fill('.delete-account input', 'מחיקה');
+  await go.click();
+  await page.waitForSelector('.login');
+  assert.deepEqual(deleted, [{ confirm: 'מחיקה' }]);
+  await page.close();
+});

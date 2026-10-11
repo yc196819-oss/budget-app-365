@@ -13,6 +13,8 @@ const { claudeRequest, isRetryable } = require('./server/claude');
 const learn = require('./server/learn');
 const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
+const account = require('./server/account');
+const twa = require('./server/twa');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1279,6 +1281,21 @@ app.post('/api/tasks/remind-due', async (req, res) => {
 
 // ═══ "מחליטים ביחד": tell the partners about a card or an answer ═══
 const decisionLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip });
+// Deleting my account: the person's own login, and every household they are
+// alone in. A shared household stays with the partner. The word "מחיקה" must
+// be sent, so a stray request cannot do it.
+app.post('/api/account/delete', requireAuth, notifyLimiter, async (req, res) => {
+  if (String((req.body || {}).confirm || '').trim() !== 'מחיקה') return res.status(400).json({ error: 'נדרש אישור' });
+  try {
+    const done = await account.deleteAccount(supabaseAdmin, req.authUserId);
+    console.log('[account] deleted', req.authUserId, 'households removed:', done.remove.length, 'left:', done.leave.length);
+    return res.json({ ok: true, removed: done.remove.length, left: done.leave.length });
+  } catch (err) {
+    console.error('[account] delete failed', req.authUserId, err.message);
+    return res.status(500).json({ error: 'המחיקה לא הושלמה. נסו שוב, ואם זה חוזר פנו אלינו.' });
+  }
+});
+
 app.post('/api/decisions/notify', requireAuth, decisionLimiter, async (req, res) => {
   try {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase not configured' });
@@ -1966,6 +1983,19 @@ function appShell() {
 app.get('/', (req, res) => {
   const q = req.originalUrl.indexOf('?');
   res.redirect(302, '/app/' + (q >= 0 ? req.originalUrl.slice(q) : ''));
+});
+// Pages that work without signing in: downloading the app, the privacy
+// policy and how to delete an account (Google Play links to the last two).
+for (const [route, file] of [['/download', 'download.html'], ['/privacy', 'privacy.html'], ['/delete-account', 'delete-account.html']]) {
+  app.get(route, (req, res) => { res.setHeader('Content-Security-Policy', NEW_APP_CSP); res.sendFile(path.join(NEW_APP_DIR, 'pages', file)); });
+}
+// Google Play (Trusted Web Activity): proves the Android app and this site
+// belong together, so the app opens full screen without a browser bar.
+// Set TWA_SHA256 (from Play Console → App signing) once the app exists.
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  const links = twa.assetLinks(process.env.TWA_PACKAGE, process.env.TWA_SHA256);
+  if (!links) return res.status(404).json([]);
+  return res.json(links);
 });
 app.get(['/old', '/old/'], (req, res) => {
   if (req.path === '/old') return res.redirect(301, '/old/');
