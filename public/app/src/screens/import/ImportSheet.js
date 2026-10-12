@@ -46,7 +46,7 @@ export function ImportSheet({ data, onClose }) {
   const reset = () => { run.current++; setItems([]); setError(''); setPhase('pick'); };
 
   const save = async () => {
-    const rows = toRows(items, { cardId });
+    const rows = toRows(items, { cardId, cards: data.cards });
     if (!rows.length || saving) return;
     setSaving(true);
     try {

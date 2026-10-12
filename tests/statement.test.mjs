@@ -178,10 +178,51 @@ test('duplicates: same amount within 3 days, "likely" starts unchecked, "maybe" 
   assert.deepEqual(out[0].dupeOf, { date: '2026-08-13', description: 'פז אילת' });
 });
 
-test('the same line twice in one file is flagged once', () => {
-  const line = { date: '2026-08-13', amount: 18, type: 'expense', description: 'ארומה' };
+test('the same line twice in one file is two real charges (two train tickets): flagged "maybe", both kept', () => {
+  const line = { date: '2026-10-08', amount: 11.5, type: 'expense', description: 'רכבת ישראל - נמל תעופה' };
   const out = flagDuplicates([line, { ...line }], []);
-  assert.deepEqual(out.map((t) => t.dupe), [null, 'likely']);
+  assert.deepEqual(out.map((t) => t.dupe), [null, 'maybe']);
+  assert.deepEqual(out.map((t) => t.include), [true, true]);
+});
+
+test('the same amount at a different shop on the same day is not a likely duplicate', () => {
+  const existing = [{ type: 'expense', amount: 93.42, tx_date: '2026-10-04', description: 'ZARA AFI BRASOV' }];
+  const out = flagDuplicates([{ date: '2026-10-04', amount: 93.42, type: 'expense', description: 'STRADIVARIUS AFI BRASOV' }], existing);
+  assert.equal(out[0].include, true);
+  const same = flagDuplicates([{ date: '2026-10-04', amount: 93.42, type: 'expense', description: 'ZARA AFI BRASOV' }], existing);
+  assert.equal(same[0].dupe, 'likely');
+});
+
+test('each installment payment is new money: payment 3 of 14 is not a duplicate of payment 1', () => {
+  const existing = [{ type: 'expense', amount: 250, tx_date: '2026-07-30', description: 'רהיטים בע"מ (תשלום 1 מתוך 14)' }];
+  const p3 = flagDuplicates([{ date: '2026-07-30', amount: 250, type: 'expense', description: 'רהיטים בע"מ (תשלום 3 מתוך 14)' }], existing);
+  assert.equal(p3[0].dupe, null);
+  const again = flagDuplicates([{ date: '2026-07-30', amount: 250, type: 'expense', description: 'רהיטים בע"מ (תשלום 1 מתוך 14)' }], existing);
+  assert.equal(again[0].dupe, 'likely', 'the same payment uploaded twice is still caught');
+});
+
+test('fromAi: one installment label, the charge-date the AI gives, and the card digits', () => {
+  const [a, b, c] = fromAi([
+    { date: '2026-10-10', description: 'רהיטים בע"מ', amount: 250, installment: { n: 3, of: 14 }, card: '••7927' },
+    { date: '2026-10-11', description: 'ספרים (תשלום 3 מתוך 4)', amount: 875, installment: null },
+    { date: '2026-10-11', description: 'מספרה', amount: 60, installment: { n: 5, of: 2 }, card: '12' }
+  ], CATS);
+  assert.equal(a.description, 'רהיטים בע"מ (תשלום 3 מתוך 14)');
+  assert.equal(a.date, '2026-10-10');
+  assert.equal(a.card4, '7927');
+  assert.equal(b.description, 'ספרים (תשלום 3 מתוך 4)');
+  assert.equal(c.description, 'מספרה', 'an impossible installment is ignored');
+  assert.equal(c.card4, undefined);
+});
+
+test('rows go on the card the statement shows for each line, else the chosen card', () => {
+  const items = prepare([
+    { date: '2026-10-05', amount: 40, type: 'expense', description: 'x', card4: '7518' },
+    { date: '2026-10-05', amount: 50, type: 'expense', description: 'y', card4: '0000' },
+    { date: '2026-10-05', amount: 60, type: 'expense', description: 'z' }
+  ], []);
+  const rows = toRows(items, { cardId: 'main', cards: [{ id: 'sky', last4: '7518' }, { id: 'other' }] });
+  assert.deepEqual(rows.map((r) => r.card_id), ['sky', 'main', 'main']);
 });
 
 test('similarText ignores installment notes and punctuation', () => {
@@ -197,9 +238,9 @@ test('summary and rows to save', () => {
     { date: '2026-08-12', amount: 100, type: 'expense', description: 'a', category_id: 'food', subcategory_id: null }
   ], []);
   const s = summary(items);
-  assert.deepEqual({ ...s }, { found: 4, chosen: 3, auto: 1, waiting: 2, likely: 1, maybe: 0, expense: 140, income: 20, from: '2026-08-12', to: '2026-08-15' });
+  assert.deepEqual({ ...s }, { found: 4, chosen: 4, auto: 2, waiting: 2, likely: 0, maybe: 1, expense: 240, income: 20, from: '2026-08-12', to: '2026-08-15' });
   const rows = toRows(items);
-  assert.equal(rows.length, 3);
+  assert.equal(rows.length, 4);
   assert.deepEqual(rows[0], { type: 'expense', amount: 100, description: 'a', tx_date: '2026-08-12', category_id: 'food', subcategory_id: null, nature: 'variable', spread: 'month', source: 'pdf' });
   const carded = toRows(items, { cardId: 'c1' });
   assert.ok(carded.every((r) => r.card_id === 'c1' && r.payment_method === 'credit'));
