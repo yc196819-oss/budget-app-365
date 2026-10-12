@@ -240,3 +240,59 @@ export function readyMonth(total, perMonth, today) {
   const d = new Date(today.getFullYear(), today.getMonth() + months, 1);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
+
+// ── what the family tells the trip chat ──
+// prefs, kept with the plan and changed only through applyChanges:
+//   skip      ['lodging', …]       not needed at all (staying with family)
+//   covered   { food: 'all' | ₪ }  someone else pays (all of it, or up to ₪)
+//   fixed     { flights: ₪ }       the real price, already known (total)
+//   pct       { food: -20 }        more or less than the plan
+//   funding   ₪                    money that is already there for the trip
+//   notes     ['לינה אצל הדודה']   short facts the chat should remember
+export const emptyPrefs = () => ({ skip: [], covered: {}, fixed: {}, pct: {}, funding: 0, notes: [] });
+
+const isCat = (k) => PLAN_CATS.includes(k);
+const amount = (v, max = 1000000) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= 0 ? Math.min(n, max) : null; };
+
+// The chat's changes (already cleaned by the server) onto the prefs. Pure.
+export function applyChanges(prefs, ch = {}) {
+  const p = { ...emptyPrefs(), ...prefs };
+  const skip = new Set(p.skip);
+  const covered = { ...p.covered }, fixed = { ...p.fixed }, pct = { ...p.pct };
+  for (const k of ch.clear || []) { if (!isCat(k)) continue; skip.delete(k); delete covered[k]; delete fixed[k]; delete pct[k]; }
+  for (const k of ch.skip || []) if (isCat(k)) { skip.add(k); delete covered[k]; delete fixed[k]; }
+  for (const k of ch.unskip || []) skip.delete(k);
+  for (const [k, v] of Object.entries(ch.covered || {})) {
+    if (!isCat(k)) continue;
+    if (v === 'all') covered[k] = 'all';
+    else if (amount(v) > 0) covered[k] = amount(v);
+    else delete covered[k];
+    skip.delete(k);
+  }
+  for (const [k, v] of Object.entries(ch.fixed || {})) { if (isCat(k) && amount(v) != null) { fixed[k] = amount(v); skip.delete(k); } }
+  for (const [k, v] of Object.entries(ch.pct || {})) { const n = Number(v); if (isCat(k) && Number.isFinite(n)) pct[k] = Math.max(-100, Math.min(300, Math.round(n))); }
+  const funding = ch.funding != null && amount(ch.funding) != null ? amount(ch.funding) : p.funding;
+  const notes = [...p.notes.filter((n) => !(ch.notes_remove || []).includes(n)), ...(ch.notes_add || [])].filter((n, i, a) => n && a.indexOf(n) === i).slice(-8);
+  return { skip: [...skip], covered, fixed, pct, funding, notes };
+}
+
+// The plan after the prefs: every line's cost, what others pay, and what the
+// household still has to put aside. total = the trip; toSave = total − covered − funding.
+export function personalize(plan, prefs = emptyPrefs()) {
+  const p = { ...emptyPrefs(), ...prefs };
+  const round = (n) => Math.round(n / 50) * 50;
+  const lines = {}, paid = {};
+  for (const k of PLAN_CATS) {
+    let v = plan.lines[k] || 0;
+    if (p.skip.includes(k)) v = 0;
+    else if (Number.isFinite(p.fixed[k])) v = p.fixed[k];
+    else if (Number.isFinite(p.pct[k])) v = round(v * (1 + p.pct[k] / 100));
+    lines[k] = v;
+    const c = p.covered[k];
+    paid[k] = c === 'all' ? v : Number.isFinite(c) ? Math.min(v, c) : 0;
+  }
+  const total = Object.values(lines).reduce((s, n) => s + n, 0);
+  const covered = Object.values(paid).reduce((s, n) => s + n, 0);
+  const funding = Math.min(Math.max(0, total - covered), p.funding || 0);
+  return { lines, paid, total, covered, funding, toSave: Math.max(0, total - covered - funding) };
+}

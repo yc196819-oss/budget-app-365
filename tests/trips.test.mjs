@@ -100,3 +100,51 @@ test('what can be saved each month, and when the trip is affordable', () => {
   assert.equal(readyMonth(9000, 1500, new Date(2026, 9, 12)), '2027-04');
   assert.equal(readyMonth(9000, 0, new Date(2026, 9, 12)), null);
 });
+
+import { emptyPrefs, applyChanges, personalize } from '../public/app/src/domain/trips.js';
+
+const PLAN = { lines: { flights: 6800, lodging: 4500, food: 3000, transport: 1200, attractions: 900, shopping: 600, other: 300 }, total: 17300 };
+
+test('no lodging, meals paid for: the trip costs less and the family saves only its part', () => {
+  const prefs = applyChanges(emptyPrefs(), { skip: ['lodging'], covered: { food: 'all' }, notes_add: ['לינה אצל האח בפריז'] });
+  const fit = personalize(PLAN, prefs);
+  assert.equal(fit.lines.lodging, 0);
+  assert.equal(fit.total, 17300 - 4500);
+  assert.equal(fit.paid.food, 3000);
+  assert.equal(fit.covered, 3000);
+  assert.equal(fit.toSave, 12800 - 3000);
+  assert.deepEqual(prefs.notes, ['לינה אצל האח בפריז']);
+});
+
+test('a known fare, a percent, partial funding and money already aside', () => {
+  const prefs = applyChanges(emptyPrefs(), { fixed: { flights: 5200 }, pct: { food: -50 }, covered: { attractions: 400 }, funding: 2000 });
+  const fit = personalize(PLAN, prefs);
+  assert.equal(fit.lines.flights, 5200);
+  assert.equal(fit.lines.food, 1500);
+  assert.equal(fit.paid.attractions, 400);
+  assert.equal(fit.funding, 2000);
+  assert.equal(fit.toSave, fit.total - 400 - 2000);
+});
+
+test('funding never makes the saving negative, and covered is capped by the line', () => {
+  const fit = personalize(PLAN, applyChanges(emptyPrefs(), { covered: { other: 99999 }, funding: 999999 }));
+  assert.equal(fit.paid.other, 300);
+  assert.equal(fit.toSave, 0);
+});
+
+test('changes undo: clear a category, bring back a skipped one, forget a note, zero the funding', () => {
+  let p = applyChanges(emptyPrefs(), { skip: ['lodging'], covered: { food: 'all' }, pct: { food: 20 }, funding: 500, notes_add: ['א', 'ב'] });
+  p = applyChanges(p, { clear: ['food'], unskip: ['lodging'], notes_remove: ['א'], funding: 0 });
+  assert.deepEqual(p, { skip: [], covered: {}, fixed: {}, pct: {}, funding: 0, notes: ['ב'] });
+  assert.deepEqual(personalize(PLAN, p).lines, PLAN.lines);
+});
+
+test('unknown categories and silly numbers are ignored; skip wins over an earlier price', () => {
+  let p = applyChanges(emptyPrefs(), { skip: ['casino'], covered: { food: -5, flights: 'some' }, pct: { food: 900 } });
+  assert.deepEqual(p.skip, []);
+  assert.deepEqual(p.covered, {});
+  assert.equal(p.pct.food, 300);
+  p = applyChanges(applyChanges(emptyPrefs(), { fixed: { lodging: 2000 } }), { skip: ['lodging'] });
+  assert.deepEqual(p.fixed, {});
+  assert.equal(personalize(PLAN, p).lines.lodging, 0);
+});

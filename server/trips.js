@@ -82,4 +82,118 @@ function pickEstimate(raw, today) {
   };
 }
 
-module.exports = { cleanRequest, estimatePrompt, pickEstimate };
+// ── the trip chat: the family says what is different for them, the chat
+// answers and changes the plan. The model returns words and a list of
+// changes; only known keys, categories and bounded numbers get through.
+
+const PLAN_CATS = ['flights', 'lodging', 'food', 'transport', 'attractions', 'shopping', 'other'];
+const LABELS = { flights: 'טיסות', lodging: 'לינה', food: 'אוכל', transport: 'תחבורה ורכב', attractions: 'אטרקציות', shopping: 'קניות', other: 'ביטוח ושונות' };
+const catsOf = (v) => (Array.isArray(v) ? v : []).map(String).filter((k) => PLAN_CATS.includes(k)).filter((k, i, a) => a.indexOf(k) === i);
+const amounts = (o, max, { all = false, lo = 0 } = {}) => {
+  const out = {};
+  for (const k of PLAN_CATS) {
+    const v = o && typeof o === 'object' ? o[k] : undefined;
+    if (v === undefined || v === null) continue;
+    if (all && v === 'all') { out[k] = 'all'; continue; }
+    const n = clampNum(v, lo, max);
+    if (n != null) out[k] = n;
+  }
+  return out;
+};
+
+function cleanChat(body) {
+  const b = body || {};
+  const message = text(b.message, 600);
+  if (!message) return null;
+  const c = b.context && typeof b.context === 'object' ? b.context : {};
+  const prefs = c.prefs && typeof c.prefs === 'object' ? c.prefs : {};
+  return {
+    message,
+    history: (Array.isArray(b.history) ? b.history : []).slice(-10)
+      .map((m) => ({ role: m && m.role === 'ai' ? 'ai' : 'me', text: text(m && m.text, 600) })).filter((m) => m.text),
+    context: {
+      destination: text(c.destination, 60),
+      month: MONTH.test(String(c.month || '')) ? String(c.month) : null,
+      days: clampNum(c.days, 1, 60) || 6,
+      travelers: clampNum(c.travelers, 1, 20) || 2,
+      past: text(c.past, 60),
+      lines: amounts(c.lines, 1000000),
+      prefs: {
+        skip: catsOf(prefs.skip),
+        covered: amounts(prefs.covered, 1000000, { all: true }),
+        fixed: amounts(prefs.fixed, 1000000),
+        pct: amounts(prefs.pct, 300, { lo: -100 }),
+        funding: clampNum(prefs.funding, 0, 1000000) || 0,
+        notes: (Array.isArray(prefs.notes) ? prefs.notes : []).map((n) => text(n, 80)).filter(Boolean).slice(0, 8)
+      },
+      estimate: c.estimate && typeof c.estimate === 'object' ? {
+        flight: clampNum(c.estimate.flight, 0, 100000), lodging: clampNum(c.estimate.lodging, 0, 100000),
+        currency: /^[A-Z]{3}$/.test(String(c.estimate.currency || '')) ? c.estimate.currency : null,
+        daily_local: clampNum(c.estimate.daily_local, 0, 10000000)
+      } : null
+    }
+  };
+}
+
+function chatPrompt(req, today) {
+  const c = req.context;
+  const lines = PLAN_CATS.map((k) => `${k} (${LABELS[k]}): ₪${c.lines[k] || 0}`).join(', ');
+  const p = c.prefs;
+  const prefs = [
+    p.skip.length ? 'לא צריך: ' + p.skip.join(', ') : '',
+    Object.keys(p.covered).length ? 'ממומן ע"י אחרים: ' + Object.entries(p.covered).map(([k, v]) => k + ' ' + (v === 'all' ? 'הכל' : '₪' + v)).join(', ') : '',
+    Object.keys(p.fixed).length ? 'מחיר ידוע: ' + Object.entries(p.fixed).map(([k, v]) => k + ' ₪' + v).join(', ') : '',
+    Object.keys(p.pct).length ? 'שינוי באחוזים: ' + Object.entries(p.pct).map(([k, v]) => k + ' ' + v + '%').join(', ') : '',
+    p.funding ? 'כסף שכבר יש לטיול: ₪' + p.funding : '',
+    p.notes.length ? 'עובדות: ' + p.notes.join('; ') : ''
+  ].filter(Boolean).join('\n') || 'אין עדיין התאמות.';
+  const est = c.estimate ? `הערכת היועץ: טיסה לאדם ₪${c.estimate.flight || '?'}, לינה ללילה ₪${c.estimate.lodging || '?'}${c.estimate.currency ? ', מטבע ' + c.estimate.currency + (c.estimate.daily_local ? ', ליום לאדם ' + c.estimate.daily_local + ' ' + c.estimate.currency : '') : ''}.` : '';
+  const convo = req.history.map((m) => (m.role === 'ai' ? 'יועץ: ' : 'משתמש: ') + m.text).join('\n');
+  return `אתה יועץ הטיולים באפליקציית התקציב של משפחה ישראלית. היום ${today}.
+אתה עוזר להתאים את תקציב הטיול לצרכים האישיים שלהם, ומשנה את התוכנית כשהם מספרים משהו.
+הטיול: ${c.destination || 'יעד לא נבחר'}${c.month ? ', ' + c.month : ''}, ${c.days} ימים, ${c.travelers} נוסעים.${c.past ? ' התוכנית מבוססת על ' + c.past + '.' : ''}
+התוכנית עכשיו (סה"כ לכל הטיול, בשקלים): ${lines}.
+${est}
+ההתאמות עד עכשיו:
+${prefs}
+${convo ? 'השיחה עד עכשיו:\n' + convo : ''}
+
+כללים:
+- "לא צריך לינה/אוכל" (ישנים אצל משפחה, אוכלים אצלם) → skip. "מישהו משלם/יש מימון ל..." → covered ("all" או סכום). "הטיסה כבר עולה X" → fixed (סה"כ לכל הנוסעים). "אוכל חצי מהזמן אצל משפחה" → pct שלילי (‎-50). "יש לי כבר X בצד/מתנה לטיול" → funding.
+- ביטול התאמה: clear עם הקטגוריה. שינוי ימים/נוסעים/חודש/יעד: days, travelers, month (YYYY-MM), destination.
+- הוסף ל-notes_add עובדה קצרה (עד 8 מילים) לכל דבר אישי שסיפרו, כדי לזכור אותו.
+- אם שואלים שאלה (מה כדאי, כמה עולה, מתי זול) – ענה מהידע שלך, מציאותי ושמרני, בלי להמציא מחירים מדויקים, ושנה רק אם ביקשו.
+- אם לא ברור – שאל שאלה אחת קצרה ואל תשנה.
+- reply: עברית, קצר (עד 3 משפטים), תגיד מה שינית ואיך זה משפיע.
+קטגוריות: ${PLAN_CATS.join(', ')}.
+
+ההודעה החדשה: ${req.message}
+
+החזר JSON בלבד:
+{"reply":"...","changes":{"skip":[],"unskip":[],"covered":{},"fixed":{},"pct":{},"clear":[],"funding":null,"days":null,"travelers":null,"month":null,"destination":null,"notes_add":[],"notes_remove":[]}}`;
+}
+
+// The model's JSON -> { reply, changes } with only what the app knows.
+function pickChat(raw, today) {
+  if (!raw || typeof raw !== 'object') return null;
+  const reply = text(raw.reply, 600);
+  if (!reply) return null;
+  const c = raw.changes && typeof raw.changes === 'object' ? raw.changes : {};
+  const ch = {};
+  const skip = catsOf(c.skip); if (skip.length) ch.skip = skip;
+  const unskip = catsOf(c.unskip); if (unskip.length) ch.unskip = unskip;
+  const clear = catsOf(c.clear); if (clear.length) ch.clear = clear;
+  const covered = amounts(c.covered, 1000000, { all: true }); if (Object.keys(covered).length) ch.covered = covered;
+  const fixed = amounts(c.fixed, 1000000); if (Object.keys(fixed).length) ch.fixed = fixed;
+  const pct = amounts(c.pct, 300, { lo: -100 }); if (Object.keys(pct).length) ch.pct = pct;
+  if (c.funding !== null && c.funding !== undefined) { const f = clampNum(c.funding, 0, 1000000); if (f != null) ch.funding = f; }
+  const days = clampNum(c.days, 1, 60); if (days) ch.days = days;
+  const travelers = clampNum(c.travelers, 1, 20); if (travelers) ch.travelers = travelers;
+  if (MONTH.test(String(c.month || '')) && String(c.month) > String(today).slice(0, 7)) ch.month = String(c.month);
+  const destination = text(c.destination, 60); if (destination) ch.destination = destination;
+  const notes = (Array.isArray(c.notes_add) ? c.notes_add : []).map((n) => text(n, 80)).filter(Boolean).slice(0, 4); if (notes.length) ch.notes_add = notes;
+  const gone = (Array.isArray(c.notes_remove) ? c.notes_remove : []).map((n) => text(n, 80)).filter(Boolean).slice(0, 8); if (gone.length) ch.notes_remove = gone;
+  return { reply, changes: ch };
+}
+
+module.exports = { cleanRequest, estimatePrompt, pickEstimate, cleanChat, chatPrompt, pickChat };
