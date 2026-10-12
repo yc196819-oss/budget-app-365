@@ -365,4 +365,11 @@ textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: 
 .trip-est { border: 1px solid var(--accent-tint); font-size: 15px; line-height: 1.55; }
 .trip-tips { margin: 0; padding-inline-start: 18px; font-size: 14px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
 .trip-save { border: 1px solid var(--income); }
+.adj.paid { background: color-mix(in srgb, var(--income) 18%, transparent); color: var(--income); }
+.trip-fit { border-top: 1px dashed var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.trip-prefs { display: flex; flex-wrap: wrap; gap: 6px; }
+.trip-pref { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); }
+.trip-pref.note { font-weight: 600; color: var(--muted); }
+.trip-pref button { border: 0; background: transparent; color: var(--muted); font-size: 12px; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; }
+.trip-chat .dchat-log { max-height: 40vh; }
 .trip-monthly { font-family: var(--font-display, inherit); font-size: 30px; color: var(--income); }

@@ -72,3 +72,9 @@ export async function estimate(body) {
   const j = await api('/api/ai/trip-estimate', { method: 'POST', body });
   return j.estimate;
 }
+
+// The trip chat (server: /api/ai/trip-chat): { reply, changes }.
+export async function tripChat(body) {
+  if (!aiEnabled()) throw new Error('היועץ (AI) כבוי בפרופיל. הפעילו אותו כדי לדבר על הטיול.');
+  return api('/api/ai/trip-chat', { method: 'POST', body });
+}

@@ -36,3 +36,34 @@ test('the answer is cleaned: ranges, percentages, months in the future only', ()
   assert.equal(pickEstimate({ flight_per_person: {}, lodging_per_night: { typical: 500 } }, '2026-10-12'), null);
   assert.equal(pickEstimate(null), null);
 });
+
+const { cleanChat, chatPrompt, pickChat } = require('../server/trips');
+
+test('the chat request needs a message and keeps only known context', () => {
+  assert.equal(cleanChat({}), null);
+  const r = cleanChat({ message: ' בפריז   אנחנו אצל אחי ', history: Array.from({ length: 14 }, (_, i) => ({ role: i % 2 ? 'ai' : 'x', text: 'm' + i })),
+    context: { destination: 'פריז', month: '2027-05', days: 7, travelers: 3, lines: { lodging: 4500, casino: 5 }, prefs: { skip: ['lodging', 'nope'], covered: { food: 'all', flights: 'x' }, pct: { food: -500 }, funding: 2000, notes: ['א'] }, estimate: { flight: 1800, currency: 'eur' } } });
+  assert.equal(r.message, 'בפריז אנחנו אצל אחי');
+  assert.equal(r.history.length, 10);
+  assert.equal(r.history[0].role, 'me');
+  assert.deepEqual(r.context.lines, { lodging: 4500 });
+  assert.deepEqual(r.context.prefs.skip, ['lodging']);
+  assert.deepEqual(r.context.prefs.covered, { food: 'all' });
+  assert.equal(r.context.prefs.pct.food, -100);
+  assert.equal(r.context.estimate.currency, null);
+});
+
+test('the chat prompt carries the plan, what is known and the message, and asks for JSON', () => {
+  const r = cleanChat({ message: 'האוכל ממומן', history: [{ role: 'me', text: 'שלום' }], context: { destination: 'פריז', days: 5, travelers: 2, lines: { food: 2000 }, prefs: { skip: ['lodging'], notes: ['לינה אצל האח'] } } });
+  const p = chatPrompt(r, '2026-10-12');
+  for (const w of ['פריז', 'food (אוכל): ₪2000', 'לא צריך: lodging', 'לינה אצל האח', 'משתמש: שלום', 'האוכל ממומן', '"changes"']) assert.ok(p.includes(w), w);
+});
+
+test('the chat answer: only known keys, categories and bounded numbers get through', () => {
+  assert.equal(pickChat(null, '2026-10-12'), null);
+  assert.equal(pickChat({ changes: { skip: ['lodging'] } }, '2026-10-12'), null, 'no words, no changes');
+  const out = pickChat({ reply: 'הורדתי את הלינה', changes: { skip: ['lodging', 'yacht'], covered: { food: 'all', flights: -3 }, fixed: { flights: 4200 }, pct: { food: -50 }, funding: 2000, days: 99, travelers: 3, month: '2020-01', destination: 'פריז', notes_add: ['לינה אצל האח'], hack: true } }, '2026-10-12');
+  assert.equal(out.reply, 'הורדתי את הלינה');
+  assert.deepEqual(out.changes, { skip: ['lodging'], covered: { food: 'all', flights: 0 }, fixed: { flights: 4200 }, pct: { food: -50 }, funding: 2000, days: 60, travelers: 3, destination: 'פריז', notes_add: ['לינה אצל האח'] });
+  assert.deepEqual(pickChat({ reply: 'מה התקציב לאוכל?', changes: { funding: null, month: null } }, '2026-10-12').changes, {});
+});

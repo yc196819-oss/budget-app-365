@@ -102,3 +102,48 @@ test('planning the next trip: the advisor checks the destination, the local curr
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('the trip chat fits the plan: no lodging, meals paid for, money already aside, and ✕ takes it back', async () => {
+  const db = withTrip(makeFakeDb());
+  db.tables.trips = [{ id: 'tr1', household_id: 'h1', status: 'saved', name: 'חופשה ברומניה 2026', country: 'רומניה', start_date: ago(24), end_date: ago(21), people: 2, transaction_ids: ['f1', 'r1', 'r2', 'r3', 'r4', 'r5'], excluded_ids: [] }];
+  const { page, errors } = await open('#/plans/trips', db);
+  const said = [];
+  await page.route('**/api/ai/trip-chat', (r) => {
+    const body = JSON.parse(r.request().postData());
+    said.push(body);
+    const changes = said.length === 1
+      ? { skip: ['lodging'], covered: { food: 'all' }, notes_add: ['לינה ואוכל אצל המשפחה'] }
+      : { funding: 1000, days: 5 };
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ reply: said.length === 1 ? 'הורדתי לינה, והאוכל ממומן.' : 'רשמתי ₪1,000 בצד ו-5 ימים.', changes }) });
+  });
+  await page.click('text=✈️ לתכנן טיול');
+  await page.waitForSelector('.sheet .trip-total');
+  const before = await page.locator('.sheet .trip-total').textContent();
+  await page.fill('.trip-chat input', 'אנחנו אצל המשפחה, הם מארחים ומאכילים');
+  await page.click('.trip-chat button:has-text("שליחה")');
+  await page.waitForSelector('.trip-chat .dmsg.ai:has-text("הורדתי לינה")');
+  const sheet = () => page.locator('.sheet').textContent();
+  assert.match(await sheet(), /לא צריך/);
+  assert.match(await sheet(), /ממומן ע״י אחרים/);
+  assert.match(await sheet(), /לינה ואוכל אצל המשפחה/);
+  assert.notEqual(await page.locator('.sheet .trip-total').textContent(), before);
+  assert.equal(said[0].context.travelers, 2);
+  assert.ok(said[0].context.lines.lodging > 0, 'the advisor sees the plan');
+  await page.fill('.trip-chat input', 'יש לי כבר אלף שקל, ובעצם 5 ימים');
+  await page.click('.trip-chat button:has-text("שליחה")');
+  await page.waitForSelector('.trip-chat .dmsg.ai:has-text("רשמתי")');
+  assert.deepEqual(said[1].context.prefs.skip, ['lodging']);
+  assert.deepEqual(said[1].history.map((m) => m.role), ['me', 'ai']);
+  assert.match(await sheet(), /כבר יש בצד/);
+  assert.equal((await page.locator('.sheet .stepper b').first().textContent()).trim(), '5');
+  await page.click('.trip-pref button[aria-label^="לבטל: 🏨"]');
+  assert.doesNotMatch(await sheet(), /לא צריך/);
+  await page.click('.sheet button:has-text("לשמור ביעדים")');
+  await page.waitForSelector('.toast');
+  const goal = db.tables.goals.find((g) => g.icon === '✈️');
+  assert.ok(!goal.plan_items.some((p) => p.name === 'אוכל'), 'what others pay is not saved for');
+  assert.match(goal.notes, /כבר יש: ₪1,000/);
+  assert.match(goal.notes, /לינה ואוכל אצל המשפחה/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

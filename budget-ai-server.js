@@ -1684,6 +1684,25 @@ app.post('/api/ai/trip-estimate', requireAuth, aiLimiter, aiQuota, async (req, r
   }
 });
 
+// The trip chat: the family tells what is different for them (no lodging,
+// meals paid for, a known fare) and the plan follows. Words plus a bounded
+// list of changes; the app applies them.
+app.post('/api/ai/trip-chat', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  const ask = tripsAi.cleanChat(req.body);
+  if (!ask) return res.status(400).json({ error: 'חסרה הודעה' });
+  try {
+    const ai = await generateWithFallback({ prompt: tripsAi.chatPrompt(ask, israelToday()), text: 'החזר את ה-JSON.' });
+    let parsed = null;
+    try { parsed = JSON.parse(extractJsonText(ai.output)); } catch (_e) { parsed = null; }
+    const out = tripsAi.pickChat(parsed, israelToday());
+    if (!out) return res.status(502).json({ error: 'לא הבנתי. נסו לנסח אחרת.' });
+    return res.json({ ...out, aiProvider: ai.provider });
+  } catch (err) {
+    console.error('trip-chat failed:', err.message);
+    return res.status(err.statusCode || 502).json({ error: 'היועץ לא זמין כרגע. נסו שוב בעוד דקה.' });
+  }
+});
+
 // ═══ stage 4: monthly report (1st of the month, cron) ═══
 app.post('/api/reports/run', async (req, res) => {
   try {
