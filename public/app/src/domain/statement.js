@@ -177,8 +177,12 @@ export function cleanCategory(type, category_id, subcategory_id, byId) {
 export function importPrompt(categories, today) {
   return 'חלץ את כל התנועות מהפירוט הבא (כרטיס אשראי או חשבון בנק). תאריך היום: ' + isoDate(today) + '. '
     + 'לכל תנועה בחר קטגוריה מהרשימה, ברמה הכי ספציפית שקיימת. השאר את שם בית העסק מלא כפי שהוא מופיע. '
-    + 'זיכוי או החזר הם type "income". אל תכלול שורות סיכום.\n\n' + categoryTreeText(categories)
-    + '\n\nהחזר JSON בלבד, בלי markdown, מערך:\n[{"date":"YYYY-MM-DD","description":"...","amount":מספר חיובי,"type":"expense"|"income","category_id":"id של קטגוריית השורש או null","subcategory_id":"id של תת-קטגוריה או null"}]';
+    + 'זיכוי או החזר הם type "income". אל תכלול שורות סיכום. '
+    + 'כלול כל שורת עסקה, גם כששם בית העסק או הפרטים נשברים לכמה שורות, וגם הוראות קבע, העברות (BIT, פייבוקס) ועמלות. שתי שורות זהות הן שתי עסקאות. '
+    + 'amount הוא הסכום בשקלים שחויב (עמודת "סכום ₪" או "סכום חיוב"), לא הסכום המקורי במטבע זר ולא סכום העסקה המלא. '
+    + 'בעסקה בתשלומים ("תשלום 3 מתוך 14"): installment הוא {"n":3,"of":14}, ו-date הוא מועד החיוב של התשלום הזה, לא תאריך העסקה המקורי. '
+    + 'אם בפירוט כמה כרטיסים, card הוא 4 הספרות האחרונות של הכרטיס שהשורה שייכת אליו.\n\n' + categoryTreeText(categories)
+    + '\n\nהחזר JSON בלבד, בלי markdown, מערך:\n[{"date":"YYYY-MM-DD","description":"...","amount":מספר חיובי,"type":"expense"|"income","category_id":"id של קטגוריית השורש או null","subcategory_id":"id של תת-קטגוריה או null","installment":{"n":מספר,"of":מספר} או null,"card":"1234" או null}]';
 }
 
 export function categorizePrompt(categories) {
@@ -191,6 +195,18 @@ export function categorizeText(items) {
   return items.map((t, i) => i + ' | ' + t.description + ' | ' + t.amount + ' | ' + (t.type === 'income' ? 'הכנסה' : 'הוצאה')).join('\n');
 }
 
+// "תשלום 3 מתוך 14" in a description -> { n: 3, of: 14 }, else null.
+const INSTALLMENT = /\(?\s*תשלום\s*(\d{1,3})\s*מתוך\s*(\d{1,3})\s*\)?/;
+export function installmentOf(description) {
+  const m = String(description || '').match(INSTALLMENT);
+  return m && +m[1] >= 1 && +m[1] <= +m[2] ? { n: +m[1], of: +m[2] } : null;
+}
+// One label at the end, whatever the AI wrote: "בורדו (תשלום 3 מתוך 14)".
+function withInstallment(description, inst) {
+  if (!inst) return description;
+  return (description.replace(INSTALLMENT, ' ').replace(/\s+/g, ' ').trim() || 'תשלום') + ' (תשלום ' + inst.n + ' מתוך ' + inst.of + ')';
+}
+
 // What the AI returned for a whole statement -> clean items.
 export function fromAi(list, categories) {
   const byId = new Map(categories.map((c) => [c.id, c]));
@@ -200,7 +216,11 @@ export function fromAi(list, categories) {
       const amount = Math.round(Math.abs(Number(t && t.amount) || 0) * 100) / 100;
       const date = normalizeDate(t && t.date);
       const cat = cleanCategory(type, t && t.category_id, t && t.subcategory_id, byId);
-      return { date, description: clean(t && t.description) || 'ייבוא', amount, type, ...cat, auto: cat.category_id ? 'ai' : null };
+      const description = clean(t && t.description) || 'ייבוא';
+      const n = Number(t && t.installment && t.installment.n), of = Number(t && t.installment && t.installment.of);
+      const inst = Number.isInteger(n) && Number.isInteger(of) && n >= 1 && n <= of && of <= 360 ? { n, of } : installmentOf(description);
+      const card4 = String((t && t.card) || '').replace(/\D/g, '');
+      return { date, description: withInstallment(description, inst), amount, type, ...cat, auto: cat.category_id ? 'ai' : null, ...(card4.length === 4 ? { card4 } : {}) };
     })
     .filter((t) => t.amount > 0 && t.date);
 }
@@ -256,8 +276,10 @@ export function setItemCategory(items, key, category_id, subcategory_id) {
 }
 
 // ── duplicates ─────────────────────────────────────────────────────────
-// Same rule as the current app: same type and amount within 3 days, scored
-// up by same day and a shared word. 75+ is "likely", 60-74 is "maybe".
+// Same type and amount within 3 days, scored up by same day and a shared
+// word. "Likely" (starts unchecked) needs the same day and a similar name:
+// the same amount at a different shop the same day is only "maybe". Two
+// payments of one installment deal (3 of 14 vs 1 of 14) are never the same.
 
 const dupNorm = (s) => String(s || '').replace(/\(?\s*תשלום\s*\d+\s*מתוך\s*\d+\s*\)?/g, ' ').replace(/["'׳״().,:\-_/\\]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -266,9 +288,14 @@ export function similarText(a, b) {
   const B = dupNorm(b);
   if (!A || !B) return false;
   if (A === B || A.includes(B) || B.includes(A)) return true;
-  const words = new Set(B.split(' ').filter((w) => w.length > 1));
-  return A.split(' ').some((w) => w.length > 1 && words.has(w));
+  // The merchant's own name (its first real word) must match: a shared town
+  // or mall ("AFI BRASOV") does not make ZARA and STRADIVARIUS the same.
+  const wa = A.split(' '), wb = B.split(' ');
+  const fa = nameWord(wa), fb = nameWord(wb);
+  return (!!fa && wb.includes(fa)) || (!!fb && wa.includes(fb));
 }
+const STOP = new Set(['בע', 'בעמ', 'ltd', 'inc', 'the', 'www', 'com']);
+const nameWord = (words) => words.find((w) => w.length > 1 && !STOP.has(w) && !/^\d+$/.test(w)) || null;
 
 function dayDiff(a, b) {
   const [y1, m1, d1] = a.split('-').map(Number);
@@ -285,20 +312,26 @@ export function bestDuplicate(item, pool) {
     if (!date) continue;
     const dd = dayDiff(date, item.date);
     if (dd > 3) continue;
-    const score = 50 + (dd === 0 ? 25 : dd === 1 ? 15 : 5) + (similarText(ex.description, item.description) ? 10 : 0);
+    const a = installmentOf(ex.description), b = installmentOf(item.description);
+    if (a && b && (a.n !== b.n || a.of !== b.of)) continue;
+    const similar = similarText(ex.description, item.description);
+    const score = Math.min(similar ? 100 : 74, 50 + (dd === 0 ? 25 : dd === 1 ? 15 : 5) + (similar ? 10 : 0));
     if (score >= 60 && (!best || score > best.score)) best = { tx: ex, score };
   }
   return best;
 }
 
-// Flags lines that already exist in the household, or twice in the same file.
-// Likely duplicates start unchecked.
+// Flags lines that already exist in the household (likely ones start
+// unchecked). The same line twice in one file is usually two real charges
+// (two train tickets), so it is only "maybe" and stays checked.
 export function flagDuplicates(items, existing) {
   const seen = [];
   return items.map((t) => {
-    const hit = bestDuplicate(t, existing) || bestDuplicate(t, seen);
-    const dupe = hit ? (hit.score >= 75 ? 'likely' : 'maybe') : null;
-    if (dupe !== 'likely') seen.push(t);
+    const old = bestDuplicate(t, existing);
+    const twin = old ? null : bestDuplicate(t, seen);
+    const hit = old || twin;
+    const dupe = old ? (old.score >= 75 ? 'likely' : 'maybe') : twin ? 'maybe' : null;
+    seen.push(t);
     return { ...t, dupe, dupeOf: hit ? { date: hit.tx.tx_date || hit.tx.date, description: hit.tx.description || '' } : null, include: dupe !== 'likely' };
   });
 }
@@ -329,19 +362,24 @@ export function summary(items) {
   };
 }
 
-// The rows to insert into `transactions`. A card, when chosen, goes on every
-// expense line (refunds too) so the card's charge can be estimated.
-export function toRows(items, { cardId = null } = {}) {
-  return items.filter((t) => t.include).map((t) => ({
-    type: t.type,
-    amount: t.amount,
-    description: t.description,
-    tx_date: t.date,
-    category_id: t.category_id || null,
-    subcategory_id: t.subcategory_id || null,
-    nature: 'variable',
-    spread: 'month',
-    source: 'pdf',
-    ...(cardId ? { card_id: cardId, payment_method: 'credit' } : {})
-  }));
+// The rows to insert into `transactions`. A line goes on the card whose last
+// 4 digits the statement showed for it; otherwise on the card chosen for the
+// whole file, so the card's charge can be estimated.
+export function toRows(items, { cardId = null, cards = [] } = {}) {
+  const byLast4 = new Map(cards.filter((c) => c.last4).map((c) => [String(c.last4), c.id]));
+  return items.filter((t) => t.include).map((t) => {
+    const card = (t.card4 && byLast4.get(t.card4)) || cardId;
+    return {
+      type: t.type,
+      amount: t.amount,
+      description: t.description,
+      tx_date: t.date,
+      category_id: t.category_id || null,
+      subcategory_id: t.subcategory_id || null,
+      nature: 'variable',
+      spread: 'month',
+      source: 'pdf',
+      ...(card ? { card_id: card, payment_method: 'credit' } : {})
+    };
+  });
 }
