@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSpoken, wordsToNumbers } from '../public/app/src/domain/voice.js';
+import { parseSpoken, wordsToNumbers, detectCurrency } from '../public/app/src/domain/voice.js';
 
 test('Hebrew number words become digits', () => {
   assert.equal(wordsToNumbers('שמונים'), '80');
@@ -107,4 +107,13 @@ test('a foreign card is saved in shekels by the rate of its date, the original a
   assert.equal(tx.description, 'אמזון ($50, שער 3.688)');
   assert.equal(tx.tx_date, '2026-09-13');
   assert.equal(inShekels({ amount: 46, currency: 'ILS' }), 46);
+});
+
+test('more currencies for trips: lei, Turkish lira, yen, Canadian dollars; "לאומי" and wine are not currencies', () => {
+  assert.equal(parseSpoken('200 לאו בסופר').currency, 'RON');
+  assert.equal(parseSpoken('100 לירות טורקיות שוק').currency, 'TRY');
+  assert.equal(parseSpoken('3000 ין יפני רמן').currency, 'JPY');
+  assert.equal(detectCurrency('50 דולר קנדי מונית'), 'CAD');
+  assert.equal(parseSpoken('נכנס החזר מביטוח לאומי 500 שקל').currency, undefined);
+  assert.equal(parseSpoken('40 יין בסופר').currency, undefined);
 });

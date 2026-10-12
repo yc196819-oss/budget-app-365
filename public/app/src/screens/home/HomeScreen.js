@@ -13,6 +13,8 @@ import { LearnCard } from '../learn/LearnCard.js';
 import { PlanCards } from '../plans/PlanCards.js';
 import { PlanSheets, usePlanSheet } from '../plans/PlanSheets.js';
 import { InstallCard } from '../../components/InstallCard.js';
+import { TripFound } from '../trips/TripFound.js';
+import { useTrips } from '../../data/useTrips.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
 // what needs attention (one action each) and what is coming up.
@@ -21,6 +23,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
   const [sheet, setSheet] = useState(null);
   // The holiday plan and the quarterly check-in have their own sheets.
   const planSheet = usePlanSheet();
+  const trips = useTrips(data.hid);
 
   if (data.status === 'loading' || data.status === 'idle') return html`<${Loading} label="טוען…" />`;
   if (data.status === 'error') {
@@ -59,6 +62,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
     <div class="home-main stack">
       <${Hero} plan=${plan} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
       <${InstallCard} />
+      <${TripFound} data=${data} trips=${trips} />
       <${Attention} items=${items} onAct=${act} />
       <${PlanCards} data=${data} onSheet=${(s) => { setSheet(null); planSheet.open(s); }} />
       <${WhereMoney} top=${top} />

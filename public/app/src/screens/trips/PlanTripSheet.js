@@ -1,0 +1,116 @@
+import { html } from '../../lib/html.js';
+import { useState } from 'preact/hooks';
+import { Sheet } from '../../components/Sheet.js';
+import { money } from '../../domain/format.js';
+import { baseline } from '../../domain/forecast.js';
+import { CATS, LEVELS, tripSummary, planBudget, savingPlan, pastRates, adjustFromEstimate, planFromEstimate, savingCapacity, readyMonth } from '../../domain/trips.js';
+import { estimate } from '../../data/trips.js';
+import { getRate } from '../../data/fx.js';
+import { saveGoal } from '../../data/household.js';
+import { showToast } from '../../lib/toast.js';
+import { CAT_LIST, categoryNamer, folderTrip, monthLabel } from './common.js';
+
+const isoMonth = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+const SEASON = { high: 'עונה גבוהה (יקר)', shoulder: 'עונת ביניים', low: 'עונה שקטה (זול)' };
+
+// Plan the next trip: where, when, how long, how many. The advisor checks
+// the destination (flights, lodging, cost of living next to the last trip,
+// cheaper months), the local currency is converted at today's rate, and the
+// plan says how much to put aside each month, or when the money is ready at
+// what the household can save. Saved as a goal with a date (forecast).
+export function PlanTripSheet({ data, row, onClose }) {
+  const today = new Date();
+  const base = row ? tripSummary(folderTrip(row, data.txs), row.people, new Set(row.excluded_ids || []), categoryNamer(data.categories)) : null;
+  const [dest, setDest] = useState('');
+  const [month, setMonth] = useState(() => isoMonth(new Date(today.getFullYear(), today.getMonth() + 5, 1)));
+  const [days, setDays] = useState(base ? base.days : 6);
+  const [people, setPeople] = useState(row ? row.people : 2);
+  const [level, setLevel] = useState('same');
+  const [est, setEst] = useState(null);
+  const [rate, setRate] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const n = { days, people, level };
+  const adjust = est && base ? adjustFromEstimate(est) : {};
+  const plan = base ? planBudget(base, { ...n, adjust }) : est ? planFromEstimate(est, n, rate || 0) : null;
+  const sv = plan ? savingPlan(plan.total, month + '-01', today) : null;
+  const capacity = savingCapacity(baseline(data.txs, today));
+  const ready = plan ? readyMonth(plan.total, capacity, today) : null;
+  const months = Array.from({ length: 18 }, (_, i) => isoMonth(new Date(today.getFullYear(), today.getMonth() + i + 1, 1)));
+
+  const check = async () => {
+    if (!dest.trim() || busy) return;
+    setBusy(true); setError('');
+    try {
+      const e = await estimate({ destination: dest.trim(), month, days, travelers: people, past: base ? { country: row.country, ...pastRates(base) } : null });
+      setEst(e);
+      setRate(null);
+      if (e.currency && e.currency !== 'ILS') getRate(e.currency, today.toISOString().slice(0, 10)).then((r) => setRate(r.rate)).catch(() => {});
+    } catch (err) {
+      setError(err.message || 'היועץ לא זמין כרגע. נסו שוב.');
+    } finally { setBusy(false); }
+  };
+  const save = async () => {
+    if (!plan || saving) return;
+    setSaving(true);
+    try {
+      await saveGoal({
+        name: ('חופשה ב' + (est?.destination || dest.trim() || 'חו״ל')).slice(0, 60), target_amount: plan.total, saved_amount: 0,
+        target_date: month + '-01', icon: '✈️',
+        plan_items: CAT_LIST.filter(([k]) => plan.lines[k] > 0).map(([k, c]) => ({ name: c.label, amount: plan.lines[k] })),
+        notes: `${days} ימים, ${people} נוסעים${est ? ' · הערכת היועץ' : ''}`
+      });
+      onClose();
+      showToast('הטיול נשמר ביעדים ונכנס לתחזית');
+    } catch (_err) { setSaving(false); showToast('השמירה נכשלה. נסו שוב.'); }
+  };
+
+  const pct = (k) => {
+    if (!est || !base) return '';
+    if (k === 'flights' && adjust.flightsPerPerson) return html`<span class="adj">${money(adjust.flightsPerPerson)} לאדם</span>`;
+    if (k === 'lodging' && adjust.lodgingPerNight) return html`<span class="adj">${money(adjust.lodgingPerNight)} ללילה</span>`;
+    return Number.isFinite(adjust.pct?.[k]) ? html`<span class="adj">${adjust.pct[k] > 0 ? '+' : ''}${adjust.pct[k]}%</span>` : '';
+  };
+  return html`<${Sheet} title="לתכנן טיול" onClose=${onClose} full=${true}>
+    <div class="card stack" style="gap:12px">
+      <label class="field"><span>לאן?</span>
+        <span class="add-input"><input class="input" value=${dest} onInput=${(e) => setDest(e.target.value)} placeholder="למשל: יוון, ניו יורק, תאילנד" onKeyDown=${(e) => { if (e.key === 'Enter') check(); }} />
+          <button type="button" class="btn" style="flex:none" disabled=${!dest.trim() || busy} onClick=${check}>${busy ? 'בודק…' : '✨ לבדוק'}</button></span></label>
+      <label class="field"><span>מתי</span><select class="input" value=${month} onChange=${(e) => setMonth(e.target.value)}>${months.map((m) => html`<option value=${m}>${monthLabel(m)}</option>`)}</select></label>
+      <div class="sec-row"><span class="muted">כמה ימים</span><span class="stepper"><button type="button" aria-label="פחות ימים" disabled=${days <= 2} onClick=${() => setDays(days - 1)}>−</button><b class="num">${days}</b><button type="button" aria-label="יותר ימים" onClick=${() => setDays(Math.min(60, days + 1))}>+</button></span></div>
+      <div class="sec-row"><span class="muted">כמה נוסעים</span><span class="stepper"><button type="button" aria-label="פחות נוסעים" disabled=${people <= 1} onClick=${() => setPeople(people - 1)}>−</button><b class="num">${people}</b><button type="button" aria-label="יותר נוסעים" onClick=${() => setPeople(Math.min(20, people + 1))}>+</button></span></div>
+      ${base && !est && html`<div class="field"><span>היעד לעומת ${row.country || 'הטיול הקודם'}</span>
+        <div class="seg" role="group" aria-label="רמת מחירים">${Object.entries(LEVELS).map(([k, l]) => html`<button type="button" aria-pressed=${String(level === k)} onClick=${() => setLevel(k)}>${l.label}</button>`)}</div></div>`}
+      ${error && html`<p class="error" role="alert">${error}</p>`}
+    </div>
+
+    ${est && html`<div class="card stack trip-est" style="gap:8px">
+      <b>✨ ${est.destination || dest}${est.country && est.country !== est.destination ? ', ' + est.country : ''}</b>
+      <span>✈️ טיסה הלוך-חזור: <b class="num">${money(est.flight_per_person.low)}–${money(est.flight_per_person.high)}</b> לאדם (בדרך כלל ${money(est.flight_per_person.typical)})</span>
+      <span>🏨 לינה: <b class="num">${money(est.lodging_per_night.low)}–${money(est.lodging_per_night.high)}</b> ללילה לזוג</span>
+      ${est.daily_per_person_local > 0 && est.currency && html`<span>💱 הוצאה יומית לאדם: כ-<b class="num">${est.daily_per_person_local.toLocaleString('en-US')} ${est.currency}</b>${rate ? html` ≈ <b class="num">${money(est.daily_per_person_local * rate)}</b> (שער היום ${rate.toFixed(3)})` : ''}</span>`}
+      ${est.season && html`<span>📅 ${monthLabel(month)}: ${SEASON[est.season]}</span>`}
+      ${est.cheaper_months.length > 0 && html`<div class="stack" style="gap:6px"><span class="muted" style="font-size:14px">זול יותר ב: ${est.cheaper_note}</span>
+        <div class="chips">${est.cheaper_months.map((m) => html`<button type="button" class="chip" aria-pressed=${String(month === m)} onClick=${() => setMonth(m)}>${monthLabel(m)}</button>`)}</div></div>`}
+      ${est.tips.length > 0 && html`<ul class="trip-tips">${est.tips.map((t) => html`<li>${t}</li>`)}</ul>`}
+      <span class="faint" style="font-size:12px">הערכה של היועץ לפי ידע כללי, לא מחירים חיים. כדאי לבדוק טיסות לפני שמזמינים.</span>
+    </div>`}
+
+    ${plan ? html`<div class="card stack" style="gap:8px">
+      <span class="muted">תקציב מוצע${dest.trim() ? ' ל' + (est?.destination || dest.trim()) : ''}: ${days} ימים, ${people} נוסעים</span>
+      <b class="trip-total num">${money(plan.total)}</b>
+      ${base && html`<span class="faint" style="font-size:13px">לפי ${row.name}: ${money(base.perPersonDay)} לאדם ליום${est ? '. האחוזים: לעומת ' + (row.country || 'הטיול הקודם') : ''}</span>`}
+      ${CAT_LIST.filter(([k]) => plan.lines[k] > 0).map(([k, c]) => html`<div class="sec-row" key=${k}><span>${c.icon} ${c.label}${pct(k)}</span><b class="num">${money(plan.lines[k])}</b></div>`)}
+    </div>
+    <div class="card stack trip-save" style="gap:6px">
+      <span class="muted">כדי שהכסף יהיה מוכן ב${monthLabel(month)}</span>
+      <b class="trip-monthly num">${money(sv.monthly)} בחודש</b>
+      <span class="faint" style="font-size:13px">${sv.months} חודשים. טיסה ולינה משולמות בדרך כלל 2–4 חודשים לפני.</span>
+      ${ready && html`<span style="font-size:14px">בקצב שמתאים לכם, <b class="num">${money(capacity)}</b> בחודש (חצי ממה שנשאר בחודש רגיל), הכסף מוכן ב<b>${monthLabel(ready)}</b>.
+        ${ready !== month && html` <button type="button" class="btn-text" onClick=${() => setMonth(months.includes(ready) ? ready : month)}>לתכנן ל${monthLabel(ready)}</button>`}</span>`}
+      <button type="button" class="btn" disabled=${saving} onClick=${save}>${saving ? 'שומר…' : 'לשמור ביעדים'}</button>
+    </div>` : html`<div class="card muted" style="font-size:14px">כתבו לאן, ולחצו "✨ לבדוק". היועץ יעריך טיסות, לינה ויוקר מחיה ויציע תקציב.</div>`}
+  <//>`;
+}
