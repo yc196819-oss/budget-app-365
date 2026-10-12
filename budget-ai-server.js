@@ -15,6 +15,7 @@ const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
 const account = require('./server/account');
 const twa = require('./server/twa');
+const tripsAi = require('./server/trips');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1661,6 +1662,25 @@ app.post('/api/ai/learn-from-chat', requireAuth, aiLimiter, aiQuota, async (req,
   } catch (err) {
     console.error('learn-from-chat failed:', err.message);
     return res.status(err.statusCode || 502).json({ error: 'לא הצלחנו לקרוא את השיחה כרגע. נסו שוב בעוד דקה.' });
+  }
+});
+
+// The trip advisor: what a destination will cost next to the family's last
+// trip (flights, lodging, cost of living, cheaper months). An estimate from
+// the model's knowledge, not live prices; the app says so.
+app.post('/api/ai/trip-estimate', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  const ask = tripsAi.cleanRequest(req.body);
+  if (!ask) return res.status(400).json({ error: 'חסר יעד' });
+  try {
+    const ai = await generateWithFallback({ prompt: tripsAi.estimatePrompt(ask, israelToday()), text: 'החזר את ה-JSON.' });
+    let parsed = null;
+    try { parsed = JSON.parse(extractJsonText(ai.output)); } catch (_e) { parsed = null; }
+    const estimate = tripsAi.pickEstimate(parsed, israelToday());
+    if (!estimate) return res.status(502).json({ error: 'לא הצלחנו להעריך את היעד. נסו שוב או נסחו אחרת.' });
+    return res.json({ estimate, aiProvider: ai.provider });
+  } catch (err) {
+    console.error('trip-estimate failed:', err.message);
+    return res.status(err.statusCode || 502).json({ error: 'היועץ לא זמין כרגע. נסו שוב בעוד דקה.' });
   }
 });
 

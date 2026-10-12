@@ -2,7 +2,9 @@
 // יציג") of that day, or the last one before it (weekends and holidays have
 // none). Parsing is kept apart so it can be tested without the network.
 
-const SUPPORTED = ['USD', 'EUR', 'GBP'];
+// Bank of Israel first; currencies it does not publish come from the ECB
+// (Frankfurter), so a trip anywhere in these can be converted.
+const SUPPORTED = ['USD', 'EUR', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'ISK', 'TRY', 'THB', 'INR', 'CNY', 'HKD', 'SGD', 'KRW', 'MXN', 'BRL', 'ZAR', 'IDR', 'MYR', 'PHP', 'JOD', 'EGP'];
 
 // BOI SDMX, CSV: a header row naming TIME_PERIOD and OBS_VALUE.
 function boiUrl(currency, date) {

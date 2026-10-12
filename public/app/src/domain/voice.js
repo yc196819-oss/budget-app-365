@@ -22,18 +22,41 @@ const DAYS = [[/(^|\s)שלשום(?=\s|$)/, 2], [/(^|\s)אתמול(?=\s|$)/, 1], 
 const FILLER = /(^|\s)(שלשום|אתמול|היום|שילמתי|שילמנו|קניתי|קנינו|הוצאתי|הוצאנו|עלה לי|עלה לנו|עלתה לי|קיבלתי|קיבלנו|נכנס לי|נכנס לנו|נכנסו|נכנסה|נכנס|תוסיף|תוסיפי|להוסיף|הוסף|תרשום|תרשמי|לרשום|בערך|בסך הכל|רק)(?=\s|$)/g;
 const CURRENCY = /(שקלים|שקל|ש"ח|ש״ח|שח|₪|nis)/gi;
 
-// Foreign currencies: an amount in dollars, euros or pounds is converted to
+// Foreign currencies: an amount in dollars, euros, lei… is converted to
 // shekels by the rate of the transaction's date (see reviewToTx).
 export const CURRENCIES = {
   ILS: { symbol: '₪', label: 'שקל' },
   USD: { symbol: '$', label: 'דולר' },
   EUR: { symbol: '€', label: 'יורו' },
-  GBP: { symbol: '£', label: 'פאונד' }
+  GBP: { symbol: '£', label: 'פאונד' },
+  CHF: { symbol: 'CHF ', label: 'פרנק שווייצרי' },
+  JPY: { symbol: '¥', label: 'ין יפני' },
+  CAD: { symbol: 'C$', label: 'דולר קנדי' },
+  AUD: { symbol: 'A$', label: 'דולר אוסטרלי' },
+  RON: { symbol: 'lei ', label: 'לאו רומני' },
+  TRY: { symbol: '₺', label: 'לירה טורקית' },
+  HUF: { symbol: 'Ft ', label: 'פורינט' },
+  CZK: { symbol: 'Kč ', label: 'קורונה צ׳כית' },
+  PLN: { symbol: 'zł ', label: 'זלוטי' },
+  BGN: { symbol: 'лв ', label: 'לב בולגרי' },
+  THB: { symbol: '฿', label: 'באט' }
 };
+// The more specific names first ("דולר קנדי" before "דולר").
 const FOREIGN = [
+  ['CAD', /דולר(?:ים)? קנדי(?:ים)?|cad\b|c\$/i, /דולר(?:ים)? קנדי(?:ים)?|cad\b|c\$/gi],
+  ['AUD', /דולר(?:ים)? אוסטרלי(?:ים)?|aud\b|a\$/i, /דולר(?:ים)? אוסטרלי(?:ים)?|aud\b|a\$/gi],
   ['USD', /\$|דולרים|דולר|dollars?|usd/i, /\$|דולרים|דולר|dollars?|usd/gi],
   ['EUR', /€|יורו|euros?|\beur\b/i, /€|יורו|euros?|\beur\b/gi],
-  ['GBP', /£|פאונד|לירות שטרלינג|שטרלינג|gbp/i, /£|פאונד|לירות שטרלינג|שטרלינג|gbp/gi]
+  ['GBP', /£|פאונד|לירות שטרלינג|שטרלינג|gbp/i, /£|פאונד|לירות שטרלינג|שטרלינג|gbp/gi],
+  ['TRY', /(?<![א-ת])(?:לירות טורקיות|לירה טורקית)(?![א-ת])|₺|\btry\b/i, /(?<![א-ת])(?:לירות טורקיות|לירה טורקית)(?![א-ת])|₺|\btry\b/gi],
+  ['RON', /(?<![א-ת])(?:לאו|ליי)(?![א-ת])|\blei\b|\bron\b/i, /(?<![א-ת])(?:לאו|ליי)(?![א-ת])|\blei\b|\bron\b/gi],
+  ['HUF', /(?<![א-ת])פורינט(?:ים)?(?![א-ת])|\bhuf\b/i, /(?<![א-ת])פורינט(?:ים)?(?![א-ת])|\bhuf\b/gi],
+  ['CZK', /(?<![א-ת])(?:קורונות צ.כיות|קורונה צ.כית)(?![א-ת])|\bczk\b/i, /(?<![א-ת])(?:קורונות צ.כיות|קורונה צ.כית)(?![א-ת])|\bczk\b/gi],
+  ['PLN', /(?<![א-ת])זלוטי(?![א-ת])|\bpln\b/i, /(?<![א-ת])זלוטי(?![א-ת])|\bpln\b/gi],
+  ['BGN', /(?<![א-ת])(?:לב בולגרי|לבים בולגריים)(?![א-ת])|\bbgn\b/i, /(?<![א-ת])(?:לב בולגרי|לבים בולגריים)(?![א-ת])|\bbgn\b/gi],
+  ['THB', /(?<![א-ת])(?:באט|באהט)(?![א-ת])|฿|\bthb\b/i, /(?<![א-ת])(?:באט|באהט)(?![א-ת])|฿|\bthb\b/gi],
+  ['CHF', /(?<![א-ת])(?:פרנק שווייצרי|פרנקים שווייצריים|פרנקים)(?![א-ת])|\bchf\b/i, /(?<![א-ת])(?:פרנק שווייצרי|פרנקים שווייצריים|פרנקים)(?![א-ת])|\bchf\b/gi],
+  ['JPY', /(?<![א-ת])ין יפני(?![א-ת])|¥|\bjpy\b/i, /(?<![א-ת])ין יפני(?![א-ת])|¥|\bjpy\b/gi],
 ];
 export function detectCurrency(text) {
   const hit = FOREIGN.find(([, re]) => re.test(String(text || '')));

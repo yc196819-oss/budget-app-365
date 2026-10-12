@@ -6,12 +6,15 @@ import { routeView } from '../../domain/routes.js';
 import { ComingMonths } from './ComingMonths.js';
 import { BudgetGoals } from './BudgetGoals.js';
 import { PlanSheets, usePlanSheet } from './PlanSheets.js';
+import { TripsView } from '../trips/TripsView.js';
+import { useTrips } from '../../data/useTrips.js';
 
-const VIEWS = [{ key: 'months', label: 'החודשים הקרובים' }, { key: 'budget', label: 'תקציב ויעדים' }];
+const VIEWS = [{ key: 'months', label: 'החודשים הקרובים' }, { key: 'budget', label: 'תקציב ויעדים' }, { key: 'trips', label: 'טיולים' }];
 
 export function PlansScreen({ data }) {
   const [view, setView] = useState(() => (VIEWS.some((v) => v.key === routeView(location.hash)) ? routeView(location.hash) : 'months'));
   const sheet = usePlanSheet();
+  const trips = useTrips(data.hid);
 
   if (data.status === 'loading' || data.status === 'idle') return html`<${Loading} label="טוען…" />`;
   if (data.status === 'error') {
@@ -22,6 +25,7 @@ export function PlansScreen({ data }) {
     <${Segmented} variant="tabs" label="תצוגה" value=${view} onChange=${setView} options=${VIEWS} />
     ${view === 'months' && html`<${ComingMonths} data=${data} onSheet=${sheet.open} onBudget=${() => setView('budget')} />`}
     ${view === 'budget' && html`<${BudgetGoals} data=${data} />`}
+    ${view === 'trips' && html`<${TripsView} data=${data} trips=${trips} />`}
     <${PlanSheets} data=${data} sheet=${sheet.value} onClose=${sheet.close} />
   </div>`;
 }

@@ -23,7 +23,8 @@ test('the request asks for ten days back to cover weekends and holidays', () => 
 
 test('only known currencies and real past dates', () => {
   assert.equal(fx.validRequest('USD', '2026-09-13', '2026-10-03'), true);
-  assert.equal(fx.validRequest('JPY', '2026-09-13', '2026-10-03'), false);
+  assert.equal(fx.validRequest('RON', '2026-09-13', '2026-10-03'), true, 'trips anywhere: currencies from the ECB too');
+  assert.equal(fx.validRequest('XYZ', '2026-09-13', '2026-10-03'), false);
   assert.equal(fx.validRequest('USD', '2026-10-04', '2026-10-03'), false, 'no future rates');
   assert.equal(fx.validRequest('USD', '13/09/2026', '2026-10-03'), false);
 });
