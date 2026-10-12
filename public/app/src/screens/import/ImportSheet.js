@@ -2,8 +2,8 @@ import { html } from '../../lib/html.js';
 import { useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { readStatement, ImportError } from '../../data/importer.js';
-import { addImported, removeMany } from '../../data/household.js';
-import { toRows } from '../../domain/statement.js';
+import { addImported, removeMany, saveRow } from '../../data/household.js';
+import { toRows, installmentDeals } from '../../domain/statement.js';
 import { showToast } from '../../lib/toast.js';
 import { PickFile } from './PickFile.js';
 import { Steps } from './Steps.js';
@@ -51,6 +51,11 @@ export function ImportSheet({ data, onClose }) {
     setSaving(true);
     try {
       const added = await addImported(rows);
+      // Installment payments create (or correct) their deal, so the payments
+      // still to come are in the forecast. Never holds up the import.
+      const deals = installmentDeals(rows, data.installments);
+      for (const d of deals.create) await saveRow('installments', d).catch(() => {});
+      for (const u of deals.update) await saveRow('installments', u).catch(() => {});
       onClose();
       const ids = added.map((r) => r.id);
       showToast('נשמרו ' + added.length + ' תנועות מהפירוט', {

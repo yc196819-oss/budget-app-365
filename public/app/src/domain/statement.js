@@ -336,6 +336,40 @@ export function flagDuplicates(items, existing) {
   });
 }
 
+// ── installment deals ──────────────────────────────────────────────────
+// A payment line ("רהיטים (תשלום 3 מתוך 14)", dated by its charge) tells the
+// whole deal: 14 payments of this amount, the first one 2 months earlier.
+// Imported lines create the deal, or correct its first payment date, so the
+// forecast counts every payment still to come (installments table).
+
+const baseName = (d) => String(d || '').replace(INSTALLMENT, ' ').replace(/\s+/g, ' ').trim();
+function monthsBack(iso, k) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1 - k, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  return first.getUTCFullYear() + '-' + String(first.getUTCMonth() + 1).padStart(2, '0') + '-' + String(Math.min(d, last)).padStart(2, '0');
+}
+
+// rows: transactions being saved; existing: the household's installments.
+// Returns { create: [installment], update: [{ id, first_payment }] }.
+export function installmentDeals(rows, existing = []) {
+  const create = [], update = [];
+  for (const r of rows) {
+    const inst = r.type === 'income' ? null : installmentOf(r.description);
+    if (!inst || !r.tx_date || !(r.amount > 0)) continue;
+    const name = baseName(r.description);
+    const first_payment = monthsBack(r.tx_date, inst.n - 1);
+    const total_amount = Math.round(r.amount * inst.of * 100) / 100;
+    const same = (d) => Number(d.payments_count) === inst.of && similarText(d.description, name)
+      && Math.abs(Number(d.total_amount) / inst.of - r.amount) <= Math.max(1, r.amount * 0.02);
+    if (create.some(same)) continue;
+    const hit = existing.find(same);
+    if (hit) { if (hit.first_payment !== first_payment && !update.some((u) => u.id === hit.id)) update.push({ id: hit.id, first_payment }); continue; }
+    create.push({ description: name, total_amount, payments_count: inst.of, first_payment, category_id: r.subcategory_id || r.category_id || null });
+  }
+  return { create, update };
+}
+
 // ── whole flow ─────────────────────────────────────────────────────────
 
 export function withKeys(items) {

@@ -9,6 +9,7 @@
 import { MONTH_NAMES, monthShare, parseDate } from './money.js';
 import { monthPlan } from './home.js';
 import { holidaysBetween, holidayGoalName, lastHolidayExtra } from './calendar.js';
+import { installmentOf, similarText } from './statement.js';
 
 const sum = (list, f = (x) => x) => list.reduce((s, x) => s + f(x), 0);
 const isExpense = (t) => t.type !== 'income';
@@ -31,7 +32,9 @@ export function baseline(txs, today) {
     income: average(txs, months, (t) => t.type === 'income'),
     fixed: sum(fixedLines, (t) => Number(t.amount) || 0),
     // Yearly-spread lines are counted where they really fall (see yearly below).
-    variable: average(txs, months, (t) => isExpense(t) && t.nature !== 'fixed' && t.spread !== 'year')
+    // Installment payments are counted from the deals instead (installmentsIn),
+    // up to the last payment, so they are not in the regular month.
+    variable: average(txs, months, (t) => isExpense(t) && t.nature !== 'fixed' && t.spread !== 'year' && !installmentOf(t.description))
   };
 }
 
@@ -41,9 +44,12 @@ function yearly(txs, mo) {
     .map((t) => ({ label: 'תשלום שנתי: ' + t.description, amount: -(Number(t.amount) || 0), kind: 'yearly' }));
 }
 
-function installmentsIn(installments, mo) {
+// paidNow: this month's transactions; a deal whose payment is already among
+// them is not counted again.
+function installmentsIn(installments, mo, paidNow = []) {
   const out = [];
   for (const i of installments) {
+    if (paidNow.some((t) => installmentOf(t.description) && similarText(t.description, i.description || ''))) continue;
     const count = Number(i.payments_count) || 0;
     const total = Number(i.total_amount) || 0;
     if (!count || !total || !i.first_payment) continue;
@@ -104,7 +110,8 @@ export function forecast({ txs, goals = [], installments = [], budgets = [], tod
         ...yearly(txs, mo)
       ];
     }
-    lines.push(...installmentsIn(installments, mo), ...plannedIn(goals, mo), ...holidaysIn(goals, txs, mo), ...scenarioLines(scenarios, i));
+    const paidNow = i === 0 ? txs.filter((t) => isExpense(t) && (() => { const d = parseDate(t.tx_date); return d.y === mo.y && d.m === mo.m; })()) : [];
+    lines.push(...installmentsIn(installments, mo, paidNow), ...plannedIn(goals, mo), ...holidaysIn(goals, txs, mo), ...scenarioLines(scenarios, i));
     lines = lines.filter((l) => Math.round(l.amount) !== 0);
     const net = sum(lines, (l) => l.amount);
     balance += net;
