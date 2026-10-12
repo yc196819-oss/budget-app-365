@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   parseAmount, normalizeDate, parseCsv, detectHeader, rowsToTransactions, cleanCategory, categoryTreeText,
   fromAi, waitingMerchants, applyAiCategories, categorizeFromHistory, setItemCategory, similarText,
-  flagDuplicates, prepare, summary, toRows, withKeys
+  flagDuplicates, prepare, summary, toRows, withKeys, installmentDeals
 } from '../public/app/src/domain/statement.js';
 import { shortDate } from '../public/app/src/domain/format.js';
 
@@ -249,4 +249,29 @@ test('summary and rows to save', () => {
 test('shortDate', () => {
   assert.equal(shortDate('2026-08-05'), '5.8');
   assert.equal(shortDate(''), '');
+});
+
+test('an installment payment creates its deal, dated from the first charge, once per deal', () => {
+  const rows = [
+    { type: 'expense', amount: 250, description: 'רהיטים בע"מ (תשלום 3 מתוך 14)', tx_date: '2026-10-10', category_id: 'home', subcategory_id: 'furniture' },
+    { type: 'expense', amount: 250, description: 'רהיטים בע"מ (תשלום 3 מתוך 14)', tx_date: '2026-10-10' },
+    { type: 'expense', amount: 40, description: 'קפה', tx_date: '2026-10-10' },
+    { type: 'income', amount: 100, description: 'זיכוי (תשלום 1 מתוך 2)', tx_date: '2026-10-10' }
+  ];
+  const { create, update } = installmentDeals(rows, []);
+  assert.deepEqual(create, [{ description: 'רהיטים בע"מ', total_amount: 3500, payments_count: 14, first_payment: '2026-08-10', category_id: 'furniture' }]);
+  assert.deepEqual(update, []);
+});
+
+test('a known deal is not created again; a wrong first payment (the purchase date) is corrected', () => {
+  const existing = [{ id: 'd1', description: 'איילון רכב חובה', total_amount: 2958, payments_count: 12, first_payment: '2025-11-30' }];
+  const rows = [{ type: 'expense', amount: 246.5, description: 'איילון רכב חובה (תשלום 11 מתוך 12)', tx_date: '2026-10-11' }];
+  assert.deepEqual(installmentDeals(rows, existing), { create: [], update: [{ id: 'd1', first_payment: '2025-12-11' }] });
+  const right = [{ ...existing[0], first_payment: '2025-12-11' }];
+  assert.deepEqual(installmentDeals(rows, right), { create: [], update: [] });
+});
+
+test('the first payment keeps the day, clamped to the month (31st)', () => {
+  const { create } = installmentDeals([{ type: 'expense', amount: 100, description: 'x (תשלום 2 מתוך 3)', tx_date: '2026-03-31' }]);
+  assert.equal(create[0].first_payment, '2026-02-28');
 });

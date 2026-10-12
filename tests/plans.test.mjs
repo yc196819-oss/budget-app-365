@@ -127,3 +127,19 @@ test('cutIdeas: over-budget variable categories first, then the biggest', () => 
   const ideas = cutIdeas(txs, cats, [{ category_id: 'fun', monthly_amount: 500 }], TODAY);
   assert.deepEqual(ideas.map((i) => [i.id, Math.round(i.avg), i.over]), [['fun', 900, true], ['food', 3000, false]]);
 });
+
+test('installments: a payment already charged this month is not counted again, and payments are not also in the regular month', () => {
+  const day = (m, d) => `2026-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const T = new Date(2026, 9, 12); // 12 Oct 2026
+  const txs = [];
+  for (const m of [7, 8, 9]) {
+    txs.push({ type: 'expense', amount: 1000, description: 'סופר', tx_date: day(m, 5), nature: 'variable', spread: 'month' });
+    txs.push({ type: 'expense', amount: 250, description: `רהיטים (תשלום ${m - 6} מתוך 14)`, tx_date: day(m, 10), nature: 'variable', spread: 'month' });
+  }
+  txs.push({ type: 'expense', amount: 250, description: 'רהיטים (תשלום 4 מתוך 14)', tx_date: day(10, 10), nature: 'variable', spread: 'month' });
+  const installments = [{ description: 'רהיטים', total_amount: 3500, payments_count: 14, first_payment: '2026-07-10' }];
+  const fc = forecast({ txs, installments, today: T, startBalance: 0 });
+  assert.equal(fc.base.variable, 1000, 'the regular month leaves the installment payments out');
+  assert.ok(!fc.months[0].lines.some((l) => l.kind === 'installment'), 'October is already charged');
+  assert.equal(fc.months[1].lines.find((l) => l.kind === 'installment').amount, -250, 'November counts it from the deal');
+});
