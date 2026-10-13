@@ -7,7 +7,7 @@ import { setBudget, saveGoal, deleteGoal } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 
 // Monthly budget per category (tap a row to change it) and goals.
-export function BudgetGoals({ data }) {
+export function BudgetGoals({ data, onTrip }) {
   const [editing, setEditing] = useState(null);
   const [goalOpen, setGoalOpen] = useState(null);
   const today = new Date();
@@ -67,14 +67,14 @@ export function BudgetGoals({ data }) {
             <b class="num">${pct}%</b>
           </button>
           <span class="bar"><span style=${'width:' + pct + '%;background:var(--accent)'}></span></span>
-          ${isOpen && html`<${GoalEdit} goal=${g} onDone=${() => setGoalOpen(null)} />`}
+          ${isOpen && html`<${GoalEdit} goal=${g} onDone=${() => setGoalOpen(null)} onTrip=${onTrip} />`}
         </div>`;
       })}
     </section>
   </div>`;
 }
 
-function GoalEdit({ goal, onDone }) {
+function GoalEdit({ goal, onDone, onTrip }) {
   const [add, setAdd] = useState('');
   const save = async (e) => {
     e.preventDefault();
@@ -90,6 +90,7 @@ function GoalEdit({ goal, onDone }) {
     try { await deleteGoal(goal.id); onDone(); showToast(goal.name + ' נמחק'); } catch (_err) { showToast('המחיקה נכשלה. נסו שוב.'); }
   };
   return html`<form class="stack rise" style="gap:8px" onSubmit=${save}>
+    ${goal.icon === '✈️' && onTrip && html`<button type="button" class="btn btn-ghost" onClick=${() => onTrip(goal.id)}>✈️ לפתוח בתכנון הטיול · 💬 לדבר עם היועץ</button>`}
     ${Array.isArray(goal.plan_items) && goal.plan_items.length > 0 && html`<div class="facts">${goal.plan_items.map((p) => html`<div><span>${p.name}</span><b class="num">${money(p.amount)}</b></div>`)}</div>`}
     <span style="display:flex;gap:8px">
       <input class="input num" inputmode="decimal" aria-label=${'כמה הפרשתם ל' + goal.name} placeholder="כמה הפרשתם?" value=${add} onInput=${(e) => setAdd(e.target.value)} style="flex:1" />

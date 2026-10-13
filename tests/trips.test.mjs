@@ -148,3 +148,22 @@ test('unknown categories and silly numbers are ignored; skip wins over an earlie
   assert.deepEqual(p.fixed, {});
   assert.equal(personalize(PLAN, p).lines.lodging, 0);
 });
+
+import { tripPlanRecord, tripPlanOf } from '../public/app/src/domain/trips.js';
+
+test('a saved trip plan keeps everything to open it again, bounded', () => {
+  const rec = tripPlanRecord({ dest: 'פריז', month: '2027-05', days: 99, people: 3, level: 'weird', base_id: 'tr1', est: { currency: 'EUR' },
+    prefs: { skip: ['lodging', 'casino'], notes: ['לינה אצל האח'] }, msgs: Array.from({ length: 25 }, (_, i) => ({ role: i % 2 ? 'ai' : 'x', text: 'm' + i })) });
+  assert.equal(rec.days, 60);
+  assert.equal(rec.level, 'same');
+  assert.deepEqual(rec.prefs.skip, ['lodging']);
+  assert.equal(rec.msgs.length, 20);
+  assert.equal(rec.msgs[0].text, 'm5');
+  assert.deepEqual(tripPlanOf({ trip_plan: JSON.parse(JSON.stringify(rec)) }), rec, 'survives the database');
+});
+
+test('an older trip goal (no plan kept) opens from its name, date and notes', () => {
+  const p = tripPlanOf({ name: 'חופשה בניו יורק', target_date: '2027-03-01', notes: '7 ימים, 4 נוסעים · הערכת היועץ' });
+  assert.deepEqual([p.dest, p.month, p.days, p.people, p.base_id, p.msgs.length], ['ניו יורק', '2027-03', 7, 4, undefined, 0]);
+  assert.equal(tripPlanOf({ name: 'חופשה בחו״ל', notes: '' }).dest, '');
+});

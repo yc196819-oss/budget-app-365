@@ -256,9 +256,16 @@ const amount = (v, max = 1000000) => { const n = Math.round(Number(v)); return N
 
 // The chat's changes (already cleaned by the server) onto the prefs. Pure.
 export function applyChanges(prefs, ch = {}) {
+  // Prefs read back from the database are checked like new changes.
   const p = { ...emptyPrefs(), ...prefs };
-  const skip = new Set(p.skip);
-  const covered = { ...p.covered }, fixed = { ...p.fixed }, pct = { ...p.pct };
+  const known = (o, ok) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).filter(([k, v]) => isCat(k) && ok(v)));
+  const skip = new Set((Array.isArray(p.skip) ? p.skip : []).filter(isCat));
+  const covered = known(p.covered, (v) => v === 'all' || amount(v) > 0);
+  const fixed = known(p.fixed, (v) => amount(v) != null);
+  const pct = known(p.pct, (v) => Number.isFinite(Number(v)));
+  if (!Array.isArray(p.notes)) p.notes = [];
+  p.notes = p.notes.map((n) => String(n).slice(0, 80));
+  if (!(amount(p.funding) >= 0)) p.funding = 0;
   for (const k of ch.clear || []) { if (!isCat(k)) continue; skip.delete(k); delete covered[k]; delete fixed[k]; delete pct[k]; }
   for (const k of ch.skip || []) if (isCat(k)) { skip.add(k); delete covered[k]; delete fixed[k]; }
   for (const k of ch.unskip || []) skip.delete(k);
@@ -295,4 +302,41 @@ export function personalize(plan, prefs = emptyPrefs()) {
   const covered = Object.values(paid).reduce((s, n) => s + n, 0);
   const funding = Math.min(Math.max(0, total - covered), p.funding || 0);
   return { lines, paid, total, covered, funding, toSave: Math.max(0, total - covered - funding) };
+}
+
+// ── a planned trip, saved with its goal (goals.trip_plan) ──
+// Everything needed to open the planner again where it was left: where,
+// when, how long, how many, the past trip it is based on, the advisor's
+// estimate, what the family told the chat, and the conversation itself.
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const int = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+
+export function tripPlanRecord(s) {
+  return {
+    v: 1,
+    dest: String(s.dest || '').slice(0, 60),
+    month: MONTH_RE.test(String(s.month || '')) ? s.month : null,
+    days: int(s.days, 1, 60, 6),
+    people: int(s.people, 1, 20, 2),
+    level: LEVELS[s.level] ? s.level : 'same',
+    base_id: s.base_id === undefined ? undefined : s.base_id || null,
+    est: s.est || null,
+    prefs: applyChanges(s.prefs || emptyPrefs(), {}),
+    msgs: (s.msgs || []).filter((m) => m && m.text).slice(-20).map((m) => ({ role: m.role === 'ai' ? 'ai' : 'me', text: String(m.text).slice(0, 600) }))
+  };
+}
+
+// The planner's starting state for a saved goal. Goals saved before the plan
+// was kept: the destination from the name, the month from the date, days and
+// travelers from the notes ("6 ימים, 2 נוסעים").
+export function tripPlanOf(goal) {
+  const p = goal && goal.trip_plan && typeof goal.trip_plan === 'object' ? goal.trip_plan : null;
+  if (p) return tripPlanRecord(p);
+  const notes = String(goal?.notes || '');
+  const d = notes.match(/(\d+)\s*ימים/), t = notes.match(/(\d+)\s*נוסעים/);
+  return tripPlanRecord({
+    dest: String(goal?.name || '').replace(/^חופשה ב/, '').replace(/^חו״ל$/, ''),
+    month: String(goal?.target_date || '').slice(0, 7),
+    days: d ? +d[1] : 6, people: t ? +t[1] : 2, base_id: undefined
+  });
 }

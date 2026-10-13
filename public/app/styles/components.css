@@ -372,4 +372,7 @@ textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: 
 .trip-pref.note { font-weight: 600; color: var(--muted); }
 .trip-pref button { border: 0; background: transparent; color: var(--muted); font-size: 12px; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; }
 .trip-chat .dchat-log { max-height: 40vh; }
+.trip-open { font-size: 12px; font-weight: 700; color: var(--accent); }
+.trip-del { display: flex; gap: 14px; align-items: center; justify-content: center; padding: 4px 0 12px; font-size: 14px; }
+.btn-text.danger { color: var(--danger); }
 .trip-monthly { font-family: var(--font-display, inherit); font-size: 30px; color: var(--income); }
