@@ -45,5 +45,59 @@
   "categories": [
     "finance",
     "productivity"
+  ],
+  "shortcuts": [
+    {
+      "name": "הוספת הוצאה",
+      "short_name": "הוצאה",
+      "description": "לרשום הוצאה חדשה",
+      "url": "/app/?action=add",
+      "icons": [
+        {
+          "src": "/shortcut-add.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "הוספה בקול",
+      "short_name": "בקול",
+      "description": "להגיד מה קניתם וכמה",
+      "url": "/app/?action=voice",
+      "icons": [
+        {
+          "src": "/shortcut-voice.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "לשאול את היועץ",
+      "short_name": "יועץ",
+      "description": "שאלה ליועץ, בכתב או בקול",
+      "url": "/app/?action=ask",
+      "icons": [
+        {
+          "src": "/shortcut-ask.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "לדבר עם היועץ",
+      "short_name": "שיחה",
+      "description": "שיחה קולית עם היועץ",
+      "url": "/app/?action=talk",
+      "icons": [
+        {
+          "src": "/shortcut-talk.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

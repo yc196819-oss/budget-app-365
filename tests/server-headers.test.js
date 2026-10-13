@@ -115,7 +115,8 @@ test('the service worker keeps only the app\'s own files; the API and Supabase n
   const rule = new RegExp(sw.match(/const STATIC = \/(.+)\/;/)[1]);
   for (const p of ['/app/src/main.js', '/app/styles/base.css', '/app/vendor/preact.js', '/wallet.svg', '/wallet-192.png', '/manifest.json']) assert.ok(rule.test(p), p);
   for (const p of ['/api/ai/advice-chat-stream', '/api/fx/rate', '/api/decisions/notify', '/old/']) assert.equal(rule.test(p), false, p);
-  assert.match(sw, /if \(url\.search\) return/, 'sign-in and invite links go to the network');
+  assert.ok(sw.includes('if (url.search && !/^\\?action=[a-z]+$/.test(url.search)) return'), 'sign-in and invite links go to the network; a shortcut (?action=) opens the shell');
+  for (const p of ['/shortcut-add.png', '/shortcut-talk.svg']) assert.ok(rule.test(p), p);
   assert.match(sw, /app-updated/);
   assert.match(sw, /existing\.navigate/);
 });
@@ -178,4 +179,17 @@ test('the manifest has a stable id and the finance category (for stores)', async
   const m = await (await fetch(BASE + '/manifest.json')).json();
   assert.equal(m.id, '/app/');
   assert.ok(m.categories.includes('finance'));
+});
+
+test('home-screen shortcuts: add, by voice, ask and talk with the advisor, each with its icon', async () => {
+  const m = await (await fetch(BASE + '/manifest.json')).json();
+  assert.deepEqual(m.shortcuts.map((s) => s.url), ['/app/?action=add', '/app/?action=voice', '/app/?action=ask', '/app/?action=talk']);
+  for (const s of m.shortcuts) {
+    assert.ok(s.name && s.short_name, s.url);
+    const icon = await fetch(BASE + s.icons[0].src);
+    assert.equal(icon.status, 200, s.icons[0].src);
+    assert.match(icon.headers.get('content-type'), /image\/png/);
+  }
+  const shell = await fetch(BASE + '/app/?action=add');
+  assert.equal(shell.status, 200);
 });

@@ -28,3 +28,13 @@ test('only transient failures are retried', () => {
   for (const s of [undefined, 0, 408, 429, 500, 529]) assert.equal(isRetryable(s), true, String(s));
   for (const s of [400, 401, 403, 404]) assert.equal(isRetryable(s), false, String(s));
 });
+
+test('thinking effort: sent to current models only, low for structured jobs (thinking is billed as output)', () => {
+  const body = (model, effort) => JSON.parse(claudeRequest({ key: 'k', model, maxTokens: 10, content: 'x', effort }).init.body);
+  assert.deepEqual(body('claude-sonnet-5', 'low').output_config, { effort: 'low' });
+  assert.deepEqual(body('claude-sonnet-5-5', 'medium').output_config, { effort: 'medium' });
+  assert.deepEqual(body('claude-opus-4-8', 'medium').output_config, { effort: 'medium' });
+  assert.equal(body('claude-haiku-4-5', 'low').output_config, undefined, 'an older model gets none (it would 400)');
+  assert.equal(body('claude-sonnet-5', undefined).output_config, undefined);
+  assert.equal(body('claude-sonnet-5', 'extreme').output_config, undefined);
+});

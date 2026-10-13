@@ -23,8 +23,9 @@ const when = (iso) => { const d = new Date(iso); return d.getDate() + '.' + (d.g
 // The advisor: recent conversations (the household's, shared unless
 // private, the same ones the current app shows), and a chat that knows the
 // numbers and the screen the person is on. Question in writing or by voice,
-// answer can be read aloud.
-export function AdvisorPanel({ data, session, screen }) {
+// answer can be read aloud, or a hands-free voice conversation (talk): it
+// listens, answers aloud and listens again.
+export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   const aiOn = useAiSetting();
   const hid = session.household && session.household.household_id;
   const me = session.user.id;
@@ -43,6 +44,14 @@ export function AdvisorPanel({ data, session, screen }) {
   const memories = useRef(null);
   const logRef = useRef(null);
   const abort = useRef(null);
+  // The open conversation, for callbacks that outlive a render (the voice loop).
+  const convRef = useRef(null);
+  convRef.current = conv;
+  // Voice conversation: null | 'listening' | 'thinking' | 'speaking'.
+  const [talk, setTalk] = useState(null);
+  const [heard, setHeard] = useState('');
+  const talkOn = useRef(false);
+  const talkStop = useRef(null);
 
   const names = data.members || {};
   const memberName = (id) => (id === me ? (names[id] || 'אני') : (names[id] || 'בן/בת הזוג'));
@@ -58,9 +67,10 @@ export function AdvisorPanel({ data, session, screen }) {
 
   const send = async (text) => {
     const msg = String(text || '').trim();
-    if (!msg || busy || !aiOn) return;
+    if (!msg || busy || !aiOn) return null;
     setBusy(true); setError(''); setSuggestions([]); setDraft(''); setOffer(false);
-    let c = conv;
+    let c = convRef.current;
+    let answered = null;
     try {
       if (!c || !c.id) {
         const row = await createConversation({ hid, userId: me, title: newTitle(msg, screen) });
@@ -84,6 +94,7 @@ export function AdvisorPanel({ data, session, screen }) {
       }, abort.current.signal);
       const reply = parseReply(raw);
       const finalText = reply.text || 'לא התקבלה תשובה. נסו לנסח אחרת.';
+      answered = reply.text || null;
       setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me } : m)) });
       setSuggestions(reply.suggestions);
       // The full reply is saved, with the follow-ups, as the current app does.
@@ -97,7 +108,48 @@ export function AdvisorPanel({ data, session, screen }) {
     }
     abort.current = null;
     setBusy(false);
+    return answered;
   };
+
+  // ── voice conversation: listen, answer aloud, listen again ──
+  const endTalk = (why = '') => {
+    talkOn.current = false;
+    if (talkStop.current) { talkStop.current(); talkStop.current = null; }
+    stopSpeaking(); setTalk(null); setHeard('');
+    if (why) setError(why);
+  };
+  const talkRound = (misses = 0) => {
+    if (!talkOn.current) return;
+    setTalk('listening'); setHeard('');
+    let said = '';
+    talkStop.current = listen({
+      onText: (t) => { said = t; setHeard(t); },
+      onInterim: (w) => { if (!said) setHeard(w); },
+      onError: (e) => endTalk(e === 'not-allowed' ? 'אין הרשאה למיקרופון. אפשר לאשר בהגדרות הטלפון.' : ''),
+      onEnd: async () => {
+        talkStop.current = null;
+        if (!talkOn.current) return;
+        if (!said) { if (misses >= 2) endTalk(); else talkRound(misses + 1); return; }
+        setTalk('thinking');
+        const reply = await send(said);
+        if (!talkOn.current) return;
+        if (reply && canSpeak()) { setTalk('speaking'); speak(reply, () => talkRound()); } else talkRound();
+      }
+    });
+  };
+  const startTalking = () => {
+    if (!canListen() || !aiOn) return;
+    stopSpeaking(); setError('');
+    talkOn.current = true;
+    talkRound();
+  };
+  useEffect(() => { if (startTalk && hid) startTalking(); return () => endTalk(); }, []);
+  const talkBar = talk && html`<div class=${'talk-bar ' + talk} role="status">
+    <span class="talk-orb" aria-hidden="true">✨</span>
+    <span class="talk-text"><b>${talk === 'listening' ? 'מקשיב…' : talk === 'thinking' ? 'חושב…' : 'מדבר…'}</b><span>${talk === 'listening' ? (heard || 'דברו כרגיל, ואחרי הפסקה קצרה היועץ יענה') : 'שיחה קולית'}</span></span>
+    ${talk === 'speaking' && html`<button type="button" class="btn-text" onClick=${() => { stopSpeaking(); talkRound(); }}>לדלג</button>`}
+    <button type="button" class="btn btn-ghost talk-end" onClick=${() => endTalk()}>סיום</button>
+  </div>`;
 
   const startLearn = async () => {
     setOffer(false); setError('');
@@ -149,6 +201,7 @@ export function AdvisorPanel({ data, session, screen }) {
   if (conv) {
     const mine = conv.user_id === me;
     return html`<div class="adv">
+      ${talkBar}
       <div class="adv-bar">
         <button type="button" class="btn-text" onClick=${() => { stopSpeaking(); setConv(null); setSuggestions([]); setLearn(null); setOffer(false); refresh(); }}>‹ כל השיחות</button>
         <span style="flex:1"></span>
@@ -171,17 +224,18 @@ export function AdvisorPanel({ data, session, screen }) {
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
       ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>💡 סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>
         <div class="learn-actions"><button type="button" class="btn" onClick=${startLearn}>לבדוק מה למדתי</button><button type="button" class="btn-text" onClick=${dismissOffer}>לא עכשיו</button></div></div>`}
-      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => send(draft)} onMic=${canListen() ? mic : null} listening=${!!listening} />`}`}
+      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => send(draft)} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
     </div>`;
   }
 
   // ── recent conversations ──
   return html`<div class="adv">
+    ${talkBar}
     ${offCard}
     ${aiOn && html`<div class="stack" style="gap:8px">
       <b style="font-size:13px;color:var(--muted)">אפשר לשאול למשל</b>
       <div class="chips">${starters(screen).map((s) => html`<button type="button" class="chip" disabled=${busy} onClick=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(s); }}>${s}</button>`)}</div>
-      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} />
+      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
     </div>`}
     ${error && html`<div class="adv-err" role="alert">${error}</div>`}
     <div class="stack" style="gap:6px">
@@ -196,11 +250,12 @@ export function AdvisorPanel({ data, session, screen }) {
   </div>`;
 }
 
-function Composer({ draft, setDraft, busy, onSend, onMic, listening }) {
+function Composer({ draft, setDraft, busy, onSend, onMic, listening, onTalk }) {
   return html`<form class="adv-compose" onSubmit=${(e) => { e.preventDefault(); onSend(); }}>
     <input class="input" value=${draft} onInput=${(e) => setDraft(e.target.value)} placeholder=${listening ? 'מקשיב…' : 'שאלו את היועץ'} aria-label="שאלה ליועץ" disabled=${busy} />
     ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}>🎙️</button>`}
     <button type="submit" class="btn" disabled=${busy || !draft.trim()}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>
   </form>
+  ${onTalk && html`<button type="button" class="btn-text adv-talk" onClick=${onTalk}>🗣️ שיחה קולית: לדבר עם היועץ בלי להקליד</button>`}
   <p class="adv-legal">מידע כללי, לא ייעוץ השקעות, מס או משפט. בינה מלאכותית יכולה לטעות. <a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a></p>`;
 }
