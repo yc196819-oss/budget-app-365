@@ -4,6 +4,7 @@ import { useState } from 'preact/hooks';
 import { sb } from '../../lib/supabase.js';
 import { readLocal } from '../../lib/storage.js';
 import { PENDING_INVITE } from '../../data/onboarding.js';
+import { consentData } from '../../domain/legal.js';
 
 const MESSAGES = {
   'Invalid login credentials': 'האימייל או הסיסמה לא נכונים',
@@ -20,19 +21,21 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [agreed, setAgreed] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
     setError(''); setNotice('');
     if (!email.trim() || !password) { setError('נא למלא אימייל וסיסמה'); return; }
     if (mode === 'register' && password.length < 8) { setError('סיסמה של 8 תווים לפחות'); return; }
+    if (mode === 'register' && !agreed) { setError('כדי להירשם צריך לאשר את תנאי השימוש ומדיניות הפרטיות'); return; }
     setBusy(true);
     if (mode === 'register') {
       const invite = readLocal(PENDING_INVITE, '');
       const { data, error: err } = await sb.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { display_name: name.trim() || email.trim().split('@')[0], invite_code: invite || undefined }, emailRedirectTo: location.origin + '/app/' }
+        options: { data: { display_name: name.trim() || email.trim().split('@')[0], invite_code: invite || undefined, ...consentData() }, emailRedirectTo: location.origin + '/app/' }
       });
       setBusy(false);
       if (err) { setError(MESSAGES[err.message] || 'ההרשמה נכשלה. נסו שוב.'); return; }
@@ -81,6 +84,8 @@ export function LoginScreen() {
           <input class="input" type="email" autocomplete="email" dir="ltr" value=${email} onInput=${(e) => setEmail(e.target.value)} /></label>
         <label class="field"><span>סיסמה</span>
           <input class="input" type="password" autocomplete=${mode === 'register' ? 'new-password' : 'current-password'} dir="ltr" value=${password} onInput=${(e) => setPassword(e.target.value)} /></label>
+        ${mode === 'register' && html`<label class="check terms-check"><input type="checkbox" checked=${agreed} onChange=${(e) => setAgreed(e.target.checked)} />
+          <span>קראתי ואני מסכים/ה ל<a href="/terms" target="_blank" rel="noopener">תנאי השימוש</a> ול<a href="/privacy" target="_blank" rel="noopener">מדיניות הפרטיות</a></span></label>`}
         ${error && html`<p class="error" role="alert">${error}</p>`}
         ${notice && html`<p class="notice" role="status">${notice}</p>`}
         <button class="btn" type="submit" disabled=${busy}>${busy ? '…' : mode === 'register' ? 'הרשמה' : 'כניסה'}</button>
@@ -88,6 +93,7 @@ export function LoginScreen() {
       </form>
       <${InstallCard} always=${true} />
       <a class="btn-text" href="/download" style="text-align:center">📲 הורדת האפליקציה לטלפון</a>
+      <p class="faint legal-links" style="font-size:13px"><a href="/terms">תנאי שימוש</a> · <a href="/privacy">מדיניות פרטיות</a> · <a href="/accessibility">הצהרת נגישות</a></p>
       <p class="faint" style="font-size:13px">זו הגרסה החדשה, בבנייה. אפשר לעבור לגרסה הקודמת בכל רגע: <a href="/old/">לגרסה הקודמת</a></p>
     </main>`;
 }

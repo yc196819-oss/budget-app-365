@@ -154,11 +154,13 @@ test('sign-up: name, email and password; the invite code travels with it', async
   await page.click('form .btn');
   assert.match(await page.locator('[role="alert"]').textContent(), /8 תווים/);
   await page.fill('input[type="password"]', 'long-enough-1');
+  await page.check('.terms-check input');
   await page.click('form .btn');
   await page.waitForSelector('text=שלחנו מייל לאימות');
   assert.equal(sent[0].email, 'dani@example.com');
   assert.equal(sent[0].data.display_name, 'דני');
   assert.equal(sent[0].data.invite_code, 'abc123');
+  assert.equal(sent[0].data.terms_version, '2026-10', 'the terms confirmed at sign-up');
   await page.close();
 });
 
@@ -179,7 +181,7 @@ test('a password-reset link asks for a new password', async () => {
   await mockSupabase(page, db);
   await page.route('**/auth/v1/user**', (r) => {
     if (r.request().method() === 'PUT') updates.push(JSON.parse(r.request().postData()));
-    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'u1', email: 'yossi@example.com', aud: 'authenticated' }) });
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'u1', email: 'yossi@example.com', aud: 'authenticated', user_metadata: { terms_version: '2026-10' } }) });
   });
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#type=recovery');

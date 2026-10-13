@@ -201,5 +201,6 @@ function Composer({ draft, setDraft, busy, onSend, onMic, listening }) {
     <input class="input" value=${draft} onInput=${(e) => setDraft(e.target.value)} placeholder=${listening ? 'מקשיב…' : 'שאלו את היועץ'} aria-label="שאלה ליועץ" disabled=${busy} />
     ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}>🎙️</button>`}
     <button type="submit" class="btn" disabled=${busy || !draft.trim()}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>
-  </form>`;
+  </form>
+  <p class="adv-legal">מידע כללי, לא ייעוץ השקעות, מס או משפט. בינה מלאכותית יכולה לטעות. <a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a></p>`;
 }

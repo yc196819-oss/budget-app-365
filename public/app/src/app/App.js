@@ -6,6 +6,8 @@ import { LoginScreen } from '../screens/auth/LoginScreen.js';
 import { Onboarding } from '../screens/onboarding/Onboarding.js';
 import { JoinInvite } from '../screens/onboarding/JoinInvite.js';
 import { NewPassword } from '../screens/auth/NewPassword.js';
+import { TermsGate } from '../screens/legal/TermsGate.js';
+import { needsConsent } from '../domain/legal.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
 import { PENDING_INVITE, DECLINED_INVITE } from '../data/onboarding.js';
 
@@ -25,6 +27,8 @@ export function App() {
   if (session.loading) return html`<div class="boot" role="status">טוען…</div>`;
   if (!session.user) return html`<${LoginScreen} />`;
   if (session.recovery) return html`<${NewPassword} onDone=${session.doneRecovery} />`;
+  // The terms of use and privacy policy, confirmed once per version.
+  if (needsConsent(session.user)) return html`<${TermsGate} session=${session} />`;
   if (!session.household && session.offline) {
     return html`<main class="login"><div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו להתחבר כרגע</b>
       <span>בדקו את החיבור לאינטרנט ונסו שוב.</span><button type="button" class="btn" onClick=${session.refresh}>לנסות שוב</button></div></main>`;

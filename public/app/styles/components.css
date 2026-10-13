@@ -490,3 +490,10 @@ body.chat-open { overflow: hidden; }
 .wa-send svg { transform: scaleX(-1); }
 .wa-send:disabled { opacity: .55; cursor: default; box-shadow: none; }
 .wa-send:not(:disabled):active { transform: scale(.94); }
+
+/* Terms of use: the confirmation before the app and at sign-up. */
+.terms-points { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; }
+.terms-check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.5; cursor: pointer; }
+.terms-check input { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--accent); }
+.adv-legal { margin: 2px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--faint); text-align: center; }
+.adv-legal a { color: inherit; }
