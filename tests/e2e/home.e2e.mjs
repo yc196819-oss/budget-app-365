@@ -34,6 +34,8 @@ test('the hero shows what is left of this month\'s budget, computed from the dat
   assert.equal(await page.locator('.sheet h2').textContent(), 'החודש במספרים');
   assert.match(await page.locator('.sheet').textContent(), /צפוי בסוף החודש/);
   await page.keyboard.press('Escape');
+  // The sheet closes on the next render; wait for it rather than racing it.
+  await page.waitForFunction(() => !document.querySelector('.sheet'), null, { timeout: 3000 });
   assert.equal(await page.locator('.sheet').count(), 0);
   assert.deepEqual(errors, []);
   await page.close();
