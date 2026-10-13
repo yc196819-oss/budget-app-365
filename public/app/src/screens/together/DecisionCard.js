@@ -2,21 +2,21 @@ import { html } from '../../lib/html.js';
 import { money, shortDate } from '../../domain/format.js';
 import { VOTES, STATUS, roomText, signedMoney, outcome, votesFor, answerers, needsMyAnswer, isClosed, impact, findPurchase, wantedLabel } from '../../domain/decisions.js';
 import { close } from '../../data/decisions.js';
-import { DecisionChat } from './DecisionChat.js';
+import { ChatPreview } from './DecisionChat.js';
 import { showToast } from '../../lib/toast.js';
 
 // One purchase: who wants it, why, what it does to the money, and each
 // partner's answer with their reason.
-export function DecisionCard({ d, data, dec, userId, memberIds, nameOf, onAnswer }) {
+export function DecisionCard({ d, data, dec, userId, memberIds, nameOf, onAnswer, onChat }) {
   const today = new Date();
   const st = outcome(d, dec.votes, memberIds);
   const votes = votesFor(d, dec.votes);
   const mine = d.created_by === userId;
   const cat = d.category_id && (data.categories || []).find((c) => c.id === d.category_id);
-  const open = !isClosed(d) && st !== 'not_now';
+  const open = !isClosed(d) && st !== 'planned';
   const fx = open ? impact(d, data, today) : null;
   const linked = dec.decisions.map((x) => x.transaction_id).filter(Boolean);
-  const bought = st === 'approved' ? findPurchase(d, data.txs || [], linked) : null;
+  const bought = st === 'approved' || st === 'planned' ? findPurchase(d, data.txs || [], linked) : null;
   const myVote = votes.find((v) => v.user_id === userId);
 
   const finish = async (status, txId = null) => {
@@ -44,13 +44,14 @@ export function DecisionCard({ d, data, dec, userId, memberIds, nameOf, onAnswer
         </div>`;
       })}
     </div>
-    <${DecisionChat} d=${d} dec=${dec} data=${data} userId=${userId} memberIds=${memberIds} nameOf=${nameOf} />
+    ${d.summary && html`<p class="decision-summary"><b>📌 מה החלטנו:</b> ${d.summary}</p>`}
+    <${ChatPreview} d=${d} dec=${dec} userId=${userId} nameOf=${nameOf} onOpen=${onChat} />
     ${bought && html`<div class="decision-match"><span>נראה שזה נקנה: ${bought.description} · ${shortDate(bought.tx_date)} · <span class="num">${money(bought.amount)}</span></span>
       <button type="button" class="btn-text" onClick=${() => finish('bought', bought.id)}>כן, לסגור</button></div>`}
     ${!isClosed(d) && html`<div class="decision-actions">
       ${needsMyAnswer(d, dec.votes, userId, memberIds) && html`<button type="button" class="btn" onClick=${onAnswer}>לענות</button>`}
       ${myVote && html`<button type="button" class="btn btn-ghost" onClick=${onAnswer}>לשנות תשובה</button>`}
-      ${st === 'approved' && !bought && html`<button type="button" class="btn btn-ghost" onClick=${() => finish('bought')}>נקנה ✓</button>`}
+      ${(st === 'approved' || st === 'planned') && !bought && html`<button type="button" class="btn btn-ghost" onClick=${() => finish('bought')}>נקנה ✓</button>`}
       ${mine && html`<button type="button" class="btn-text" style="color:var(--danger)" onClick=${() => finish('withdrawn')}>לבטל את הבקשה</button>`}
     </div>`}
   </article>`;

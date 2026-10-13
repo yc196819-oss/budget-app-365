@@ -11,7 +11,7 @@ test('a new card goes to the partner, with who, what and how much', () => {
   assert.equal(m.to, 'u1');
   assert.equal(m.title, '🛒 דני רוצה לקנות: מכונת כביסה');
   assert.match(m.body, /₪2,400 · הישנה נשברה — מה דעתך\?/);
-  assert.equal(m.url, '/app/#/together');
+  assert.equal(m.url, '/app/#/together/d1', 'opens the conversation');
 });
 
 test('an answer goes to the others, with the reason', () => {
@@ -46,4 +46,16 @@ test('a message on the card and the advisor joining go to the other partner', ()
   assert.equal(a.title, '🤖 היועץ הצטרף לשיחה על: מכונת כביסה');
   assert.match(a.body, /לחכות לדצמבר/);
   assert.deepEqual(messagesFor('message', { decision, actorId: 'u1', members, message: null }), []);
+});
+
+test('a decision closed together: the partner hears what was decided, and the words agreed on', () => {
+  const [m] = messagesFor('concluded', { decision: { ...decision, status: 'planned', summary: 'קונים בדצמבר מהבונוס' }, actorId: 'u1', members });
+  assert.equal(m.to, 'u2');
+  assert.equal(m.title, '✅ סוכם: מכונת כביסה נכנס לתוכנית (יוסי)');
+  assert.equal(m.body, 'קונים בדצמבר מהבונוס');
+  assert.equal(m.url, '/app/#/together/d1');
+  const [no] = messagesFor('concluded', { decision: { ...decision, status: 'declined', summary: null }, actorId: 'u2', members });
+  assert.equal(no.to, 'u1');
+  assert.equal(no.title, '🙅 סוכם: לא קונים את מכונת כביסה (דני)');
+  assert.equal(no.body, '₪2,400');
 });

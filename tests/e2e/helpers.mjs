@@ -90,6 +90,21 @@ function applyFilters(rows, params) {
 }
 
 export async function mockSupabase(page, db, calls = []) {
+  // Realtime (live updates): a quiet Phoenix server that accepts every join
+  // and heartbeat, so nothing reaches the network.
+  await page.routeWebSocket(/supabase\.co\/realtime/, (ws) => {
+    ws.onMessage((raw) => {
+      let msg;
+      try { msg = JSON.parse(String(raw)); } catch (_e) { return; }
+      const [joinRef, ref, topic, event, payload] = msg;
+      if (event === 'phx_join') {
+        const pc = ((payload && payload.config && payload.config.postgres_changes) || []).map((c, i) => ({ ...c, id: i + 1 }));
+        ws.send(JSON.stringify([joinRef, ref, topic, 'phx_reply', { status: 'ok', response: { postgres_changes: pc } }]));
+      } else if (ref) {
+        ws.send(JSON.stringify([joinRef, ref, topic, 'phx_reply', { status: 'ok', response: {} }]));
+      }
+    });
+  });
   await page.route('**/*.supabase.co/**', async (route) => {
     const req = route.request();
     const url = new URL(req.url());

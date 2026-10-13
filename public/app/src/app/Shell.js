@@ -17,7 +17,8 @@ import { AssetsScreen } from '../screens/assets/AssetsScreen.js';
 import { TogetherScreen } from '../screens/together/TogetherScreen.js';
 import { useDecisions } from '../data/useDecisions.js';
 import { pendingCount, unreadTotal } from '../domain/decisions.js';
-import { seenAt } from '../data/decisions.js';
+import { seenAt, onIncoming } from '../data/decisions.js';
+import { showToast } from '../lib/toast.js';
 import { shortcut, isTyping } from '../domain/shortcuts.js';
 import { hrefFor } from '../domain/routes.js';
 import { ProfileSheet } from '../screens/profile/ProfileSheet.js';
@@ -44,9 +45,16 @@ export function Shell({ tab, session }) {
   // The desktop rail and the mobile sheet hold the same advisor; only one is mounted.
   const desktop = useMedia('(min-width: 1024px)');
   // Shared decisions: the "together" tab shows how many wait for my answer.
-  const dec = useDecisions(session.household?.household_id);
+  const dec = useDecisions(session.household?.household_id, session.user.id);
   // Answers waiting for me, plus cards with new messages in their conversation.
-  const badges = { together: dec.status === 'ready' ? pendingCount(dec.decisions, dec.votes, session.user.id, Object.keys(data.members || {})) + unreadTotal(dec.decisions, dec.messages || [], session.user.id, seenAt) : 0 };
+  const badges = { together: dec.status === 'ready' ? pendingCount(dec.decisions, dec.votes, session.user.id, Object.keys(data.members || {})) + unreadTotal(dec.decisions, dec.messages || [], session.user.id, (id) => seenAt(id, session.user.id)) : 0 };
+  // A new message from the partner while the app is open: a banner, unless that conversation is on the screen.
+  useEffect(() => onIncoming((m) => {
+    if (document.querySelector('.wa') || document.visibilityState !== 'visible') return;
+    const who = m.role === 'ai' ? '🤖 היועץ' : (data.members || {})[m.author_id] || 'בן/בת הזוג';
+    if (navigator.vibrate) navigator.vibrate(30);
+    showToast('💬 ' + who + ': ' + String(m.text).split('\n')[0].slice(0, 80), { undo: () => { location.hash = '#/together/' + m.decision_id; }, label: 'לפתוח', ms: 6000 });
+  }), [data.members]);
 
   const profile = {
     name: session.household?.display_name || session.user.email.split('@')[0],

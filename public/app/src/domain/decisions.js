@@ -22,12 +22,14 @@ export const STATUS = {
   approved: 'אושר',
   not_now: 'לא עכשיו',
   talk: 'נדבר על זה',
+  planned: 'סוכם, בתוכנית',
   bought: 'נקנה',
-  withdrawn: 'בוטל'
+  withdrawn: 'בוטל',
+  declined: 'החלטנו לא לקנות'
 };
 
 export const DEFAULT_THRESHOLD = 500;
-const CLOSED = ['bought', 'withdrawn'];
+const CLOSED = ['bought', 'withdrawn', 'declined'];
 
 export const isClosed = (d) => CLOSED.includes(d.status);
 export const votesFor = (d, votes) => votes.filter((v) => v.decision_id === d.id);
@@ -41,7 +43,7 @@ export function answerers(d, memberIds) {
 // conversation), then any "not now", and it is approved only when every
 // partner approved. Bought and withdrawn are final.
 export function outcome(d, votes, memberIds) {
-  if (isClosed(d)) return d.status;
+  if (isClosed(d) || d.status === 'planned') return d.status;
   const others = answerers(d, memberIds);
   if (others.length === 0) return 'open';
   const mine = votesFor(d, votes).filter((v) => others.includes(v.user_id));
@@ -51,14 +53,15 @@ export function outcome(d, votes, memberIds) {
   return 'open';
 }
 
+// Decided together (planned) or final: nobody owes an answer any more.
 export function waitingOn(d, votes, memberIds) {
-  if (isClosed(d)) return [];
+  if (isClosed(d) || d.status === 'planned') return [];
   const answered = new Set(votesFor(d, votes).map((v) => v.user_id));
   return answerers(d, memberIds).filter((id) => !answered.has(id));
 }
 
 export function needsMyAnswer(d, votes, me, memberIds) {
-  return !isClosed(d) && waitingOn(d, votes, memberIds).includes(me);
+  return waitingOn(d, votes, memberIds).includes(me);
 }
 
 // A reason is required unless approving: "no" without a why hurts.
@@ -70,20 +73,26 @@ export function needsCard(amount, threshold) {
   return Number(amount) >= (threshold ?? DEFAULT_THRESHOLD);
 }
 
-// The screen's groups, in the order they need attention.
+// The screen's groups, in the order they need attention. A card goes to
+// history only when the couple has decided: bought, decided not to buy, or
+// withdrawn. "Not now" and "let's talk" stay in the conversation until then;
+// agreed and in the plan stays until it is bought.
 export function groups(decisions, votes, me, memberIds) {
   const out = { mine: [], waiting: [], talk: [], approved: [], history: [] };
   const sorted = [...decisions].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   for (const d of sorted) {
     const st = outcome(d, votes, memberIds);
-    if (isClosed(d) || st === 'not_now') out.history.push(d);
+    if (isClosed(d)) out.history.push(d);
     else if (needsMyAnswer(d, votes, me, memberIds)) out.mine.push(d);
-    else if (st === 'talk') out.talk.push(d);
-    else if (st === 'approved') out.approved.push(d);
+    else if (st === 'talk' || st === 'not_now') out.talk.push(d);
+    else if (st === 'approved' || st === 'planned') out.approved.push(d);
     else out.waiting.push(d);
   }
   return out;
 }
+
+// Can the card be summed up as a decision now? Anything not final.
+export const canConclude = (d) => !isClosed(d);
 
 export function pendingCount(decisions, votes, me, memberIds) {
   return decisions.filter((d) => needsMyAnswer(d, votes, me, memberIds)).length;
@@ -164,9 +173,9 @@ export function forAdvisor(decisions, votes, memberIds) {
 // is asked, with the purchase, why it is wanted, each partner's answer and
 // what it does to the numbers. It is asked to weigh both sides, not to take
 // one, and to end with a clear recommendation.
-export function advisorQuestion(d, votes, memberIds, nameOf, fx, today = new Date(), hasThread = false) {
+export function advisorQuestion(d, votes, memberIds, nameOf, fx, today = new Date(), hasThread = false, voices = null) {
   const lines = [
-    `בני הזוג מתלבטים יחד על קנייה ומבקשים שתצטרף לשיחה ותגיד את דעתך לפי הנתונים.`,
+    `בני הזוג מתלבטים יחד על קנייה ומבקשים שתצטרף לשיחה שלהם, תעזור לכל אחד להישמע ותגיד את דעתך לפי הנתונים.`,
     `${nameOf(d.created_by)} רוצה לקנות: ${d.title}, ב-${money(d.amount)}, ${wantedLabel(d.wanted_by, today)}.`,
     d.note ? `למה זה חשוב לו/לה: ${d.note}` : null
   ];
@@ -179,8 +188,42 @@ export function advisorQuestion(d, votes, memberIds, nameOf, fx, today = new Dat
     if (fx.hasBalance) lines.push(`בחשבון בסוף ${fx.month}: ${signedMoney(fx.endBefore)} בלי הקנייה, ${signedMoney(fx.endAfter)} איתה.${fx.turnsNegative ? ' הקנייה מכניסה את החשבון למינוס.' : ''}`);
   }
   if (hasThread) lines.push('בני הזוג כבר מדברים על זה (השיחה מופיעה למעלה). התייחס למה שנאמר, ובעיקר להודעה האחרונה, בלי לחזור על מה שכבר אמרת.');
-  lines.push('תן דעה מאוזנת ב-3 עד 5 משפטים, על סמך המספרים בנתונים (תקציב, תחזית, יעדים, החלטות קודמות). הצג את השיקולים של שני הצדדים ואל תיקח צד. סיים בשורה שמתחילה ב"ההמלצה שלי:" — לקנות עכשיו, לחכות (ועד מתי), או לקנות בתנאי (איזה).');
+  if (voices) {
+    const quiet = voices.quiet ? nameOf(voices.quiet) : null;
+    lines.push(`בשיחה עד עכשיו: ${voices.counts.map(([id, n]) => nameOf(id) + ' ' + n + ' הודעות').join(', ')}.${quiet ? ' ' + quiet + ' כתב/ה פחות; תן לו/ה מקום.' : ''}`);
+  }
+  lines.push(COUPLE_RULES);
   return lines.filter(Boolean).join('\n');
+}
+
+// How the advisor speaks in a couple's conversation: to both, with room for
+// each, never as a judge.
+const COUPLE_RULES = [
+  'אתה מדבר עם זוג, לא מכריע ביניהם. פנה לשניהם בשמם.',
+  'קודם שקף בחום, במשפט קצר לכל אחד, מה חשוב לו/לה ומה הוא/היא מרגיש/ה לפי מה שכתבו, בלי לפרש מעבר למה שנאמר. אם מישהו עוד לא אמר מה חשוב לו, הזמן אותו בשאלה פתוחה אחת.',
+  'אחר כך המספרים: מה הקנייה עושה לתקציב, לתחזית וליעדים, בעובדות.',
+  'בלי האשמה, בלי "צריך" ובלי לקחת צד. אם יש מתח, הכר בו בעדינות והצע דרך שבה שניהם מרוויחים (פשרה, תנאי, מועד).',
+  'עד 6 משפטים קצרים, בעברית חמה ופשוטה. סיים בשורה שמתחילה ב"ההמלצה שלי:" — לקנות עכשיו, לחכות (ועד מתי), או לקנות בתנאי (איזה) — ואחריה שאלה אחת לשניהם שתעזור להחליט.'
+].join('\n');
+
+// The decision in words, to write into the card when closing it: what was
+// agreed, why, and the practical steps. The advisor proposes; the couple edits.
+export function summaryQuestion(d, votes, memberIds, nameOf, today = new Date()) {
+  return [
+    `בני הזוג מסכמים את ההחלטה על: ${d.title}, ${money(d.amount)}, ${wantedLabel(d.wanted_by, today)}.`,
+    ...answerers(d, memberIds).map((id) => { const v = votesFor(d, votes).find((x) => x.user_id === id); return v ? `${nameOf(id)}: ${VOTES[v.vote].label}${v.note ? ' — ' + v.note : ''}` : null; }),
+    'לפי השיחה למעלה, נסח סיכום החלטה קצר שמכבד את שניהם: מה הוחלט, ולמה במשפט, ו-1 עד 3 צעדים מעשיים (מי, מה, עד מתי). בלי פתיח ובלי "ההמלצה שלי". עד 4 שורות.'
+  ].filter(Boolean).join('\n');
+}
+
+// Who has spoken in the conversation (people only), and who less: the
+// advisor makes room for the quieter partner.
+export function voiceBalance(thread, memberIds) {
+  const counts = memberIds.map((id) => [id, thread.filter((m) => m.role !== 'ai' && m.author_id === id).length]);
+  const total = counts.reduce((s, [, n]) => s + n, 0);
+  if (total < 2 || counts.length < 2) return { counts, quiet: null };
+  const sorted = [...counts].sort((a, b) => a[1] - b[1]);
+  return { counts, quiet: sorted[0][1] * 2 < sorted[sorted.length - 1][1] ? sorted[0][0] : null };
 }
 
 // ── the conversation on a card: the partners and the advisor ──
@@ -192,6 +235,25 @@ export function threadFor(d, messages) {
 
 // Messages I have not seen: written by someone else, or the advisor's answer
 // to someone else, after I last opened the conversation.
+// Read receipts: my message is read when the partner's last read is after it.
+export function readBy(msg, reads, me) {
+  return reads.some((r) => r.decision_id === msg.decision_id && r.user_id !== me && r.seen_at >= msg.created_at);
+}
+
+// The conversation with a day line where the day changes: [{ day } | message].
+export function withDays(thread, today = new Date()) {
+  const key = (iso) => { const d = new Date(iso); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); };
+  const label = (iso) => {
+    const d = new Date(iso);
+    const days = Math.round((new Date(today.getFullYear(), today.getMonth(), today.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    return days === 0 ? 'היום' : days === 1 ? 'אתמול' : d.getDate() + ' ב' + MONTH_NAMES[d.getMonth()] + (d.getFullYear() !== today.getFullYear() ? ' ' + d.getFullYear() : '');
+  };
+  const out = [];
+  let last = null;
+  for (const m of thread) { const k = key(m.created_at); if (k !== last) { out.push({ day: label(m.created_at), key: 'day-' + k }); last = k; } out.push(m); }
+  return out;
+}
+
 export function unreadCount(d, messages, me, seenAt) {
   return threadFor(d, messages).filter((m) => m.author_id !== me && (!seenAt || m.created_at > seenAt)).length;
 }
