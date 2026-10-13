@@ -42,18 +42,20 @@ test('the agreed threshold decides when a card is needed', () => {
   assert.equal(needsCard(600, undefined), true);
 });
 
-test('groups: what waits for me first, then talk, waiting, approved; not-now and closed in history', () => {
+test('groups: what waits for me first, then the conversations, waiting, agreed; only decided cards in history', () => {
   const list = [
     d({ id: 'a', created_at: '2026-09-01' }),
     d({ id: 'b', created_by: 'u1', created_at: '2026-09-02' }),
     d({ id: 'c', created_at: '2026-09-03' }),
     d({ id: 'e', created_at: '2026-09-04' }),
     d({ id: 'f', status: 'bought', created_at: '2026-09-05' }),
-    d({ id: 'g', created_at: '2026-09-06' })
+    d({ id: 'g', created_at: '2026-09-06' }),
+    d({ id: 'h', status: 'planned', created_at: '2026-09-07' }),
+    d({ id: 'i', status: 'declined', created_at: '2026-09-08' })
   ];
   const votes = [v('talk', 'u1', 'c', 'נדבר'), v('approve', 'u1', 'e'), v('not_now', 'u1', 'g', 'אחרי החגים')];
   const g = groups(list, votes, 'u1', members);
-  assert.deepEqual(Object.fromEntries(Object.entries(g).map(([k, l]) => [k, l.map((x) => x.id)])), { mine: ['a'], waiting: ['b'], talk: ['c'], approved: ['e'], history: ['g', 'f'] });
+  assert.deepEqual(Object.fromEntries(Object.entries(g).map(([k, l]) => [k, l.map((x) => x.id)])), { mine: ['a'], waiting: ['b'], talk: ['g', 'c'], approved: ['h', 'e'], history: ['i', 'f'] }, '"not now" stays in the conversation until we decide');
   assert.equal(pendingCount(list, votes, 'u1', members), 1);
   assert.equal(pendingCount(list, votes, 'u2', members), 1, 'u2 answers the card u1 opened');
 });
@@ -117,7 +119,8 @@ test('the advisor is asked with the purchase, the reasons, both answers and the 
   assert.match(q, /יוסי ענה\/תה: לא עכשיו — אחרי החגים/);
   assert.match(q, /נשארים ₪1,200 לפני הקנייה, חריגה של ₪1,200 אחריה/);
   assert.match(q, /₪3,000 בלי הקנייה, ₪600 איתה/);
-  assert.match(q, /אל תיקח צד/);
+  assert.match(q, /לא מכריע ביניהם/);
+  assert.match(q, /במשפט קצר לכל אחד, מה חשוב לו\/לה/);
   assert.match(q, /ההמלצה שלי:/);
   assert.match(advisorQuestion(d(), [], members, nameOf, null), /יוסי עוד לא ענה\/תה/);
 });
@@ -139,4 +142,40 @@ test('the conversation on a card: order, unread, and what the advisor gets', () 
     { role: 'user', text: 'אולי נחכה?', author: 'יוסי' }, { role: 'user', text: 'נו?', author: 'דני' }, { role: 'ai', text: 'ההמלצה שלי: לחכות.' }
   ]);
   assert.match(advisorQuestion(d(), [], members, nameOf, null, new Date(), true), /התייחס למה שנאמר, ובעיקר להודעה האחרונה/);
+});
+
+import { voiceBalance, summaryQuestion, readBy, withDays, canConclude } from '../public/app/src/domain/decisions.js';
+
+test('the quieter partner gets room: the advisor is told who wrote less', () => {
+  const nameOf = (id) => ({ u1: 'יוסי', u2: 'דני' }[id]);
+  const m = (author, role = 'user') => ({ decision_id: 'd1', role, author_id: author, text: 'x', created_at: '2026-10-01T10:00:00Z' });
+  const thread = [m('u2'), m('u2'), m('u2'), m('u1'), m('u2', 'ai')];
+  const vb = voiceBalance(thread, members);
+  assert.equal(vb.quiet, 'u1');
+  assert.deepEqual(vb.counts, [['u1', 1], ['u2', 3]], 'the advisor is not a voice');
+  assert.equal(voiceBalance([m('u1'), m('u2')], members).quiet, null);
+  const q = advisorQuestion(d(), [], members, nameOf, null, new Date(2026, 9, 1), true, vb);
+  assert.match(q, /יוסי 1 הודעות, דני 3 הודעות/);
+  assert.match(q, /יוסי כתב\/ה פחות; תן לו\/ה מקום/);
+});
+
+test('the decision in words: the advisor drafts it from both answers', () => {
+  const nameOf = (id) => ({ u1: 'יוסי', u2: 'דני' }[id]);
+  const q = summaryQuestion(d(), [v('not_now', 'u1', 'd1', 'אחרי החגים')], members, nameOf, new Date(2026, 9, 1));
+  assert.match(q, /יוסי: לא עכשיו — אחרי החגים/);
+  assert.match(q, /צעדים מעשיים/);
+});
+
+test('read ticks, day lines, and what can still be decided', () => {
+  const msg = { decision_id: 'd1', author_id: 'u1', created_at: '2026-10-01T10:00:00Z' };
+  assert.equal(readBy(msg, [{ decision_id: 'd1', user_id: 'u1', seen_at: '2026-10-02T00:00:00Z' }], 'u1'), false, 'my own read does not count');
+  assert.equal(readBy(msg, [{ decision_id: 'd1', user_id: 'u2', seen_at: '2026-10-01T09:59:00Z' }], 'u1'), false);
+  assert.equal(readBy(msg, [{ decision_id: 'd1', user_id: 'u2', seen_at: '2026-10-01T10:00:00Z' }], 'u1'), true);
+  const today = new Date(2026, 9, 13, 12);
+  const at = (d, h) => new Date(2026, 9, d, h).toISOString();
+  const items = withDays([{ id: 1, created_at: at(11, 9) }, { id: 2, created_at: at(12, 9) }, { id: 3, created_at: at(12, 22) }, { id: 4, created_at: at(13, 8) }], today);
+  assert.deepEqual(items.map((x) => x.day || x.id), ['11 באוקטובר', 1, 'אתמול', 2, 3, 'היום', 4]);
+  assert.equal(canConclude(d({ status: 'not_now' })), true);
+  assert.equal(canConclude(d({ status: 'planned' })), true, 'a planned one can be changed');
+  assert.equal(canConclude(d({ status: 'declined' })), false);
 });

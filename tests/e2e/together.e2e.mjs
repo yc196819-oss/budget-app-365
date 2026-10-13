@@ -65,8 +65,9 @@ test('"not now" needs a reason; the answer is saved and the partner is notified'
   assert.deepEqual(db.tables.decision_votes.map((v) => [v.decision_id, v.user_id, v.vote, v.note]), [['d1', 'u1', 'not_now', 'בואו נחכה לבונוס בדצמבר']]);
   assert.equal(db.tables.shared_decisions[0].status, 'not_now');
   assert.deepEqual(notified, [{ decisionId: 'd1', event: 'answered' }]);
-  // It moves to history, and the badge is gone.
-  await page.waitForSelector('details.history');
+  // It stays in the conversation until we decide together, and the badge is gone.
+  await page.waitForSelector('section:has-text("בשיחה, עוד לא החלטנו") .decision');
+  assert.equal(await page.locator('details.history').count(), 0);
   assert.equal(await page.locator('.nav-badge').count(), 0);
   await page.close();
 });
@@ -206,62 +207,86 @@ test('desktop keyboard shortcuts: N adds, 1-5 switch tabs, / asks the advisor; n
   await page.close();
 });
 
-test('a conversation for three on the card: write to each other, then invite the advisor', async () => {
+test('a conversation for three, like a messaging app: write, read ticks, invite the advisor', async () => {
   const { page, db, notified } = await open();
   const asked = [];
   await page.route('**/api/ai/advice-chat-stream', (r) => {
     asked.push(JSON.parse(r.request().postData()));
-    const body = ['לפי המספרים, ', 'החודש כבר חרגתם מהתקציב.', '\nההמלצה שלי: לחכות לחודש הבא.', '\n@@הצעות: למה? | ומה עם הבונוס?']
+    const body = ['יוסי, דני, ', 'החודש כבר חרגתם מהתקציב.', '\nההמלצה שלי: לחכות לחודש הבא.', '\n@@הצעות: למה? | ומה עם הבונוס?']
       .map((x) => 'data: ' + JSON.stringify({ delta: x }) + '\n\n').join('') + 'data: {"done":true}\n\n';
     return r.fulfill({ status: 200, contentType: 'text/event-stream', body });
   });
   await page.waitForSelector('.decision');
-  await page.click('.dchat-toggle');
-  await page.fill('input[aria-label="הודעה על הכרטיס"]', 'אולי נחכה לבונוס בדצמבר?');
-  await page.click('.dchat-compose button[type="submit"]');
-  await page.waitForSelector('.dmsg.me:has-text("אולי נחכה לבונוס בדצמבר?")');
+  await page.click('.chat-preview');
+  await page.waitForSelector('.wa');
+  assert.match(await page.locator('.wa-empty').textContent(), /איך כל אחד מכם מרגיש/);
+  assert.match(await page.locator('.wa-empty').textContent(), /נשארת פתוחה עד שתסכמו/);
+  // An opener starts the sentence; Enter sends.
+  await page.click('.wa-opener:has-text("חשוב לי ש")');
+  assert.equal(await page.locator('.wa-input').inputValue(), 'חשוב לי ש');
+  await page.fill('.wa-input', 'חשוב לי שנחכה לבונוס בדצמבר');
+  await page.press('.wa-input', 'Enter');
+  await page.waitForSelector('.wa-msg.me:has-text("חשוב לי שנחכה לבונוס בדצמבר")');
+  assert.equal((await page.locator('.wa-msg.me .wa-ticks').textContent()).trim(), '✓', 'sent, not read yet');
+  assert.match(await page.locator('.wa-day').first().textContent(), /היום/);
   const mine = db.tables.decision_messages.find((m) => m.role === 'user');
-  assert.deepEqual([mine.decision_id, mine.household_id, mine.author_id, mine.text], ['d1', 'h1', 'u1', 'אולי נחכה לבונוס בדצמבר?']);
-  // The partner is notified after the message shows (it never holds up the screen).
+  assert.deepEqual([mine.decision_id, mine.household_id, mine.author_id, mine.text], ['d1', 'h1', 'u1', 'חשוב לי שנחכה לבונוס בדצמבר']);
   await until(page, () => notified.some((n) => n.event === 'message'));
   assert.deepEqual(notified.at(-1), { decisionId: 'd1', event: 'message' });
+  // I read it here: the read is shared (the partner's ✓✓).
+  await until(page, () => (db.tables.decision_reads || []).some((r) => r.user_id === 'u1'));
+  assert.equal(db.tables.decision_reads.find((r) => r.user_id === 'u1').decision_id, 'd1');
 
-  await page.click('.dchat button:has-text("להזמין את היועץ לשיחה")');
-  await page.waitForSelector('.dmsg.ai:has-text("ההמלצה שלי: לחכות לחודש הבא.")');
+  await page.click('.wa-ai');
+  await page.waitForSelector('.wa-msg.ai:has-text("ההמלצה שלי: לחכות לחודש הבא.")');
   const q = asked[0];
   assert.match(q.message, /דני רוצה לקנות: מכונת כביסה, ב-₪2,400/);
-  assert.match(q.message, /התייחס למה שנאמר, ובעיקר להודעה האחרונה/);
-  assert.deepEqual(q.history, [{ role: 'user', text: 'אולי נחכה לבונוס בדצמבר?', author: 'יוסי ודני' }]);
-  assert.equal(q.summary.screen, 'together');
+  assert.match(q.message, /לא מכריע ביניהם/);
+  assert.match(q.message, /דני 0 הודעות/);
+  assert.deepEqual(q.history, [{ role: 'user', text: 'חשוב לי שנחכה לבונוס בדצמבר', author: 'יוסי ודני' }]);
   const ai = db.tables.decision_messages.find((m) => m.role === 'ai');
-  assert.equal(ai.text, 'לפי המספרים, החודש כבר חרגתם מהתקציב.\nההמלצה שלי: לחכות לחודש הבא.');
-  assert.equal(ai.author_id, 'u1');
+  assert.equal(ai.text, 'יוסי, דני, החודש כבר חרגתם מהתקציב.\nההמלצה שלי: לחכות לחודש הבא.');
   await until(page, () => notified.some((n) => n.event === 'advisor'));
-  assert.deepEqual(notified.at(-1), { decisionId: 'd1', event: 'advisor' });
-  assert.doesNotMatch(await page.locator('.dchat').textContent(), /@@/);
-  assert.match(await page.locator('.dchat').textContent(), /לשאול את היועץ שוב/);
+  assert.doesNotMatch(await page.locator('.wa').textContent(), /@@/);
+  // Back to the card: the last message shows on it.
+  await page.click('.wa-back');
+  await page.waitForFunction(() => !document.querySelector('.wa'));
+  assert.match(await page.locator('.chat-preview').textContent(), /היועץ/);
   await page.close();
 });
 
-test('new messages from the partner: the conversation opens by itself and the tab shows it', async () => {
+test('the partner\'s messages: the tab and the card show them; read ticks turn blue when they read mine', async () => {
   const { page } = await open({ hash: '#/home', prep: (db) => {
     db.tables.decision_messages = [
+      { id: 'm0', decision_id: 'd1', household_id: 'h1', role: 'user', author_id: 'u1', text: 'מה דעתך שנחכה?', created_at: new Date(Date.now() - 900e3).toISOString() },
       { id: 'm1', decision_id: 'd1', household_id: 'h1', role: 'user', author_id: 'u2', text: 'זה ממש דחוף, הישנה מציפה את המטבח', created_at: new Date(Date.now() - 600e3).toISOString() },
       { id: 'm2', decision_id: 'd1', household_id: 'h1', role: 'ai', author_id: 'u2', text: 'ההמלצה שלי: לקנות בתנאי שתקצצו 300 באוכל בחוץ.', created_at: new Date(Date.now() - 300e3).toISOString() }
     ];
+    db.tables.decision_reads = [{ decision_id: 'd1', household_id: 'h1', user_id: 'u2', seen_at: new Date(Date.now() - 700e3).toISOString() }];
   } });
   await page.waitForSelector('.hero');
   // One answer waiting for me + one card with new messages.
   await page.waitForFunction(() => (document.querySelector('.nav-item[href="#/together"] .nav-badge') || {}).textContent === '2');
   await page.click('.nav-item[href="#/together"]');
-  await page.waitForSelector('.dchat.open');
-  const t = await page.locator('.dchat-log').textContent();
-  assert.match(t, /דני/);
+  await page.waitForSelector('.chat-preview.unread');
+  assert.match(await page.locator('.chat-preview').textContent(), /היועץ: ההמלצה שלי/);
+  assert.equal((await page.locator('.chat-preview .chat-preview-count').textContent()).trim(), '2');
+  await page.click('.chat-preview');
+  await page.waitForSelector('.wa');
+  const t = await page.locator('.wa-log').textContent();
   assert.match(t, /הישנה מציפה את המטבח/);
-  assert.match(t, /היועץ · לבקשת דני/);
-  assert.match(t, /לקנות בתנאי שתקצצו 300/);
+  assert.match(t, /היועץלבקשת דני/);
+  assert.equal(await page.locator('.wa-msg.me .wa-ticks.read').count(), 1, 'דני read my message');
   // Seen: only the answer still waits.
+  await page.click('.wa-back');
   await page.waitForFunction(() => (document.querySelector('.nav-item[href="#/together"] .nav-badge') || {}).textContent === '1');
+  await page.close();
+});
+
+test('a notification opens the conversation itself (#/together/<card>)', async () => {
+  const { page } = await open({ hash: '#/together/d1' });
+  await page.waitForSelector('.wa');
+  assert.match(await page.locator('.wa-head').textContent(), /מכונת כביסה/);
   await page.close();
 });
 
@@ -273,14 +298,61 @@ test('I can delete my own messages (two taps), not my partner\'s or the advisor\
       { id: 'ai', decision_id: 'd1', household_id: 'h1', role: 'ai', author_id: 'u1', text: 'ההמלצה שלי: לחכות.', created_at: new Date(Date.now() - 300e3).toISOString() }
     ];
   } });
-  await page.waitForSelector('.dchat.open');
-  assert.equal(await page.locator('.dmsg-x').count(), 1, 'only on my own message');
-  await page.click('.dmsg.me .dmsg-x');
-  await page.click('.dmsg.me button:has-text("ביטול")');
+  await page.click('.chat-preview');
+  await page.waitForSelector('.wa');
+  await page.click('.wa-msg.them');
+  assert.equal(await page.locator('.wa-actions').count(), 0, 'not on the partner\'s message');
+  await page.click('.wa-msg.me');
+  await page.click('.wa-actions button:has-text("מחיקה")');
+  await page.click('.wa-actions button:has-text("ביטול")');
   assert.equal(db.tables.decision_messages.length, 3);
-  await page.click('.dmsg.me .dmsg-x');
-  await page.click('.dmsg.me button:has-text("כן, למחוק")');
-  await page.waitForFunction(() => !document.querySelector('.dmsg.me'));
+  await page.click('.wa-actions button:has-text("מחיקה")');
+  await page.click('.wa-actions button:has-text("כן, למחוק")');
+  await page.waitForFunction(() => !document.querySelector('.wa-msg.me'));
   assert.deepEqual(db.tables.decision_messages.map((m) => m.id), ['his', 'ai']);
+  await page.close();
+});
+
+test('closing with a decision: the advisor drafts it, it goes into the plan, the partner is told; declined goes to history', async () => {
+  const { page, db, notified } = await open({ prep: (db) => {
+    db.tables.decision_votes = [{ decision_id: 'd1', household_id: 'h1', user_id: 'u1', vote: 'talk', note: 'בוא נדבר על התקציב' }];
+    db.tables.shared_decisions[0].status = 'talk';
+    db.tables.shared_decisions.push({ id: 'd2', household_id: 'h1', created_by: 'u2', title: 'אופניים', amount: 1800, note: null, status: 'not_now', wanted_by: null, created_at: new Date(Date.now() - 7200e3).toISOString() });
+    db.tables.decision_votes.push({ decision_id: 'd2', household_id: 'h1', user_id: 'u1', vote: 'not_now', note: 'אחרי החורף' });
+  } });
+  await page.route('**/api/ai/advice-chat-stream', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: 'קונים בדצמבר מהבונוס.\nדני בודק מחירים עד סוף החודש.' }) + '\n\ndata: {"done":true}\n\n' }));
+  await page.waitForSelector('section:has-text("בשיחה, עוד לא החלטנו")');
+  assert.equal(await page.locator('section:has-text("בשיחה, עוד לא החלטנו") .decision').count(), 2, '"not now" and "talk" wait for a decision');
+  await page.click('.decision:has-text("מכונת כביסה") .chat-preview');
+  await page.click('.wa-pin button:has-text("לסכם החלטה")');
+  await page.click('.sheet .vote-choice:has-text("קונים, נכנס לתוכנית")');
+  await page.selectOption('.sheet select', { index: 2 });
+  await page.click('.sheet button:has-text("שהיועץ ינסח")');
+  await page.waitForFunction(() => document.querySelector('.sheet textarea').value.includes('דני בודק מחירים'));
+  await page.click('.sheet button:has-text("לסגור עם ההחלטה")');
+  await page.waitForFunction(() => !document.querySelector('.sheet'));
+  const d1 = db.tables.shared_decisions.find((d) => d.id === 'd1');
+  assert.equal(d1.status, 'planned');
+  assert.match(d1.summary, /קונים בדצמבר מהבונוס/);
+  assert.ok(d1.goal_id, 'a planned expense');
+  const goal = db.tables.goals.find((g) => g.id === d1.goal_id);
+  assert.equal(goal.target_amount, 2400);
+  assert.equal(goal.target_date, d1.wanted_by);
+  await until(page, () => notified.some((n) => n.event === 'concluded'));
+  assert.match(await page.locator('.wa-summary').textContent(), /מה החלטנו.*קונים בדצמבר/);
+  await page.click('.wa-back');
+  assert.match(await page.locator('section:has-text("סוכם, עוד לא נקנה")').textContent(), /מכונת כביסה/);
+
+  await page.click('.decision:has-text("אופניים") .chat-preview');
+  await page.click('.wa-pin button:has-text("לסכם החלטה")');
+  await page.click('.sheet .vote-choice:has-text("החלטנו לא לקנות")');
+  await page.fill('.sheet textarea', 'יש לנו אופניים טובים מספיק');
+  await page.click('.sheet button:has-text("לסגור עם ההחלטה")');
+  await page.waitForFunction(() => !document.querySelector('.sheet'));
+  assert.equal(db.tables.shared_decisions.find((d) => d.id === 'd2').status, 'declined');
+  await page.click('.wa-back');
+  await page.click('details.history summary');
+  assert.match(await page.locator('details.history').textContent(), /אופניים.*החלטנו לא לקנות/s);
+  assert.match(await page.locator('details.history').textContent(), /יש לנו אופניים טובים מספיק/);
   await page.close();
 });

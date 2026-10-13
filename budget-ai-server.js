@@ -1301,7 +1301,7 @@ app.post('/api/decisions/notify', requireAuth, decisionLimiter, async (req, res)
   try {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase not configured' });
     const { decisionId, event } = req.body || {};
-    if (!decisionId || !['opened', 'answered', 'message', 'advisor', 'bought', 'withdrawn'].includes(event)) return res.status(400).json({ error: 'bad request' });
+    if (!decisionId || !['opened', 'answered', 'message', 'advisor', 'concluded', 'bought', 'withdrawn'].includes(event)) return res.status(400).json({ error: 'bad request' });
     const { data: decision } = await supabaseAdmin.from('shared_decisions').select('*').eq('id', decisionId).maybeSingle();
     if (!decision || !(await isHouseholdMember(req.authUserId, decision.household_id))) return res.status(404).json({ error: 'not found' });
     const [{ data: members }, { data: vote }, { data: last }] = await Promise.all([
