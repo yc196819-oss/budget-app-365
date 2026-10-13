@@ -24,10 +24,10 @@ export function PrefChips({ prefs, onClear, onForget }) {
 }
 
 // The trip chat: tell what is different for you, the plan follows.
-// context = what the advisor sees now; onChanges gets the cleaned changes.
-export function TripChat({ context, onChanges }) {
+// context = what the advisor sees now; onChanges gets the cleaned changes;
+// the conversation is the planner's (msgs/setMsgs), saved with the plan.
+export function TripChat({ context, onChanges, msgs, setMsgs }) {
   const aiOn = useAiSetting();
-  const [msgs, setMsgs] = useState([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -51,8 +51,8 @@ export function TripChat({ context, onChanges }) {
 
   if (!aiOn) return html`<div class="card muted" style="font-size:14px">💬 כדי להתאים את הטיול בשיחה, הפעילו את היועץ (AI) בפרופיל.</div>`;
   return html`<div class="card stack trip-chat" style="gap:10px">
-    <b>💬 להתאים לנו</b>
-    <span class="faint" style="font-size:13px">ספרו מה שונה אצלכם: איפה ישנים, מה ממומן, מחיר שכבר ידוע, כסף שכבר יש בצד. התוכנית תתעדכן.</span>
+    <b>💬 לדבר עם היועץ על הטיול</b>
+    <span class="faint" style="font-size:13px">שאלו כל דבר על הטיול, או ספרו מה שונה אצלכם: איפה ישנים, מה ממומן, מחיר שכבר ידוע, כסף שכבר יש בצד. התוכנית תתעדכן.</span>
     ${msgs.length > 0 && html`<div class="dchat-log" ref=${logRef} aria-live="polite">
       ${msgs.map((m, i) => html`<div class=${'dmsg ' + (m.role === 'ai' ? 'ai' : 'me')} key=${i}>${m.role === 'ai' && html`<small>✨ היועץ</small>`}<span>${m.text}</span></div>`)}
       ${busy && html`<div class="dmsg ai"><small>✨ היועץ</small><span class="adv-thinking"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>מעדכן את התוכנית…</span></div>`}

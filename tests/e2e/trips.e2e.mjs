@@ -147,3 +147,60 @@ test('the trip chat fits the plan: no lodging, meals paid for, money already asi
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('a saved trip opens again with its plan and conversation, and the advisor keeps changing it', async () => {
+  const db = withTrip(makeFakeDb());
+  db.tables.trips = [{ id: 'tr1', household_id: 'h1', status: 'saved', name: 'חופשה ברומניה 2026', country: 'רומניה', start_date: ago(24), end_date: ago(21), people: 2, transaction_ids: ['f1', 'r1', 'r2', 'r3', 'r4', 'r5'], excluded_ids: [] }];
+  const { page, errors } = await open('#/plans/trips', db);
+  let n = 0;
+  await page.route('**/api/ai/trip-chat', (r) => {
+    n++;
+    const changes = n === 1 ? { skip: ['lodging'], notes_add: ['לינה אצל האח'] } : { funding: 1500 };
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ reply: n === 1 ? 'הורדתי את הלינה.' : 'רשמתי ₪1,500 בצד.', changes }) });
+  });
+  await page.click('text=✈️ לתכנן טיול');
+  await page.fill('.sheet input[placeholder^="למשל: יוון"]', 'פריז');
+  await page.fill('.trip-chat input', 'אנחנו אצל אחי');
+  await page.click('.trip-chat button:has-text("שליחה")');
+  await page.waitForSelector('.trip-chat .dmsg.ai:has-text("הורדתי")');
+  await page.click('.sheet button:has-text("לשמור ביעדים")');
+  await page.waitForSelector('.toast');
+  const goal = db.tables.goals.find((g) => g.icon === '✈️');
+  assert.equal(goal.trip_plan.dest, 'פריז');
+  assert.deepEqual(goal.trip_plan.prefs.skip, ['lodging']);
+  assert.equal(goal.trip_plan.msgs.length, 2);
+  assert.equal(goal.trip_plan.base_id, 'tr1');
+  const firstTarget = goal.target_amount;
+
+  // Open it again from the list: the plan and the conversation are there.
+  await page.click('button.row:has-text("חופשה בפריז")');
+  await page.waitForSelector('.trip-chat .dmsg.ai:has-text("הורדתי")');
+  assert.equal(await page.locator('.sheet input[placeholder^="למשל: יוון"]').inputValue(), 'פריז');
+  assert.match(await page.locator('.sheet').textContent(), /לינה אצל האח/);
+  // Another word with the advisor is saved right away, without "save".
+  await page.fill('.trip-chat input', 'יש לי 1500 בצד');
+  await page.click('.trip-chat button:has-text("שליחה")');
+  await page.waitForSelector('.trip-chat .dmsg.ai:has-text("רשמתי")');
+  await page.waitForTimeout(300);
+  const again = db.tables.goals.find((g) => g.id === goal.id);
+  assert.equal(again.trip_plan.msgs.length, 4);
+  assert.equal(again.trip_plan.prefs.funding, 1500);
+  assert.equal(again.target_amount, firstTarget - 1500);
+  assert.equal(db.tables.goals.filter((g) => g.icon === '✈️').length, 1, 'the same goal, not a new one');
+  await page.click('.sheet button[aria-label="סגירה"]');
+  await page.waitForTimeout(300);
+
+  // From "budget and goals" too.
+  await page.click('text=תקציב ויעדים');
+  await page.click('.goal-head:has-text("חופשה בפריז")');
+  await page.click('text=✈️ לפתוח בתכנון הטיול');
+  await page.waitForSelector('.trip-chat .dmsg.ai:has-text("רשמתי")');
+
+  // And deleted from there.
+  await page.click('.sheet button:has-text("למחוק את התוכנית")');
+  await page.click('.sheet button:has-text("כן, למחוק")');
+  await page.waitForTimeout(300);
+  assert.equal(db.tables.goals.filter((g) => g.icon === '✈️').length, 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

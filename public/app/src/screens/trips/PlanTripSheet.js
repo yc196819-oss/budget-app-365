@@ -1,12 +1,12 @@
 import { html } from '../../lib/html.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { money } from '../../domain/format.js';
 import { baseline } from '../../domain/forecast.js';
-import { CATS, LEVELS, tripSummary, planBudget, savingPlan, pastRates, adjustFromEstimate, planFromEstimate, savingCapacity, readyMonth, emptyPrefs, applyChanges, personalize } from '../../domain/trips.js';
+import { CATS, LEVELS, tripSummary, planBudget, savingPlan, pastRates, adjustFromEstimate, planFromEstimate, savingCapacity, readyMonth, emptyPrefs, applyChanges, personalize, tripPlanOf, tripPlanRecord } from '../../domain/trips.js';
 import { estimate } from '../../data/trips.js';
 import { getRate } from '../../data/fx.js';
-import { saveGoal } from '../../data/household.js';
+import { saveGoal, deleteGoal } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 import { CAT_LIST, categoryNamer, folderTrip, monthLabel } from './common.js';
 import { TripChat, PrefChips } from './TripChat.js';
@@ -19,21 +19,26 @@ const SEASON = { high: 'עונה גבוהה (יקר)', shoulder: 'עונת בי�
 // cheaper months), the local currency is converted at today's rate, and the
 // plan says how much to put aside each month, or when the money is ready at
 // what the household can save. The chat fits it to the family (no lodging,
-// meals paid for, money already put aside). Saved as a goal with a date.
-export function PlanTripSheet({ data, row, onClose }) {
+// meals paid for, money already put aside). Saved as a goal with a date, and
+// with the whole plan (goals.trip_plan), so a saved trip opens here again,
+// conversation included, to keep planning.
+export function PlanTripSheet({ data, row, goal = null, onClose }) {
   const today = new Date();
   const base = row ? tripSummary(folderTrip(row, data.txs), row.people, new Set(row.excluded_ids || []), categoryNamer(data.categories)) : null;
-  const [dest, setDest] = useState('');
-  const [month, setMonth] = useState(() => isoMonth(new Date(today.getFullYear(), today.getMonth() + 5, 1)));
-  const [days, setDays] = useState(base ? base.days : 6);
-  const [people, setPeople] = useState(row ? row.people : 2);
-  const [level, setLevel] = useState('same');
-  const [est, setEst] = useState(null);
+  const [init] = useState(() => (goal ? tripPlanOf(goal) : null));
+  const [dest, setDest] = useState(init ? init.dest : '');
+  const [month, setMonth] = useState(() => (init && init.month) || isoMonth(new Date(today.getFullYear(), today.getMonth() + 5, 1)));
+  const [days, setDays] = useState(init ? init.days : base ? base.days : 6);
+  const [people, setPeople] = useState(init ? init.people : row ? row.people : 2);
+  const [level, setLevel] = useState(init ? init.level : 'same');
+  const [est, setEst] = useState(init ? init.est : null);
+  const [msgs, setMsgs] = useState(init ? init.msgs : []);
+  const [confirmDel, setConfirmDel] = useState(false);
   const [rate, setRate] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [prefs, setPrefs] = useState(emptyPrefs);
+  const [prefs, setPrefs] = useState(() => (init ? init.prefs : emptyPrefs()));
 
   const n = { days, people, level };
   const adjust = est && base ? adjustFromEstimate(est) : {};
@@ -42,7 +47,8 @@ export function PlanTripSheet({ data, row, onClose }) {
   const sv = fit ? savingPlan(fit.toSave, month + '-01', today) : null;
   const capacity = savingCapacity(baseline(data.txs, today));
   const ready = fit && fit.toSave > 0 ? readyMonth(fit.toSave, capacity, today) : null;
-  const months = Array.from({ length: 18 }, (_, i) => isoMonth(new Date(today.getFullYear(), today.getMonth() + i + 1, 1)));
+  const ahead = Array.from({ length: 18 }, (_, i) => isoMonth(new Date(today.getFullYear(), today.getMonth() + i + 1, 1)));
+  const months = ahead.includes(month) ? ahead : [month, ...ahead].sort();
 
   const check = async (where = dest, when = month) => {
     if (!where.trim() || busy) return;
@@ -60,27 +66,43 @@ export function PlanTripSheet({ data, row, onClose }) {
   const onChanges = (ch) => {
     if (ch.days) setDays(ch.days);
     if (ch.travelers) setPeople(ch.travelers);
-    if (ch.month && months.includes(ch.month)) setMonth(ch.month);
+    if (ch.month && ahead.includes(ch.month)) setMonth(ch.month);
     setPrefs((p) => applyChanges(p, ch));
-    if (ch.destination && ch.destination !== dest.trim()) { setDest(ch.destination); check(ch.destination, ch.month && months.includes(ch.month) ? ch.month : month); }
+    if (ch.destination && ch.destination !== dest.trim()) { setDest(ch.destination); check(ch.destination, ch.month && ahead.includes(ch.month) ? ch.month : month); }
   };
   const chatContext = {
     destination: est?.destination || dest.trim(), month, days, travelers: people, past: row ? row.name : '',
     lines: fit ? fit.lines : {}, prefs,
     estimate: est ? { flight: est.flight_per_person.typical, lodging: est.lodging_per_night.typical, currency: est.currency, daily_local: est.daily_per_person_local } : null
   };
+  // The rate comes again when a saved plan opens with an estimate in a foreign currency.
+  useEffect(() => {
+    if (init && init.est && init.est.currency && init.est.currency !== 'ILS') getRate(init.est.currency, today.toISOString().slice(0, 10)).then((r) => setRate(r.rate)).catch(() => {});
+  }, []);
+  const record = () => ({
+    ...(goal ? { id: goal.id } : { saved_amount: 0 }),
+        ...(goal ? { id: goal.id } : { saved_amount: 0 }),
+    trip_plan: tripPlanRecord({ dest: est?.destination || dest.trim(), month, days, people, level, base_id: row ? row.id : null, est, prefs, msgs }),
+    name: ('חופשה ב' + (est?.destination || dest.trim() || 'חו״ל')).slice(0, 60), target_amount: fit.toSave,
+    target_date: month + '-01', icon: '✈️',
+    plan_items: CAT_LIST.filter(([k]) => fit.lines[k] - fit.paid[k] > 0).map(([k, c]) => ({ name: c.label, amount: fit.lines[k] - fit.paid[k] })),
+    notes: [`${days} ימים, ${people} נוסעים${est ? ' · הערכת היועץ' : ''}`, fit.covered ? 'ממומן: ' + money(fit.covered) : '', fit.funding ? 'כבר יש: ' + money(fit.funding) : '', ...prefs.notes].filter(Boolean).join(' · ').slice(0, 500)
+  });
+  // A saved plan keeps up with the conversation: each answer of the advisor
+  // (and what it changed) is saved right away, so nothing is lost on close.
+  const said = useRef(init ? init.msgs.length : 0);
+  useEffect(() => {
+    if (!goal || !fit || msgs.length <= said.current || msgs.at(-1).role !== 'ai') return;
+    said.current = msgs.length;
+    saveGoal(record()).catch(() => showToast('השינויים לא נשמרו. לחצו "לשמור שינויים".'));
+  }, [msgs.length]);
   const save = async () => {
     if (!fit || saving) return;
     setSaving(true);
     try {
-      await saveGoal({
-        name: ('חופשה ב' + (est?.destination || dest.trim() || 'חו״ל')).slice(0, 60), target_amount: fit.toSave, saved_amount: 0,
-        target_date: month + '-01', icon: '✈️',
-        plan_items: CAT_LIST.filter(([k]) => fit.lines[k] - fit.paid[k] > 0).map(([k, c]) => ({ name: c.label, amount: fit.lines[k] - fit.paid[k] })),
-        notes: [`${days} ימים, ${people} נוסעים${est ? ' · הערכת היועץ' : ''}`, fit.covered ? 'ממומן: ' + money(fit.covered) : '', fit.funding ? 'כבר יש: ' + money(fit.funding) : '', ...prefs.notes].filter(Boolean).join(' · ').slice(0, 500)
-      });
+      await saveGoal(record());
       onClose();
-      showToast('הטיול נשמר ביעדים ונכנס לתחזית');
+      showToast(goal ? 'התוכנית עודכנה' : 'הטיול נשמר ביעדים ונכנס לתחזית');
     } catch (_err) { setSaving(false); showToast('השמירה נכשלה. נסו שוב.'); }
   };
 
@@ -90,7 +112,11 @@ export function PlanTripSheet({ data, row, onClose }) {
     if (k === 'lodging' && adjust.lodgingPerNight) return html`<span class="adj">${money(adjust.lodgingPerNight)} ללילה</span>`;
     return Number.isFinite(adjust.pct?.[k]) ? html`<span class="adj">${adjust.pct[k] > 0 ? '+' : ''}${adjust.pct[k]}%</span>` : '';
   };
-  return html`<${Sheet} title="לתכנן טיול" onClose=${onClose} full=${true}>
+  const remove = async () => {
+    try { await deleteGoal(goal.id); onClose(); showToast(goal.name + ' נמחק'); } catch (_err) { showToast('המחיקה נכשלה. נסו שוב.'); }
+  };
+  const chat = html`<${TripChat} context=${chatContext} onChanges=${onChanges} msgs=${msgs} setMsgs=${setMsgs} />`;
+  return html`<${Sheet} title=${goal ? goal.name : 'לתכנן טיול'} onClose=${onClose} full=${true}>
     <div class="card stack" style="gap:12px">
       <label class="field"><span>לאן?</span>
         <span class="add-input"><input class="input" value=${dest} onInput=${(e) => setDest(e.target.value)} placeholder="למשל: יוון, ניו יורק, תאילנד" onKeyDown=${(e) => { if (e.key === 'Enter') check(); }} />
@@ -131,15 +157,18 @@ export function PlanTripSheet({ data, row, onClose }) {
       </div>`}
       <${PrefChips} prefs=${prefs} onClear=${(k) => setPrefs((p) => (k === 'funding' ? applyChanges(p, { funding: 0 }) : applyChanges(p, { clear: [k] })))} onForget=${(n) => setPrefs((p) => applyChanges(p, { notes_remove: [n] }))} />
     </div>
-    <${TripChat} context=${chatContext} onChanges=${onChanges} />
+    ${chat}
     <div class="card stack trip-save" style="gap:6px">
       <span class="muted">כדי שהכסף יהיה מוכן ב${monthLabel(month)}</span>
       <b class="trip-monthly num">${fit.toSave > 0 ? money(sv.monthly) + ' בחודש' : 'הכל מכוסה 🎉'}</b>
       <span class="faint" style="font-size:13px">${sv.months} חודשים. טיסה ולינה משולמות בדרך כלל 2–4 חודשים לפני.</span>
       ${ready && html`<span style="font-size:14px">בקצב שמתאים לכם, <b class="num">${money(capacity)}</b> בחודש (חצי ממה שנשאר בחודש רגיל), הכסף מוכן ב<b>${monthLabel(ready)}</b>.
         ${ready !== month && html` <button type="button" class="btn-text" onClick=${() => setMonth(months.includes(ready) ? ready : month)}>לתכנן ל${monthLabel(ready)}</button>`}</span>`}
-      <button type="button" class="btn" disabled=${saving} onClick=${save}>${saving ? 'שומר…' : 'לשמור ביעדים'}</button>
+      <button type="button" class="btn" disabled=${saving} onClick=${save}>${saving ? 'שומר…' : goal ? 'לשמור שינויים' : 'לשמור ביעדים'}</button>
     </div>` : html`<div class="card muted" style="font-size:14px">כתבו לאן, ולחצו "✨ לבדוק". היועץ יעריך טיסות, לינה ויוקר מחיה ויציע תקציב.</div>
-    <${TripChat} context=${chatContext} onChanges=${onChanges} />`}
+    ${chat}`}
+    ${goal && html`<div class="trip-del">${confirmDel
+      ? html`<span>למחוק את התוכנית?</span><button type="button" class="btn-text danger" onClick=${remove}>כן, למחוק</button><button type="button" class="btn-text" onClick=${() => setConfirmDel(false)}>ביטול</button>`
+      : html`<button type="button" class="btn-text danger" onClick=${() => setConfirmDel(true)}>למחוק את התוכנית</button>`}</div>`}
   <//>`;
 }

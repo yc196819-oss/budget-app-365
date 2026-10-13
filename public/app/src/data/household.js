@@ -177,6 +177,16 @@ export async function setBudget(categoryId, amount) {
 // target date and a list of items, the same shape the current app uses.
 export async function saveGoal(goal) {
   const { id, ...fields } = goal;
+  try { return await writeGoal(id, fields); } catch (err) {
+    // Before supabase_goal_trip_plan.sql the column is not there: the goal
+    // is saved without the trip plan.
+    if (!('trip_plan' in fields) || !/trip_plan/.test(String(err && err.message))) throw err;
+    const { trip_plan: _tp, ...rest } = fields;
+    return writeGoal(id, rest);
+  }
+}
+
+async function writeGoal(id, fields) {
   const q = id
     ? sb.from('goals').update(fields).eq('id', id).eq('household_id', state.hid)
     : sb.from('goals').insert({ saved_amount: 0, ...fields, household_id: state.hid, created_by: state.userId });
