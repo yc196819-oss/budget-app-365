@@ -165,7 +165,7 @@ export async function signIn(page, base) {
     const b = (o) => btoa(JSON.stringify(o)).replace(/=+$/, '');
     localStorage.setItem('sb-bwwupwbakefjhwropdin-auth-token', JSON.stringify({
       access_token: b({ alg: 'HS256' }) + '.' + b({ sub: 'u1', exp }) + '.s', token_type: 'bearer', expires_in: 3600, expires_at: exp,
-      refresh_token: 'r', user: { id: 'u1', email: 'yossi@example.com', aud: 'authenticated' }
+      refresh_token: 'r', user: { id: 'u1', email: 'yossi@example.com', aud: 'authenticated', user_metadata: { terms_version: '2026-10' } }
     }));
   });
   await page.reload();

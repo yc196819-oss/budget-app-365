@@ -37,8 +37,8 @@
   :root:not([data-theme="dark"]) {
     --bg: #F6F1EA; --surface: #FFFFFF; --surface-2: #EFE7DC; --line: #E3D7C8;
     --text: #221A13; --muted: #6B5948; --faint: #7A6755;
-    --accent: #A5570F; --accent-ink: #FFFFFF; --accent-tint: #A5570F1F;
-    --income: #1F7A4D; --income-tint: #1F7A4D1A; --danger: #B3362A; --danger-tint: #B3362A1A;
+    --accent: #92490A; --accent-ink: #FFFFFF; --accent-tint: #92490A1F;
+    --income: #1A6A42; --income-tint: #1A6A421A; --danger: #B3362A; --danger-tint: #B3362A1A;
     --warn: #9A5410; --warn-tint: #C77A2A24;
     --hero-bg: #221A13; --hero-text: #FBF4EA; --hero-muted: #FBF4EABF; --hero-track: #FFFFFF24;
     --nav: #FFFFFF; --scrim: rgba(34, 26, 19, .45);
@@ -48,8 +48,8 @@
 :root[data-theme="light"] {
   --bg: #F6F1EA; --surface: #FFFFFF; --surface-2: #EFE7DC; --line: #E3D7C8;
   --text: #221A13; --muted: #6B5948; --faint: #7A6755;
-  --accent: #A5570F; --accent-ink: #FFFFFF; --accent-tint: #A5570F1F;
-  --income: #1F7A4D; --income-tint: #1F7A4D1A; --danger: #B3362A; --danger-tint: #B3362A1A;
+  --accent: #92490A; --accent-ink: #FFFFFF; --accent-tint: #92490A1F;
+  --income: #1A6A42; --income-tint: #1A6A421A; --danger: #B3362A; --danger-tint: #B3362A1A;
   --warn: #9A5410; --warn-tint: #C77A2A24;
   --hero-bg: #221A13; --hero-text: #FBF4EA; --hero-muted: #FBF4EABF; --hero-track: #FFFFFF24;
   --nav: #FFFFFF; --scrim: rgba(34, 26, 19, .45);

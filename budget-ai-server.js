@@ -16,6 +16,7 @@ const fx = require('./server/fx');
 const account = require('./server/account');
 const twa = require('./server/twa');
 const tripsAi = require('./server/trips');
+const legal = require('./server/legal');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -400,6 +401,8 @@ function delay(ms) {
 
 async function generateWithFallback(payload, { skipClaude = false } = {}) {
   const attempted = [];
+  // Every advisor answer stays general information, not licensed advice (server/legal.js).
+  if (payload && payload.prompt) payload = { ...payload, prompt: legal.withAdviceRule(payload.prompt) };
 
   if (ANTHROPIC_KEY && !skipClaude) {
     try {
@@ -1143,7 +1146,7 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders && res.flushHeaders();
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const prompt = buildChatPrompt(summary, history, message, authorName, buildFixContext(candidates, categories));
+  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, authorName, buildFixContext(candidates, categories)));
   const text = JSON.stringify(summary || {}).slice(0, 12000);
   try {
     if (ANTHROPIC_KEY) {
@@ -2024,8 +2027,9 @@ app.get('/', (req, res) => {
   res.redirect(302, '/app/' + (q >= 0 ? req.originalUrl.slice(q) : ''));
 });
 // Pages that work without signing in: downloading the app, the privacy
-// policy and how to delete an account (Google Play links to the last two).
-for (const [route, file] of [['/download', 'download.html'], ['/privacy', 'privacy.html'], ['/delete-account', 'delete-account.html']]) {
+// policy and how to delete an account (Google Play links to the last two),
+// the terms of use and the accessibility statement (required by law).
+for (const [route, file] of [['/download', 'download.html'], ['/privacy', 'privacy.html'], ['/delete-account', 'delete-account.html'], ['/terms', 'terms.html'], ['/accessibility', 'accessibility.html']]) {
   app.get(route, (req, res) => { res.setHeader('Content-Security-Policy', NEW_APP_CSP); res.sendFile(path.join(NEW_APP_DIR, 'pages', file)); });
 }
 // Google Play (Trusted Web Activity): proves the Android app and this site

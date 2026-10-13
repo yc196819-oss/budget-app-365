@@ -38,7 +38,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
       <a class="btn btn-ghost" href="/old/" style="text-decoration:none">לגרסה הקודמת של האפליקציה</a>
       <button type="button" class="btn btn-ghost" style="color:var(--danger)" onClick=${onSignOut}><${Icon} name="logout" />יציאה</button>
       <p class="faint" style="font-size:12px;margin:0">ביציאה נמחקים מהמכשיר גם מפתחות ונתונים רגישים ששמורים בו.</p>
-      <p class="faint" style="font-size:12px;margin:0"><a href="/privacy" target="_blank" rel="noopener">מדיניות פרטיות</a></p>
+      <p class="faint" style="font-size:12px;margin:0"><a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a> · <a href="/privacy" target="_blank" rel="noopener">מדיניות פרטיות</a> · <a href="/accessibility" target="_blank" rel="noopener">הצהרת נגישות</a></p>
       <${DeleteAccount} onDeleted=${onSignOut} />
     <//>`;
 }
