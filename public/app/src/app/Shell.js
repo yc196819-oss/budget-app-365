@@ -38,7 +38,7 @@ export function applyTheme(theme) {
 }
 
 export function Shell({ tab, session }) {
-  // One overlay at a time: 'profile' | 'add' | 'import' | 'learn' | 'advisor' | null.
+  // One overlay at a time: 'profile' | 'add' | 'voice' | 'import' | 'learn' | 'advisor' | 'talk' | null.
   const [overlay, setOverlay] = useState(null);
   const [theme, setTheme] = useState(() => readLocal('theme', ''));
   const data = useHousehold(session.household?.household_id, session.user.id);
@@ -67,6 +67,19 @@ export function Shell({ tab, session }) {
     const next = effectiveTheme === 'light' ? 'dark' : 'light';
     setTheme(next); writeLocal('theme', next); applyTheme(next);
   };
+  // Home-screen shortcuts (manifest): /app/?action=add|voice|ask|talk opens
+  // that action at once; the parameter is taken off the address.
+  useEffect(() => {
+    const action = new URLSearchParams(location.search).get('action');
+    if (!action) return;
+    history.replaceState(null, '', location.pathname + location.hash);
+    if (!session.household) return;
+    if (action === 'add' || action === 'voice' || action === 'talk') setOverlay(action);
+    else if (action === 'ask') {
+      if (desktop) setTimeout(() => document.querySelector('.rail input[aria-label="שאלה ליועץ"]')?.focus(), 300);
+      else setOverlay('advisor');
+    }
+  }, []);
   // Desktop shortcuts: N add, U import, / ask the advisor, 1-5 tabs.
   useEffect(() => {
     if (!desktop) return undefined;
@@ -105,8 +118,11 @@ export function Shell({ tab, session }) {
       <${BottomNav} tab=${tab} badges=${badges} onAdd=${() => setOverlay('add')} />
 
       ${overlay === 'profile' && html`<${ProfileSheet} profile=${profile} hid=${session.household ? session.household.household_id : null} userId=${session.user.id} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
-      ${overlay === 'add' && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => setOverlay('import')} />`}
-      ${overlay === 'learn' && html`<${LearnSheet} userId=${session.user.id} householdId=${session.household ? session.household.household_id : null} onClose=${close} />`}
+      ${(overlay === 'add' || overlay === 'voice') && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => setOverlay('import')} startVoice=${overlay === 'voice'} />`}
+      ${overlay === 'talk' && html`<${Sheet} title="שיחה קולית עם היועץ" onClose=${close}>
+        ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} startTalk=${true} />` : html`<${Loading} />`}
+      <//>`}
+      ${overlay === 'learn' && html`<${LearnSheet} userId=${session.user.id} householdId=${session.household ? session.household.household_id : null} data=${session.household && data.status === 'ready' ? data : null} onClose=${close} />`}
       ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} data=${data} onClose=${close} />`}
       ${overlay === 'advisor' && !desktop && html`<${Sheet} title="היועץ" onClose=${close}>
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} />` : html`<${Loading} />`}

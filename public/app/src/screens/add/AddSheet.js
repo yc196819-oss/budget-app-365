@@ -19,7 +19,7 @@ import { readLocal, writeLocal } from '../../lib/storage.js';
 // and shown as cards to check, edit or remove before anything is saved.
 // Saying "קיבלתי…" makes it income. The category is taken from the last time
 // the merchant appeared. One-tap buttons for what the household buys most.
-export function AddSheet({ data, onClose, onImport }) {
+export function AddSheet({ data, onClose, onImport, startVoice = false }) {
   const [text, setText] = useState('');
   const [type, setType] = useState('expense');
   // Once the person taps expense/income themselves, their choice wins.
@@ -117,6 +117,10 @@ export function AddSheet({ data, onClose, onImport }) {
       setVoiceError('לא הצלחתי להפעיל את המיקרופון. אפשר להכתיב עם המיקרופון שבמקלדת.');
     }
   };
+
+  // Opened from the "add by voice" shortcut: the mic starts at once.
+  useEffect(() => { if (startVoice && canListen()) mic(); }, []);
+
 
   const saveAll = async (txs) => {
     if (busy || !txs.length) return;

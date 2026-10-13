@@ -17,6 +17,7 @@ const account = require('./server/account');
 const twa = require('./server/twa');
 const tripsAi = require('./server/trips');
 const legal = require('./server/legal');
+const news = require('./server/news');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -275,7 +276,7 @@ function getAvailableAiProviders() {
   return providers;
 }
 
-async function callClaude({ prompt, text, fileData, mimeType }) {
+async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium' }) {
   const content = [
     { type: 'text', text: `${prompt}\n\n${String(text || '').slice(0, 12000)}` }
   ];
@@ -294,7 +295,7 @@ async function callClaude({ prompt, text, fileData, mimeType }) {
     });
   }
 
-  const req = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 4096, content });
+  const req = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 4096, content, effort });
   const response = await fetch(req.url, req.init);
 
   const data = await response.json().catch(() => ({}));
@@ -738,7 +739,7 @@ app.post('/api/ai/import', requireAuth, aiLimiter, aiQuota, async (req, res) => 
       return res.status(400).json({ error: 'text or fileData is required' });
     }
 
-    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType });
+    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType, effort: 'medium' });
     const output = aiResult.output || '[]';
     let parsed = null;
     try {
@@ -1121,9 +1122,9 @@ ${rows}
 קטגוריות קיימות: ${cats}`;
 }
 function buildChatPrompt(summary, history, message, authorName, fixContext) {
-  const historyText = Array.isArray(history)
-    ? history.slice(-20).map((h) => `${h.role === 'user' ? (h.author || 'משתמש') : 'יועץ'}: ${String(h.text || '').slice(0, 2000)}`).join('\n')
-    : '';
+  // The last 12 messages; the 4 newest in full, older ones shortened (tokens).
+  const recent = Array.isArray(history) ? history.slice(-12) : [];
+  const historyText = recent.map((h, i) => `${h.role === 'user' ? (h.author || 'משתמש') : 'יועץ'}: ${String(h.text || '').slice(0, i >= recent.length - 4 ? 2000 : 400)}`).join('\n');
   return `אתה יועץ פיננסי חם, ענייני ומקצועי למשק בית בישראל. עונים בעברית פשוטה.
 בשיחה יכולים להשתתף שני בני הזוג; ההודעה הנוכחית נכתבה על ידי ${authorName || 'משתמש'} — פנה אליו/אליה בשמו/ה כשזה טבעי.
 הנתונים (JSON) כוללים categorySpendingHistory ברמת משק הבית, personalCategoryBreakdown של המשתמש, תקציבים, יעדים ומשימות. ענה על סמך המספרים בפועל, 2-6 משפטים, בלי markdown ובלי כותרות.
@@ -1150,7 +1151,7 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
   const text = JSON.stringify(summary || {}).slice(0, 12000);
   try {
     if (ANTHROPIC_KEY) {
-      const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 3000, stream: true, content: `${prompt}\n\n${text}` });
+      const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 3000, stream: true, content: `${prompt}\n\n${text}`, effort: 'medium' });
       const r = await fetch(cr.url, cr.init);
       if (!r.ok) console.error('Claude stream failed:', r.status, (await r.text().catch(() => '')).slice(0, 300));
       if (r.ok && r.body) {
@@ -1587,7 +1588,8 @@ app.post('/api/checkin/run', async (req, res) => {
       try {
         const ai = await generateWithFallback({
           prompt: 'אתה יועץ כלכלי למשק בית בישראל. מתוך סיכום השבוע (JSON) הצע עד 3 החלטות קטנות וקונקרטיות שבני הזוג יכולים לענות עליהן כן/לא בשבוע הקרוב (למשל "להגביל משלוחים לפעם אחת השבוע"). בעברית, עד 70 תווים כל אחת. ענה רק ב-JSON: {"decisions":["..."]}',
-          text: JSON.stringify(summary)
+          text: JSON.stringify(summary),
+          effort: 'low'
         });
         const j = JSON.parse(extractJsonText(ai.output || '{}'));
         decisions = (Array.isArray(j.decisions) ? j.decisions : []).map((d) => ({ text: String(d).slice(0, 90), votes: {} })).slice(0, 3);
@@ -1642,7 +1644,7 @@ app.post('/api/ai/extract-memories', requireAuth, aiLimiter, aiQuota, async (req
 לא: עצות של היועץ שלא אושרו, מספרים שמשתנים כל חודש, רגשות רגעיים, פרטים רפואיים.
 כל פריט — משפט קצר בעברית (עד 80 תווים). עד 5 פריטים. אל תחזור על מה שכבר קיים: ${JSON.stringify((existing || []).slice(0, 40))}
 ענה רק ב-JSON: {"memories":[{"text":"...","kind":"decision|preference|goal|fact"}]}`;
-    const ai = await generateWithFallback({ prompt, text: convo });
+    const ai = await generateWithFallback({ prompt, text: convo, effort: 'low' });
     let j = null;
     try { j = JSON.parse(extractJsonText(ai.output || '')); } catch (_e) { j = null; }
     const kinds = ['decision', 'preference', 'goal', 'fact'];
@@ -1660,7 +1662,7 @@ app.post('/api/ai/learn-from-chat', requireAuth, aiLimiter, aiQuota, async (req,
     const { messages, context } = req.body || {};
     const convo = learn.convoText(messages);
     if (!convo) return res.json({ items: [] });
-    const ai = await generateWithFallback({ prompt: learn.learnPrompt(context, israelToday()), text: convo });
+    const ai = await generateWithFallback({ prompt: learn.learnPrompt(context, israelToday()), text: convo, effort: 'low' });
     return res.json({ items: learn.pickItems(learn.parseLoose(ai.output)) });
   } catch (err) {
     console.error('learn-from-chat failed:', err.message);
@@ -1671,16 +1673,29 @@ app.post('/api/ai/learn-from-chat', requireAuth, aiLimiter, aiQuota, async (req,
 // The trip advisor: what a destination will cost next to the family's last
 // trip (flights, lodging, cost of living, cheaper months). An estimate from
 // the model's knowledge, not live prices; the app says so.
-app.post('/api/ai/trip-estimate', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+// The same question (destination, month, days, travelers, past trip) is
+// answered once a day from memory: no tokens for asking twice.
+const tripEstimates = new Map(); // key -> { at, body }
+app.post('/api/ai/trip-estimate', requireAuth, aiLimiter, async (req, res, next) => {
   const ask = tripsAi.cleanRequest(req.body);
   if (!ask) return res.status(400).json({ error: 'חסר יעד' });
+  const key = israelToday() + ':' + JSON.stringify(ask);
+  const hit = tripEstimates.get(key);
+  if (hit) return res.json(hit);
+  req.tripAsk = ask; req.tripKey = key;
+  return next();
+}, aiQuota, async (req, res) => {
+  const ask = req.tripAsk;
   try {
-    const ai = await generateWithFallback({ prompt: tripsAi.estimatePrompt(ask, israelToday()), text: 'החזר את ה-JSON.' });
+    const ai = await generateWithFallback({ prompt: tripsAi.estimatePrompt(ask, israelToday()), text: 'החזר את ה-JSON.', effort: 'low' });
     let parsed = null;
     try { parsed = JSON.parse(extractJsonText(ai.output)); } catch (_e) { parsed = null; }
     const estimate = tripsAi.pickEstimate(parsed, israelToday());
     if (!estimate) return res.status(502).json({ error: 'לא הצלחנו להעריך את היעד. נסו שוב או נסחו אחרת.' });
-    return res.json({ estimate, aiProvider: ai.provider });
+    const body = { estimate, aiProvider: ai.provider };
+    if (tripEstimates.size > 500) tripEstimates.clear();
+    tripEstimates.set(req.tripKey, body);
+    return res.json(body);
   } catch (err) {
     console.error('trip-estimate failed:', err.message);
     return res.status(err.statusCode || 502).json({ error: 'היועץ לא זמין כרגע. נסו שוב בעוד דקה.' });
@@ -1694,7 +1709,7 @@ app.post('/api/ai/trip-chat', requireAuth, aiLimiter, aiQuota, async (req, res) 
   const ask = tripsAi.cleanChat(req.body);
   if (!ask) return res.status(400).json({ error: 'חסרה הודעה' });
   try {
-    const ai = await generateWithFallback({ prompt: tripsAi.chatPrompt(ask, israelToday()), text: 'החזר את ה-JSON.' });
+    const ai = await generateWithFallback({ prompt: tripsAi.chatPrompt(ask, israelToday()), text: 'החזר את ה-JSON.', effort: 'low' });
     let parsed = null;
     try { parsed = JSON.parse(extractJsonText(ai.output)); } catch (_e) { parsed = null; }
     const out = tripsAi.pickChat(parsed, israelToday());
@@ -1703,6 +1718,44 @@ app.post('/api/ai/trip-chat', requireAuth, aiLimiter, aiQuota, async (req, res) 
   } catch (err) {
     console.error('trip-chat failed:', err.message);
     return res.status(err.statusCode || 502).json({ error: 'היועץ לא זמין כרגע. נסו שוב בעוד דקה.' });
+  }
+});
+
+// Morning news: one digest a day for everyone, made the first time someone
+// asks that day and kept in news_digests, so the AI runs once a day (a few
+// cents), not once per user. The feeds are free; with too few headlines no
+// AI call is made at all.
+const newsMemory = new Map(); // day -> digest (when the table is not there)
+let newsMaking = null;
+async function todaysNews() {
+  const day = israelToday();
+  if (newsMemory.has(day)) return newsMemory.get(day);
+  if (supabaseAdmin) {
+    const { data } = await supabaseAdmin.from('news_digests').select('digest').eq('day', day).maybeSingle();
+    if (data && data.digest) { newsMemory.set(day, data.digest); return data.digest; }
+  }
+  if (newsMaking) return newsMaking;
+  newsMaking = (async () => {
+    const items = news.recentItems(await news.fetchFeeds());
+    if (items.length < 5) { const e = new Error('too few headlines'); e.statusCode = 503; throw e; }
+    const ai = await generateWithFallback({ prompt: news.newsPrompt(items, day), text: 'החזר את ה-JSON.', effort: 'low' });
+    let parsed = null;
+    try { parsed = JSON.parse(extractJsonText(ai.output)); } catch (_e) { parsed = null; }
+    const digest = news.pickDigest(parsed, items, day);
+    if (!digest) { const e = new Error('no digest'); e.statusCode = 502; throw e; }
+    newsMemory.clear();
+    newsMemory.set(day, digest);
+    if (supabaseAdmin) await supabaseAdmin.from('news_digests').upsert({ day, digest }, { onConflict: 'day' }).then(() => {}, () => {});
+    return digest;
+  })().finally(() => { newsMaking = null; });
+  return newsMaking;
+}
+app.get('/api/news/today', requireAuth, aiLimiter, async (req, res) => {
+  try {
+    return res.json({ digest: await todaysNews() });
+  } catch (err) {
+    console.error('news failed:', err.message);
+    return res.status(err.statusCode === 503 ? 503 : 502).json({ error: 'החדשות של הבוקר לא זמינות כרגע. נסו שוב מאוחר יותר.' });
   }
 });
 

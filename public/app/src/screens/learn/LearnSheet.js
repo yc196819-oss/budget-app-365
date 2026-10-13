@@ -6,11 +6,12 @@ import { lessonOfDay, streak, complete, topicStats, shuffledQuiz } from '../../d
 import { saveProgress } from '../../data/learning.js';
 import { showToast } from '../../lib/toast.js';
 import { useLearning, setLearningCache } from './useLearning.js';
+import { NewsView } from './NewsView.js';
 
 // The learning corner, separate from the advisor: one concept a day with a
 // 2-question quiz, a streak, and the whole library by topic.
-// view: 'today' | 'library' | lesson id
-export function LearnSheet({ userId, householdId, onClose }) {
+// view: 'today' | 'news' | 'library' | lesson id
+export function LearnSheet({ userId, householdId, data, onClose }) {
   const { progress } = useLearning(userId);
   const [view, setView] = useState('today');
   const day = lessonOfDay(LESSONS, progress);
@@ -25,10 +26,11 @@ export function LearnSheet({ userId, householdId, onClose }) {
 
   return html`<${Sheet} title="פינת הלמידה" onClose=${onClose}>
     <div class="tabs" role="group" aria-label="תצוגה">
-      <button type="button" aria-pressed=${String(view !== 'library')} onClick=${() => setView('today')}>השיעור של היום</button>
+      <button type="button" aria-pressed=${String(view !== 'library' && view !== 'news')} onClick=${() => setView('today')}>השיעור</button>
+      ${data && html`<button type="button" aria-pressed=${String(view === 'news')} onClick=${() => setView('news')}>חדשות הבוקר</button>`}
       <button type="button" aria-pressed=${String(view === 'library')} onClick=${() => setView('library')}>כל השיעורים</button>
     </div>
-    ${view === 'library'
+    ${view === 'news' ? html`<${NewsView} data=${data} />` : view === 'library'
       ? html`<${Library} progress=${progress} onOpen=${setView} />`
       : html`<${Lesson} key=${current.id} lesson=${current} progress=${progress} streakDays=${s} isToday=${view === 'today'} onFinish=${finish}
           onNext=${() => setView(nextAfter(current.id, progress))} />`}
