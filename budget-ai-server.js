@@ -18,6 +18,7 @@ const twa = require('./server/twa');
 const tripsAi = require('./server/trips');
 const legal = require('./server/legal');
 const news = require('./server/news');
+const limits = require('./server/limits');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -70,6 +71,19 @@ app.use(cors((req, callback) => {
   callback(null, { origin: allow });
 }));
 app.use(express.json({ limit: '2mb' }));
+
+// AI requests: long text is cut before any prompt is built, and past a daily
+// cap for the whole service the AI is not called until tomorrow (server/limits.js).
+const aiDay = limits.dailyCap();
+app.use('/api/ai', (req, res, next) => {
+  if (req.method !== 'POST') return next();
+  req.body = limits.clipBody(req.body);
+  if (!aiDay.take(israelToday())) {
+    console.error('AI daily cap reached:', aiDay.used);
+    return res.status(429).json({ error: 'היועץ עמוס היום. נסו שוב מחר בבוקר.' });
+  }
+  return next();
+});
 
 // ═══ security headers ═══
 // Applied to every response. The strict Content-Security-Policy only covers
