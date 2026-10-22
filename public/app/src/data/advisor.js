@@ -1,4 +1,5 @@
 import { sb } from '../lib/supabase.js';
+import { track } from '../lib/telemetry.js';
 import { CONFIG } from '../config.js';
 import { normalizeMessages, parseSse } from '../domain/advisor.js';
 
@@ -53,6 +54,7 @@ export async function loadMemories(hid) {
 
 // Streams the answer from our server; onDelta gets each piece of text.
 export async function streamReply(payload, onDelta, signal) {
+  track('advisor_ask');
   const { data } = await sb.auth.getSession();
   const token = data?.session?.access_token;
   if (!token) throw new Error('not signed in');

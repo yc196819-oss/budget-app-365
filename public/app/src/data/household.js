@@ -1,4 +1,5 @@
 import { sb } from '../lib/supabase.js';
+import { track } from '../lib/telemetry.js';
 import { showToast } from '../lib/toast.js';
 import { isoDate } from '../domain/money.js';
 import { readCache, writeCache } from '../lib/storage.js';
@@ -124,6 +125,7 @@ export async function load(hid, userId, { force = false } = {}) {
 }
 
 export async function addTransaction({ type = 'expense', amount, description, category_id = null, subcategory_id = null, tx_date, paid = {} }) {
+  track('tx_add');
   const row = {
     household_id: state.hid,
     created_by: state.userId,

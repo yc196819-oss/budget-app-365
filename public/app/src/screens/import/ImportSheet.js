@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { track } from '../../lib/telemetry.js';
 import { useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { readStatement, ImportError } from '../../data/importer.js';
@@ -58,6 +59,7 @@ export function ImportSheet({ data, onClose }) {
       for (const u of deals.update) await saveRow('installments', u).catch(() => {});
       onClose();
       const ids = added.map((r) => r.id);
+      track('import_done');
       showToast('נשמרו ' + added.length + ' תנועות מהפירוט', {
         ms: 8000,
         undo: () => removeMany(ids).then(() => showToast('הייבוא בוטל')).catch(() => showToast('הביטול נכשל. אפשר למחוק את התנועות מהרשימה.'))

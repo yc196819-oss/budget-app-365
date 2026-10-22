@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { track } from '../../lib/telemetry.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { buildSummary, parseReply, starters, newTitle, historyFor } from '../../domain/advisor.js';
@@ -141,6 +142,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     if (!canListen() || !aiOn) return;
     stopSpeaking(); setError('');
     talkOn.current = true;
+    track('advisor_talk');
     talkRound();
   };
   useEffect(() => { if (startTalk && hid) startTalking(); return () => endTalk(); }, []);

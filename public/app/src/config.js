@@ -6,5 +6,8 @@ export const CONFIG = {
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3d3Vwd2Jha2Vmamh3cm9wZGluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MjgyNzYsImV4cCI6MjA5ODIwNDI3Nn0.-x9BYvkn-21jCr6CIrnh15m9gAUfIS3GMVNbrPuznBE',
   // The AI server is this same origin. There is deliberately no way to
   // override it from the browser.
-  apiBase: ''
+  apiBase: '',
+  // Who sees the owner's dashboard in the profile. The server checks again
+  // (ADMIN_EMAILS); this only saves everyone else a request.
+  adminEmails: ['budgetapp2852@gmail.com']
 };

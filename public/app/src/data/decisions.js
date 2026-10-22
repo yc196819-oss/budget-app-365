@@ -1,4 +1,5 @@
 import { sb } from '../lib/supabase.js';
+import { track } from '../lib/telemetry.js';
 import { CONFIG } from '../config.js';
 import { outcome, advisorQuestion, summaryQuestion, voiceBalance, impact, forAdvisor, threadFor, threadHistory } from '../domain/decisions.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
@@ -113,6 +114,7 @@ export function sendTyping(decisionId, userId) {
 }
 
 export async function createDecision({ hid, userId, title, amount, category_id = null, wanted_by = null, note = null }) {
+  track('decision_open');
   const row = { household_id: hid, created_by: userId, title: title.trim().slice(0, 80), amount, category_id, wanted_by, note: note ? note.trim().slice(0, 500) : null, status: 'open' };
   const { data, error } = await sb.from('shared_decisions').insert(row).select().single();
   if (error) throw error;
@@ -218,6 +220,7 @@ export async function deleteMessage(id) {
 }
 
 export async function sendMessage({ decision, userId, text }) {
+  track('decision_message');
   const msg = await addMessage({ decision_id: decision.id, role: 'user', author_id: userId, text });
   notify(decision.id, 'message');
   return msg;
