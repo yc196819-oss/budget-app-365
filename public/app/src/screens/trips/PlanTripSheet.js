@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { track } from '../../lib/telemetry.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { money } from '../../domain/format.js';
@@ -101,6 +102,7 @@ export function PlanTripSheet({ data, row, goal = null, onClose }) {
     setSaving(true);
     try {
       await saveGoal(record());
+      track('trip_plan');
       onClose();
       showToast(goal ? 'התוכנית עודכנה' : 'הטיול נשמר ביעדים ונכנס לתחזית');
     } catch (_err) { setSaving(false); showToast('השמירה נכשלה. נסו שוב.'); }

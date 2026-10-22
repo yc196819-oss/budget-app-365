@@ -1,8 +1,10 @@
 import { api } from '../lib/api.js';
+import { track } from '../lib/telemetry.js';
 
 // Today's morning news (server: /api/news/today, one digest a day for all),
 // kept on the device for the day so opening it again costs nothing.
 export async function todaysNews(today) {
+  track('news_open');
   const key = 'news:' + today;
   try {
     const cached = JSON.parse(localStorage.getItem(key) || 'null');

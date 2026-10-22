@@ -1,4 +1,5 @@
 import { sb } from '../lib/supabase.js';
+import { track } from '../lib/telemetry.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
 import { normalizeProgress } from '../domain/learning.js';
 
@@ -23,6 +24,7 @@ export async function loadProgress(userId) {
 }
 
 export async function saveProgress(userId, householdId, progress) {
+  track('lesson_done');
   writeLocal(localKey(userId), JSON.stringify(progress));
   const { error } = await sb.from('user_settings').upsert({ user_id: userId, household_id: householdId, learning: progress, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (error) throw error;

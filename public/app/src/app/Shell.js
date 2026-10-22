@@ -1,4 +1,5 @@
 import { html } from '../lib/html.js';
+import { track } from '../lib/telemetry.js';
 import { Loading } from '../components/Loading.js';
 import { useEffect, useState } from 'preact/hooks';
 import { TABS } from '../domain/routes.js';
@@ -73,6 +74,7 @@ export function Shell({ tab, session }) {
     const action = new URLSearchParams(location.search).get('action');
     if (!action) return;
     history.replaceState(null, '', location.pathname + location.hash);
+    track('shortcut');
     if (!session.household) return;
     if (action === 'add' || action === 'voice' || action === 'talk') setOverlay(action);
     else if (action === 'ask') {
@@ -80,6 +82,8 @@ export function Shell({ tab, session }) {
       else setOverlay('advisor');
     }
   }, []);
+  // Opening the app: counted once per launch (who comes back).
+  useEffect(() => { track('app_open'); }, []);
   // Desktop shortcuts: N add, U import, / ask the advisor, 1-5 tabs.
   useEffect(() => {
     if (!desktop) return undefined;

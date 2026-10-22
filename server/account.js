@@ -10,7 +10,7 @@
 // failed step leaves it in place and trying again finds everything.
 const HOUSEHOLD_FIRST = ['transactions', 'category_budgets', 'categories', 'credit_cards', 'bank_accounts', 'push_subscriptions', 'user_settings', 'advisor_conversations', 'household_reset_codes'];
 // The person's own rows in a household that stays.
-const USER_ROWS = ['push_subscriptions', 'user_settings', 'advisor_conversations', 'household_reset_codes', 'checkin_feelings'];
+const USER_ROWS = ['push_subscriptions', 'user_settings', 'advisor_conversations', 'household_reset_codes', 'checkin_feelings', 'app_events', 'app_errors'];
 
 // members: every membership row of the households the person is in.
 // Returns { remove: [household ids], leave: [{ hid, newOwner | null }] }.
@@ -40,6 +40,8 @@ async function deleteAccount(admin, userId) {
   for (const hid of p.remove) {
     for (const t of HOUSEHOLD_FIRST) check(await admin.from(t).delete().eq('household_id', hid), t);
     check(await admin.from('households').delete().eq('id', hid), 'household');
+    // What the recycle bin kept of it goes too (it has no foreign key, by design).
+    check(await admin.from('recycle_bin').delete().eq('household_id', hid), 'recycle bin');
   }
   for (const { hid, newOwner } of p.leave) {
     check(await admin.from('memberships').delete().eq('household_id', hid).eq('user_id', userId), 'leave');

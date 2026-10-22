@@ -19,6 +19,7 @@ const tripsAi = require('./server/trips');
 const legal = require('./server/legal');
 const news = require('./server/news');
 const limits = require('./server/limits');
+const ops = require('./server/ops');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -131,6 +132,7 @@ app.use((req, res, next) => {
 // verify the caller's Supabase session token server-side instead of
 // trusting a userId/householdId sent in the request body — otherwise
 // anyone who finds this server's URL can act as any user. ═══
+const sessions = ops.sessionCache();
 async function requireAuth(req, res, next) {
   if (!supabaseAdmin) {
     return res.status(503).json({ error: 'Supabase server credentials are not configured' });
@@ -140,12 +142,18 @@ async function requireAuth(req, res, next) {
   if (!token) {
     return res.status(401).json({ error: 'Missing Authorization bearer token' });
   }
+  // A session verified in the last few minutes is not asked about again
+  // (the auth server is far away; see ops.sessionCache).
+  const known = sessions.get(token);
+  if (known) { req.authUserId = known; return next(); }
   try {
     const { data, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !data?.user?.id) {
       return res.status(401).json({ error: 'Invalid or expired session' });
     }
     req.authUserId = data.user.id;
+    req.authEmail = data.user.email || '';
+    sessions.set(token, data.user.id, ops.tokenExp(token));
     return next();
   } catch (_err) {
     return res.status(401).json({ error: 'Authentication failed' });
@@ -1544,6 +1552,12 @@ async function buildAlertsForHousehold(hid) {
 app.post('/api/alerts/run', async (req, res) => {
   try {
     if (!(await checkCronSecret(req))) return res.status(401).json({ error: 'unauthorized' });
+    // Housekeeping once a day: the recycle bin keeps 30 days, usage events
+    // and failure reports 180 days.
+    const ago = (d) => new Date(Date.now() - d * 86400000).toISOString();
+    await supabaseAdmin.from('recycle_bin').delete().lt('removed_at', ago(30)).then(() => {}, () => {});
+    await supabaseAdmin.from('app_events').delete().lt('at', ago(180)).then(() => {}, () => {});
+    await supabaseAdmin.from('app_errors').delete().lt('at', ago(180)).then(() => {}, () => {});
     const { data: hhs } = await supabaseAdmin.from('memberships').select('household_id');
     const ids = [...new Set((hhs || []).map((m) => m.household_id))];
     let created = 0;
@@ -1770,6 +1784,64 @@ app.get('/api/news/today', requireAuth, aiLimiter, async (req, res) => {
   } catch (err) {
     console.error('news failed:', err.message);
     return res.status(err.statusCode === 503 ? 503 : 502).json({ error: 'החדשות של הבוקר לא זמינות כרגע. נסו שוב מאוחר יותר.' });
+  }
+});
+
+// ═══ operations: failures, usage, and the owner's numbers ═══
+// The app reports its failures (also before signing in) and a few usage
+// events (signed in). Nothing the person wrote and no amounts are kept.
+const telemetryLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.ip });
+async function optionalUser(req) {
+  const h = String(req.headers.authorization || '');
+  const token = h.startsWith('Bearer ') ? h.slice(7).trim() : '';
+  if (!token || !supabaseAdmin) return null;
+  const known = sessions.get(token);
+  if (known) return known;
+  try { const { data } = await supabaseAdmin.auth.getUser(token); if (data?.user?.id) { sessions.set(token, data.user.id, ops.tokenExp(token)); return data.user.id; } } catch (_e) { /* anonymous */ }
+  return null;
+}
+app.post('/api/telemetry', telemetryLimiter, async (req, res) => {
+  if (!supabaseAdmin) return res.status(204).end();
+  try {
+    const userId = await optionalUser(req);
+    const errors = ops.cleanErrors(req.body && req.body.errors, { userId, agent: req.headers['user-agent'] });
+    let householdId = null;
+    if (userId && Array.isArray(req.body && req.body.events) && req.body.events.length) {
+      const { data: m } = await supabaseAdmin.from('memberships').select('household_id').eq('user_id', userId).limit(1);
+      householdId = m && m[0] ? m[0].household_id : null;
+    }
+    const events = ops.cleanEvents(req.body && req.body.events, { userId, householdId });
+    if (errors.length) await supabaseAdmin.from('app_errors').insert(errors);
+    if (events.length) await supabaseAdmin.from('app_events').insert(events);
+  } catch (err) { console.error('telemetry failed:', err.message); }
+  return res.status(204).end();
+});
+// Failures on the server are kept too.
+async function reportServerError(err, path) {
+  try {
+    if (supabaseAdmin) await supabaseAdmin.from('app_errors').insert({ source: 'server', message: String((err && err.message) || err).slice(0, 500), detail: String((err && err.stack) || '').slice(0, 4000) || null, path: String(path || '').slice(0, 300) || null });
+  } catch (_e) { /* nothing more to do */ }
+}
+process.on('unhandledRejection', (err) => { console.error('unhandledRejection:', err && err.message); reportServerError(err, 'unhandledRejection'); });
+
+// The owner's numbers (ADMIN_EMAILS): active people, who came back, what is
+// used, and the week's failures.
+const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || 'budgetapp2852@gmail.com').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+app.get('/api/admin/stats', requireAuth, async (req, res) => {
+  try {
+    let email = req.authEmail;
+    if (!email) { const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId); email = data?.user?.email || ''; }
+    if (!ADMIN_EMAILS.includes(String(email).toLowerCase())) return res.status(403).json({ error: 'not allowed' });
+    const since = new Date(Date.now() - 60 * 86400000).toISOString();
+    const [ev, er, users] = await Promise.all([
+      supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).order('at', { ascending: false }).limit(50000),
+      supabaseAdmin.from('app_errors').select('message,path,at,source').gte('at', new Date(Date.now() - 7 * 86400000).toISOString()).order('at', { ascending: false }).limit(2000),
+      supabaseAdmin.from('memberships').select('user_id', { count: 'exact', head: true })
+    ]);
+    return res.json({ ...ops.stats({ events: ev.data || [], errors: er.data || [] }), members: users.count || 0 });
+  } catch (err) {
+    console.error('admin stats failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
   }
 });
 
@@ -2125,6 +2197,14 @@ app.get('/app-config.js', (req, res) => {
 });
 app.use((req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
+
+// Any route that throws: the person gets a plain error, and the failure is kept.
+app.use((err, req, res, _next) => {
+  console.error('unhandled route error:', req.path, err && err.message);
+  reportServerError(err, req.method + ' ' + req.path);
+  if (res.headersSent) return;
+  res.status(err.status || 500).json({ error: 'משהו השתבש. נסו שוב.' });
 });
 
 app.listen(PORT, () => {
