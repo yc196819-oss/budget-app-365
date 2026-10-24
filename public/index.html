@@ -281,6 +281,73 @@ tr:last-child td{border-bottom:none}
 
 
 
+
+/* ═══ stage 5: real redesign ═══ */
+.sec-title{font-size:.8rem;font-weight:800;color:var(--muted);margin:4px 2px 10px;letter-spacing:.01em}
+@media (max-width:760px){
+  section>.panel{background:transparent;border:0;box-shadow:none;padding:4px 2px 18px;margin-bottom:6px}
+  section>.panel>h2{font-size:1.05rem;margin-bottom:10px}
+  section>.panel .panel{background:var(--surface2)}
+}
+/* transactions */
+.qa-panel{display:none}
+.qa-panel.open{display:block;background:var(--surface2)!important;border:1px solid var(--line)!important;border-radius:22px!important;padding:16px!important;margin-bottom:14px!important;animation:modalPop .2s ease}
+.qa-head{display:flex;align-items:center;justify-content:space-between}
+.qa-head h2{margin:0}
+.qa-x{background:none;border:0;font-size:1.1rem;color:var(--muted);cursor:pointer}
+.fab{position:fixed;left:18px;bottom:calc(88px + env(safe-area-inset-bottom,0px));z-index:600;width:58px;height:58px;border-radius:20px;border:0;background:var(--accent);color:var(--on-accent);font-size:1.8rem;font-weight:300;box-shadow:0 10px 24px rgba(0,0,0,.25);cursor:pointer}
+@media (min-width:761px){.fab{bottom:28px;left:28px}}
+#tab-expenses.hidden .fab{display:none}
+.tx-main .tx-summary{background:var(--me);color:var(--me-text);border-radius:24px;padding:18px;border:0;margin-bottom:16px}
+.tx-main .tx-summary .lbl,.tx-main .tx-chip .l{color:inherit;opacity:.75}
+.tx-main .hero-num{font-size:2.2rem!important;color:inherit!important}
+.tx-main .tx-chip{background:rgba(255,255,255,.1);border:0}
+body.light .tx-main .tx-chip{background:rgba(255,255,255,.12)}
+.tx-main .tx-chip b{color:inherit}
+.tx-main .tx-summary .trend{background:rgba(0,0,0,.14)!important;color:inherit!important}
+.share-bar{display:flex;height:10px;border-radius:99px;overflow:hidden;margin:14px 0 8px;background:rgba(255,255,255,.15)}
+.share-bar span{display:block;height:100%}
+.share-lg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.74rem;opacity:.85}
+.share-lg i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:5px;vertical-align:0}
+.tx-main .tx-insights{margin-top:12px}
+.tx-main .tx-insight-chip{background:rgba(255,255,255,.1);color:inherit;border:0}
+#txShowListBtn{display:none!important}
+#txListSection{margin-top:6px!important}
+.tx-catcards{display:flex!important;overflow-x:auto;gap:10px;padding-bottom:6px;scrollbar-width:none;flex-wrap:nowrap!important}
+.tx-catcards::-webkit-scrollbar{display:none}
+.tx-cat-card{flex:0 0 132px;border-radius:18px!important}
+.tx-cat-card.empty-cat{display:none}
+.tx-toolbar .tx-search{border-radius:14px}
+#exBody .tx-card,#catPeekBody .tx-card,#instBody .tx-card,#loanBody .tx-card{background:var(--surface2);border:0;border-radius:0;margin:0;box-shadow:none;border-bottom:1px solid var(--line);padding:12px 14px}
+#exBody .tx-card:first-of-type,#instBody .tx-card:first-of-type,#loanBody .tx-card:first-of-type,#catPeekBody .tx-card:first-of-type{border-radius:18px 18px 0 0}
+#exBody .tx-card:last-of-type,#instBody .tx-card:last-of-type,#loanBody .tx-card:last-of-type,#catPeekBody .tx-card:last-of-type{border-radius:0 0 18px 18px;border-bottom:0}
+#exBody .tx-card:only-of-type,#instBody .tx-card:only-of-type,#loanBody .tx-card:only-of-type{border-radius:18px}
+.tx-tap{cursor:pointer}
+.tx-tap:active{background:var(--surface3)!important}
+#exBody .tx-actions,#catPeekBody .tx-actions{display:none!important}
+#exBody .tx-badge,#instBody .tx-badge,#loanBody .tx-badge{border-radius:14px}
+/* categories: rings */
+.panel.flat{background:transparent!important;border:0!important;box-shadow:none!important;padding:4px 2px 12px!important}
+.ring-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.ring-card{display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--line);border-radius:20px;padding:14px 10px;cursor:pointer;font-family:inherit;color:var(--text)}
+.ring-card b{font-size:.9rem}
+.ring-card span{font-size:.74rem;color:var(--muted);text-align:center}
+/* credit cards */
+.cc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.cc{border-radius:20px;padding:16px 18px;color:#fff;min-height:150px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 10px 24px rgba(0,0,0,.18)}
+.cc-top{display:flex;justify-content:space-between;align-items:center}
+.cc-top b{font-size:1.02rem}
+.cc-act button{background:rgba(255,255,255,.18);border:0;border-radius:10px;padding:5px 7px;cursor:pointer;margin-right:4px}
+.cc-chip{width:38px;height:28px;border-radius:7px;background:linear-gradient(135deg,rgba(255,255,255,.75),rgba(255,255,255,.35))}
+.cc-bot{display:flex;justify-content:space-between;align-items:center;font-size:.82rem}
+.cc-bot select{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:8px;padding:3px 6px;font-size:.78rem;width:auto}
+.cc-bot select option{color:#000}
+/* accounts / installments / goals: roomier cards */
+#acctManage .tx-card{border-radius:18px;margin-bottom:8px}
+#instBody .bar{height:10px;border-radius:99px;margin-top:8px!important}
+.goalcard{border-radius:22px!important;padding:16px!important}
+.goalcard .bar{height:12px;border-radius:99px}
+.cards .card{border-radius:20px}
 /* ═══ stage 4 ═══ */
 .wc-tool{width:36px;height:36px;border-radius:50%;border:1px solid var(--line2);background:var(--surface);font-size:1rem;cursor:pointer;flex-shrink:0}
 .wc-tool.on{background:rgba(var(--accent-rgb),.18);border-color:var(--accent)}
@@ -793,7 +860,7 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
   <div id="subNav" class="subnav hidden" role="tablist" aria-label="מסכים בקבוצה"></div>
   <section id="tab-dash">
     <div id="dashGreeting" class="dash-greeting"></div>
-    <div class="dash-voice"><button type="button" onclick="openVoiceAdd()">🎤 להוסיף תנועה בקול</button><button type="button" onclick="goToTab('expenses');setTimeout(()=>$('#quickAddText')?.focus(),200)">✍️ בכתב</button></div>
+    <div class="dash-voice"><button type="button" onclick="openVoiceAdd()">🎤 להוסיף תנועה בקול</button><button type="button" onclick="openQuickAdd()">✍️ בכתב</button></div>
     <div id="dashReport"></div>
     <div id="dashCheckin"></div>
     <div id="dashAlerts"></div>
@@ -824,9 +891,10 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
   </section>
 
   <section id="tab-expenses" class="hidden">
-    <div class="panel">
-      <h2 data-i18n="expenses.quickadd.title">✨ הוספה מהירה עם AI</h2>
-      <p class="muted" style="margin-bottom:10px">כתבו בשפה חופשית — תנועה אחת או כמה תנועות בבת אחת (גם טקסט ארוך) — או צלמו קבלה. Enter לשליחה, Shift+Enter לשורה חדשה.</p>
+    <button type="button" class="fab" id="txFab" onclick="openQuickAdd()" aria-label="הוספת תנועה">＋</button>
+    <div class="panel qa-panel" id="qaPanel">
+      <div class="qa-head"><h2 data-i18n="expenses.quickadd.title">✨ הוספה מהירה</h2><button type="button" class="qa-x" onclick="closeQuickAdd()" aria-label="סגירה">✕</button></div>
+      <p class="muted" style="margin-bottom:10px">כתבו במילים, דברו, או צלמו קבלה.</p>
       <div class="row" style="align-items:flex-start">
         <textarea id="quickAddText" rows="2" placeholder='למשל: "שילמתי 80 שקל בסופר, ואתמול קיבלתי 500 שקל מתנה מסבתא"' style="flex:1;resize:vertical;min-height:44px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiQuickAdd();}"></textarea>
         <input type="file" id="quickAddPhoto" accept="image/*" capture="environment" class="hidden" onchange="aiQuickAddPhoto(this.files[0])">
@@ -836,8 +904,7 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
       </div>
       <button type="button" class="link-btn" onclick="openManualAddModal()" style="margin-top:14px;font-size:.82rem">+ הוספה ידנית (בלי AI)</button>
     </div>
-    <div class="panel">
-      <h2 data-i18n="nav.expenses">תנועות</h2>
+    <div class="panel tx-main">
       <div class="tx-summary hidden" id="txSummary">
         <div class="tx-summary-top">
           <div><div class="lbl">יתרה בתקופה</div><div class="hero-num" id="txHeroNum">₪0</div></div>
@@ -846,10 +913,11 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
             <div class="tx-chip"><span class="dot out"></span><div><span class="l">הוצאות</span><b id="txChipOut">₪0</b><span class="trend flat" id="txChipDelta"></span></div></div>
           </div>
         </div>
+        <div class="tx-share" id="txShare"></div>
         <div class="tx-insights" id="txInsights"></div>
       </div>
       <div id="txCatCardsWrap">
-        <div class="muted" style="margin-bottom:10px;font-weight:700">כמה הוצאתי החודש — לפי קטגוריה</div>
+        <div class="sec-title">לפי קטגוריה</div>
         <div id="txCatCards" class="tx-catcards"></div>
       </div>
       <button type="button" class="btn sec" id="txShowListBtn" style="width:100%;margin-top:18px" onclick="toggleTxListExpanded()">📋 הצג את כל התנועות</button>
@@ -928,6 +996,7 @@ body.light .dg-hit{background:linear-gradient(transparent 58%,rgba(255,170,60,.5
   </section>
 
   <section id="tab-categories" class="hidden">
+    <div class="panel flat" id="catRings"></div>
     <div class="panel">
       <h2><span data-i18n="cat.summary.title">סיכום שנתי</span> <span class="muted" id="catYearLbl"></span></h2>
       <div class="filters" id="catFilters"></div>
@@ -1730,7 +1799,7 @@ async function authHeaders(){
 
 let CU=null,HID=null,MNAME='',MROLE='owner'; let VM=new Date().getMonth(),VY=new Date().getFullYear();
 let DB={categories:[],transactions:[],loans:[],installments:[],investments:[],goals:[],bankAccounts:[],creditCards:[],categoryBudgets:[]};
-let exFilter='all',exSearch='',exGroupBy='day',txListExpanded=false,catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
+let exFilter='all',exSearch='',exGroupBy='day',txListExpanded=true,catFilter='all',catSubFilter=null,pendingLoan=null,pendingImport=[],importInProgress=false;
 const memberCache={}; let charts={};
 if(window.Chart){
   Chart.defaults.font.family="'Rubik','Segoe UI',sans-serif";
@@ -2091,6 +2160,8 @@ function goToTab(tab){
   if(tab==='charts')renderCharts();
   if(tab==='advisor'){showAdvisorConvoView(false);loadAdvisorConversationsList();renderAdvisorTopics();renderTaskBoard();}
   if(tab==='investments')renderInv2();
+  if(tab==='categories')try{renderCatRings();}catch(_){}
+  if(tab!=='expenses')closeQuickAdd();
   if(tab==='advisor')renderMemoryBoard();
   if(tab==='planning')renderSimChips();
   if(tab==='investments')loadMarketQuote();
@@ -4777,6 +4848,38 @@ window.buildActionPlan=async()=>{
   };
 };
 
+// ═══════════════ STAGE 5: real screen redesign ═══════════════
+window.openQuickAdd=()=>{if(!document.getElementById('tab-expenses')||document.getElementById('tab-expenses').classList.contains('hidden'))goToTab('expenses');const p=$('#qaPanel');if(p){p.classList.add('open');window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>$('#quickAddText')?.focus(),250);}};
+window.closeQuickAdd=()=>{$('#qaPanel')?.classList.remove('open');};
+// categories: rings for the viewed month (budget if set, else share of spend)
+function catRingSvg(pct,color,icon,over){
+  const r=26,C=2*Math.PI*r,len=Math.max(0,Math.min(1,pct))*C;
+  return '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><circle cx="32" cy="32" r="'+r+'" fill="none" stroke="var(--surface3)" stroke-width="7"/><circle cx="32" cy="32" r="'+r+'" fill="none" stroke="'+(over?'var(--danger)':color)+'" stroke-width="7" stroke-linecap="round" stroke-dasharray="'+len.toFixed(1)+' '+C.toFixed(1)+'" transform="rotate(-90 32 32)"/><text x="32" y="38" text-anchor="middle" font-size="18">'+icon+'</text></svg>';
+}
+function renderCatRings(){
+  const box=$('#catRings');if(!box)return;
+  const rows=monthRows(VY,VM,'all').filter(t=>t.type==='expense');
+  const tot={};rows.forEach(t=>{tot[t.category_id||'']=(tot[t.category_id||'']||0)+(+t.amount);});
+  const all=Object.values(tot).reduce((s,v)=>s+v,0);
+  const budgets={};(DB.categoryBudgets||[]).forEach(b=>budgets[b.category_id]=+b.monthly_amount);
+  const cats=rootCats('expense').map(c=>({c,v:tot[c.id]||0,b:budgets[c.id]||0})).filter(x=>x.v>0||x.b>0).sort((a,b)=>b.v-a.v);
+  box.innerHTML='<div class="sec-title">'+MONTHS[VM]+' · '+fmt(all)+'</div>'+(cats.length?'<div class="ring-grid">'+cats.map(({c,v,b})=>{
+    const color=catColor(c.id),pct=b?v/b:(all?v/all:0),over=b&&v>b;
+    const sub=b?(over?'<span class="neg">חריגה של '+fmt(v-b)+'</span>':fmt(v)+' מתוך '+fmt(b)):fmt(v)+' · '+Math.round(pct*100)+'%';
+    return '<button type="button" class="ring-card" onclick="openCategoryPeekModal(\''+c.id+'\')">'+catRingSvg(pct,color,catIcon(c),over)+'<b>'+esc(c.name)+'</b><span>'+sub+'</span></button>';
+  }).join('')+'</div>':'<p class="empty">אין הוצאות בחודש הזה</p>');
+}
+// credit cards look like cards
+window.renderCreditCards=function(){
+  const box=$('#cardManage');if(!box)return;
+  let dayOpts='';for(let d=1;d<=28;d++)dayOpts+='<option value="'+d+'">ה-'+d+'</option>';
+  box.innerHTML=DB.creditCards.length?'<div class="cc-grid">'+DB.creditCards.map(c=>{
+    const acct=DB.bankAccounts.find(a=>a.id===c.bank_account_id),color=catColor(c.id);
+    return '<div class="cc" style="background:linear-gradient(135deg,'+color+','+hexA(color,.72)+')"><div class="cc-top"><b>'+esc(c.name)+'</b><span class="cc-act"><button type="button" onclick="renameCreditCard(\''+c.id+'\')" aria-label="שינוי שם">✏️</button><button type="button" onclick="delCreditCard(\''+c.id+'\')" aria-label="מחיקה">🗑️</button></span></div>'
+      +'<div class="cc-chip"></div><div class="cc-bot"><span>'+(acct?esc(acct.name):'—')+'</span><label>חיוב <select onchange="updateCardBillingDay(\''+c.id+'\',this.value)">'+dayOpts.replace('value="'+c.billing_day+'"','value="'+c.billing_day+'" selected')+'</select></label></div></div>';
+  }).join('')+'</div>':'<p class="empty">אין עדיין כרטיסי אשראי. הוסיפו אחד למעלה</p>';
+};
+
 // ═══════════════ STAGE 4 ═══════════════
 // ── advisor memory ──
 const MEM_KIND={decision:'📌',preference:'💛',goal:'🎯',fact:'ℹ️'};
@@ -5530,16 +5633,26 @@ function txCardHtml(t){
   const btns=t._isInst
     ?'<button class="smallbtn" onclick="editInst(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delInst(\''+t.id+'\')">מחק</button>'
     :'<button class="smallbtn" onclick="editTx(\''+t.id+'\')">עריכה</button><button class="btn danger" onclick="delTx(\''+t.id+'\')">מחק</button>';
-  return '<div class="tx-card">'
+  return '<div class="tx-card tx-tap" role="button" tabindex="0" onclick="txSheet(\''+t.id+'\','+(t._isInst?'true':'false')+')">'
     +'<div class="tx-badge" style="background:'+hexA(color,.16)+';color:'+color+'">'+icon+'</div>'
     +'<div class="tx-mid">'
       +'<div class="tx-desc">'+esc(t.description)+'</div>'
-      +'<div class="tx-meta"><button type="button" class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'" onclick="openTxCategoryModal(\''+t.id+'\','+(t._isInst?'true':'false')+')" title="שינוי קטגוריה">'+catLabel+' <span class="cattag-edit">✎</span></button>'+txPmTag(t)+'</div>'
+      +'<div class="tx-meta"><button type="button" class="tx-cattag" style="background:'+hexA(color,.14)+';color:'+color+'" onclick="event.stopPropagation();openTxCategoryModal(\''+t.id+'\','+(t._isInst?'true':'false')+')" title="שינוי קטגוריה">'+catLabel+' <span class="cattag-edit">✎</span></button>'+txPmTag(t)+'</div>'
     +'</div>'
     +'<div class="tx-amt '+(t.type==='income'?'pos':'neg')+'">'+(t.type==='income'?'+':'−')+'₪'+Math.abs(Math.round(t.amount)).toLocaleString('he-IL')+'</div>'
-    +'<div class="tx-actions">'+btns+'</div>'
     +'</div>';
 }
+window.txSheet=(id,isInst)=>{
+  const t=isInst?(DB.installments||[]).find(x=>x.id===id):(DB.transactions||[]).find(x=>x.id===id);if(!t)return;
+  const amt=isInst?(+t.total_amount/(t.payments_count||t.count||1)):+t.amount;
+  const {ov,close}=UI._open('<h3 style="margin-bottom:2px">'+esc(t.description||'—')+'</h3><p style="margin-bottom:14px">'+fmt(amt)+(t.tx_date?' · '+_dgDate(t.tx_date):'')+'</p>'
+    +'<div class="dg-actions"><button class="btn sec" data-a="cat">🏷️ שינוי קטגוריה</button><button class="btn sec" data-a="edit">✏️ עריכה</button><button class="btn sec" data-a="del" style="color:var(--danger)">🗑️ מחיקה</button><button class="dg-back" data-a="x">סגור</button></div>');
+  ov.querySelector('.modal').classList.add('dg-modal');
+  ov.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{close();const a=b.dataset.a;
+    if(a==='cat')openTxCategoryModal(id,!!isInst);
+    if(a==='edit')(isInst?editInst:editTx)(id);
+    if(a==='del')(isInst?delInst:delTx)(id);});
+};
 // "הצצה" לקטגוריה — נפתחת בחלון קופץ בלבד, לא נוגעת בסינון הכללי של
 // הרשימה, כדי שאפשר תמיד לחזור למצב המלא בלי לחפש כפתור "נקה סינון".
 window.openCategoryPeekModal=(cid)=>{
@@ -5679,6 +5792,15 @@ function renderExpenses(){
   } else summaryEl.classList.add('hidden');
 
   renderTxCatCards(homeRows);
+  try{
+    const ct={};homeRows.forEach(t=>{if(t.type==='expense')ct[t.category_id||'']=(ct[t.category_id||'']||0)+(+t.amount);});
+    const ent=Object.entries(ct).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]),tot=ent.reduce((s,[,v])=>s+v,0);
+    const top=ent.slice(0,4),rest=ent.slice(4).reduce((s,[,v])=>s+v,0);
+    const seg=(cid,v)=>{const c=DB.categories.find(x=>x.id===cid);return{name:c?c.name:'ללא קטגוריה',pct:tot?v/tot*100:0,color:catColor(cid||null)};};
+    const segs=top.map(([c,v])=>seg(c,v));if(rest>0)segs.push({name:'אחר',pct:rest/tot*100,color:'var(--line2)'});
+    const sh=$('#txShare');
+    if(sh)sh.innerHTML=tot?'<div class="share-bar">'+segs.map(x=>'<span style="width:'+x.pct.toFixed(1)+'%;background:'+x.color+'"></span>').join('')+'</div><div class="share-lg">'+segs.map(x=>'<span><i style="background:'+x.color+'"></i>'+esc(x.name)+' '+Math.round(x.pct)+'%</span>').join('')+'</div>':'';
+  }catch(_){}
 
   // תובנות אוטומטיות — קטגוריה מובילה (לחיצה פותחת הצצה), וקצב הוצאה חזוי
   const catTotals={};
