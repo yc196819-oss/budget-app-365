@@ -73,7 +73,8 @@ test('a new household in five steps: everything is created in the shared tables'
   assert.ok(t.categories.filter((c) => c.parent_id).every((c) => roots.some((r) => r.id === c.parent_id)));
   assert.ok(t.categories.every((c) => c.household_id === hid));
   assert.equal(t.bank_accounts.length, 1);
-  assert.deepEqual(t.credit_cards.map((c) => [c.name, c.last4, c.billing_day]), [['ויזה', '4821', 15], ['דיירקט', null, null]]);
+  // A direct-debit card sends no day: the database keeps its default (it refuses null).
+  assert.deepEqual(t.credit_cards.map((c) => [c.name, c.last4, c.billing_day]), [['ויזה', '4821', 15], ['דיירקט', null, undefined]]);
   const budgetOf = (name) => t.category_budgets.find((b) => b.category_id === roots.find((r) => r.name === name).id)?.monthly_amount;
   assert.equal(budgetOf('בית ודיור'), 5000);
   assert.equal(budgetOf('ילדים'), 1800);

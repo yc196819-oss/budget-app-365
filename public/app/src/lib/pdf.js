@@ -1,5 +1,6 @@
 // Text of a PDF statement, page by page. pdf.js is large, so it is loaded
 // only when a PDF is picked, from our own server (strict CSP: no CDN).
+import { fixReversedHebrew } from '../domain/pdftext.js';
 
 const MAX_PAGES = 30;
 let loading = null;
@@ -24,7 +25,7 @@ export async function pdfText(arrayBuffer, onPage) {
     if (onPage) onPage(i, pages);
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
-    text += content.items.map((it) => it.str + (it.hasEOL ? '\n' : ' ')).join('') + '\n';
+    text += content.items.map((it) => fixReversedHebrew(it.str) + (it.hasEOL ? '\n' : ' ')).join('') + '\n';
   }
   await doc.destroy();
   return text;

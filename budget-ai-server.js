@@ -78,7 +78,7 @@ app.use(express.json({ limit: '2mb' }));
 const aiDay = limits.dailyCap();
 app.use('/api/ai', (req, res, next) => {
   if (req.method !== 'POST') return next();
-  req.body = limits.clipBody(req.body);
+  req.body = limits.clipBody(req.body, { statement: req.path === '/import' });
   if (!aiDay.take(israelToday())) {
     console.error('AI daily cap reached:', aiDay.used);
     return res.status(429).json({ error: 'היועץ עמוס היום. נסו שוב מחר בבוקר.' });
@@ -298,7 +298,7 @@ function getAvailableAiProviders() {
   return providers;
 }
 
-async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium' }) {
+async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium', maxTokens = 4096 }) {
   const content = [
     { type: 'text', text: `${prompt}\n\n${String(text || '').slice(0, 12000)}` }
   ];
@@ -317,7 +317,7 @@ async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium' 
     });
   }
 
-  const req = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 4096, content, effort });
+  const req = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens, content, effort });
   const response = await fetch(req.url, req.init);
 
   const data = await response.json().catch(() => ({}));
@@ -327,6 +327,12 @@ async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium' 
     throw err;
   }
 
+  // A cut-off answer is broken JSON: say so, so the next provider is tried.
+  if (data.stop_reason === 'max_tokens') {
+    const err = new Error('Claude answer was cut off (max_tokens)');
+    err.status = 500;
+    throw err;
+  }
   return {
     provider: 'claude',
     model: ANTHROPIC_MODEL,
@@ -334,7 +340,7 @@ async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium' 
   };
 }
 
-async function callGemini({ prompt, text, fileData, mimeType }) {
+async function callGemini({ prompt, text, fileData, mimeType, json = false }) {
   const parts = [{ text: `${prompt}\n\n${String(text || '').slice(0, 12000)}` }];
   if (fileData) {
     const normalizedMime = String(mimeType || '').toLowerCase().trim().replace('image/jpg', 'image/jpeg');
@@ -349,7 +355,7 @@ async function callGemini({ prompt, text, fileData, mimeType }) {
 
   const payload = {
     contents: [{ parts }],
-    generationConfig: { temperature: 0.1 }
+    generationConfig: { temperature: 0.1, ...(json ? { responseMimeType: 'application/json' } : {}) }
   };
 
   const response = await fetch(
@@ -369,7 +375,8 @@ async function callGemini({ prompt, text, fileData, mimeType }) {
   return {
     provider: 'gemini',
     model: GEMINI_MODEL,
-    output: data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    // The answer can come in several parts; thoughts are not part of it.
+    output: (data?.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought && p.text).map((p) => p.text).join('')
   };
 }
 
@@ -761,7 +768,9 @@ app.post('/api/ai/import', requireAuth, aiLimiter, aiQuota, async (req, res) => 
       return res.status(400).json({ error: 'text or fileData is required' });
     }
 
-    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType, effort: 'medium' });
+    // Reading a statement is structured work: little thinking, room for a
+    // long JSON answer (one part of the statement is ~60 lines).
+    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType, effort: 'low', maxTokens: 16000, json: true });
     const output = aiResult.output || '[]';
     let parsed = null;
     try {
@@ -777,8 +786,12 @@ app.post('/api/ai/import', requireAuth, aiLimiter, aiQuota, async (req, res) => 
       }
     }
 
+    // {"transactions":[...]} is the same answer in a wrapper.
+    if (parsed && !Array.isArray(parsed) && typeof parsed === 'object') parsed = Object.values(parsed).find(Array.isArray) || null;
     if (!Array.isArray(parsed)) {
-      parsed = [];
+      // An answer we cannot read is a failure, not "no transactions".
+      reportServerError(new Error('import: unreadable AI answer (' + aiResult.provider + ')'), 'POST /api/ai/import');
+      return res.status(502).json({ error: 'ה-AI החזיר תשובה לא קריאה. נסו שוב.', aiProvider: aiResult.provider });
     }
 
     return res.json({
@@ -791,9 +804,10 @@ app.post('/api/ai/import', requireAuth, aiLimiter, aiQuota, async (req, res) => 
     });
   } catch (err) {
     const statusCode = err.statusCode || 502;
+    reportServerError(err, 'POST /api/ai/import');
     return res.status(statusCode).json({
-      error: err.message || 'Unexpected error',
-      attemptedProviders: err.attempted || []
+      error: statusCode === 502 ? 'ה-AI לא זמין כרגע. נסו שוב בעוד דקה.' : err.message || 'Unexpected error',
+      attemptedProviders: (err.attempted || []).map((a) => a.provider)
     });
   }
 });

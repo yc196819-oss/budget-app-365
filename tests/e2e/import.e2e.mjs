@@ -174,3 +174,26 @@ test('the add sheet links to the statement upload, replacing itself (no sheet on
   assert.equal(await page.locator('.sheet h2').textContent(), 'העלאת פירוט כרטיס');
   await page.close();
 });
+
+test('a long statement goes to the AI in parts, each read whole, and every part counts', async () => {
+  const { page, sent, errors } = await open();
+  await page.route('**/api/ai/import', async (route) => {
+    const body = JSON.parse(route.request().postData() || '{}');
+    sent.push(body);
+    if (/מספר \| תיאור/.test(body.prompt)) return route.fulfill({ status: 200, contentType: 'application/json', body: '{"transactions":[]}' });
+    // One transaction per line the part holds.
+    const transactions = String(body.text).split('\n').filter((l) => /^MOVE/.test(l)).map((l, i) => ({ date: iso(prev((i % 27) + 1)), description: l.slice(0, 20), amount: 10 + (Number(l.split(' ')[1]) % 50), type: 'expense' }));
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ transactions }) });
+  });
+  const lines = Array.from({ length: 700 }, (_, i) => 'MOVE ' + i + ' some long merchant name here ' + 'x'.repeat(10));
+  await page.click('text=העלאת פירוט כרטיס');
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'bank.txt', mimeType: 'text/plain', buffer: Buffer.from(lines.join('\n')) });
+  await page.waitForSelector('.import-summary');
+  const reads = sent.filter((b) => !/מספר \| תיאור/.test(b.prompt));
+  assert.ok(reads.length >= 3, 'sent in parts: ' + reads.length);
+  assert.ok(reads.every((b) => b.text.length <= 10000));
+  assert.equal(reads.map((b) => b.text).join('\n').split('\n').filter((l) => /^MOVE/.test(l)).length, 700, 'no line left out');
+  assert.match(await page.locator('.import-summary').textContent(), /700 תנועות נמצאו/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

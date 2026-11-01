@@ -1,4 +1,5 @@
 import { sb } from '../lib/supabase.js';
+import { reportError } from '../lib/telemetry.js';
 import { categoriesFor, initialBudgets, emergencyTarget, cleanCards, householdName, inviteLink, firstPicture } from '../domain/onboarding.js';
 
 // Creates everything a new household needs, in the same tables and shapes as
@@ -36,15 +37,17 @@ export async function createHousehold(user, answers) {
     if (error) throw error;
   }
 
-  // A main bank account and the cards (direct-debit cards have no billing day).
+  // A main bank account and the cards (a direct-debit card keeps the default day).
   const { data: acct, error: acctErr } = await sb.from('bank_accounts').insert({ household_id: hid, created_by: user.id, name: 'חשבון ראשי' }).select().single();
   if (acctErr) throw acctErr;
   const cards = cleanCards(answers.cards || []);
   if (cards.length) {
+    // A card the database refuses must not stop the rest of the setup
+    // (budgets, income, the emergency goal): it can be added later.
     const { error } = await sb.from('credit_cards').insert(cards.map((c) => ({
-      household_id: hid, created_by: user.id, bank_account_id: acct.id, name: c.name, last4: c.last4 || null, billing_day: c.billing_day
+      household_id: hid, created_by: user.id, bank_account_id: acct.id, name: c.name, last4: c.last4 || null, ...(c.billing_day ? { billing_day: c.billing_day } : {})
     })));
-    if (error) throw error;
+    if (error) reportError(error, 'onboarding:cards');
   }
 
   // First budgets, expected income and an emergency fund goal.

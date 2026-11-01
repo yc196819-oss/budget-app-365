@@ -1,5 +1,5 @@
 import { html } from '../../lib/html.js';
-import { track } from '../../lib/telemetry.js';
+import { track, reportError } from '../../lib/telemetry.js';
 import { useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { readStatement, ImportError } from '../../data/importer.js';
@@ -39,6 +39,9 @@ export function ImportSheet({ data, onClose }) {
       setPhase('review');
     } catch (err) {
       if (run.current !== id) return;
+      // Which kind of file failed and why (our message, never its content).
+      track('import_fail');
+      reportError(err, 'import:' + (String(file.name).split('.').pop() || '').toLowerCase().slice(0, 5));
       setError(err instanceof ImportError ? err.message : 'משהו השתבש בקריאת הקובץ (' + (err.message || err) + '). נסו שוב, או קובץ אחר.');
       setPhase('error');
     }
