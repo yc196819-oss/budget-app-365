@@ -13,6 +13,9 @@ test('long text is cut before it reaches the AI; files and objects are left alon
   assert.equal(body.history[0].i, 40, 'the newest messages are kept');
   assert.equal(body.history[0].text.length, MAX.item);
   assert.equal(clipBody(null), null);
+  // A part of a statement is longer than a question, and is not cut to 8,000.
+  assert.equal(clipBody({ text: 'ד'.repeat(11000) }, { statement: true }).text.length, 11000);
+  assert.equal(clipBody({ text: 'ד'.repeat(50000) }, { statement: true }).text.length, MAX.statement);
 });
 
 test('the whole service stops calling the AI past the daily cap, and starts again the next day', () => {

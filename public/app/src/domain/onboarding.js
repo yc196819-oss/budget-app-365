@@ -86,7 +86,13 @@ export function emergencyTarget(answers) {
 
 export function cleanCards(cards) {
   return cards
-    .map((c) => ({ name: String(c.name || '').trim(), last4: String(c.last4 || '').replace(/\D/g, '').slice(0, 4), billing_day: c.type === 'direct' ? null : Number(c.day) || 10, type: c.type === 'direct' ? 'direct' : 'credit' }))
+    .map((c) => {
+      // The database takes exactly 4 digits (the last ones) or none, and a day 1-28 (a
+      // direct-debit card is charged at once; it keeps the default day).
+      const d = String(c.last4 || '').replace(/\D/g, '');
+      const day = Math.trunc(Number(c.day));
+      return { name: String(c.name || '').trim(), last4: d.length >= 4 ? d.slice(-4) : '', billing_day: c.type === 'direct' ? null : day >= 1 && day <= 28 ? day : 10, type: c.type === 'direct' ? 'direct' : 'credit' };
+    })
     .filter((c) => c.name);
 }
 

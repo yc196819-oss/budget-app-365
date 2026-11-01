@@ -42,9 +42,11 @@ test('emergency fund target: 3 months of spending, at least 10,000', () => {
 
 test('cards, household name and invite link', () => {
   assert.deepEqual(cleanCards([{ name: ' ויזה ', last4: '12a34567', day: 15, type: 'credit' }, { name: '', day: 2 }, { name: 'דיירקט', type: 'direct', day: 10 }]), [
-    { name: 'ויזה', last4: '1234', billing_day: 15, type: 'credit' },
+    { name: 'ויזה', last4: '4567', billing_day: 15, type: 'credit' },
     { name: 'דיירקט', last4: '', billing_day: null, type: 'direct' }
   ]);
+  // What the database refuses never leaves here: 2 digits, day 31.
+  assert.deepEqual(cleanCards([{ name: 'כאל', last4: '12', day: 31 }]), [{ name: 'כאל', last4: '', billing_day: 10, type: 'credit' }]);
   assert.equal(householdName('יוסי', 'דני', true), 'יוסי ודני');
   assert.equal(householdName('יוסי', 'דני', false), 'משק הבית של יוסי');
   assert.equal(householdName('', '', false), 'משק הבית שלנו');

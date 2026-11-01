@@ -3,16 +3,18 @@
 // built, and the whole service stops calling the AI for the day past a cap.
 // Pure, except the day counter.
 
-const MAX = { message: 2000, text: 8000, item: 2000, history: 20 };
+const MAX = { message: 2000, text: 8000, item: 2000, history: 20, statement: 12000 };
 
 // The request body, with long text cut. File data (statements) is left as is:
-// its size is held by the JSON limit and the import endpoint.
-function clipBody(body) {
+// its size is held by the JSON limit and the import endpoint. A statement's
+// text is longer than a question: the app sends it in parts of up to
+// MAX.statement, so a 3-month bank statement is read whole.
+function clipBody(body, { statement = false } = {}) {
   if (!body || typeof body !== 'object') return body;
   const out = { ...body };
   const cut = (v, n) => (typeof v === 'string' && v.length > n ? v.slice(0, n) : v);
   for (const k of ['message', 'question', 'destination', 'authorName']) out[k] = cut(out[k], MAX.message);
-  for (const k of ['text', 'scenario', 'context']) if (typeof out[k] === 'string') out[k] = cut(out[k], MAX.text);
+  for (const k of ['text', 'scenario', 'context']) if (typeof out[k] === 'string') out[k] = cut(out[k], statement && k === 'text' ? MAX.statement : MAX.text);
   for (const k of ['history', 'messages']) {
     if (Array.isArray(out[k])) out[k] = out[k].slice(-MAX.history).map((m) => (m && typeof m === 'object' ? { ...m, text: cut(m.text, MAX.item) } : m));
   }
