@@ -1,6 +1,6 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive } from '../../data/account.js';
+import { adminStats, adminLive, adminReengage, sendReengage } from '../../data/account.js';
 import { adminFeedback, setFeedback, FEEDBACK_KIND, FEEDBACK_STATUS } from '../../data/feedback.js';
 import { showToast } from '../../lib/toast.js';
 
@@ -18,6 +18,16 @@ export function AdminView({ onBack }) {
     return () => clearInterval(t);
   }, []);
   const [inbox, setInbox] = useState(null);
+  const [back, setBack] = useState(null);
+  const [backSure, setBackSure] = useState(false);
+  const [backBusy, setBackBusy] = useState(false);
+  useEffect(() => { adminReengage().then(setBack); }, []);
+  const sendBack = async () => {
+    if (!backSure) { setBackSure(true); return; }
+    setBackBusy(true);
+    try { const r = await sendReengage(); showToast('נשלחו ' + r.sent + ' מיילים' + (r.failed ? ', ' + r.failed + ' לא נשלחו' : '')); setBack((b) => ({ ...b, count: 0 })); } catch (_e) { showToast('השליחה נכשלה. נסו שוב.'); }
+    setBackBusy(false); setBackSure(false);
+  };
   const [replies, setReplies] = useState({});
   useEffect(() => { adminFeedback().then(setInbox); }, []);
   const act = async (f, patch, done) => {
@@ -42,6 +52,14 @@ export function AdminView({ onBack }) {
       ${live.users + live.visitors > 0 && html`<span class="muted" style="font-size:13px">${Object.entries(live.screens).map(([k, n]) => (SCREEN_NAMES[k] || k) + ' ' + n).join(' · ')}</span>
         <span class="faint" style="font-size:12px">טלפון ${live.devices.mobile} · מחשב ${live.devices.desktop} · מותקנת ${live.installed}</span>`}
       <span class="faint" style="font-size:11px">מתעדכן כל 15 שניות. נספר מי שהאפליקציה פתוחה אצלו ב-2 הדקות האחרונות.</span>
+    </div>`}
+    ${back && html`<div class="card stack admin-reengage"><b>✉️ הזמנה לחזור</b>
+      <span class="muted" style="font-size:13px;line-height:1.55">${back.count ? html`<b class="num">${back.count}</b> נרשמו לפני יותר מיומיים ולא סיימו את ההרשמה. כל אחד מקבל את המייל הזה פעם אחת בלבד, ורק כשלוחצים כאן.` : 'אין כרגע למי לשלוח. כל מי שנרשם ולא סיים כבר קיבל הזמנה, או שעוד לא עברו יומיים.'}</span>
+      ${back.count > 0 && html`<details><summary style="cursor:pointer;font-size:13px">איך המייל נראה</summary>
+        <div class="card" style="font-size:13px;white-space:pre-wrap;margin-top:6px"><b>${back.preview.subject}</b>
+
+${back.preview.text}</div></details>
+        <button type="button" class=${'btn' + (backSure ? '' : ' btn-ghost')} disabled=${backBusy} onClick=${sendBack}>${backBusy ? 'שולח…' : backSure ? 'בטוח? לשלוח עכשיו ל-' + back.count : 'לשלוח ל-' + back.count}</button>`}
     </div>`}
     ${inbox && html`<div class="card stack admin-inbox"><b>📬 פניות משתמשים${inbox.filter((f) => f.status === 'new').length ? ' · ' + inbox.filter((f) => f.status === 'new').length + ' חדשות' : ''}</b>
       ${inbox.length === 0 && html`<span class="muted" style="font-size:13px">עוד אין פניות.</span>`}

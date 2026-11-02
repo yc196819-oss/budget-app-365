@@ -201,4 +201,23 @@ function feedbackPatch(body) {
   return out;
 }
 
-module.exports = { cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+// ── one invitation back, to whoever signed up and stopped before the end ──
+// Signed up 2+ days ago, confirmed, no household, never invited, not the owner.
+function reengageList({ users = [], members = [], sent = [], owners = [], now = new Date() }) {
+  const inHousehold = new Set(members.map((m) => m.user_id));
+  const done = new Set(sent.map((r) => r.user_id));
+  return users.filter((u) => u.email && u.email_confirmed_at && !inHousehold.has(u.id) && !done.has(u.id) && !owners.includes(String(u.email).toLowerCase())
+    && now.getTime() - new Date(u.created_at).getTime() >= 2 * DAY);
+}
+function reengageMail(link) {
+  const subject = 'נשארו לך 2 דקות להתחיל';
+  const text = 'היי,\nראיתי שנרשמת ל"התקציב שלנו" ולא הספקת לסיים את ההגדרה.\nזה לוקח בערך 2 דקות: כמה שאלות קצרות, מעלים פירוט אשראי, ורואים בפעם הראשונה לאן הכסף הולך.\n\nלהמשיך מאיפה שעצרתי: ' + link + '\n\nאם משהו לא עבד או לא היה ברור, פשוט תענה למייל הזה. אני קורא כל תשובה.\nקובי\n\nלא רוצה לקבל עוד מיילים? תענה "הסר".';
+  const html = '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;max-width:520px">'
+    + '<p>היי,</p><p>ראיתי שנרשמת ל"התקציב שלנו" ולא הספקת לסיים את ההגדרה.<br>זה לוקח בערך 2 דקות: כמה שאלות קצרות, מעלים פירוט אשראי, ורואים בפעם הראשונה לאן הכסף הולך.</p>'
+    + '<p><a href="' + link + '" style="display:inline-block;background:#92490A;color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:bold">להמשיך מאיפה שעצרתי</a></p>'
+    + '<p>אם משהו לא עבד או לא היה ברור, פשוט תענה למייל הזה. אני קורא כל תשובה.<br>קובי</p>'
+    + '<p style="color:#888;font-size:12px">לא רוצה לקבל עוד מיילים? תענה "הסר".</p></div>';
+  return { subject, text, html };
+}
+
+module.exports = { reengageList, reengageMail, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

@@ -122,6 +122,7 @@ test('owner dashboard: only for the owner, with active people, return rate and f
       { who: '#ffee00', owner: true, joined: '2026-06-28', lastSeen: '2026-11-02', opens: 30, added: 5, imports: 1, importFails: 0, asked: 40, aiCalls: 45, tokens: 90000, cost: 0.9 }]
   }) }));
   await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
   await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ users: 5, visitors: 0, screens: { home: 5 }, devices: { mobile: 5, desktop: 0 }, installed: 1 }) }));
   await page.clock.install();
   await page.click('button[aria-label="פרופיל והגדרות"]');
@@ -178,6 +179,7 @@ test('owner inbox: requests by label, mark as working or done, and answer', asyn
   await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
   await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
   await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ id: 'f1', who: '#abc123', kind: 'bug', text: 'הייבוא נתקע', screen: 'money', device: 'טלפון', status: 'new', created_at: '2026-11-02T10:00:00Z' }] }) }));
+  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
   await page.route('**/api/admin/feedback/f1', (r) => { patches.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
@@ -221,6 +223,33 @@ test('a wrong file is removed whole: every line it brought, after a second tap t
   assert.ok(!db.tables.transactions.some((t) => t.import_id === 'imp1'));
   assert.ok(db.tables.imports[0].removed_at);
   assert.equal(await files.locator('.file-row').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('the invitation back: shown before it is sent, and sent only after a second tap', async () => {
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
+  let posts = 0;
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => {
+    if (r.request().method() === 'POST') { posts++; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"sent":13,"failed":0}' }); }
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ count: 13, preview: { subject: 'נשארו לך 2 דקות להתחיל', text: 'היי,\nקובי' } }) });
+  });
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  const card = page.locator('.admin-reengage');
+  await card.waitFor();
+  assert.match(await card.textContent(), /13/);
+  await card.locator('summary').click();
+  assert.match(await card.textContent(), /נשארו לך 2 דקות להתחיל/);
+  await card.locator('button:has-text("לשלוח ל-13")').click();
+  assert.equal(posts, 0, 'the first tap only asks');
+  await card.locator('button:has-text("בטוח? לשלוח עכשיו ל-13")').click();
+  await page.waitForSelector('text=נשלחו 13 מיילים');
+  assert.equal(posts, 1);
+  assert.match(await card.textContent(), /אין כרגע למי לשלוח/);
   assert.deepEqual(errors, []);
   await page.close();
 });

@@ -149,3 +149,20 @@ test("the owner's own accounts are marked, so they are not taken for users", () 
   assert.deepEqual(out.users.map((u) => u.owner).sort(), [false, true]);
   assert.ok(!JSON.stringify(out).includes('"me"'));
 });
+
+const { reengageList, reengageMail } = require('../server/ops');
+
+test('one invitation back: signed up 2+ days ago, confirmed, no household, never invited, not the owner', () => {
+  const now = new Date('2026-11-02T12:00:00Z');
+  const u = (id, o = {}) => ({ id, email: id + '@x.com', email_confirmed_at: '2026-10-01', created_at: '2026-10-28T10:00:00Z', ...o });
+  const list = reengageList({
+    now, owners: ['boss@x.com'],
+    users: [u('a'), u('b'), u('c'), u('d', { email_confirmed_at: null }), u('e', { created_at: '2026-11-01T20:00:00Z' }), u('boss')],
+    members: [{ user_id: 'b' }], sent: [{ user_id: 'c' }]
+  });
+  assert.deepEqual(list.map((x) => x.id), ['a']);
+  const m = reengageMail('https://app.example/app/');
+  assert.equal(m.subject, 'נשארו לך 2 דקות להתחיל');
+  assert.match(m.text, /https:\/\/app\.example\/app\//);
+  assert.match(m.html, /הסר/);
+});

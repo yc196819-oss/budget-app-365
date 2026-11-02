@@ -1933,6 +1933,43 @@ app.get('/api/admin/live', requireAuth, async (req, res) => {
   return res.json(presence.snapshot());
 });
 
+// ═══ one invitation back (the owner presses send, after reading it) ═══
+async function reengageTargets() {
+  const [{ data: people }, { data: members }, { data: sent }] = await Promise.all([
+    supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    supabaseAdmin.from('memberships').select('user_id'),
+    supabaseAdmin.from('reengage_sent').select('user_id')
+  ]);
+  return ops.reengageList({ users: (people && people.users) || [], members: members || [], sent: sent || [], owners: ADMIN_EMAILS });
+}
+const appLinkOf = (req) => (process.env.PUBLIC_URL || (req.protocol + '://' + req.get('host'))).replace(/\/$/, '') + '/app/';
+app.get('/api/admin/reengage', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  try {
+    const list = await reengageTargets();
+    return res.json({ count: list.length, preview: ops.reengageMail(appLinkOf(req)) });
+  } catch (err) { return res.status(500).json({ error: 'failed' }); }
+});
+app.post('/api/admin/reengage', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  try {
+    const list = await reengageTargets();
+    const mail = ops.reengageMail(appLinkOf(req));
+    let sent = 0, failed = 0;
+    for (const u of list) {
+      // Marked first: a person is never written to twice, even if this is pressed again.
+      const { error } = await supabaseAdmin.from('reengage_sent').insert({ user_id: u.id });
+      if (error) continue;
+      try { await sendMailWithFallback({ to: u.email, ...mail }); sent++; } catch (_e) { failed++; }
+      await delay(400);
+    }
+    return res.json({ sent, failed });
+  } catch (err) {
+    console.error('reengage failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+
 // ═══ requests from users (a problem or an idea) ═══
 // Saved, and the owner gets an email at once. The owner answers from the
 // dashboard; the person sees the status and the answer in the app.
