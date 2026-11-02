@@ -188,7 +188,9 @@ test('each email goes to the people at its step of getting started, once each', 
   assert.match(m.text, /3 עד 6/);
   assert.match(m.text, /מכל כרטיסי האשראי/);
   assert.match(m.text, /מזומן/);
-  assert.match(m.html, /<ul[^>]*>.*<li[^>]*>.*מכל כרטיסי האשראי.*<\/ul>/s, 'the tips are a list in the email');
+  assert.match(m.html, /✓<\/td><td[^>]*>[^<]*מכל כרטיסי האשראי/, 'the tips are a list in the email');
+  assert.match(m.html, /src="https:\/\/app\.example\/wallet-192\.png"/, 'the logo comes from the app');
+  assert.doesNotMatch(m.html, /<script|animation/i);
   const f = campaignMail('first', 'https://app.example/app/');
   assert.match(f.text, /מכל כרטיסי האשראי/);
   assert.match(f.text, /מזומן/);

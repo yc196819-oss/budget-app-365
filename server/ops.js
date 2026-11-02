@@ -260,17 +260,34 @@ function campaignMail(campaign, link) {
   const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + link + '\n\n' + sign + '\nקובי\n\nלא רוצה לקבל עוד מיילים? תענה "הסר".';
   let body = '';
   let list = [];
-  const flush = () => { if (list.length) { body += '<ul style="padding-right:20px;margin:8px 0">' + list.map((l) => '<li style="margin-bottom:6px">' + l + '</li>').join('') + '</ul>'; list = []; } };
+  const P = 'margin:0 0 14px;font-size:16px;line-height:1.65;color:#2B2118';
+  const flush = () => {
+    if (!list.length) return;
+    body += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;background:#FBF4EA;border-radius:12px">'
+      + list.map((l) => '<tr><td width="28" valign="top" style="padding:12px 14px 0 0;font-size:16px;color:#92490A">✓</td><td style="padding:12px 0 0 14px;font-size:15px;line-height:1.6;color:#2B2118">' + l + '</td></tr>').join('')
+      + '<tr><td colspan="2" style="height:12px"></td></tr></table>';
+    list = [];
+  };
   for (const line of m.body) {
     if (line.startsWith('• ')) list.push(line.slice(2));
-    else { flush(); body += '<p>' + line + '</p>'; }
+    else { flush(); body += '<p style="' + P + '">' + line + '</p>'; }
   }
   flush();
-  const html = '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;max-width:520px">'
-    + '<p>היי,</p>' + body
-    + '<p><a href="' + link + '" style="display:inline-block;background:#92490A;color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:bold">' + m.button + '</a></p>'
-    + '<p>' + sign + '<br>קובי</p>'
-    + '<p style="color:#888;font-size:12px">לא רוצה לקבל עוד מיילים? תענה "הסר".</p></div>';
+  const origin = String(link).replace(/\/app\/?$/, '');
+  const html = '<!doctype html><html lang="he" dir="rtl"><body style="margin:0;padding:0;background:#F3EDE6">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3EDE6"><tr><td align="center" style="padding:24px 12px">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" dir="rtl" style="max-width:560px;font-family:Arial,Helvetica,sans-serif;text-align:right">'
+    + '<tr><td style="padding:0 4px 14px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+    + '<td><img src="' + origin + '/wallet-192.png" width="40" height="40" alt="" style="display:block;border:0;border-radius:10px"></td>'
+    + '<td style="padding-right:10px;font-size:19px;font-weight:bold;color:#2B2118">התקציב שלנו</td></tr></table></td></tr>'
+    + '<tr><td style="background:#FFFFFF;border-radius:18px;padding:28px 26px;box-shadow:0 1px 3px rgba(0,0,0,.06)">'
+    + '<p style="margin:0 0 14px;font-size:20px;font-weight:bold;color:#2B2118">היי,</p>' + body
+    + '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 22px"><tr><td style="background:#92490A;border-radius:12px">'
+    + '<a href="' + link + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none">' + m.button + '</a></td></tr></table>'
+    + '<p style="margin:0;font-size:15px;line-height:1.6;color:#5B4B3D">' + sign + '</p>'
+    + '<p style="margin:10px 0 0;font-size:15px;font-weight:bold;color:#2B2118">קובי</p></td></tr>'
+    + '<tr><td style="padding:16px 8px 0;font-size:12px;line-height:1.6;color:#8A7B6E;text-align:center">קיבלת את המייל כי נרשמת ל"התקציב שלנו". לא רוצה לקבל עוד מיילים? תענה "הסר".</td></tr>'
+    + '</table></td></tr></table></body></html>';
   return { subject: m.subject, text, html };
 }
 function reengageMail(link) { return campaignMail('start', link); }
