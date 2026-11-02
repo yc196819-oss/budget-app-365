@@ -44,7 +44,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
       </div>
       <label class="check toggle-row">
         <span style="flex:1;display:flex;flex-direction:column"><b>היועץ והצעות AI</b>
-          <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, נשלח סיכום של המספרים (לא שמות בתי עסק מלאים או פרטי חשבון). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>
+          <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, היועץ מקבל את המספרים שלכם, שמות בתי העסק והתנועות האחרונות, כדי לענות על המקרה שלכם (לא מספרי חשבון או כרטיס). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>
         <input type="checkbox" role="switch" checked=${aiOn} onChange=${(e) => setAiEnabled(e.target.checked)} aria-label="היועץ והצעות AI" />
       </label>
       ${aiOn && html`<label class="check toggle-row">

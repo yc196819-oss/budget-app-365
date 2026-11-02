@@ -79,13 +79,16 @@ test('continuing an old conversation: the answer streams, both turns are saved, 
   const added = db.tables.advisor_messages.filter((m) => m.conversation_id === 'c1').slice(2);
   assert.deepEqual(added.map((m) => [m.role, m.author_id]), [['user', 'u1'], ['ai', 'u1']]);
   assert.equal(added[0].text, 'ובכמה בדיוק?');
-  // What the server got: history, the screen, decisions; no merchant names.
+  // What the server got: history, the screen, decisions, and where the money
+  // went by business (so it can answer about the real lines); no raw rows or card digits.
   const p = asked[0];
   assert.equal(p.message, 'ובכמה בדיוק?');
   assert.equal(p.history.length, 2);
   assert.equal(p.summary.screen, 'home');
   assert.deepEqual(p.summary.memories, ['לא לוקחים הלוואות לחופשות']);
-  assert.doesNotMatch(JSON.stringify(p.summary), /שופרסל|ארומה|description/);
+  assert.match(JSON.stringify(p.summary.topMerchants), /שופרסל/);
+  assert.ok(p.summary.recentTransactions.length > 0 && p.summary.recentTransactions.length <= 30);
+  assert.doesNotMatch(JSON.stringify(p.summary), /"description"|"last4"|household_id|created_by/);
   await page.close();
 });
 

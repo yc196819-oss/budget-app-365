@@ -2,7 +2,7 @@
 // same shape the current app sends, so the server prompt understands it),
 // parsing the reply, and conversation helpers. No DOM, no network.
 
-import { MONTH_NAMES, monthShare, monthsBack } from './money.js';
+import { MONTH_NAMES, monthShare, monthsBack, merchantKey } from './money.js';
 import { monthPlan } from './home.js';
 import { forecast, verdict } from './forecast.js';
 
@@ -24,7 +24,7 @@ export function parseReply(raw) {
 // What the advisor gets: six months of income and spending, categories with
 // their trend, budgets against spending, goals, decisions the household
 // already made (memories), the forecast and the screen the person is on.
-export function buildSummary({ txs, categories, budgets, goals = [], installments = [], income = [], sharedDecisions = [], userId, userName, memories = [], today = new Date(), screen = 'home' }) {
+export function buildSummary({ txs, categories, budgets, goals = [], installments = [], income = [], sharedDecisions = [], accounts = [], cards = [], loans = [], investments = [], userId, userName, memories = [], today = new Date(), screen = 'home' }) {
   const months = monthsBack(today, 6);
   const label = (mo) => MONTH_NAMES[mo.m] + ' ' + mo.y;
   const cur = months[months.length - 1];
@@ -58,6 +58,7 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
   const plan = monthPlan({ txs, budgets, today });
   const fc = forecast({ txs, goals, installments, budgets, today });
   const v = verdict(fc);
+  const detail = spendingDetail({ txs, categories, today });
   return {
     userName: userName || '',
     currentMonth: label(cur),
@@ -73,8 +74,42 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
     sharedDecisions,
     expectedMonthlyIncome: round((Array.isArray(income) ? income : []).reduce((s, l) => s + (Number(l && l.amount) || 0), 0)),
     thisMonth: { budget: round(plan.budget), spent: round(plan.spent), projectedEnd: plan.canForecast ? round(plan.projectedEnd) : null, daysLeft: plan.daysLeft },
-    comingMonths: { verdict: v.title, months: fc.months.map((m) => ({ month: m.name, net: round(m.net) })) }
+    comingMonths: { verdict: v.title, months: fc.months.map((m) => ({ month: m.name, net: round(m.net) })) },
+    // Where the money goes, by business: so "which subscriptions?" or "why
+    // is food up?" can be answered from the real lines.
+    ...detail,
+    accounts: accounts.map((a) => ({ name: a.name, balance: a.balance ?? null })),
+    cards: cards.map((c) => ({ name: c.name, billingDay: c.billing_day || null, limit: c.credit_limit ?? null })),
+    loans: loans.filter((l) => !l.settled).map((l) => ({ with: l.counterparty, amount: Number(l.amount) || 0, direction: l.direction === 'tome' ? 'owed_to_us' : 'we_owe' })),
+    installments: installments.map((i) => ({ what: i.description, total: Number(i.total_amount) || 0, payments: Number(i.payments_count) || 0, first: i.first_payment || null })),
+    investmentsTotal: round(investments.reduce((s, x) => s + (Number(x.current_value ?? x.value ?? x.amount) || 0), 0))
   };
+}
+
+// The businesses behind the spending (last 3 months), what repeats every
+// month (subscriptions, fixed bills), and the latest lines. Pure.
+export function spendingDetail({ txs, categories, today = new Date(), top = 20, recent = 30 }) {
+  const since = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate()).toISOString().slice(0, 10);
+  const name = new Map((categories || []).map((c) => [c.id, c.name]));
+  const exp = (txs || []).filter((t) => t.type !== 'income' && String(t.tx_date) >= since);
+  const groups = new Map();
+  for (const t of exp) {
+    const k = merchantKey(t.description) || String(t.description || '').slice(0, 20);
+    if (!k) continue;
+    if (!groups.has(k)) groups.set(k, { merchant: String(t.description || '').slice(0, 40), category: name.get(t.subcategory_id) || name.get(t.category_id) || null, total: 0, count: 0, months: new Set(), amounts: [] });
+    const g = groups.get(k);
+    g.total += Number(t.amount) || 0; g.count++; g.months.add(String(t.tx_date).slice(0, 7)); g.amounts.push(Number(t.amount) || 0);
+  }
+  const all = [...groups.values()];
+  const topMerchants = all.sort((a, b) => b.total - a.total).slice(0, top)
+    .map((g) => ({ merchant: g.merchant, category: g.category, total3Months: round(g.total), times: g.count }));
+  // Charged in 3 different months at about the same amount: a subscription or a fixed bill.
+  const recurring = all.filter((g) => g.months.size >= 3 && Math.max(...g.amounts) - Math.min(...g.amounts) <= Math.max(5, Math.min(...g.amounts) * 0.15))
+    .sort((a, b) => b.total - a.total).slice(0, 15)
+    .map((g) => ({ merchant: g.merchant, category: g.category, monthly: round(g.total / g.months.size) }));
+  const recentTransactions = [...(txs || [])].sort((a, b) => String(b.tx_date).localeCompare(String(a.tx_date))).slice(0, recent)
+    .map((t) => ({ date: String(t.tx_date).slice(5), what: String(t.description || '').slice(0, 30), amount: round(Number(t.amount) || 0), type: t.type === 'income' ? 'income' : 'expense', category: name.get(t.subcategory_id) || name.get(t.category_id) || null }));
+  return { topMerchants, recurring, recentTransactions };
 }
 
 // Questions to start with, per screen.

@@ -107,7 +107,8 @@ function alias(userId, salt = '') {
 // One row per person, last 30 days: when they joined and were last seen,
 // how often they open the app, add, import, ask the advisor; AI calls,
 // tokens and estimated cost. Busiest first.
-function perUser({ users = [], events = [], calls = [], now = new Date(), salt = '' }) {
+// owners: ids of the owner's own accounts, marked so they are not taken for users.
+function perUser({ users = [], events = [], calls = [], now = new Date(), salt = '', owners = [] }) {
   const since = now.getTime() - 30 * DAY;
   const rows = new Map();
   const row = (id) => {
@@ -135,7 +136,7 @@ function perUser({ users = [], events = [], calls = [], now = new Date(), salt =
     r.cost += costOf(c);
   }
   const list = [...rows.values()]
-    .map((r) => ({ ...r, id: undefined, who: alias(r.id, salt), lastSeen: r.lastSeen ? String(r.lastSeen).slice(0, 10) : null, cost: Math.round(r.cost * 1000) / 1000 }))
+    .map((r) => ({ ...r, id: undefined, who: alias(r.id, salt), owner: owners.includes(r.id), lastSeen: r.lastSeen ? String(r.lastSeen).slice(0, 10) : null, cost: Math.round(r.cost * 1000) / 1000 }))
     .sort((a, b) => b.aiCalls - a.aiCalls || b.opens - a.opens);
   const total = list.reduce((s, r) => s + r.cost, 0) + systemCost;
   return { users: list, aiCost30d: Math.round(total * 100) / 100, systemCost30d: Math.round(systemCost * 100) / 100 };

@@ -1190,6 +1190,7 @@ function buildChatPrompt(summary, history, message, authorName, fixContext) {
 הנתונים (JSON) כוללים categorySpendingHistory ברמת משק הבית, personalCategoryBreakdown של המשתמש, תקציבים, יעדים ומשימות. ענה על סמך המספרים בפועל, 2-6 משפטים, בלי markdown ובלי כותרות.
 בהחלטות גדולות (משכנתא, השקעות) תן מידע, חישובים ושאלות לבדיקה, וציין שכדאי להתייעץ עם יועץ מורשה; אל תמליץ על נייר ערך או מוצר ספציפי.
 אם בנתונים יש memories (החלטות והעדפות שבני הזוג קבעו בעבר): התחשב בהן כעובדה, אל תציע משהו שסותר אותן אלא אם שואלים, ואם משהו השתנה — שאל.
+בנתונים יש גם את פירוט ההוצאה: topMerchants (בתי העסק שהכי הרבה כסף הלך אליהם ב-3 החודשים האחרונים), recurring (חיובים שחוזרים כל חודש בסכום דומה: מנויים וחשבונות קבועים), recentTransactions (התנועות האחרונות), וגם accounts, cards, loans, installments. כשהשאלה נוגעת להם, ענה לפי השורות האמיתיות ושמות בתי העסק (למשל איזה מנוי לבטל, לאן הלך הכסף באוכל), ולא בהכללות.
 אם בנתונים יש sharedDecisions (קניות שבני הזוג מחליטים עליהן יחד, עם הסטטוס): כשזה רלוונטי, עזור להחליט לפי המספרים, הצג את השיקולים של שני הצדדים ואל תיקח צד.
 אם בנתונים יש feelings (איך בני הזוג מרגישים השבוע עם הכסף): כשמישהו "stressed" — טון רגוע, צעד אחד קטן בכל פעם, הזכר מה כבר הולך טוב; כשכולם "calm" — אפשר להציע יעד גדול יותר. אל תכתוב "ראיתי שאתה לחוץ" אלא אם שאלו.
 בסוף התשובה, בשורה נפרדת, כתוב בדיוק: ${SUGG_MARK} ואחריו 2-3 שאלות המשך קצרות (עד 5 מילים כל אחת) מופרדות ב-|.
@@ -1208,7 +1209,8 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
   res.flushHeaders && res.flushHeaders();
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
   const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, authorName, buildFixContext(candidates, categories)));
-  const text = JSON.stringify(summary || {}).slice(0, 12000);
+  // The household's numbers and lines (about 6-8k tokens at most).
+  const text = JSON.stringify(summary || {}).slice(0, 24000);
   try {
     if (ANTHROPIC_KEY) {
       const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 3000, stream: true, content: `${prompt}\n\n${text}`, effort: 'medium' });
@@ -1900,8 +1902,11 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
       // Ids and sign-up dates only: no emails or names reach the dashboard.
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     ]);
-    const signedUp = ((people.data && people.data.users) || []).map((u) => ({ id: u.id, created_at: u.created_at }));
-    const per = ops.perUser({ users: signedUp, events: ev.data || [], calls: calls.data || [], salt: ADMIN_SALT });
+    const all = (people.data && people.data.users) || [];
+    const signedUp = all.map((u) => ({ id: u.id, created_at: u.created_at }));
+    // The owner's own accounts are marked (by id; the emails stay here).
+    const owners = all.filter((u) => ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())).map((u) => u.id);
+    const per = ops.perUser({ users: signedUp, events: ev.data || [], calls: calls.data || [], salt: ADMIN_SALT, owners });
     const { data: funnel } = await supabaseAdmin.rpc('ops_funnel', { p_since: month });
     return res.json({
       ...ops.stats({ events: ev.data || [], errors: er.data || [] }), members: users.count || 0, signedUp: signedUp.length, ...per,
