@@ -162,7 +162,9 @@ test('one invitation back: signed up 2+ days ago, confirmed, no household, never
   });
   assert.deepEqual(list.map((x) => x.id), ['a']);
   const m = reengageMail('https://app.example/app/');
-  assert.equal(m.subject, 'נשארו לך 2 דקות להתחיל');
+  assert.equal(m.subject, 'בוא נראה יחד לאן הכסף שלך הולך');
+  assert.doesNotMatch(m.text, /2 דקות/);
+  assert.match(m.text, /פירוט אשראי של החודשים האחרונים/);
   assert.match(m.text, /https:\/\/app\.example\/app\//);
   assert.match(m.html, /הסר/);
 });
@@ -183,7 +185,13 @@ test('each email goes to the people at its step of getting started, once each', 
   assert.equal(campaignList('nope', args).length, 0);
   const m = campaignMail('more', 'https://app.example/app/');
   assert.match(m.subject, /טיפ/);
-  assert.match(m.text, /3 עד 6 חודשים/);
+  assert.match(m.text, /3 עד 6/);
+  assert.match(m.text, /מכל כרטיסי האשראי/);
+  assert.match(m.text, /מזומן/);
+  assert.match(m.html, /<ul[^>]*>.*<li[^>]*>.*מכל כרטיסי האשראי.*<\/ul>/s, 'the tips are a list in the email');
+  const f = campaignMail('first', 'https://app.example/app/');
+  assert.match(f.text, /מכל כרטיסי האשראי/);
+  assert.match(f.text, /מזומן/);
   assert.match(m.html, /להוסיף עוד חודשים/);
   assert.match(m.html, /הסר/);
   assert.equal(campaignMail('nope', 'x'), null);
