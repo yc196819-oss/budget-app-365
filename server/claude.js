@@ -11,7 +11,7 @@ const API_URL = (process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com') 
 // (classifying lines, JSON) run at "low", conversations at "medium". Sent only
 // to models that take it; an older model id from the environment gets none.
 const EFFORTS = ['low', 'medium', 'high'];
-const supportsEffort = (model) => /claude-(sonnet-5|sonnet-4-6|opus-5|opus-4-[5-8]|fable|mythos)/.test(String(model || ''));
+const supportsEffort = (model) => /claude-(sonnet-5|sonnet-4-6|opus-5|opus-4-[5-8]|haiku-5|fable|mythos)/.test(String(model || ''));
 
 function claudeRequest({ key, model, maxTokens, content, stream = false, effort }) {
   const body = { model, max_tokens: maxTokens, messages: [{ role: 'user', content }] };
