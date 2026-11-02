@@ -107,7 +107,8 @@ function alias(userId, salt = '') {
 // One row per person, last 30 days: when they joined and were last seen,
 // how often they open the app, add, import, ask the advisor; AI calls,
 // tokens and estimated cost. Busiest first.
-function perUser({ users = [], events = [], calls = [], now = new Date(), salt = '' }) {
+// owners: ids of the owner's own accounts, marked so they are not taken for users.
+function perUser({ users = [], events = [], calls = [], now = new Date(), salt = '', owners = [] }) {
   const since = now.getTime() - 30 * DAY;
   const rows = new Map();
   const row = (id) => {
@@ -135,7 +136,7 @@ function perUser({ users = [], events = [], calls = [], now = new Date(), salt =
     r.cost += costOf(c);
   }
   const list = [...rows.values()]
-    .map((r) => ({ ...r, id: undefined, who: alias(r.id, salt), lastSeen: r.lastSeen ? String(r.lastSeen).slice(0, 10) : null, cost: Math.round(r.cost * 1000) / 1000 }))
+    .map((r) => ({ ...r, id: undefined, who: alias(r.id, salt), owner: owners.includes(r.id), lastSeen: r.lastSeen ? String(r.lastSeen).slice(0, 10) : null, cost: Math.round(r.cost * 1000) / 1000 }))
     .sort((a, b) => b.aiCalls - a.aiCalls || b.opens - a.opens);
   const total = list.reduce((s, r) => s + r.cost, 0) + systemCost;
   return { users: list, aiCost30d: Math.round(total * 100) / 100, systemCost30d: Math.round(systemCost * 100) / 100 };
@@ -181,4 +182,23 @@ function daily({ events = [], calls = [], days = 14, now = new Date() }) {
   return keys.map((k) => ({ day: k, active: act.get(k).size, cost: Math.round(cost.get(k) * 100) / 100 }));
 }
 
-module.exports = { EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+// ── requests from users ──
+const FEEDBACK_KINDS = ['bug', 'idea', 'other'];
+const FEEDBACK_STATUS = ['new', 'working', 'done', 'wontfix'];
+function cleanFeedback(body, userId) {
+  const b = body || {};
+  const t = String(b.text ?? '').replace(/\r/g, '').trim().slice(0, 2000);
+  if (!userId || t.replace(/\s/g, '').length < 3) return null;
+  return { user_id: userId, kind: FEEDBACK_KINDS.includes(b.kind) ? b.kind : 'other', text: t, screen: text(b.screen, 40) || null, device: text(b.device, 40) || null };
+}
+function feedbackPatch(body) {
+  const b = body || {};
+  const out = {};
+  if (FEEDBACK_STATUS.includes(b.status)) out.status = b.status;
+  if (typeof b.owner_note === 'string') out.owner_note = b.owner_note.trim().slice(0, 1000) || null;
+  if (!Object.keys(out).length) return null;
+  out.updated_at = new Date().toISOString();
+  return out;
+}
+
+module.exports = { cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

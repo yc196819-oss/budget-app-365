@@ -32,7 +32,7 @@ async function open({ email, setup } = {}) {
 test('export: two files, everything as JSON and the transactions as a CSV for Excel', async () => {
   const { page, errors } = await open();
   await page.click('button[aria-label="פרופיל והגדרות"]');
-  await page.click('text=ייצוא המידע ונמחקו לאחרונה');
+  await page.click('text=המידע שלנו: קבצים, ייצוא ושחזור');
   const files = [];
   page.on('download', (d) => files.push(d));
   await page.click('text=להוריד את כל המידע');
@@ -72,7 +72,7 @@ test('recycle bin: what was deleted is listed with the days left, and comes back
     return r.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
   });
   await page.click('button[aria-label="פרופיל והגדרות"]');
-  await page.click('text=ייצוא המידע ונמחקו לאחרונה');
+  await page.click('text=המידע שלנו: קבצים, ייצוא ושחזור');
   const bin = page.locator('.recycle-bin');
   await bin.locator('.bin-row').first().waitFor();
   assert.equal(await bin.locator('.bin-row').count(), 2);
@@ -118,8 +118,10 @@ test('owner dashboard: only for the owner, with active people, return rate and f
     live: { users: 3, visitors: 1, screens: { home: 2, money: 1, login: 1 }, devices: { mobile: 3, desktop: 1 }, installed: 2 },
     funnel: { signups: 28, household: 15, tx: 7, import: 7, cameBack: 0, oldEnough: 0, byDay: { [new Date().toISOString().slice(0, 10)]: 2 } },
     daily: Array.from({ length: 14 }, (_, i) => ({ day: new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10), active: i, cost: 0.05 })),
-    users: [{ who: '#a1b2c3', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31 }]
+    users: [{ who: '#a1b2c3', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31 },
+      { who: '#ffee00', owner: true, joined: '2026-06-28', lastSeen: '2026-11-02', opens: 30, added: 5, imports: 1, importFails: 0, asked: 40, aiCalls: 45, tokens: 90000, cost: 0.9 }]
   }) }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
   await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ users: 5, visitors: 0, screens: { home: 5 }, devices: { mobile: 5, desktop: 0 }, installed: 1 }) }));
   await page.clock.install();
   await page.click('button[aria-label="פרופיל והגדרות"]');
@@ -134,6 +136,7 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   const row = await s.locator('.per-user tbody tr').first().textContent();
   assert.match(row, /#a1b2c3/);
   assert.match(row, /51,000/);
+  assert.match(await s.locator('.per-user tr.owner-row').textContent(), /👑 #ffee00 \(אתה\)/);
   assert.match(t, /\$1\.23/);
   assert.doesNotMatch(t, /@/);
   // Live: who is on now, by screen and device; refreshed every 15 seconds.
@@ -144,6 +147,80 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   assert.match(t, /2נרשמו היום/);
   await page.clock.runFor(16000);
   await page.waitForSelector('text=מחוברים עכשיו: 5');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('writing to the owner: a problem goes to the server, and the answer shows in "my requests"', async () => {
+  const sentReq = [];
+  const { page, errors, db } = await open({ setup: (d) => { d.tables.feedback = [{ id: 'f0', user_id: 'u1', kind: 'idea', text: 'רשימת קניות', status: 'done', owner_note: 'בדרך!', created_at: '2026-10-30T10:00:00Z' }]; } });
+  await page.route('**/api/feedback', (r) => { sentReq.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=תקלה או הצעה? כתבו לנו');
+  const fb = page.locator('.feedback');
+  await fb.locator('.my-feedback').waitFor();
+  assert.match(await fb.locator('.my-feedback').textContent(), /תשובה: בדרך!/);
+  assert.ok(await fb.locator('button:has-text("לשלוח")').isDisabled());
+  await fb.locator('textarea[aria-label="הפנייה"]').fill('הייבוא של הפירוט נתקע');
+  await fb.locator('button:has-text("לשלוח")').click();
+  await page.waitForSelector('text=נשלח. תודה!');
+  assert.equal(sentReq.length, 1);
+  assert.equal(sentReq[0].kind, 'bug');
+  assert.equal(sentReq[0].text, 'הייבוא של הפירוט נתקע');
+  assert.ok(db);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('owner inbox: requests by label, mark as working or done, and answer', async () => {
+  const { page, errors } = await open({ email: 'yc196819@gmail.com' });
+  const patches = [];
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ id: 'f1', who: '#abc123', kind: 'bug', text: 'הייבוא נתקע', screen: 'money', device: 'טלפון', status: 'new', created_at: '2026-11-02T10:00:00Z' }] }) }));
+  await page.route('**/api/admin/feedback/f1', (r) => { patches.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  const inbox = page.locator('.admin-inbox');
+  await inbox.waitFor();
+  assert.match(await inbox.textContent(), /1 חדשות/);
+  assert.match(await inbox.textContent(), /#abc123/);
+  assert.doesNotMatch(await inbox.textContent(), /@/);
+  await inbox.locator('button.chip:has-text("בטיפול")').click();
+  await page.waitForFunction(() => /בטיפול/.test(document.querySelector('.inbox-item').textContent));
+  await inbox.locator('input[aria-label="תשובה לפנייה של #abc123"]').fill('תוקן, נסו שוב');
+  await inbox.locator('button:has-text("לענות")').click();
+  await page.waitForSelector('text=התשובה נשלחה');
+  assert.deepEqual(patches, [{ status: 'working' }, { owner_note: 'תוקן, נסו שוב', status: 'working', notify: true }]);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a wrong file is removed whole: every line it brought, after a second tap to be sure', async () => {
+  const { page, errors, db } = await open({
+    setup: (d) => {
+      d.tables.imports = [{ id: 'imp1', household_id: 'h1', file_name: 'cal-october.pdf', kind: 'pdf', rows: 2, date_from: '2026-10-01', date_to: '2026-10-20', created_at: '2026-10-28T20:00:00Z' }];
+      d.tables.transactions.push(
+        { id: 'x1', household_id: 'h1', type: 'expense', amount: 77, description: 'מהקובץ', tx_date: '2026-10-05', import_id: 'imp1', source: 'pdf' },
+        { id: 'x2', household_id: 'h1', type: 'expense', amount: 88, description: 'מהקובץ', tx_date: '2026-10-06', import_id: 'imp1', source: 'pdf' }
+      );
+    }
+  });
+  const before = db.tables.transactions.length;
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=המידע שלנו: קבצים, ייצוא ושחזור');
+  const files = page.locator('.import-files');
+  await files.locator('.file-row').waitFor();
+  assert.match(await files.textContent(), /cal-october\.pdf/);
+  assert.match(await files.textContent(), /2 תנועות/);
+  await files.locator('button[aria-label="למחוק את הקובץ cal-october.pdf"]').click();
+  assert.equal(db.tables.transactions.length, before, 'the first tap only asks');
+  await files.locator('button:has-text("בטוח? למחוק 2")').click();
+  await page.waitForSelector('text=הקובץ נמחק עם 2 התנועות שלו');
+  assert.equal(db.tables.transactions.length, before - 2);
+  assert.ok(!db.tables.transactions.some((t) => t.import_id === 'imp1'));
+  assert.ok(db.tables.imports[0].removed_at);
+  assert.equal(await files.locator('.file-row').count(), 0);
   assert.deepEqual(errors, []);
   await page.close();
 });

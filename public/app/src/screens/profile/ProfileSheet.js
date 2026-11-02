@@ -11,6 +11,7 @@ import { InstallCard } from '../../components/InstallCard.js';
 import { DeleteAccount } from './DeleteAccount.js';
 import { DataView } from './DataView.js';
 import { AdminView } from './AdminView.js';
+import { FeedbackView } from './FeedbackView.js';
 import { telemetryOn, setTelemetry } from '../../lib/telemetry.js';
 import { CONFIG } from '../../config.js';
 
@@ -26,6 +27,9 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
   if (view === 'data') {
     return html`<${Sheet} title="המידע שלנו" onClose=${onClose}><${DataView} hid=${hid} userId=${userId} onBack=${() => setView('main')} /><//>`;
   }
+  if (view === 'feedback') {
+    return html`<${Sheet} title="פנייה אלינו" onClose=${onClose}><${FeedbackView} userId=${userId} onBack=${() => setView('main')} /><//>`;
+  }
   if (view === 'admin') {
     return html`<${Sheet} title="לוח בעלים" onClose=${onClose}><${AdminView} onBack=${() => setView('main')} /><//>`;
   }
@@ -40,7 +44,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
       </div>
       <label class="check toggle-row">
         <span style="flex:1;display:flex;flex-direction:column"><b>היועץ והצעות AI</b>
-          <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, נשלח סיכום של המספרים (לא שמות בתי עסק מלאים או פרטי חשבון). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>
+          <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, היועץ מקבל את המספרים שלכם, שמות בתי העסק והתנועות האחרונות, כדי לענות על המקרה שלכם (לא מספרי חשבון או כרטיס). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>
         <input type="checkbox" role="switch" checked=${aiOn} onChange=${(e) => setAiEnabled(e.target.checked)} aria-label="היועץ והצעות AI" />
       </label>
       ${aiOn && html`<label class="check toggle-row">
@@ -56,8 +60,9 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
       <${InstallCard} always=${true} />
       ${hid && html`<${PushToggle} userId=${userId} hid=${hid} />`}
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}>🧠 מה היועץ יודע עלינו</button>`}
-      ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('data')}>📦 ייצוא המידע ונמחקו לאחרונה</button>`}
+      ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('data')}>📦 המידע שלנו: קבצים, ייצוא ושחזור</button>`}
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
+      <button type="button" class="btn btn-ghost" onClick=${() => setView('feedback')}>💬 תקלה או הצעה? כתבו לנו</button>
       ${isAdmin && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('admin')}>📊 לוח בעלים</button>`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
       <a class="btn btn-ghost" href="/old/" style="text-decoration:none">לגרסה הקודמת של האפליקציה</a>
