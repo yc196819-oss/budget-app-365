@@ -534,3 +534,7 @@ body.chat-open { overflow: hidden; }
 .news-term { gap: 8px; border: 1px dashed var(--line); }
 .quiz-opt.right { border-color: var(--income); background: var(--income-tint); }
 .quiz-opt.wrong { border-color: var(--danger); background: var(--danger-tint); }
+
+/* The way out when loading takes too long (rescue.js). */
+.rescue { position: fixed; inset-inline: 16px; bottom: 24px; z-index: 50; display: flex; flex-direction: column; gap: 10px; text-align: center; animation: none; }
+.rescue b { color: var(--text); font-size: 17px; }
