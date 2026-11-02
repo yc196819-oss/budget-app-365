@@ -16,7 +16,7 @@ async function open(width = 390, db = makeFakeDb()) {
   await mockSupabase(page, db, calls);
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/home');
-  await page.waitForSelector('.hero, .empty');
+  await page.waitForSelector('.hero, .empty, .setup-guide');
   return { page, db, calls, errors };
 }
 
@@ -89,12 +89,14 @@ test('attention: an over-budget category and a suspected double charge, each wit
   await page.close();
 });
 
-test('a household with no transactions gets one clear way in: upload a statement', async () => {
+test('a household with no transactions gets the setup guide, opened at the statement', async () => {
   const db = makeFakeDb();
   db.tables.transactions = [];
   const { page, errors } = await open(390, db);
-  assert.match(await page.locator('.empty').textContent(), /עוד אין תנועות/);
-  await page.click('.empty >> text=העלאת פירוט כרטיס');
+  const guide = page.locator('.setup-guide');
+  assert.match(await guide.textContent(), /בואו נסדר לכם את התמונה/);
+  assert.match(await guide.locator('.guide-step.open').textContent(), /מעלים פירוט של 3 חודשים/);
+  await guide.locator('text=להעלות פירוט').click();
   assert.equal(await page.locator('.sheet h2').textContent(), 'העלאת פירוט כרטיס');
   assert.deepEqual(errors, []);
   await page.close();

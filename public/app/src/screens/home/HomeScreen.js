@@ -15,10 +15,13 @@ import { PlanSheets, usePlanSheet } from '../plans/PlanSheets.js';
 import { InstallCard } from '../../components/InstallCard.js';
 import { TripFound } from '../trips/TripFound.js';
 import { useTrips } from '../../data/useTrips.js';
+import { SetupGuide } from './SetupGuide.js';
+import { ImportNotice } from './ImportNotice.js';
+import { SortSheet } from '../money/SortSheet.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
 // what needs attention (one action each) and what is coming up.
-export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
+export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
   // One sheet at a time: { kind: 'hero' } | { kind: 'tx', id } | null
   const [sheet, setSheet] = useState(null);
   // The holiday plan and the quarterly check-in have their own sheets.
@@ -38,20 +41,17 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
   const items = attention({ txs: data.txs, categories: data.categories, budgets: data.budgets, cards: data.cards, today, plan });
   const top = topCategories(data.txs, data.categories, data.budgets, today);
 
+  const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} />`;
   if (!data.txs.length) {
     return html`<div class="stack">
-      <div class="card empty">
-        <b style="font-size:19px;color:var(--text)">עוד אין תנועות</b>
-        <span style="max-width:320px;line-height:1.55">הדרך הכי מהירה: להעלות את הפירוט של 3 החודשים האחרונים מהאתר של חברת האשראי. לוקח דקה.</span>
-        <button type="button" class="btn" style="width:100%;max-width:320px" onClick=${onImport}>העלאת פירוט כרטיס</button>
-        <button type="button" class="btn btn-ghost" style="width:100%;max-width:320px" onClick=${onAdd}>הוספת הוצאה ידנית</button>
-      </div>
+      ${guide}
       <${InstallCard} />
     </div>`;
   }
 
   const act = (a) => {
     if (a.to === 'import') onImport();
+    else if (a.to === 'sort') { planSheet.close(); setSheet({ kind: 'sort' }); }
     else if (a.to === 'tx') { planSheet.close(); setSheet({ kind: 'tx', id: a.id }); }
     else if (a.to === 'money-cats') location.hash = '#/money/cats';
     else location.hash = '#/' + a.to;
@@ -60,6 +60,8 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
 
   return html`<div class="stack home">
     <div class="home-main stack">
+      <${ImportNotice} data=${data} onImport=${onImport} />
+      ${guide}
       <${Hero} plan=${plan} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
       <${InstallCard} />
       <${TripFound} data=${data} trips=${trips} />
@@ -73,6 +75,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, userId }) {
       <${Upcoming} items=${soon} />
     </div>
     <${PlanSheets} data=${data} sheet=${planSheet.value} onClose=${planSheet.close} />
+    ${sheet && sheet.kind === 'sort' && html`<${SortSheet} data=${data} onClose=${() => setSheet(null)} />`}
     ${sheet && sheet.kind === 'hero' && html`<${HeroSheet} plan=${plan} onClose=${() => setSheet(null)} />`}
     ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
   </div>`;

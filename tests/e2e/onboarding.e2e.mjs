@@ -90,7 +90,8 @@ test('a new household in five steps: everything is created in the shared tables'
   assert.equal(t.invites[0].household_id, hid);
 
   await page.click('text=להיכנס לאפליקציה');
-  await page.waitForSelector('text=עוד אין תנועות');
+  // A new household lands on the setup guide, at its first step.
+  await page.waitForSelector('.setup-guide >> text=בואו נסדר לכם את התמונה');
   // The AI switch from step 5 is applied.
   assert.equal(await page.evaluate(() => localStorage.getItem('ai:off')), '1');
   assert.deepEqual(errors, []);

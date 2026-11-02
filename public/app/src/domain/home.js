@@ -221,7 +221,7 @@ export function attention({ txs, categories, budgets, cards, today, plan, limit 
 
   const loose = txs.filter((t) => !t.category_id && monthShare(t, mo) > 0);
   if (loose.length) {
-    items.push({ kind: 'loose', tone: 'accent', title: loose.length === 1 ? 'תנועה אחת בלי קטגוריה' : loose.length + ' תנועות בלי קטגוריה', detail: 'בלי קטגוריה הן לא נספרות בתקציב של אף קטגוריה.', action: { label: 'לסווג', to: 'tx', id: loose[0].id } });
+    items.push({ kind: 'loose', tone: 'accent', title: loose.length === 1 ? 'תנועה אחת בלי קטגוריה' : loose.length + ' תנועות בלי קטגוריה', detail: 'בלי קטגוריה הן לא נספרות בתקציב של אף קטגוריה.', action: loose.length === 1 ? { label: 'לסווג', to: 'tx', id: loose[0].id } : { label: 'לסווג את כולן', to: 'sort' } });
   }
   return items.slice(0, limit);
 }
