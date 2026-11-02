@@ -1,6 +1,6 @@
 import { html } from '../../lib/html.js';
 import { Loading } from '../../components/Loading.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Segmented } from '../../components/Segmented.js';
 import { routeView } from '../../domain/routes.js';
 import { ComingMonths } from './ComingMonths.js';
@@ -15,6 +15,12 @@ const VIEWS = [{ key: 'months', label: 'החודשים הקרובים' }, { key:
 export function PlansScreen({ data }) {
   const [view, setView] = useState(() => (VIEWS.some((v) => v.key === routeView(location.hash)) ? routeView(location.hash) : 'months'));
   const sheet = usePlanSheet();
+  // #/plans/checkin (the weekly check-in notification) opens the check-in.
+  useEffect(() => {
+    if (routeView(location.hash) !== 'checkin') return;
+    history.replaceState(null, '', location.pathname + '#/plans');
+    sheet.open({ kind: 'checkin' });
+  }, []);
   const trips = useTrips(data.hid);
 
   if (data.status === 'loading' || data.status === 'idle') return html`<${Loading} label="טוען…" />`;

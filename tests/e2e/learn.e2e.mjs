@@ -30,8 +30,9 @@ function setup(db) {
   return db;
 }
 
-async function open({ proposals = PROPOSALS, learnStatus = 200 } = {}) {
+async function open({ proposals = PROPOSALS, learnStatus = 200, manual = false } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  if (manual) await page.addInitScript(() => localStorage.setItem('learn:manual', '1'));
   const db = setup(makeFakeDb());
   const errors = collectErrors(page);
   const sent = [];
@@ -101,8 +102,8 @@ test('when there is nothing new, it says so; when the server fails, it can be re
   await b.page.close();
 });
 
-test('after telling the advisor an amount, it offers to save what it learned; "not now" hides it for those messages', async () => {
-  const { page } = await open();
+test('asking first (switched in the profile): after an amount it offers to save what it learned; "not now" hides it for those messages', async () => {
+  const { page } = await open({ manual: true });
   await page.fill('input[aria-label="שאלה ליועץ"]', 'המשכורת שלי עלתה ל-12,500');
   await page.click('.adv-compose button[type="submit"]');
   await page.waitForSelector('.learn-offer');
@@ -118,6 +119,37 @@ test('after telling the advisor an amount, it offers to save what it learned; "n
   await page.waitForSelector('.learn-offer');
   await page.click('.learn-offer button:has-text("לבדוק מה למדתי")');
   await page.waitForSelector('.learn-item');
+  await page.close();
+});
+
+test('by default the advisor updates the data from the conversation by itself, says what changed, and each change can be undone', async () => {
+  const { page, db, errors, sent } = await open();
+  const carBefore = db.tables.category_budgets.find((b) => b.category_id === 'car').monthly_amount;
+  await page.fill('input[aria-label="שאלה ליועץ"]', 'החלטנו: רכב 700 בחודש, ויש לנו כבר 15,000 בקרן החירום');
+  await page.click('.adv-compose button[type="submit"]');
+  const note = page.locator('.learn-auto');
+  await note.waitFor();
+  const text = await note.textContent();
+  assert.match(text, /עדכנתי לפי השיחה/);
+  assert.match(text, /תקציב רכב: ₪700 \(היה ₪900\)/);
+  assert.match(text, /יעד חדש: חופשה ביוון/);
+  assert.match(text, /יעד קרן חירום: נחסך ₪15,000/);
+  assert.match(text, /זוכר: לא נוגעים בקרן החירום/);
+  assert.doesNotMatch(text, /חיות מחמד|לא לוקחים הלוואות/, 'unknown category and known memory are dropped');
+  assert.equal(sent.length, 1);
+  // Saved where they belong, without asking.
+  assert.equal(db.tables.category_budgets.find((b) => b.category_id === 'car').monthly_amount, 700);
+  assert.ok(db.tables.goals.some((g) => g.name === 'חופשה ביוון'));
+  assert.equal(db.tables.goals.find((g) => g.id === 'g1').saved_amount, 15000);
+  // Undo one: the budget goes back; the rest stays.
+  await note.locator('.learn-auto-row', { hasText: 'תקציב רכב' }).locator('button:has-text("ביטול")').click();
+  await note.locator('.learn-auto-row', { hasText: 'תקציב רכב' }).locator('text=בוטל').waitFor();
+  assert.equal(db.tables.category_budgets.find((b) => b.category_id === 'car').monthly_amount, carBefore);
+  await note.locator('.learn-auto-row', { hasText: 'יעד חדש' }).locator('button:has-text("ביטול")').click();
+  await note.locator('.learn-auto-row', { hasText: 'יעד חדש' }).locator('text=בוטל').waitFor();
+  assert.ok(!db.tables.goals.some((g) => g.name === 'חופשה ביוון'));
+  assert.equal(db.tables.goals.find((g) => g.id === 'g1').saved_amount, 15000);
+  assert.deepEqual(errors, []);
   await page.close();
 });
 

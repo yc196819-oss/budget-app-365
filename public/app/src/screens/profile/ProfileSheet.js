@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
-import { setAiEnabled } from '../../lib/settings.js';
+import { setAiEnabled, autoLearn, setAutoLearn } from '../../lib/settings.js';
 import { useAiSetting } from '../advisor/useAiSetting.js';
 import { InviteButton } from '../../components/InviteButton.js';
 import { useState } from 'preact/hooks';
@@ -18,6 +18,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
   const aiOn = useAiSetting();
   const [view, setView] = useState('main');
   const [usage, setUsage] = useState(telemetryOn);
+  const [learnAuto, setLearnAuto] = useState(autoLearn);
   const isAdmin = CONFIG.adminEmails.includes(String(profile.email || '').toLowerCase());
   if (view === 'memories') {
     return html`<${Sheet} title="מה היועץ יודע עלינו" onClose=${onClose}><${MemoriesView} hid=${hid} userId=${userId} onBack=${() => setView('main')} /><//>`;
@@ -42,6 +43,11 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
           <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, נשלח סיכום של המספרים (לא שמות בתי עסק מלאים או פרטי חשבון). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>
         <input type="checkbox" role="switch" checked=${aiOn} onChange=${(e) => setAiEnabled(e.target.checked)} aria-label="היועץ והצעות AI" />
       </label>
+      ${aiOn && html`<label class="check toggle-row">
+        <span style="flex:1;display:flex;flex-direction:column"><b>היועץ מעדכן לבד מהשיחות</b>
+          <span class="muted" style="font-size:12px;line-height:1.5">${learnAuto ? 'כשמספרים לו על יעד, תקציב, הכנסה או החלטה, הוא מעדכן את הנתונים ומראה מה שינה, עם אפשרות לבטל.' : 'הוא שואל לפני כל עדכון.'}</span></span>
+        <input type="checkbox" role="switch" checked=${learnAuto} onChange=${(e) => { setAutoLearn(e.target.checked); setLearnAuto(e.target.checked); }} aria-label="היועץ מעדכן לבד מהשיחות" />
+      </label>`}
       <label class="check toggle-row">
         <span style="flex:1;display:flex;flex-direction:column"><b>עזרה בשיפור האפליקציה</b>
           <span class="muted" style="font-size:12px;line-height:1.5">שולח דיווח כשמשהו נשבר, ואילו פעולות נעשו (למשל "נוספה הוצאה"). בלי סכומים, שמות או מה שכתבתם.</span></span>
