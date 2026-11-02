@@ -33,6 +33,8 @@ test('the hero shows what is left of this month\'s budget, computed from the dat
   await page.waitForSelector('.sheet');
   assert.equal(await page.locator('.sheet h2').textContent(), 'החודש במספרים');
   assert.match(await page.locator('.sheet').textContent(), /צפוי בסוף החודש/);
+  // Escape is heard once the sheet has taken focus (its effect runs after paint).
+  await page.waitForFunction(() => document.activeElement && document.activeElement.closest('.sheet'));
   await page.keyboard.press('Escape');
   // The sheet closes on the next render; wait for it rather than racing it.
   await page.waitForFunction(() => !document.querySelector('.sheet'), null, { timeout: 3000 });

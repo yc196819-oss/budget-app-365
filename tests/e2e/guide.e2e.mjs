@@ -47,8 +47,8 @@ test('the guide resumes at the first step not done, and saving the income ticks 
   assert.deepEqual(db.tables.households[0].income_expectations, [{ label: 'הכנסה חודשית נטו', amount: 18000 }]);
   // Skips are remembered after reopening the app.
   await page.reload();
-  await page.waitForSelector('.setup-guide');
-  assert.doesNotMatch(await page.locator('.setup-guide .guide-step.open').textContent(), /מסווגים|כמה נכנס/);
+  // The app opens with the data kept on the device, then refreshes: wait for the fresh one.
+  await page.waitForFunction(() => { const el = document.querySelector('.setup-guide .guide-step.open'); return el && !/מסווגים|כמה נכנס/.test(el.textContent); }, null, { timeout: 10000 });
   assert.deepEqual(errors, []);
   await page.close();
 });
