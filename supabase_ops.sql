@@ -83,3 +83,19 @@ begin
 end $$;
 revoke execute on function public.restore_from_bin(bigint) from public, anon;
 grant execute on function public.restore_from_bin(bigint) to authenticated;
+
+-- Applied 2026-11-02 (ops_ai_calls): every AI call, numbers only.
+create table if not exists public.ai_calls (
+  id bigserial primary key,
+  user_id uuid,
+  route text,
+  provider text not null,
+  model text,
+  input_tokens integer not null default 0,
+  output_tokens integer not null default 0,
+  at timestamptz not null default now()
+);
+create index if not exists ai_calls_at_idx on public.ai_calls (at desc);
+create index if not exists ai_calls_user_idx on public.ai_calls (user_id, at desc);
+alter table public.ai_calls enable row level security;
+revoke all on public.ai_calls from anon, authenticated;
