@@ -140,6 +140,8 @@ create table if not exists public.imports (
 alter table public.imports enable row level security;
 create policy imports_household on public.imports for all to authenticated
   using (household_id in (select public.my_households())) with check (household_id in (select public.my_households()));
+-- Applied 2026-11-02 (imports_title): a name of the person's own for a file.
+alter table public.imports add column if not exists title text check (title is null or char_length(title) <= 80);
 alter table public.transactions add column if not exists import_id uuid references public.imports(id) on update cascade on delete set null;
 
 create table if not exists public.feedback (

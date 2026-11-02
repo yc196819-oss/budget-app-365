@@ -28,7 +28,7 @@ export function FeedbackView({ userId, onBack }) {
   return html`<div class="stack feedback">
     <button type="button" class="btn-text" style="align-self:flex-start" onClick=${onBack}>→ חזרה</button>
     <form class="card stack" onSubmit=${send}>
-      <b>כתבו לנו</b>
+      <b>תקלות ורעיונות לשיפור</b>
       <span class="muted" style="font-size:13px;line-height:1.55">משהו לא עובד? יש לכם רעיון? זה מגיע ישר אלינו, ואנחנו קוראים כל פנייה.</span>
       <div class="chips" role="radiogroup" aria-label="סוג הפנייה">${Object.entries(FEEDBACK_KIND).map(([k, v]) => html`<button type="button" role="radio" class="chip" aria-checked=${String(kind === k)} aria-pressed=${String(kind === k)} onClick=${() => setKind(k)}>${v.icon} ${v.label}</button>`)}</div>
       <textarea class="input" rows="5" maxlength="2000" aria-label="הפנייה" value=${text} onInput=${(e) => setText(e.target.value)}

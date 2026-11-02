@@ -287,10 +287,19 @@ async function startImport(rows, { fileName, kind }) {
 
 // The files uploaded to this household, newest first (not the removed ones).
 export async function listImports() {
-  const { data, error } = await sb.from('imports').select('id,file_name,kind,rows,date_from,date_to,created_at,created_by')
+  const { data, error } = await sb.from('imports').select('id,file_name,title,kind,rows,date_from,date_to,created_at,created_by')
     .eq('household_id', state.hid).is('removed_at', null).order('created_at', { ascending: false }).limit(100);
   if (error) throw error;
   return data || [];
+}
+
+// A name of the person's own for an uploaded file ("the October card"); the
+// original file name stays as it was. An empty name goes back to the original.
+export async function renameImport(id, title) {
+  const t = String(title || '').trim().slice(0, 80) || null;
+  const { error } = await sb.from('imports').update({ title: t }).eq('id', id).eq('household_id', state.hid);
+  if (error) throw error;
+  return t;
 }
 
 // Removes every line that came from one file (into the recycle bin, so it
