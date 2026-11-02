@@ -56,3 +56,49 @@ test('reads the expiry of a token without trusting it', () => {
   assert.equal(tokenExp(b({ alg: 'x' }) + '.' + b({ exp: 123 }) + '.sig'), 123);
   assert.equal(tokenExp('garbage'), null);
 });
+
+const { aiCallRow, costOf, alias, perUser } = require('../server/ops');
+
+test('an AI call is kept as numbers only: who, which route and model, tokens', () => {
+  assert.deepEqual(aiCallRow({ userId: 'u1', route: 'POST /api/ai/import', provider: 'claude', model: 'claude-haiku-5-5', inputTokens: 1200.4, outputTokens: -3 }),
+    { user_id: 'u1', route: 'POST /api/ai/import', provider: 'claude', model: 'claude-haiku-5-5', input_tokens: 1200, output_tokens: 0 });
+  assert.equal(aiCallRow({ provider: 'gemini' }).user_id, null);
+});
+
+test('cost per model: Haiku for files, Sonnet for the advisor; an unknown model counts at the Sonnet price', () => {
+  assert.equal(costOf({ model: 'claude-haiku-5-5', input_tokens: 1e6, output_tokens: 1e6 }), 0.6);
+  assert.equal(costOf({ model: 'claude-sonnet-5', input_tokens: 1e6, output_tokens: 1e6 }), 12);
+  assert.equal(costOf({ provider: 'gemini', model: 'gemini-2.5-flash', input_tokens: 1e6, output_tokens: 0 }), 0.3);
+  assert.equal(costOf({ model: 'mystery', input_tokens: 1e6, output_tokens: 0 }), 2);
+});
+
+test('activity per person: a label instead of who they are, counts and AI cost for 30 days, busiest first', () => {
+  const now = new Date('2026-11-02T12:00:00Z');
+  const ago = (d) => new Date(now.getTime() - d * 86400000).toISOString();
+  const out = perUser({
+    now, salt: 's',
+    users: [{ id: 'u1', created_at: '2026-10-28T19:00:00Z' }, { id: 'u2', created_at: '2026-10-29T07:00:00Z' }, { id: 'u3', created_at: '2026-10-30T07:00:00Z' }],
+    events: [
+      { user_id: 'u1', name: 'app_open', at: ago(1) }, { user_id: 'u1', name: 'import_done', at: ago(1) }, { user_id: 'u1', name: 'import_fail', at: ago(2) },
+      { user_id: 'u1', name: 'advisor_ask', at: ago(0.5) }, { user_id: 'u2', name: 'app_open', at: ago(3) }, { user_id: 'u2', name: 'tx_add', at: ago(40) }
+    ],
+    calls: [
+      { user_id: 'u1', provider: 'claude', model: 'claude-sonnet-5', input_tokens: 4000, output_tokens: 1000, at: ago(0.5) },
+      { user_id: 'u1', provider: 'claude', model: 'claude-haiku-5-5', input_tokens: 20000, output_tokens: 16000, at: ago(1) },
+      { user_id: null, provider: 'claude', model: 'claude-sonnet-5', input_tokens: 1e5, output_tokens: 0, at: ago(1) },
+      { user_id: 'u2', provider: 'gemini', model: 'x', input_tokens: 1, output_tokens: 1, at: ago(45) }
+    ]
+  });
+  const [a, b, c] = out.users;
+  assert.equal(a.who, alias('u1', 's'));
+  assert.match(a.who, /^#[0-9a-f]{6}$/);
+  assert.ok(!JSON.stringify(out).includes('u1'), 'no ids in the answer');
+  assert.deepEqual({ ...a, who: undefined }, { who: undefined, id: undefined, joined: '2026-10-28', lastSeen: ago(0.5).slice(0, 10), opens: 1, added: 0, imports: 1, importFails: 1, asked: 1, aiCalls: 2, tokens: 41000, cost: 0.028 });
+  assert.equal(b.opens, 1);
+  assert.equal(b.added, 0, 'older than 30 days');
+  assert.equal(b.aiCalls, 0);
+  assert.equal(c.lastSeen, null, 'signed up, never came back');
+  assert.equal(out.systemCost30d, 0.2);
+  assert.equal(out.aiCost30d, 0.23);
+  assert.notEqual(alias('u1', 's'), alias('u1', 'other'), 'the label depends on a secret salt');
+});

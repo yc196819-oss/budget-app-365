@@ -113,7 +113,9 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
   await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
     active: { day: 3, week: 11, month: 25 }, retention: { started: 10, cameBack: 6, pct: 60 }, members: 31,
-    use: [{ name: 'tx_add', count: 120 }], errors: { week: 2, top: [{ message: 'boom', count: 2, path: '#/home' }] }
+    use: [{ name: 'tx_add', count: 120 }], errors: { week: 2, top: [{ message: 'boom', count: 2, path: '#/home' }] },
+    signedUp: 40, aiCost30d: 1.23, systemCost30d: 0.2,
+    users: [{ who: '#a1b2c3', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31 }]
   }) }));
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
@@ -123,6 +125,12 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   assert.match(t, /60%/);
   assert.match(t, /הוספת תנועה/);
   assert.match(t, /boom/);
+  // Per person: a label and counts, never a name or an email.
+  const row = await s.locator('.per-user tbody tr').first().textContent();
+  assert.match(row, /#a1b2c3/);
+  assert.match(row, /51,000/);
+  assert.match(t, /\$1\.23/);
+  assert.doesNotMatch(t, /@/);
   assert.deepEqual(errors, []);
   await page.close();
 });

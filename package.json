@@ -17,11 +17,11 @@
     "@supabase/supabase-js": "^2.55.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
-    "express": "^5.2.1",
+    "express": "^5.3.0",
     "express-rate-limit": "^7.4.1",
-    "googleapis": "^173.0.0",
+    "googleapis": "^189.0.0",
     "htm": "^3.1.1",
-    "nodemailer": "^6.10.1",
+    "nodemailer": "^10.3.1",
     "pdfjs-dist": "4.10.38",
     "preact": "^10.29.8",
     "web-push": "^3.6.7"
@@ -29,5 +29,8 @@
   "devDependencies": {
     "axe-core": "^4.10.3",
     "playwright": "^1.56.1"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

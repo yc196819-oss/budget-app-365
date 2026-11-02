@@ -20,6 +20,7 @@ const legal = require('./server/legal');
 const news = require('./server/news');
 const limits = require('./server/limits');
 const ops = require('./server/ops');
+const { AsyncLocalStorage } = require('node:async_hooks');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -79,6 +80,17 @@ app.use(express.json({ limit: '2mb' }));
 // AI requests: long text is cut before any prompt is built, and past a daily
 // cap for the whole service the AI is not called until tomorrow (server/limits.js).
 const aiDay = limits.dailyCap();
+// Every AI call is counted per person (tokens and model, never what was
+// said): the request it came from is kept for the calls it makes.
+const aiCtx = new AsyncLocalStorage();
+app.use('/api', (req, _res, next) => aiCtx.run({ req }, next));
+function recordAi(provider, model, inputTokens, outputTokens) {
+  if (!supabaseAdmin) return;
+  const store = aiCtx.getStore();
+  const req = store && store.req;
+  const row = ops.aiCallRow({ userId: req && req.authUserId, route: req ? req.method + ' ' + String(req.originalUrl || req.url).split('?')[0] : 'system', provider, model, inputTokens, outputTokens });
+  supabaseAdmin.from('ai_calls').insert(row).then(() => {}, () => {});
+}
 app.use('/api/ai', (req, res, next) => {
   if (req.method !== 'POST') return next();
   req.body = limits.clipBody(req.body, { statement: req.path === '/import' });
@@ -337,6 +349,7 @@ async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium',
     err.status = 500;
     throw err;
   }
+  recordAi('claude', model, data.usage && data.usage.input_tokens, data.usage && data.usage.output_tokens);
   return {
     provider: 'claude',
     model,
@@ -376,6 +389,8 @@ async function callGemini({ prompt, text, fileData, mimeType, json = false }) {
     throw new Error(data.error?.message || 'Gemini provider error');
   }
 
+  const um = data.usageMetadata || {};
+  recordAi('gemini', GEMINI_MODEL, um.promptTokenCount, (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0));
   return {
     provider: 'gemini',
     model: GEMINI_MODEL,
@@ -422,6 +437,7 @@ async function callGrok({ prompt, text, fileData, mimeType }) {
     throw new Error(data.error?.message || 'Grok provider error');
   }
 
+  recordAi('grok', GROK_MODEL, data.usage && data.usage.prompt_tokens, data.usage && data.usage.completion_tokens);
   return {
     provider: 'grok',
     model: GROK_MODEL,
@@ -1199,6 +1215,7 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
       if (r.ok && r.body) {
         const decoder = new TextDecoder();
         let buf = '';
+        let tokensIn = 0, tokensOut = 0;
         for await (const chunk of r.body) {
           buf += decoder.decode(chunk, { stream: true });
           let i;
@@ -1209,9 +1226,12 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
             try {
               const d = JSON.parse(line.slice(6));
               if (d.type === 'content_block_delta' && d.delta && d.delta.type === 'text_delta') send({ delta: d.delta.text });
+              else if (d.type === 'message_start' && d.message && d.message.usage) tokensIn = d.message.usage.input_tokens || 0;
+              else if (d.type === 'message_delta' && d.usage) tokensOut = d.usage.output_tokens || 0;
             } catch (_e) { /* ignore keep-alives */ }
           }
         }
+        recordAi('claude', ANTHROPIC_MODEL, tokensIn, tokensOut);
         send({ done: true, provider: 'claude' });
         return res.end();
       }
@@ -1578,6 +1598,7 @@ app.post('/api/alerts/run', async (req, res) => {
     await supabaseAdmin.from('recycle_bin').delete().lt('removed_at', ago(30)).then(() => {}, () => {});
     await supabaseAdmin.from('app_events').delete().lt('at', ago(180)).then(() => {}, () => {});
     await supabaseAdmin.from('app_errors').delete().lt('at', ago(180)).then(() => {}, () => {});
+    await supabaseAdmin.from('ai_calls').delete().lt('at', ago(180)).then(() => {}, () => {});
     const { data: hhs } = await supabaseAdmin.from('memberships').select('household_id');
     const ids = [...new Set((hhs || []).map((m) => m.household_id))];
     let created = 0;
@@ -1847,18 +1868,26 @@ process.on('unhandledRejection', (err) => { console.error('unhandledRejection:',
 // The owner's numbers (ADMIN_EMAILS): active people, who came back, what is
 // used, and the week's failures.
 const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || 'budgetapp2852@gmail.com').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+// Salt for the per-person labels, so they cannot be matched to ids elsewhere.
+const ADMIN_SALT = process.env.ADMIN_SALT || VAPID_PRIVATE_KEY || 'budget';
 app.get('/api/admin/stats', requireAuth, async (req, res) => {
   try {
     let email = req.authEmail;
     if (!email) { const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId); email = data?.user?.email || ''; }
     if (!ADMIN_EMAILS.includes(String(email).toLowerCase())) return res.status(403).json({ error: 'not allowed' });
     const since = new Date(Date.now() - 60 * 86400000).toISOString();
-    const [ev, er, users] = await Promise.all([
+    const month = new Date(Date.now() - 30 * 86400000).toISOString();
+    const [ev, er, users, calls, people] = await Promise.all([
       supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).order('at', { ascending: false }).limit(50000),
       supabaseAdmin.from('app_errors').select('message,path,at,source').gte('at', new Date(Date.now() - 7 * 86400000).toISOString()).order('at', { ascending: false }).limit(2000),
-      supabaseAdmin.from('memberships').select('user_id', { count: 'exact', head: true })
+      supabaseAdmin.from('memberships').select('user_id', { count: 'exact', head: true }),
+      supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', month).limit(100000),
+      // Ids and sign-up dates only: no emails or names reach the dashboard.
+      supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     ]);
-    return res.json({ ...ops.stats({ events: ev.data || [], errors: er.data || [] }), members: users.count || 0 });
+    const signedUp = ((people.data && people.data.users) || []).map((u) => ({ id: u.id, created_at: u.created_at }));
+    const per = ops.perUser({ users: signedUp, events: ev.data || [], calls: calls.data || [], salt: ADMIN_SALT });
+    return res.json({ ...ops.stats({ events: ev.data || [], errors: er.data || [] }), members: users.count || 0, signedUp: signedUp.length, ...per });
   } catch (err) {
     console.error('admin stats failed:', err.message);
     return res.status(500).json({ error: 'failed' });

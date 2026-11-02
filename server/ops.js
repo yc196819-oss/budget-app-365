@@ -76,4 +76,69 @@ function tokenExp(token) {
   try { return JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString()).exp || null; } catch (_e) { return null; }
 }
 
-module.exports = { EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp };
+// ── AI use per person: what each call cost, never what was said ──
+
+// $ per million tokens (input, output). Unknown models count at the
+// Sonnet price, so a cost is never under-reported.
+const PRICES = {
+  'claude-haiku-5-5': [0.10, 0.50],
+  'claude-sonnet-5': [2, 10],
+  'claude-sonnet-5-5': [2, 10],
+  'claude-opus-5-5': [4, 20],
+  gemini: [0.30, 2.50],
+  grok: [0.20, 0.50]
+};
+function costOf(c) {
+  const p = PRICES[c.model] || PRICES[c.provider] || PRICES['claude-sonnet-5'];
+  return ((Number(c.input_tokens) || 0) * p[0] + (Number(c.output_tokens) || 0) * p[1]) / 1e6;
+}
+
+const int = (v) => Math.max(0, Math.round(Number(v) || 0));
+function aiCallRow({ userId = null, route = 'system', provider, model = null, inputTokens, outputTokens }) {
+  return { user_id: userId || null, route: text(route, 80), provider: text(provider, 20), model: text(model, 60) || null, input_tokens: int(inputTokens), output_tokens: int(outputTokens) };
+}
+
+// A stable label for a person that is not their email or id: the owner sees
+// how each one uses the app, not who they are or what they wrote.
+function alias(userId, salt = '') {
+  return '#' + require('crypto').createHash('sha256').update(salt + ':' + userId).digest('hex').slice(0, 6);
+}
+
+// One row per person, last 30 days: when they joined and were last seen,
+// how often they open the app, add, import, ask the advisor; AI calls,
+// tokens and estimated cost. Busiest first.
+function perUser({ users = [], events = [], calls = [], now = new Date(), salt = '' }) {
+  const since = now.getTime() - 30 * DAY;
+  const rows = new Map();
+  const row = (id) => {
+    if (!rows.has(id)) rows.set(id, { id, joined: null, lastSeen: null, opens: 0, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, tokens: 0, cost: 0 });
+    return rows.get(id);
+  };
+  for (const u of users) row(u.id).joined = u.created_at ? String(u.created_at).slice(0, 10) : null;
+  for (const e of events) {
+    if (!e.user_id || new Date(e.at).getTime() < since) continue;
+    const r = row(e.user_id);
+    if (!r.lastSeen || e.at > r.lastSeen) r.lastSeen = e.at;
+    if (e.name === 'app_open') r.opens++;
+    else if (e.name === 'tx_add') r.added++;
+    else if (e.name === 'import_done') r.imports++;
+    else if (e.name === 'import_fail') r.importFails++;
+    else if (e.name === 'advisor_ask' || e.name === 'advisor_talk') r.asked++;
+  }
+  let systemCost = 0;
+  for (const c of calls) {
+    if (new Date(c.at).getTime() < since) continue;
+    if (!c.user_id) { systemCost += costOf(c); continue; }
+    const r = row(c.user_id);
+    r.aiCalls++;
+    r.tokens += int(c.input_tokens) + int(c.output_tokens);
+    r.cost += costOf(c);
+  }
+  const list = [...rows.values()]
+    .map((r) => ({ ...r, id: undefined, who: alias(r.id, salt), lastSeen: r.lastSeen ? String(r.lastSeen).slice(0, 10) : null, cost: Math.round(r.cost * 1000) / 1000 }))
+    .sort((a, b) => b.aiCalls - a.aiCalls || b.opens - a.opens);
+  const total = list.reduce((s, r) => s + r.cost, 0) + systemCost;
+  return { users: list, aiCost30d: Math.round(total * 100) / 100, systemCost30d: Math.round(systemCost * 100) / 100 };
+}
+
+module.exports = { EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser };
