@@ -114,7 +114,7 @@ export function Shell({ tab, session }) {
             <button type="button" class="icon-btn only-mobile" aria-label="פרופיל והגדרות" onClick=${() => setOverlay('profile')}>${profile.initials}</button>
           </div>
         </header>
-        ${session.household ? html`<${Screen} key=${tab} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} onLearn=${() => setOverlay('learn')} userId=${session.user.id} />`
+        ${session.household ? html`<${Screen} key=${tab} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} onLearn=${() => setOverlay('learn')} onAsk=${() => (desktop ? document.querySelector('.rail input[aria-label="שאלה ליועץ"]')?.focus() : setOverlay('advisor'))} userId=${session.user.id} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
       ${desktop && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} />`}

@@ -104,3 +104,18 @@ export async function readStatement(file, { categories, history, today = new Dat
   onStep('dupes');
   return { items: prepare(items, history), via };
 }
+
+// Suggestions for lines already saved without a category: one line per
+// merchant group goes to the AI, in groups of 80. Returns { [groupKey]: cat }.
+export async function suggestCategories(groups, categories) {
+  const out = {};
+  const parts = [];
+  for (let i = 0; i < groups.length; i += MERCHANTS_PER_CALL) parts.push(groups.slice(i, i + MERCHANTS_PER_CALL));
+  await inParts(parts, 2, async (part) => {
+    const sent = part.map((g) => ({ description: g.description, amount: g.amount, type: g.type, key: g.key }));
+    const answers = await aiImport({ prompt: categorizePrompt(categories), text: categorizeText(sent) });
+    const filled = applyAiCategories(sent, sent, answers, categories);
+    for (const f of filled) if (f.category_id) out[f.key] = { category_id: f.category_id, subcategory_id: f.subcategory_id || null };
+  });
+  return out;
+}

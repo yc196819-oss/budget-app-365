@@ -53,8 +53,13 @@ export async function loadMemories(hid) {
 }
 
 // Streams the answer from our server; onDelta gets each piece of text.
+// The first question asked on this device, for the setup guide.
+export const askedKey = 'guide:asked';
+function markAsked() { try { localStorage.setItem(askedKey, '1'); } catch (_e) { /* private mode */ } }
+
 export async function streamReply(payload, onDelta, signal) {
   track('advisor_ask');
+  markAsked();
   const { data } = await sb.auth.getSession();
   const token = data?.session?.access_token;
   if (!token) throw new Error('not signed in');
