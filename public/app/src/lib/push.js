@@ -9,7 +9,21 @@ import { CONFIG } from '../config.js';
 // new version arrives in the background, offer to switch to it.
 export function registerWorker(onUpdate) {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  const reg = navigator.serviceWorker.register('/sw.js').catch(() => null);
+  // A new version of the app took over (the worker activates at once): load
+  // it now. Without this, a phone that keeps the app alive in the background
+  // stays on the old version for days.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return; // the first install, not an update
+    reloading = true;
+    location.reload();
+  });
+  // Coming back to the app (from the background): check for a new version.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') reg.then((r) => r && r.update()).catch(() => {});
+  });
   navigator.serviceWorker.addEventListener('message', (e) => {
     if (e.data && e.data.type === 'app-updated' && onUpdate) onUpdate();
     if (e.data && e.data.type === 'open') openInApp(e.data.url);

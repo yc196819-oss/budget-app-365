@@ -65,3 +65,28 @@ test('signing out removes the data kept on the device', async () => {
   assert.equal(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('cache:')).length), 0);
   await page.close();
 });
+
+test('a new version reaches an app that stays open: the page loads it by itself, without closing the app', async () => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 900 } });
+  const page = await context.newPage();
+  await mockSupabase(page, makeFakeDb());
+  await signIn(page, server.base);
+  await page.waitForSelector('.hero');
+  await page.waitForFunction(() => navigator.serviceWorker.controller);
+  await page.evaluate(() => { window.__sameLoad = true; });
+  // A deploy: the worker file changes on the server (put back right after).
+  const fs = await import('node:fs');
+  const file = new URL('../../public/sw.js', import.meta.url);
+  const original = fs.readFileSync(file, 'utf8');
+  try {
+    fs.writeFileSync(file, original.replace(/budget-app-v\d+/, 'budget-app-vNEXT'));
+    // The person comes back to the app from the background.
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.waitForFunction(() => !window.__sameLoad, null, { timeout: 15000 });
+  } finally {
+    fs.writeFileSync(file, original);
+  }
+  await page.waitForSelector('.hero');
+  assert.ok(await page.evaluate(async () => (await caches.keys()).includes('budget-app-vNEXT')), 'running on the new version');
+  await context.close();
+});
