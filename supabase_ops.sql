@@ -161,3 +161,23 @@ create policy feedback_read_own on public.feedback for select to authenticated u
 create table if not exists public.reengage_sent (user_id uuid primary key, sent_at timestamptz not null default now());
 alter table public.reengage_sent enable row level security;
 revoke all on public.reengage_sent from anon, authenticated;
+
+-- Applied 2026-11-02 (mail_campaigns): the one-time emails from the dashboard,
+-- one per step of getting started (start / first / more); each person gets
+-- each one once. ops_tx_span: lines and months per household, for the server only.
+create table if not exists public.mail_sent (
+  user_id uuid not null,
+  campaign text not null check (campaign in ('start', 'first', 'more')),
+  sent_at timestamptz not null default now(),
+  primary key (user_id, campaign)
+);
+alter table public.mail_sent enable row level security;
+revoke all on public.mail_sent from anon, authenticated;
+create or replace function public.ops_tx_span()
+returns table (household_id uuid, n bigint, months bigint)
+language sql stable security definer set search_path = public as $$
+  select t.household_id, count(*), count(distinct date_trunc('month', t.tx_date))
+  from public.transactions t group by t.household_id
+$$;
+revoke execute on function public.ops_tx_span() from public, anon, authenticated;
+grant execute on function public.ops_tx_span() to service_role;

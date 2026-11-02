@@ -260,29 +260,61 @@ test('an uploaded file gets a name of its own, and the original file name stays 
   await page.close();
 });
 
-test('the invitation back: shown before it is sent, and sent only after a second tap', async () => {
+test('emails to users: one per step, read before sending, a test to yourself, and sent only after a second tap', async () => {
   const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
-  let posts = 0;
+  const posts = [];
   await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
   await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
   await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  const mail = (subject) => ({ subject, text: 'היי,\nקובי', html: '' });
   await page.route('**/api/admin/reengage', (r) => {
-    if (r.request().method() === 'POST') { posts++; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"sent":13,"failed":0}' }); }
-    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ count: 13, preview: { subject: 'נשארו לך 2 דקות להתחיל', text: 'היי,\nקובי' } }) });
+    if (r.request().method() === 'POST') {
+      const body = JSON.parse(r.request().postData() || '{}');
+      posts.push(body);
+      if (body.test) return r.fulfill({ status: 200, contentType: 'application/json', body: '{"test":true,"to":"budgetapp2852@gmail.com"}' });
+      return r.fulfill({ status: 200, contentType: 'application/json', body: '{"sent":7,"failed":0}' });
+    }
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: true }, campaigns: [
+      { id: 'start', title: 'נרשמו ולא פתחו משק בית', count: 14, preview: mail('נשארו לך 2 דקות להתחיל') },
+      { id: 'first', title: 'פתחו משק בית ולא העלו פירוט', count: 12, preview: mail('עוד צעד אחד, ורואים לאן הכסף הולך') },
+      { id: 'more', title: 'העלו פירוט, פחות מ-6 חודשים', count: 7, preview: mail('טיפ קטן שיעשה את התקציב הרבה יותר מדויק') }
+    ] }) });
   });
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
   const card = page.locator('.admin-reengage');
   await card.waitFor();
-  assert.match(await card.textContent(), /13/);
-  await card.locator('summary').click();
-  assert.match(await card.textContent(), /נשארו לך 2 דקות להתחיל/);
-  await card.locator('button:has-text("לשלוח ל-13")').click();
-  assert.equal(posts, 0, 'the first tap only asks');
-  await card.locator('button:has-text("בטוח? לשלוח עכשיו ל-13")').click();
-  await page.waitForSelector('text=נשלחו 13 מיילים');
-  assert.equal(posts, 1);
-  assert.match(await card.textContent(), /אין כרגע למי לשלוח/);
+  assert.equal(await card.locator('.campaign').count(), 3);
+  const more = card.locator('.campaign-more');
+  await more.locator('summary').click();
+  assert.match(await more.textContent(), /טיפ קטן שיעשה את התקציב/);
+  await more.locator('button:has-text("ניסיון אליי")').click();
+  await page.waitForSelector('text=נשלח ניסיון אל budgetapp2852@gmail.com');
+  assert.deepEqual(posts, [{ campaign: 'more', test: true }]);
+  await more.locator('button:has-text("לשלוח ל-7")').click();
+  assert.equal(posts.length, 1, 'the first tap only asks');
+  await more.locator('button:has-text("בטוח? לשלוח עכשיו ל-7")').click();
+  await page.waitForSelector('text=נשלחו 7 מיילים');
+  assert.deepEqual(posts[1], { campaign: 'more', test: false });
+  assert.match(await more.textContent(), /אין כרגע למי לשלוח/);
+  assert.match(await card.locator('.campaign-start').textContent(), /14/, 'the other emails stay as they were');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('emails to users: when the server cannot email people yet, the dashboard says so and only a test can be sent', async () => {
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: false, resendTestOnly: true }, campaigns: [{ id: 'more', title: 'העלו פירוט, פחות מ-6 חודשים', count: 7, preview: { subject: 'טיפ', text: 'היי' } }] }) }));
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  const card = page.locator('.admin-reengage');
+  await card.waitFor();
+  assert.match(await card.locator('.mail-not-ready').textContent(), /עוד לא מוגדר לשלוח מיילים/);
+  assert.equal(await card.locator('button:has-text("לשלוח ל-7")').count(), 0);
+  assert.equal(await card.locator('button:has-text("ניסיון אליי")').count(), 1);
   assert.deepEqual(errors, []);
   await page.close();
 });

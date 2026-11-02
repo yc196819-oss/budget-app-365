@@ -150,7 +150,7 @@ test("the owner's own accounts are marked, so they are not taken for users", () 
   assert.ok(!JSON.stringify(out).includes('"me"'));
 });
 
-const { reengageList, reengageMail } = require('../server/ops');
+const { reengageList, reengageMail, campaignList, campaignMail, mailReady } = require('../server/ops');
 
 test('one invitation back: signed up 2+ days ago, confirmed, no household, never invited, not the owner', () => {
   const now = new Date('2026-11-02T12:00:00Z');
@@ -165,4 +165,33 @@ test('one invitation back: signed up 2+ days ago, confirmed, no household, never
   assert.equal(m.subject, 'נשארו לך 2 דקות להתחיל');
   assert.match(m.text, /https:\/\/app\.example\/app\//);
   assert.match(m.html, /הסר/);
+});
+
+test('each email goes to the people at its step of getting started, once each', () => {
+  const now = new Date('2026-11-02T12:00:00Z');
+  const u = (id, o = {}) => ({ id, email: id + '@x.com', email_confirmed_at: '2026-10-01', created_at: '2026-10-28T10:00:00Z', ...o });
+  const args = {
+    now, owners: ['boss@x.com'],
+    users: [u('none'), u('empty'), u('few'), u('lots'), u('boss'), u('fresh', { created_at: '2026-11-02T08:00:00Z' }), u('gotit')],
+    members: [{ user_id: 'empty', household_id: 'h1' }, { user_id: 'few', household_id: 'h2' }, { user_id: 'lots', household_id: 'h3' }, { user_id: 'boss', household_id: 'h2' }, { user_id: 'gotit', household_id: 'h2' }, { user_id: 'fresh', household_id: 'h1' }],
+    spans: [{ household_id: 'h2', n: '40', months: '2' }, { household_id: 'h3', n: '500', months: '12' }],
+    sent: [{ user_id: 'gotit', campaign: 'more' }, { user_id: 'none', campaign: 'more' }]
+  };
+  assert.deepEqual(campaignList('start', args).map((x) => x.id), ['none']);
+  assert.deepEqual(campaignList('first', args).map((x) => x.id), ['empty'], 'opened a household, nothing uploaded');
+  assert.deepEqual(campaignList('more', args).map((x) => x.id), ['few'], 'less than 6 months; the owner, the one already sent, and 12 months are left out');
+  assert.equal(campaignList('nope', args).length, 0);
+  const m = campaignMail('more', 'https://app.example/app/');
+  assert.match(m.subject, /טיפ/);
+  assert.match(m.text, /3 עד 6 חודשים/);
+  assert.match(m.html, /להוסיף עוד חודשים/);
+  assert.match(m.html, /הסר/);
+  assert.equal(campaignMail('nope', 'x'), null);
+});
+
+test('mail is ready with SMTP or a Resend sender of your own, not with Resend\'s test address', () => {
+  assert.equal(mailReady({}).ready, false);
+  assert.equal(mailReady({ smtp: true }).ready, true);
+  assert.deepEqual(mailReady({ resendKey: 'k', resendFrom: 'Budget App <onboarding@resend.dev>' }), { ready: false, smtp: false, resend: false, resendTestOnly: true });
+  assert.equal(mailReady({ resendKey: 'k', resendFrom: 'קובי <hi@budget.co.il>' }).ready, true);
 });
