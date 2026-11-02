@@ -223,6 +223,26 @@ export async function saveRow(table, row) {
   return data;
 }
 
+// A category of the household's own: top level (with its kind) or under a
+// parent. Shows everywhere at once.
+export async function addCategory({ name, kind = 'expense', parentId = null, icon = null }) {
+  const parent = parentId ? state.categories.find((c) => c.id === parentId) : null;
+  const row = { household_id: state.hid, name, icon: icon || null, parent_id: parentId || null, kind: parent ? parent.kind || 'expense' : kind };
+  const { data, error } = await sb.from('categories').insert(row).select('id,name,icon,kind,parent_id').single();
+  if (error) throw error;
+  state.categories = [...state.categories, data];
+  emit();
+  return data;
+}
+export async function renameCategory(id, { name, icon }) {
+  const patch = { name, ...(icon !== undefined ? { icon: icon || null } : {}) };
+  const { data, error } = await sb.from('categories').update(patch).eq('id', id).eq('household_id', state.hid).select('id,name,icon,kind,parent_id').single();
+  if (error) throw error;
+  state.categories = state.categories.map((c) => (c.id === id ? data : c));
+  emit();
+  return data;
+}
+
 // The monthly net income the household expects (households.income_expectations,
 // the lines the previous app edits). The approved total becomes one line,
 // keeping its name when there was a single line.

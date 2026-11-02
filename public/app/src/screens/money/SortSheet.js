@@ -7,6 +7,7 @@ import { suggestCategories } from '../../data/importer.js';
 import { setCategory, restoreCategories } from '../../data/household.js';
 import { useAiSetting } from '../advisor/useAiSetting.js';
 import { showToast } from '../../lib/toast.js';
+import { NewCategory } from '../../components/NewCategory.js';
 
 // Everything still without a category, one line per merchant: the advisor
 // suggests, the person checks and saves all at once (with undo).
@@ -57,6 +58,7 @@ export function SortSheet({ data, onClose }) {
           ${roots(g.type).map((r) => [html`<option value=${r.id}>${r.name}</option>`, ...kids(r.id).map((c) => html`<option value=${c.id}>— ${c.name}</option>`)])}
         </select>
       </div>`)}</div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span class="faint" style="font-size:13px">חסרה קטגוריה ברשימה? מוסיפים, והיא מופיעה בבחירה.</span><${NewCategory} categories=${data.categories} kind="expense" /></div>
       <button type="button" class="btn" disabled=${!chosen.length || saving} onClick=${save}>${saving ? 'שומר…' : chosen.length ? 'לשמור ' + chosen.length + ' בתי עסק' : 'בחרו קטגוריה כדי לשמור'}</button>
     </div>`}
   <//>`;

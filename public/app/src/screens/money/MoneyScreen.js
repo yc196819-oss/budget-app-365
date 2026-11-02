@@ -8,6 +8,7 @@ import { CategoriesView } from './CategoriesView.js';
 import { ReportView } from './ReportView.js';
 import { TxSheet } from './TxSheet.js';
 import { CategorySheet } from './CategorySheet.js';
+import { ManageCategories } from './ManageCategories.js';
 import { monthsBack } from '../../domain/money.js';
 import { routeView } from '../../domain/routes.js';
 
@@ -38,9 +39,10 @@ export function MoneyScreen({ data, onAdd, onImport }) {
     <${PeriodBar} months=${months} period=${period} index=${index} onPeriod=${setPeriod} onIndex=${pickIndex} txs=${data.txs} />
     <${Segmented} variant="tabs" label="תצוגה" value=${view} onChange=${setView} options=${VIEWS} />
     ${view === 'list' && html`<${ListView} txs=${data.txs} months=${months} period=${period} index=${index} categoriesById=${categoriesById} onOpen=${openTx} onAdd=${onAdd} onImport=${onImport} />`}
-    ${view === 'cats' && html`<${CategoriesView} ...${common} onOpenCategory=${(id) => setSheet({ kind: 'cat', id })} />`}
+    ${view === 'cats' && html`<${CategoriesView} ...${common} onOpenCategory=${(id) => setSheet({ kind: 'cat', id })} onManage=${() => setSheet({ kind: 'manage' })} />`}
     ${view === 'report' && html`<${ReportView} ...${common} />`}
     ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
+    ${sheet && sheet.kind === 'manage' && html`<${ManageCategories} categories=${data.categories} onClose=${() => setSheet(null)} />`}
     ${sheet && sheet.kind === 'cat' && html`<${CategorySheet} categoryId=${sheet.id} ...${common} months=${months} onOpenTx=${openTx} onClose=${() => setSheet(null)} />`}
   </div>`;
 }
