@@ -2,6 +2,12 @@ import { useEffect, useState } from 'preact/hooks';
 import { sb } from '../lib/supabase.js';
 import { clearSensitiveLocal, readCache, writeCache } from '../lib/storage.js';
 
+// A slow or stalled connection (mobile data, a sign-in being renewed) must
+// never leave the app on "loading" for good: past this, it says so and offers
+// to try again.
+export const START_TIMEOUT_MS = 10000;
+const timeout = (promise, ms) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), ms))]);
+
 // Session + the household the user belongs to. The session is shared with
 // the current app (same origin, same Supabase storage key), so whoever is
 // logged in there is logged in here too.
@@ -20,22 +26,34 @@ export function useSession() {
       // once, and the check below confirms or corrects it.
       const cached = readCache('member:' + user.id);
       if (cached && alive) setState({ loading: false, user, household: cached.data });
-      const { data, error } = await sb.from('memberships')
-        .select('household_id,display_name,role')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: true })
-        .limit(1);
+      let res;
+      try {
+        res = await timeout(sb.from('memberships')
+          .select('household_id,display_name,role')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true })
+          .limit(1), START_TIMEOUT_MS);
+      } catch (_err) { res = { error: true }; }
       if (!alive) return;
+      const { data, error } = res.timedOut ? { error: true } : res;
       // A failed check (weak connection) must not look like "no household".
       if (error) { if (!cached) setState({ loading: false, user, household: null, offline: true }); return; }
       const household = data && data[0] ? data[0] : null;
       if (household) writeCache('member:' + user.id, household);
       setState({ loading: false, user, household });
     };
-    sb.auth.getSession().then(({ data }) => load(data.session));
+    // The stored sign-in: if reading or renewing it stalls or fails, the app
+    // still moves on (to "could not connect", or to the sign-in screen).
+    timeout(sb.auth.getSession(), START_TIMEOUT_MS).then((res) => {
+      if (!alive) return;
+      if (res.timedOut) { setState((s) => (s.loading ? { loading: false, user: null, household: null, stalled: true } : s)); return; }
+      load(res.data && res.data.session);
+    }, () => { if (alive) setState((s) => (s.loading ? { loading: false, user: null, household: null } : s)); });
+    // Supabase asks not to call it from inside this callback (it can lock up
+    // the sign-in), so the household check runs right after it instead.
     const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') setRecovery(true);
-      load(session);
+      setTimeout(() => load(session), 0);
     });
     return () => { alive = false; sub.subscription.unsubscribe(); };
   }, [tick]);

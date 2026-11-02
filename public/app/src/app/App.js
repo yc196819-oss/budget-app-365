@@ -25,6 +25,11 @@ export function App() {
   const tab = useRoute();
   const session = useSession();
   if (session.loading) return html`<div class="boot" role="status">טוען…</div>`;
+  if (session.stalled) {
+    return html`<main class="login"><div class="card empty" role="alert"><b style="color:var(--text)">החיבור איטי מדי כרגע</b>
+      <span>לא הצלחנו לבדוק את הכניסה שלכם. בדקו את האינטרנט ונסו שוב. הנתונים שלכם שמורים.</span>
+      <button type="button" class="btn" onClick=${() => location.reload()}>לנסות שוב</button></div></main>`;
+  }
   if (!session.user) return html`<${LoginScreen} />`;
   if (session.recovery) return html`<${NewPassword} onDone=${session.doneRecovery} />`;
   // The terms of use and privacy policy, confirmed once per version.
