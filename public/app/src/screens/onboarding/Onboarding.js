@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { createHousehold } from '../../data/onboarding.js';
-import { track } from '../../lib/telemetry.js';
+import { track, setScreen } from '../../lib/telemetry.js';
 import { firstPicture } from '../../domain/onboarding.js';
 import { setAiEnabled } from '../../lib/settings.js';
 import { StepWho, StepLife, StepCards, StepMoney, StepPrivacy } from './Steps.js';
@@ -14,6 +14,7 @@ const INITIAL = { name: '', mode: 'together', partner: '', life: { car: true, su
 // A new user: welcome, five short steps, then a summary with what to do first.
 // Every step after the first can be skipped; everything can be changed later.
 export function Onboarding({ session }) {
+  setScreen('onboarding');
   const meta = session.user.user_metadata || {};
   const [stage, setStage] = useState('welcome'); // welcome | setup | saving | done
   const [step, setStep] = useState(1);

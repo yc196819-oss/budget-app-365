@@ -99,3 +99,30 @@ create index if not exists ai_calls_at_idx on public.ai_calls (at desc);
 create index if not exists ai_calls_user_idx on public.ai_calls (user_id, at desc);
 alter table public.ai_calls enable row level security;
 revoke all on public.ai_calls from anon, authenticated;
+
+-- Applied 2026-11-02 (ops_funnel): sign-up to real use, counts only; the
+-- service role (owner dashboard) is the only caller.
+create or replace function public.ops_funnel(p_since timestamptz)
+returns jsonb language sql security definer set search_path = public as $$
+  with u as (
+    select id, created_at from auth.users where created_at >= p_since
+  ), m as (
+    select distinct on (user_id) user_id, household_id from public.memberships order by user_id, created_at
+  ), x as (
+    select u.id, u.created_at, m.household_id,
+      exists (select 1 from public.transactions t where t.household_id = m.household_id) as has_tx,
+      exists (select 1 from public.transactions t where t.household_id = m.household_id and t.source is distinct from 'manual') as has_import,
+      exists (select 1 from public.app_events e where e.user_id = u.id and e.at > u.created_at + interval '7 days') as came_back
+    from u left join m on m.user_id = u.id
+  )
+  select jsonb_build_object(
+    'signups', count(*),
+    'household', count(household_id),
+    'tx', count(*) filter (where has_tx),
+    'import', count(*) filter (where has_import),
+    'cameBack', count(*) filter (where came_back),
+    'oldEnough', count(*) filter (where created_at < now() - interval '7 days'),
+    'byDay', coalesce((select jsonb_object_agg(d, n) from (select to_char(created_at at time zone 'Asia/Jerusalem', 'YYYY-MM-DD') d, count(*) n from u group by 1) s), '{}'::jsonb)
+  ) from x;
+$$;
+revoke execute on function public.ops_funnel(timestamptz) from public, anon, authenticated;

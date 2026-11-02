@@ -1857,6 +1857,19 @@ app.post('/api/telemetry', telemetryLimiter, async (req, res) => {
   } catch (err) { console.error('telemetry failed:', err.message); }
   return res.status(204).end();
 });
+// "Still here": once a minute from each open app, for the owner's live count.
+const presence = ops.presenceStore();
+const presenceLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.ip });
+app.post('/api/presence', presenceLimiter, async (req, res) => {
+  const b = req.body || {};
+  const key = String(b.v || '').slice(0, 40);
+  if (/^[\w-]{8,40}$/.test(key)) {
+    const userId = await optionalUser(req).catch(() => null);
+    presence.beat({ key, userId, screen: String(b.screen || ''), device: b.device, installed: b.installed });
+  }
+  return res.status(204).end();
+});
+
 // Failures on the server are kept too.
 async function reportServerError(err, path) {
   try {
@@ -1872,9 +1885,11 @@ const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || 'budgetapp2852@gmail.com
 const ADMIN_SALT = process.env.ADMIN_SALT || VAPID_PRIVATE_KEY || 'budget';
 app.get('/api/admin/stats', requireAuth, async (req, res) => {
   try {
-    let email = req.authEmail;
-    if (!email) { const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId); email = data?.user?.email || ''; }
-    if (!ADMIN_EMAILS.includes(String(email).toLowerCase())) return res.status(403).json({ error: 'not allowed' });
+    // Asked of the auth server each time (not the session memory): the
+    // official account only, with its email confirmed.
+    const { data: who } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
+    const u = who && who.user;
+    if (!u || !u.email_confirmed_at || !ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())) return res.status(403).json({ error: 'not allowed' });
     const since = new Date(Date.now() - 60 * 86400000).toISOString();
     const month = new Date(Date.now() - 30 * 86400000).toISOString();
     const [ev, er, users, calls, people] = await Promise.all([
@@ -1887,11 +1902,23 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     ]);
     const signedUp = ((people.data && people.data.users) || []).map((u) => ({ id: u.id, created_at: u.created_at }));
     const per = ops.perUser({ users: signedUp, events: ev.data || [], calls: calls.data || [], salt: ADMIN_SALT });
-    return res.json({ ...ops.stats({ events: ev.data || [], errors: er.data || [] }), members: users.count || 0, signedUp: signedUp.length, ...per });
+    const { data: funnel } = await supabaseAdmin.rpc('ops_funnel', { p_since: month });
+    return res.json({
+      ...ops.stats({ events: ev.data || [], errors: er.data || [] }), members: users.count || 0, signedUp: signedUp.length, ...per,
+      live: presence.snapshot(), funnel: funnel || null, daily: ops.daily({ events: ev.data || [], calls: calls.data || [] })
+    });
   } catch (err) {
     console.error('admin stats failed:', err.message);
     return res.status(500).json({ error: 'failed' });
   }
+});
+
+// The live count alone, refreshed every few seconds on the dashboard.
+app.get('/api/admin/live', requireAuth, async (req, res) => {
+  const { data: who } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
+  const u = who && who.user;
+  if (!u || !u.email_confirmed_at || !ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())) return res.status(403).json({ error: 'not allowed' });
+  return res.json(presence.snapshot());
 });
 
 // ═══ stage 4: monthly report (1st of the month, cron) ═══
