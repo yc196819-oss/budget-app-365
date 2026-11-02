@@ -49,6 +49,14 @@ export async function adminStats() {
   try { return await api('/api/admin/stats'); } catch (_e) { return null; }
 }
 
+// The one invitation back to people who stopped before the end of sign-up.
+export async function adminReengage() {
+  try { return await api('/api/admin/reengage'); } catch (_e) { return null; }
+}
+export function sendReengage() {
+  return api('/api/admin/reengage', { method: 'POST', body: {} });
+}
+
 export async function adminLive() {
   try { return await api('/api/admin/live'); } catch (_e) { return null; }
 }

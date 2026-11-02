@@ -1,0 +1,58 @@
+name: move the database (one time)
+
+# Copies the whole database (tables, functions, policies, data, and the
+# users with their passwords and Google sign-ins) from OLD_DB_URL to
+# NEW_DB_URL. Run by hand, once, on the night of the move. Nothing is
+# printed or uploaded: the dump lives only on the runner. Then it counts
+# the rows of every table on both sides.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type MOVE to copy the old database into the new one'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    if: github.event.inputs.confirm == 'MOVE'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client > /dev/null
+      - name: Dump the old database
+        env:
+          OLD_DB_URL: ${{ secrets.OLD_DB_URL }}
+        run: |
+          set -euo pipefail
+          supabase db dump --db-url "$OLD_DB_URL" -f roles.sql --role-only > /dev/null
+          supabase db dump --db-url "$OLD_DB_URL" -f schema.sql > /dev/null
+          supabase db dump --db-url "$OLD_DB_URL" -f data.sql --use-copy --data-only > /dev/null
+          echo "sizes: $(wc -c < roles.sql) $(wc -c < schema.sql) $(wc -c < data.sql) bytes"
+      - name: Restore into the new database
+        env:
+          NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
+        run: |
+          set -euo pipefail
+          psql --single-transaction --variable ON_ERROR_STOP=1 --quiet \
+            --file roles.sql --file schema.sql \
+            --command 'SET session_replication_role = replica' \
+            --file data.sql --dbname "$NEW_DB_URL" > /dev/null
+          echo "restored"
+      - name: Compare row counts
+        env:
+          OLD_DB_URL: ${{ secrets.OLD_DB_URL }}
+          NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
+        run: |
+          set -euo pipefail
+          q="select 'auth.users', count(*) from auth.users union all select 'auth.identities', count(*) from auth.identities union all select format('%I', table_name), (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', table_name), false, true, '')))[1]::text::bigint from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by 1"
+          psql "$OLD_DB_URL" -At -F ' ' -c "$q" > old.txt
+          psql "$NEW_DB_URL" -At -F ' ' -c "$q" > new.txt
+          if diff old.txt new.txt; then echo "every table has the same number of rows ($(wc -l < old.txt) tables)"; else echo "::error::row counts differ"; exit 1; fi
+          rm -f roles.sql schema.sql data.sql

@@ -1,0 +1,55 @@
+name: nightly backup
+
+# A full copy of the database every night (the free plan has no backups):
+# dumped, encrypted with BACKUP_PASSPHRASE (AES-256), kept as a workflow
+# artifact for 30 days. The repository is public, so nothing leaves the
+# runner unencrypted, and nothing is printed to the log.
+# Needs two repository secrets: DB_URL (the session pooler connection
+# string) and BACKUP_PASSPHRASE (a long passphrase kept somewhere safe).
+# Restore: download the artifact, then
+#   gpg --decrypt backup.tar.gz.gpg | tar xz && psql "$NEW_DB_URL" -f roles.sql -f schema.sql -c 'SET session_replication_role = replica' -f data.sql
+on:
+  schedule:
+    - cron: '17 1 * * *'   # 03:17 / 04:17 in Israel
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check the secrets are set
+        id: ready
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then echo "::notice::No backup yet: set the DB_URL and BACKUP_PASSPHRASE secrets"; echo "ok=no" >> "$GITHUB_OUTPUT"; else echo "ok=yes" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.ready.outputs.ok == 'yes'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Dump and encrypt
+        if: steps.ready.outputs.ok == 'yes'
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          mkdir -p out && cd out
+          supabase db dump --db-url "$DB_URL" -f roles.sql --role-only > /dev/null
+          supabase db dump --db-url "$DB_URL" -f schema.sql > /dev/null
+          supabase db dump --db-url "$DB_URL" -f data.sql --use-copy --data-only > /dev/null
+          echo "sizes: $(wc -c < roles.sql) $(wc -c < schema.sql) $(wc -c < data.sql) bytes"
+          tar czf - roles.sql schema.sql data.sql | gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" --symmetric --cipher-algo AES256 -o ../backup.tar.gz.gpg
+          cd .. && rm -rf out
+      - if: steps.ready.outputs.ok == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_id }}
+          path: backup.tar.gz.gpg
+          retention-days: 30
+          if-no-files-found: error

@@ -154,3 +154,8 @@ create table if not exists public.feedback (
 alter table public.feedback enable row level security;
 create policy feedback_insert_own on public.feedback for insert to authenticated with check (user_id = (select auth.uid()));
 create policy feedback_read_own on public.feedback for select to authenticated using (user_id = (select auth.uid()));
+
+-- Applied 2026-11-02 (reengage_sent): who already got the one invitation back.
+create table if not exists public.reengage_sent (user_id uuid primary key, sent_at timestamptz not null default now());
+alter table public.reengage_sent enable row level security;
+revoke all on public.reengage_sent from anon, authenticated;
