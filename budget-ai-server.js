@@ -1933,39 +1933,59 @@ app.get('/api/admin/live', requireAuth, async (req, res) => {
   return res.json(presence.snapshot());
 });
 
-// ═══ one invitation back (the owner presses send, after reading it) ═══
-async function reengageTargets() {
-  const [{ data: people }, { data: members }, { data: sent }] = await Promise.all([
+// ═══ one-time emails from the dashboard (the owner reads, then sends) ═══
+async function campaignData() {
+  const [{ data: people }, { data: members }, { data: spans }, { data: sent }, { data: oldSent }] = await Promise.all([
     supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-    supabaseAdmin.from('memberships').select('user_id'),
+    supabaseAdmin.from('memberships').select('user_id,household_id,created_at').order('created_at', { ascending: true }),
+    supabaseAdmin.rpc('ops_tx_span'),
+    supabaseAdmin.from('mail_sent').select('user_id,campaign'),
     supabaseAdmin.from('reengage_sent').select('user_id')
   ]);
-  return ops.reengageList({ users: (people && people.users) || [], members: members || [], sent: sent || [], owners: ADMIN_EMAILS });
+  // A person's first household, as the app opens it.
+  const first = new Map();
+  for (const m of members || []) if (!first.has(m.user_id)) first.set(m.user_id, m);
+  return {
+    users: (people && people.users) || [], members: [...first.values()], spans: spans || [],
+    sent: [...(sent || []), ...(oldSent || []).map((r) => ({ user_id: r.user_id, campaign: 'start' }))], owners: ADMIN_EMAILS
+  };
 }
 const appLinkOf = (req) => (process.env.PUBLIC_URL || (req.protocol + '://' + req.get('host'))).replace(/\/$/, '') + '/app/';
+const mailStatus = () => ops.mailReady({ resendKey: RESEND_API_KEY, resendFrom: RESEND_FROM, smtp: !!mailer });
 app.get('/api/admin/reengage', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   try {
-    const list = await reengageTargets();
-    return res.json({ count: list.length, preview: ops.reengageMail(appLinkOf(req)) });
+    const d = await campaignData();
+    const link = appLinkOf(req);
+    const campaigns = ops.CAMPAIGNS.map((id) => ({ id, title: ops.campaignTitle(id), count: ops.campaignList(id, d).length, preview: ops.campaignMail(id, link) }));
+    return res.json({ campaigns, mail: mailStatus() });
   } catch (err) { return res.status(500).json({ error: 'failed' }); }
 });
 app.post('/api/admin/reengage', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  const campaign = ops.CAMPAIGNS.includes(req.body && req.body.campaign) ? req.body.campaign : 'start';
+  const mail = ops.campaignMail(campaign, appLinkOf(req));
   try {
-    const list = await reengageTargets();
-    const mail = ops.reengageMail(appLinkOf(req));
+    // A test goes only to the owner's own address, and marks no one.
+    if (req.body && req.body.test) {
+      const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
+      const to = data && data.user && data.user.email;
+      if (!to) return res.status(400).json({ error: 'no email' });
+      try { const r = await sendMailWithFallback({ to, ...mail, subject: '[ניסיון] ' + mail.subject }); return res.json({ test: true, to, provider: r && r.provider }); } catch (err) { return res.status(502).json({ error: 'המייל לא נשלח: ' + String(err.message || err).slice(0, 200) }); }
+    }
+    if (!mailStatus().ready) return res.status(503).json({ error: 'השרת עוד לא מוגדר לשלוח מיילים למשתמשים.' });
+    const list = ops.campaignList(campaign, await campaignData());
     let sent = 0, failed = 0;
     for (const u of list) {
-      // Marked first: a person is never written to twice, even if this is pressed again.
-      const { error } = await supabaseAdmin.from('reengage_sent').insert({ user_id: u.id });
+      // Marked first: a person never gets the same email twice, even if this is pressed again.
+      const { error } = await supabaseAdmin.from('mail_sent').insert({ user_id: u.id, campaign });
       if (error) continue;
       try { await sendMailWithFallback({ to: u.email, ...mail }); sent++; } catch (_e) { failed++; }
       await delay(400);
     }
     return res.json({ sent, failed });
   } catch (err) {
-    console.error('reengage failed:', err.message);
+    console.error('campaign failed:', err.message);
     return res.status(500).json({ error: 'failed' });
   }
 });

@@ -19,14 +19,23 @@ export function AdminView({ onBack }) {
   }, []);
   const [inbox, setInbox] = useState(null);
   const [back, setBack] = useState(null);
-  const [backSure, setBackSure] = useState(false);
-  const [backBusy, setBackBusy] = useState(false);
+  const [backSure, setBackSure] = useState('');
+  const [backBusy, setBackBusy] = useState('');
   useEffect(() => { adminReengage().then(setBack); }, []);
-  const sendBack = async () => {
-    if (!backSure) { setBackSure(true); return; }
-    setBackBusy(true);
-    try { const r = await sendReengage(); showToast('נשלחו ' + r.sent + ' מיילים' + (r.failed ? ', ' + r.failed + ' לא נשלחו' : '')); setBack((b) => ({ ...b, count: 0 })); } catch (_e) { showToast('השליחה נכשלה. נסו שוב.'); }
-    setBackBusy(false); setBackSure(false);
+  const sendBack = async (c) => {
+    if (backSure !== c.id) { setBackSure(c.id); return; }
+    setBackBusy(c.id);
+    try {
+      const r = await sendReengage(c.id);
+      showToast('נשלחו ' + r.sent + ' מיילים' + (r.failed ? ', ' + r.failed + ' לא נשלחו' : ''));
+      setBack((b) => ({ ...b, campaigns: b.campaigns.map((x) => (x.id === c.id ? { ...x, count: 0 } : x)) }));
+    } catch (err) { showToast(err.message || 'השליחה נכשלה. נסו שוב.'); }
+    setBackBusy(''); setBackSure('');
+  };
+  const testBack = async (c) => {
+    setBackBusy('t' + c.id);
+    try { const r = await sendReengage(c.id, { test: true }); showToast('נשלח ניסיון אל ' + r.to + '. בדקו את תיבת הדואר (וגם בספאם).'); } catch (err) { showToast(err.message || 'הניסיון לא נשלח.'); }
+    setBackBusy('');
   };
   const [replies, setReplies] = useState({});
   useEffect(() => { adminFeedback().then(setInbox); }, []);
@@ -53,13 +62,21 @@ export function AdminView({ onBack }) {
         <span class="faint" style="font-size:12px">טלפון ${live.devices.mobile} · מחשב ${live.devices.desktop} · מותקנת ${live.installed}</span>`}
       <span class="faint" style="font-size:11px">מתעדכן כל 15 שניות. נספר מי שהאפליקציה פתוחה אצלו ב-2 הדקות האחרונות.</span>
     </div>`}
-    ${back && html`<div class="card stack admin-reengage"><b>✉️ הזמנה לחזור</b>
-      <span class="muted" style="font-size:13px;line-height:1.55">${back.count ? html`<b class="num">${back.count}</b> נרשמו לפני יותר מיומיים ולא סיימו את ההרשמה. כל אחד מקבל את המייל הזה פעם אחת בלבד, ורק כשלוחצים כאן.` : 'אין כרגע למי לשלוח. כל מי שנרשם ולא סיים כבר קיבל הזמנה, או שעוד לא עברו יומיים.'}</span>
-      ${back.count > 0 && html`<details><summary style="cursor:pointer;font-size:13px">איך המייל נראה</summary>
-        <div class="card" style="font-size:13px;white-space:pre-wrap;margin-top:6px"><b>${back.preview.subject}</b>
+    ${back && back.campaigns && html`<div class="card stack admin-reengage"><b>✉️ מיילים למשתמשים</b>
+      <span class="muted" style="font-size:13px;line-height:1.55">כל מייל נשלח לכל אדם פעם אחת בלבד, ורק כשלוחצים כאן פעמיים. קודם כדאי לשלוח ניסיון לעצמכם.</span>
+      ${back.mail && !back.mail.ready && html`<span class="card mail-not-ready" role="status" style="font-size:13px;line-height:1.55;border:1px solid var(--danger)">⚠️ השרת עוד לא מוגדר לשלוח מיילים למשתמשים${back.mail.resendTestOnly ? ' (Resend מוגדר רק בכתובת הניסיון שלו, שמגיעה רק אליכם)' : ''}. אפשר לשלוח ניסיון לעצמכם, אבל לא למשתמשים.</span>`}
+      ${back.campaigns.map((c) => html`<div class=${'campaign campaign-' + c.id} key=${c.id} style="display:flex;flex-direction:column;gap:6px;padding:8px 0;border-top:1px solid var(--line)">
+        <span style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14px">${c.title}</b><b class="num">${c.count}</b></span>
+        <details><summary style="cursor:pointer;font-size:13px">איך המייל נראה</summary>
+          <div class="card" style="font-size:13px;white-space:pre-wrap;margin-top:6px"><b>${c.preview.subject}</b>
 
-${back.preview.text}</div></details>
-        <button type="button" class=${'btn' + (backSure ? '' : ' btn-ghost')} disabled=${backBusy} onClick=${sendBack}>${backBusy ? 'שולח…' : backSure ? 'בטוח? לשלוח עכשיו ל-' + back.count : 'לשלוח ל-' + back.count}</button>`}
+${c.preview.text}</div></details>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => testBack(c)}>${backBusy === 't' + c.id ? 'שולח…' : 'ניסיון אליי'}</button>
+          ${c.count > 0 && (!back.mail || back.mail.ready) && html`<button type="button" class=${'btn' + (backSure === c.id ? '' : ' btn-ghost')} style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => sendBack(c)}>${backBusy === c.id ? 'שולח…' : backSure === c.id ? 'בטוח? לשלוח עכשיו ל-' + c.count : 'לשלוח ל-' + c.count}</button>`}
+          ${c.count === 0 && html`<span class="faint" style="font-size:12px;align-self:center">אין כרגע למי לשלוח</span>`}
+        </div>
+      </div>`)}
     </div>`}
     ${inbox && html`<div class="card stack admin-inbox"><b>🛠️ תקלות ורעיונות מהמשתמשים${inbox.filter((f) => f.status === 'new').length ? ' · ' + inbox.filter((f) => f.status === 'new').length + ' חדשות' : ''}</b>
       ${inbox.length === 0 && html`<span class="muted" style="font-size:13px">עוד אין פניות.</span>`}

@@ -203,21 +203,70 @@ function feedbackPatch(body) {
 
 // ── one invitation back, to whoever signed up and stopped before the end ──
 // Signed up 2+ days ago, confirmed, no household, never invited, not the owner.
-function reengageList({ users = [], members = [], sent = [], owners = [], now = new Date() }) {
-  const inHousehold = new Set(members.map((m) => m.user_id));
-  const done = new Set(sent.map((r) => r.user_id));
-  return users.filter((u) => u.email && u.email_confirmed_at && !inHousehold.has(u.id) && !done.has(u.id) && !owners.includes(String(u.email).toLowerCase())
-    && now.getTime() - new Date(u.created_at).getTime() >= 2 * DAY);
+// One-time emails the owner sends from the dashboard, each to the people at
+// one step of getting started. A person gets each one once, ever.
+//   start: signed up, never opened a household
+//   first: opened a household, never uploaded a statement
+//   more:  uploaded, but less than 6 months of statements
+const CAMPAIGNS = ['start', 'first', 'more'];
+function campaignList(campaign, { users = [], members = [], spans = [], sent = [], owners = [], now = new Date() }) {
+  const householdOf = new Map(members.map((m) => [m.user_id, m.household_id]));
+  const span = new Map(spans.map((x) => [x.household_id, { n: Number(x.n) || 0, months: Number(x.months) || 0 }]));
+  const done = new Set(sent.filter((r) => (r.campaign || 'start') === campaign).map((r) => r.user_id));
+  return users.filter((u) => {
+    if (!u.email || !u.email_confirmed_at || done.has(u.id) || owners.includes(String(u.email).toLowerCase())) return false;
+    if (now.getTime() - new Date(u.created_at).getTime() < 2 * DAY) return false;
+    const inHousehold = householdOf.has(u.id);
+    const s = (inHousehold && span.get(householdOf.get(u.id))) || { n: 0, months: 0 };
+    if (campaign === 'start') return !inHousehold;
+    if (campaign === 'first') return inHousehold && s.n === 0;
+    if (campaign === 'more') return inHousehold && s.n > 0 && s.months < 6;
+    return false;
+  });
 }
-function reengageMail(link) {
-  const subject = 'נשארו לך 2 דקות להתחיל';
-  const text = 'היי,\nראיתי שנרשמת ל"התקציב שלנו" ולא הספקת לסיים את ההגדרה.\nזה לוקח בערך 2 דקות: כמה שאלות קצרות, מעלים פירוט אשראי, ורואים בפעם הראשונה לאן הכסף הולך.\n\nלהמשיך מאיפה שעצרתי: ' + link + '\n\nאם משהו לא עבד או לא היה ברור, פשוט תענה למייל הזה. אני קורא כל תשובה.\nקובי\n\nלא רוצה לקבל עוד מיילים? תענה "הסר".';
+// Kept for the first campaign's callers and tests.
+function reengageList(args) { return campaignList('start', args); }
+
+const MAILS = {
+  start: {
+    title: 'נרשמו ולא פתחו משק בית',
+    subject: 'נשארו לך 2 דקות להתחיל',
+    body: ['ראיתי שנרשמת ל"התקציב שלנו" ולא הספקת לסיים את ההגדרה.', 'זה לוקח בערך 2 דקות: כמה שאלות קצרות, מעלים פירוט אשראי, ורואים בפעם הראשונה לאן הכסף הולך.'],
+    button: 'להמשיך מאיפה שעצרתי'
+  },
+  first: {
+    title: 'פתחו משק בית ולא העלו פירוט',
+    subject: 'עוד צעד אחד, ורואים לאן הכסף הולך',
+    body: ['ראיתי שפתחת משק בית ב"התקציב שלנו". כל הכבוד!', 'הצעד הבא הוא גם הכי משתלם: מורידים את פירוט האשראי של החודש האחרון (PDF או אקסל) מהאתר או מהאפליקציה של חברת האשראי, ומעלים אותו ב"ייבוא". המערכת קוראת וממיינת לבד, ותוך דקה רואים לאן הלך הכסף.'],
+    button: 'להעלות פירוט ראשון'
+  },
+  more: {
+    title: 'העלו פירוט, פחות מ-6 חודשים',
+    subject: 'טיפ קטן שיעשה את התקציב הרבה יותר מדויק',
+    body: ['ראיתי שכבר העלית פירוט ל"התקציב שלנו". מעולה!', 'טיפ אחד: אם תעלה עוד 3 עד 6 חודשים אחורה, המערכת תזהה לבד הוראות קבע ומנויים, התחזית לחודשים הבאים תהיה מדויקת יותר, והיועץ יוכל להשוות בין חודשים ולהראות מה השתנה.', 'ברוב חברות האשראי אפשר להוריד פירוט של חודשים קודמים מהאתר או מהאפליקציה. אפשר להעלות כמה קבצים, אחד אחרי השני.'],
+    button: 'להוסיף עוד חודשים'
+  }
+};
+function campaignMail(campaign, link) {
+  const m = MAILS[campaign];
+  if (!m) return null;
+  const sign = 'אם משהו לא עבד או לא היה ברור, פשוט תענה למייל הזה. אני קורא כל תשובה.';
+  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + link + '\n\n' + sign + '\nקובי\n\nלא רוצה לקבל עוד מיילים? תענה "הסר".';
   const html = '<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;max-width:520px">'
-    + '<p>היי,</p><p>ראיתי שנרשמת ל"התקציב שלנו" ולא הספקת לסיים את ההגדרה.<br>זה לוקח בערך 2 דקות: כמה שאלות קצרות, מעלים פירוט אשראי, ורואים בפעם הראשונה לאן הכסף הולך.</p>'
-    + '<p><a href="' + link + '" style="display:inline-block;background:#92490A;color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:bold">להמשיך מאיפה שעצרתי</a></p>'
-    + '<p>אם משהו לא עבד או לא היה ברור, פשוט תענה למייל הזה. אני קורא כל תשובה.<br>קובי</p>'
+    + '<p>היי,</p>' + m.body.map((b) => '<p>' + b + '</p>').join('')
+    + '<p><a href="' + link + '" style="display:inline-block;background:#92490A;color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:bold">' + m.button + '</a></p>'
+    + '<p>' + sign + '<br>קובי</p>'
     + '<p style="color:#888;font-size:12px">לא רוצה לקבל עוד מיילים? תענה "הסר".</p></div>';
-  return { subject, text, html };
+  return { subject: m.subject, text, html };
+}
+function reengageMail(link) { return campaignMail('start', link); }
+const campaignTitle = (c) => (MAILS[c] ? MAILS[c].title : '');
+
+// Can the server email people? Resend's shared test address only delivers to
+// the Resend account's own email, so it does not count.
+function mailReady({ resendKey = '', resendFrom = '', smtp = false } = {}) {
+  const resend = !!resendKey && !/@resend\.dev>?\s*$/i.test(String(resendFrom));
+  return { ready: smtp || resend, smtp: !!smtp, resend, resendTestOnly: !!resendKey && !resend };
 }
 
-module.exports = { reengageList, reengageMail, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
