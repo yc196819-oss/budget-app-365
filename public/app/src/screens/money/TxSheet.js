@@ -1,5 +1,6 @@
 import { html } from '../../lib/html.js';
 import { useState } from 'preact/hooks';
+import { NewCategory } from '../../components/NewCategory.js';
 import { Sheet } from '../../components/Sheet.js';
 import { CatIcon } from '../../components/CatIcon.js';
 import { dayLabel, sameMerchantIds } from '../../domain/money.js';
@@ -19,14 +20,14 @@ export function TxSheet({ tx, txs, categories, members, onClose }) {
   const others = sameMerchantIds(tx, txs);
   const income = tx.type === 'income';
 
-  const choose = async (category_id, subcategory_id = null) => {
+  const choose = async (category_id, subcategory_id = null, created = null) => {
     if (busy) return;
     if (category_id === (tx.category_id || null) && subcategory_id === (tx.subcategory_id || null)) return;
     setBusy(true);
     const ids = applyAll && others.length ? [tx.id, ...others] : [tx.id];
     try {
       const before = await setCategory(ids, category_id, subcategory_id);
-      const name = (byId.get(subcategory_id) || byId.get(category_id) || { name: 'בלי קטגוריה' }).name;
+      const name = (created || byId.get(subcategory_id) || byId.get(category_id) || { name: 'בלי קטגוריה' }).name;
       showToast(ids.length > 1 ? 'עודכנו ' + ids.length + ' תנועות של ' + tx.description + ' ← ' + name : 'עודכן ← ' + name, {
         undo: () => restoreCategories(before).catch(() => showToast('הביטול נכשל. נסו שוב.'))
       });
@@ -58,8 +59,10 @@ export function TxSheet({ tx, txs, categories, members, onClose }) {
       <div class="chips">
         ${tops.map((c) => html`<button type="button" class="chip" aria-pressed=${String(tx.category_id === c.id)} disabled=${busy} onClick=${() => choose(c.id, null)}>${c.icon || ''} ${c.name}</button>`)}
       </div>
-      ${subs.length > 0 && html`<div class="chips">
+      <${NewCategory} categories=${categories} kind=${kind} onCreated=${(c) => choose(c.id, null, c)} />
+      ${tx.category_id && html`<div class="chips">
         ${subs.map((c) => html`<button type="button" class="chip" aria-pressed=${String(tx.subcategory_id === c.id)} disabled=${busy} onClick=${() => choose(tx.category_id, c.id)}>${c.name}</button>`)}
+        <${NewCategory} categories=${categories} kind=${kind} parentId=${tx.category_id} onCreated=${(c) => choose(tx.category_id, c.id, c)} />
       </div>`}
       ${others.length > 0 && html`<label class="check"><input type="checkbox" checked=${applyAll} onChange=${(e) => setApplyAll(e.target.checked)} />
         <span>לשנות גם ב-${others.length} התנועות האחרות של ${tx.description}</span></label>`}

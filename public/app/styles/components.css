@@ -568,3 +568,8 @@ body.chat-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .mail-job .mail-env, .mail-job .mail-trail, .mail-steps .st-dot, .mail-bar i { animation: none !important; transition: none !important; }
 }
+
+/* Adding a category of your own. */
+.chip-add { border-style: dashed; color: var(--accent); }
+.new-category { display: flex; flex-direction: column; gap: 10px; }
+.icon-pick .chip { font-size: 18px; padding: 4px 8px; min-width: 40px; }

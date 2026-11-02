@@ -148,3 +148,59 @@ test('yearly report on desktop, no errors', async () => {
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('a category of my own, right from a transaction: it is created and the transaction moves into it', async () => {
+  const { page, db, errors } = await openMoney();
+  await page.click('button[aria-label="החודש הקודם"]');
+  await page.locator('.row', { hasText: 'ארומה' }).first().click();
+  await page.waitForSelector('.sheet');
+  await page.locator('.sheet button.chip-add', { hasText: '+ קטגוריה חדשה' }).click();
+  await page.fill('.sheet input[aria-label="שם הקטגוריה"]', 'בתי קפה');
+  await page.locator('.sheet .icon-pick button', { hasText: '🍔' }).click();
+  await page.locator('.sheet .new-category button:has-text("להוסיף")').click();
+  await page.waitForSelector('.toast:has-text("עודכנו")');
+  const cat = db.tables.categories.find((c) => c.name === 'בתי קפה');
+  assert.ok(cat, 'saved');
+  assert.equal(cat.icon, '🍔');
+  assert.equal(cat.kind, 'expense');
+  assert.equal(cat.household_id, 'h1');
+  assert.ok(db.tables.transactions.filter((t) => t.description === 'ארומה').every((t) => t.category_id === cat.id), 'the transaction (and its merchant) moved in');
+  // The same name again picks the one that exists, instead of a twin.
+  await page.locator('.sheet button.chip-add', { hasText: '+ קטגוריה חדשה' }).click();
+  await page.fill('.sheet input[aria-label="שם הקטגוריה"]', ' בתי  קפה ');
+  await page.locator('.sheet .new-category button:has-text("להוסיף")').click();
+  await page.waitForSelector('.toast:has-text("נבחרה הקטגוריה הקיימת")');
+  assert.equal(db.tables.categories.filter((c) => c.name === 'בתי קפה').length, 1);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('managing categories: add one, add a sub-category, rename; one with no spending shows too', async () => {
+  const { page, db, errors } = await openMoney();
+  await page.locator('[role=tab]:has-text("קטגוריות"), button:has-text("קטגוריות")').first().click();
+  await page.click('button.manage-cats');
+  await page.waitForSelector('.manage-categories');
+  await page.locator('.manage-categories > button.chip-add', { hasText: '+ קטגוריה חדשה' }).click();
+  await page.fill('.manage-categories input[aria-label="שם הקטגוריה"]', 'חיות מחמד');
+  await page.locator('.manage-categories .new-category button:has-text("להוסיף")').click();
+  await page.locator('.manage-row', { hasText: 'חיות מחמד' }).waitFor();
+  const pets = db.tables.categories.find((c) => c.name === 'חיות מחמד');
+  assert.ok(pets);
+  const row = page.locator('.manage-row', { hasText: 'חיות מחמד' });
+  await row.locator('button.chip-add', { hasText: '+ תת-קטגוריה' }).click();
+  await row.locator('input[aria-label="שם הקטגוריה"]').fill('וטרינר');
+  await row.locator('.new-category button:has-text("להוסיף")').click();
+  await row.locator('text=וטרינר').waitFor();
+  assert.equal(db.tables.categories.find((c) => c.name === 'וטרינר').parent_id, pets.id);
+  await row.locator('button[aria-label="לשנות שם: חיות מחמד"]').click();
+  await page.locator('input[aria-label="שם חדש לחיות מחמד"]').fill('הכלב');
+  await page.locator('.rename-form button:has-text("לשמור")').click();
+  await page.locator('.manage-row', { hasText: 'הכלב' }).waitFor();
+  assert.equal(db.tables.categories.find((c) => c.id === pets.id).name, 'הכלב');
+  // A name that is too short is explained, not saved.
+  await page.locator('.manage-categories > button.chip-add').click();
+  await page.fill('.manage-categories input[aria-label="שם הקטגוריה"]', 'א');
+  assert.ok(await page.locator('.manage-categories .new-category button:has-text("להוסיף")').isDisabled());
+  assert.deepEqual(errors, []);
+  await page.close();
+});
