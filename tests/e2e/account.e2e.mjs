@@ -157,7 +157,7 @@ test('writing to the owner: a problem goes to the server, and the answer shows i
   const { page, errors, db } = await open({ setup: (d) => { d.tables.feedback = [{ id: 'f0', user_id: 'u1', kind: 'idea', text: 'רשימת קניות', status: 'done', owner_note: 'בדרך!', created_at: '2026-10-30T10:00:00Z' }]; } });
   await page.route('**/api/feedback', (r) => { sentReq.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
   await page.click('button[aria-label="פרופיל והגדרות"]');
-  await page.click('text=תקלה או הצעה? כתבו לנו');
+  await page.click('text=תקלות ורעיונות לשיפור');
   const fb = page.locator('.feedback');
   await fb.locator('.my-feedback').waitFor();
   assert.match(await fb.locator('.my-feedback').textContent(), /תשובה: בדרך!/);

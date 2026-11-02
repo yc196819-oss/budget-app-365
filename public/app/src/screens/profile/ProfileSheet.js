@@ -62,7 +62,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}>🧠 מה היועץ יודע עלינו</button>`}
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('data')}>📦 המידע שלנו: קבצים, ייצוא ושחזור</button>`}
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
-      <button type="button" class="btn btn-ghost" onClick=${() => setView('feedback')}>💬 תקלה או הצעה? כתבו לנו</button>
+      <button type="button" class="btn btn-ghost" onClick=${() => setView('feedback')}>🛠️ תקלות ורעיונות לשיפור</button>
       ${isAdmin && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('admin')}>📊 לוח בעלים</button>`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
       <a class="btn btn-ghost" href="/old/" style="text-decoration:none">לגרסה הקודמת של האפליקציה</a>
