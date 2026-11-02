@@ -34,6 +34,7 @@ test('thinking effort: sent to current models only, low for structured jobs (thi
   assert.deepEqual(body('claude-sonnet-5', 'low').output_config, { effort: 'low' });
   assert.deepEqual(body('claude-sonnet-5-5', 'medium').output_config, { effort: 'medium' });
   assert.deepEqual(body('claude-opus-4-8', 'medium').output_config, { effort: 'medium' });
+  assert.deepEqual(body('claude-haiku-5-5', 'low').output_config, { effort: 'low' }, 'the files model (Haiku 5.5) takes effort');
   assert.equal(body('claude-haiku-4-5', 'low').output_config, undefined, 'an older model gets none (it would 400)');
   assert.equal(body('claude-sonnet-5', undefined).output_config, undefined);
   assert.equal(body('claude-sonnet-5', 'extreme').output_config, undefined);

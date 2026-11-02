@@ -27,6 +27,9 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
+// Reading statements and sorting merchants: structured work, many tokens,
+// done well by the small model at a fraction of the price.
+const ANTHROPIC_FILES_MODEL = process.env.ANTHROPIC_FILES_MODEL || 'claude-haiku-5-5';
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const GROK_KEY = process.env.GROK_API_KEY || process.env.XAI_API_KEY || '';
@@ -299,7 +302,7 @@ function getAvailableAiProviders() {
   return providers;
 }
 
-async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium', maxTokens = 4096 }) {
+async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium', maxTokens = 4096, model = ANTHROPIC_MODEL }) {
   const content = [
     { type: 'text', text: `${prompt}\n\n${String(text || '').slice(0, 12000)}` }
   ];
@@ -318,7 +321,7 @@ async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium',
     });
   }
 
-  const req = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens, content, effort });
+  const req = claudeRequest({ key: ANTHROPIC_KEY, model, maxTokens, content, effort });
   const response = await fetch(req.url, req.init);
 
   const data = await response.json().catch(() => ({}));
@@ -336,7 +339,7 @@ async function callClaude({ prompt, text, fileData, mimeType, effort = 'medium',
   }
   return {
     provider: 'claude',
-    model: ANTHROPIC_MODEL,
+    model,
     output: (data?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n')
   };
 }
@@ -745,6 +748,8 @@ app.get('/api/health', async (_req, res) => {
     ok: true,
     aiConfigured: availableAiProviders.length > 0,
     aiProviders: availableAiProviders,
+    claudeModel: ANTHROPIC_MODEL,
+    claudeFilesModel: ANTHROPIC_FILES_MODEL,
     geminiModel: GEMINI_MODEL,
     grokModel: GROK_MODEL,
     googleOAuthConfigured: isGoogleOAuthConfigured(),
@@ -771,7 +776,7 @@ app.post('/api/ai/import', requireAuth, aiLimiter, aiQuota, async (req, res) => 
 
     // Reading a statement is structured work: little thinking, room for a
     // long JSON answer (one part of the statement is ~60 lines).
-    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType, effort: 'low', maxTokens: 16000, json: true });
+    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType, effort: 'low', maxTokens: 16000, json: true, model: ANTHROPIC_FILES_MODEL });
     const output = aiResult.output || '[]';
     let parsed = null;
     try {
