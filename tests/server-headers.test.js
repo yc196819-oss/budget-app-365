@@ -205,3 +205,15 @@ test('home-screen shortcuts: add, by voice, ask and talk with the advisor, each 
   const shell = await fetch(BASE + '/app/?action=add');
   assert.equal(shell.status, 200);
 });
+
+test('the preview of an email: its design, framed only by the app itself, with no scripts', async () => {
+  const res = await fetch(BASE + '/mail-preview/more');
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.match(html, /wallet-192\.png/);
+  assert.match(html, /להוסיף עוד פירוט/);
+  assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
+  assert.match(res.headers.get('content-security-policy'), /default-src 'none'/);
+  assert.match(res.headers.get('content-security-policy'), /frame-ancestors 'self'/);
+  assert.equal((await fetch(BASE + '/mail-preview/nope')).status, 404);
+});

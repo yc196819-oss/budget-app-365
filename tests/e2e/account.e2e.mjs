@@ -288,6 +288,9 @@ test('emails to users: one per step, read before sending, a test to yourself, an
   const more = card.locator('.campaign-more');
   await more.locator('summary').click();
   assert.match(await more.textContent(), /טיפ קטן שיעשה את התקציב/);
+  // The email itself, with its design.
+  await more.frameLocator('iframe.mail-preview').locator('a:has-text("להוסיף עוד פירוט")').waitFor();
+  assert.ok(await more.frameLocator('iframe.mail-preview').locator('img[src$="/wallet-192.png"]').count());
   await more.locator('button:has-text("ניסיון אליי")').click();
   await page.waitForSelector('text=נשלח ניסיון אל budgetapp2852@gmail.com');
   assert.deepEqual(posts, [{ campaign: 'more', test: true }]);

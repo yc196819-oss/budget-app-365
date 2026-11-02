@@ -1952,6 +1952,16 @@ async function campaignData() {
 }
 const appLinkOf = (req) => (process.env.PUBLIC_URL || (req.protocol + '://' + req.get('host'))).replace(/\/$/, '') + '/app/';
 const mailStatus = () => ops.mailReady({ resendKey: RESEND_API_KEY, resendFrom: RESEND_FROM, smtp: !!mailer });
+// How an email looks, with its design, for the dashboard's preview (shown in
+// a frame there). The wording is not private: it is the same for everyone.
+app.get('/mail-preview/:campaign', (req, res) => {
+  const mail = ops.CAMPAIGNS.includes(req.params.campaign) ? ops.campaignMail(req.params.campaign, appLinkOf(req)) : null;
+  if (!mail) return res.status(404).end();
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'");
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.type('html').send(mail.html);
+});
 app.get('/api/admin/reengage', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   try {
