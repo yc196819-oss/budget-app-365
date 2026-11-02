@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { setScreen } from '../../lib/telemetry.js';
 import { InstallCard } from '../../components/InstallCard.js';
 import { useState } from 'preact/hooks';
 import { sb } from '../../lib/supabase.js';
@@ -13,6 +14,7 @@ const MESSAGES = {
 };
 
 export function LoginScreen() {
+  setScreen('login');
   // A new person who came from an invite link starts on sign-up.
   const [mode, setMode] = useState(() => (readLocal(PENDING_INVITE, '') ? 'register' : 'login'));
   const [name, setName] = useState('');

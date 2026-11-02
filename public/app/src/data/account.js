@@ -49,6 +49,10 @@ export async function adminStats() {
   try { return await api('/api/admin/stats'); } catch (_e) { return null; }
 }
 
+export async function adminLive() {
+  try { return await api('/api/admin/live'); } catch (_e) { return null; }
+}
+
 export function download(name, text, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement('a');

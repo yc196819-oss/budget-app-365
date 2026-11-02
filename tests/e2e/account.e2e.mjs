@@ -115,12 +115,17 @@ test('owner dashboard: only for the owner, with active people, return rate and f
     active: { day: 3, week: 11, month: 25 }, retention: { started: 10, cameBack: 6, pct: 60 }, members: 31,
     use: [{ name: 'tx_add', count: 120 }], errors: { week: 2, top: [{ message: 'boom', count: 2, path: '#/home' }] },
     signedUp: 40, aiCost30d: 1.23, systemCost30d: 0.2,
+    live: { users: 3, visitors: 1, screens: { home: 2, money: 1, login: 1 }, devices: { mobile: 3, desktop: 1 }, installed: 2 },
+    funnel: { signups: 28, household: 15, tx: 7, import: 7, cameBack: 0, oldEnough: 0, byDay: { [new Date().toISOString().slice(0, 10)]: 2 } },
+    daily: Array.from({ length: 14 }, (_, i) => ({ day: new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10), active: i, cost: 0.05 })),
     users: [{ who: '#a1b2c3', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31 }]
   }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ users: 5, visitors: 0, screens: { home: 5 }, devices: { mobile: 5, desktop: 0 }, installed: 1 }) }));
+  await page.clock.install();
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
   const s = page.locator('.admin-stats');
-  await s.locator('text=חזרו אחרי שבוע').waitFor();
+  await s.locator('.per-user').waitFor();
   const t = await s.textContent();
   assert.match(t, /60%/);
   assert.match(t, /הוספת תנועה/);
@@ -131,6 +136,14 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   assert.match(row, /51,000/);
   assert.match(t, /\$1\.23/);
   assert.doesNotMatch(t, /@/);
+  // Live: who is on now, by screen and device; refreshed every 15 seconds.
+  assert.match(t, /מחוברים עכשיו: 3/);
+  assert.match(t, /\+ 1 לא מחוברים/);
+  assert.match(t, /בית 2 · כסף 1 · כניסה 1/);
+  assert.match(await s.locator('.admin-funnel').textContent(), /הקימו משק בית15 54%/);
+  assert.match(t, /2נרשמו היום/);
+  await page.clock.runFor(16000);
+  await page.waitForSelector('text=מחוברים עכשיו: 5');
   assert.deepEqual(errors, []);
   await page.close();
 });

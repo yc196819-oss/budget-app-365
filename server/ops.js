@@ -141,4 +141,44 @@ function perUser({ users = [], events = [], calls = [], now = new Date(), salt =
   return { users: list, aiCost30d: Math.round(total * 100) / 100, systemCost30d: Math.round(systemCost * 100) / 100 };
 }
 
-module.exports = { EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser };
+// ── who is here right now ──
+// Each open app says "still here" every minute; seen in the last 2 minutes
+// counts as online. Kept in memory only: the screen and the kind of device,
+// never what is on it.
+const SCREENS = ['home', 'money', 'together', 'plans', 'assets', 'login', 'onboarding', 'other'];
+function presenceStore({ window = 2 * 60 * 1000, max = 20000 } = {}) {
+  const seen = new Map();
+  return {
+    beat({ key, userId = null, screen = 'other', device = 'mobile', installed = false }, now = Date.now()) {
+      if (!key) return;
+      if (seen.size >= max && !seen.has(key)) seen.delete(seen.keys().next().value);
+      seen.set(key, { at: now, userId, screen: SCREENS.includes(screen) ? screen : 'other', device: device === 'desktop' ? 'desktop' : 'mobile', installed: !!installed });
+    },
+    snapshot(now = Date.now()) {
+      const out = { users: 0, visitors: 0, screens: {}, devices: { mobile: 0, desktop: 0 }, installed: 0 };
+      const people = new Set();
+      for (const [k, v] of seen) {
+        if (now - v.at > window) { seen.delete(k); continue; }
+        if (v.userId) { if (people.has(v.userId)) continue; people.add(v.userId); out.users++; } else out.visitors++;
+        out.screens[v.screen] = (out.screens[v.screen] || 0) + 1;
+        out.devices[v.device]++;
+        if (v.installed) out.installed++;
+      }
+      return out;
+    }
+  };
+}
+
+// The last `days` days, oldest first: active people and AI cost each day
+// (Israel time).
+function daily({ events = [], calls = [], days = 14, now = new Date() }) {
+  const dayOf = (iso) => new Date(new Date(iso).getTime() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+  const keys = Array.from({ length: days }, (_, i) => dayOf(new Date(now.getTime() - (days - 1 - i) * DAY).toISOString()));
+  const act = new Map(keys.map((k) => [k, new Set()]));
+  const cost = new Map(keys.map((k) => [k, 0]));
+  for (const e of events) { const k = dayOf(e.at); if (act.has(k) && e.user_id) act.get(k).add(e.user_id); }
+  for (const c of calls) { const k = dayOf(c.at); if (cost.has(k)) cost.set(k, cost.get(k) + costOf(c)); }
+  return keys.map((k) => ({ day: k, active: act.get(k).size, cost: Math.round(cost.get(k) * 100) / 100 }));
+}
+
+module.exports = { EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

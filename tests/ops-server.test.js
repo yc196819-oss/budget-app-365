@@ -102,3 +102,25 @@ test('activity per person: a label instead of who they are, counts and AI cost f
   assert.equal(out.aiCost30d, 0.23);
   assert.notEqual(alias('u1', 's'), alias('u1', 'other'), 'the label depends on a secret salt');
 });
+
+const { presenceStore, daily } = require('../server/ops');
+
+test('online now: each open app once a minute; a person on two devices counts once; quiet for 2 minutes is gone', () => {
+  const p = presenceStore();
+  p.beat({ key: 'phone-a', userId: 'u1', screen: 'home', device: 'mobile', installed: true }, 0);
+  p.beat({ key: 'laptop-a', userId: 'u1', screen: 'money', device: 'desktop' }, 1000);
+  p.beat({ key: 'phone-b', userId: 'u2', screen: 'together' }, 2000);
+  p.beat({ key: 'visitor', screen: 'login' }, 3000);
+  p.beat({ key: 'odd', userId: 'u3', screen: '<script>' }, 3000);
+  assert.deepEqual(p.snapshot(60000), { users: 3, visitors: 1, screens: { home: 1, together: 1, login: 1, other: 1 }, devices: { mobile: 4, desktop: 0 }, installed: 1 });
+  assert.deepEqual(p.snapshot(125000), { users: 0, visitors: 0, screens: {}, devices: { mobile: 0, desktop: 0 }, installed: 0 });
+});
+
+test('the last 14 days: active people and AI cost per day, in Israel time', () => {
+  const now = new Date('2026-11-02T10:00:00Z');
+  const d = daily({ now, events: [{ user_id: 'a', at: '2026-11-01T22:30:00Z' }, { user_id: 'a', at: '2026-11-02T08:00:00Z' }, { user_id: 'b', at: '2026-11-02T09:00:00Z' }, { user_id: 'c', at: '2026-10-01T09:00:00Z' }],
+    calls: [{ model: 'claude-sonnet-5', input_tokens: 1e6, output_tokens: 0, at: '2026-11-02T09:00:00Z' }] });
+  assert.equal(d.length, 14);
+  assert.deepEqual(d[13], { day: '2026-11-02', active: 2, cost: 2 }, '22:30Z on Nov 1 is already Nov 2 in Israel');
+  assert.equal(d[12].active, 0);
+});

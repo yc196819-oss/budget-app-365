@@ -1,5 +1,5 @@
 import { html } from '../lib/html.js';
-import { track } from '../lib/telemetry.js';
+import { track, setScreen } from '../lib/telemetry.js';
 import { Loading } from '../components/Loading.js';
 import { useEffect, useState } from 'preact/hooks';
 import { TABS } from '../domain/routes.js';
@@ -39,6 +39,7 @@ export function applyTheme(theme) {
 }
 
 export function Shell({ tab, session }) {
+  setScreen(tab);
   // One overlay at a time: 'profile' | 'add' | 'voice' | 'import' | 'learn' | 'advisor' | 'talk' | null.
   const [overlay, setOverlay] = useState(null);
   const [theme, setTheme] = useState(() => readLocal('theme', ''));

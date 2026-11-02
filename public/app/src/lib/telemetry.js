@@ -49,8 +49,35 @@ export async function flush(final = false) {
   } catch (_e) { /* offline: these are lost, that is fine */ }
 }
 
+// "Still here", once a minute while the app is on screen: how many are
+// online now, on which screen and kind of device (for the owner's live
+// count). A random id for this device, never who it is or what is shown.
+let screenName = '';
+export function setScreen(name) { screenName = name; }
+function visitorId() {
+  let v = readLocal('visitor', '');
+  if (!/^[\w-]{8,40}$/.test(v)) { v = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); writeLocal('visitor', v); }
+  return v;
+}
+export async function beat() {
+  if (!telemetryOn() || document.visibilityState !== 'visible') return;
+  const tab = String(location.hash || '').replace(/^#\/?/, '').split(/[/?]/)[0];
+  const body = JSON.stringify({
+    v: visitorId(),
+    screen: screenName || tab || 'home',
+    device: matchMedia('(min-width: 900px)').matches ? 'desktop' : 'mobile',
+    installed: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
+  });
+  let auth = {};
+  try { const { data } = await sb.auth.getSession(); if (data?.session?.access_token) auth = { Authorization: 'Bearer ' + data.session.access_token }; } catch (_e) { /* anonymous */ }
+  try { await fetch(CONFIG.apiBase + '/api/presence', { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth }, body }); } catch (_e) { /* offline */ }
+}
+
 // Unexpected failures anywhere in the app, and the last batch when leaving.
 export function startTelemetry() {
+  setTimeout(beat, 3000);
+  setInterval(beat, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') beat(); });
   window.addEventListener('error', (e) => { if (e.error || e.message) reportError(e.error || e.message, 'window'); });
   window.addEventListener('unhandledrejection', (e) => reportError(e.reason, 'promise'));
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(true); });
