@@ -538,3 +538,33 @@ body.chat-open { overflow: hidden; }
 /* The way out when loading takes too long (rescue.js). */
 .rescue { position: fixed; inset-inline: 16px; bottom: 24px; z-index: 50; display: flex; flex-direction: column; gap: 10px; text-align: center; animation: none; }
 .rescue b { color: var(--text); font-size: 17px; }
+
+/* Sending an email from the dashboard: the envelope flies while it works,
+   each step gets its ✓, and the bar shows how many went. */
+.mail-job { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--accent-tint); }
+.mail-job.is-error { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.mail-fly { position: relative; height: 26px; overflow: hidden; }
+.mail-env { position: absolute; inset-inline-start: 0; top: 2px; font-size: 20px; }
+.mail-trail { position: absolute; top: 13px; inset-inline-start: 0; height: 2px; width: 0; background: linear-gradient(to left, var(--accent), transparent); border-radius: 2px; }
+.mail-job.is-active .mail-env { animation: mail-fly 1.6s cubic-bezier(.5,0,.5,1) infinite; }
+.mail-job.is-active .mail-trail { animation: mail-trail 1.6s cubic-bezier(.5,0,.5,1) infinite; }
+.mail-job.is-done .mail-env { inset-inline-start: calc(100% - 26px); animation: mail-land .5s ease-out; }
+@keyframes mail-fly { 0% { inset-inline-start: 0; transform: translateY(0) rotate(0); opacity: 1; } 50% { transform: translateY(-4px) rotate(-8deg); } 85% { opacity: 1; } 100% { inset-inline-start: calc(100% - 26px); transform: translateY(0) rotate(0); opacity: 0; } }
+@keyframes mail-trail { 0% { width: 0; opacity: .9; } 100% { width: 100%; opacity: 0; } }
+@keyframes mail-land { 0% { transform: scale(.6); } 70% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.mail-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.mail-steps li { display: flex; align-items: center; gap: 8px; color: var(--muted); transition: color .3s; }
+.mail-steps .st-dot { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; border: 2px solid var(--line); flex: none; transition: background .3s, border-color .3s; }
+.mail-steps .st-now { color: var(--text); }
+.mail-steps .st-now .st-dot { border-color: var(--accent); border-top-color: transparent; animation: mail-spin .8s linear infinite; }
+.mail-steps .st-ok { color: var(--text); }
+.mail-steps .st-ok .st-dot { background: var(--income); border-color: var(--income); color: #fff; animation: mail-pop .35s ease-out; }
+.mail-steps .st-fail .st-dot { background: var(--danger); border-color: var(--danger); color: #fff; }
+@keyframes mail-spin { to { transform: rotate(360deg); } }
+@keyframes mail-pop { 0% { transform: scale(.4); } 80% { transform: scale(1.2); } 100% { transform: scale(1); } }
+.mail-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.mail-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .4s ease; }
+.mail-count, .mail-result { font-size: 13px; line-height: 1.55; }
+@media (prefers-reduced-motion: reduce) {
+  .mail-job .mail-env, .mail-job .mail-trail, .mail-steps .st-dot, .mail-bar i { animation: none !important; transition: none !important; }
+}

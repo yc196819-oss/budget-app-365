@@ -267,12 +267,17 @@ test('emails to users: one per step, read before sending, a test to yourself, an
   await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
   await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
   const mail = (subject) => ({ subject, text: 'היי,\nקובי', html: '' });
-  await page.route('**/api/admin/reengage', (r) => {
+  let left = 7;
+  let testFails = true;
+  await page.route('**/api/admin/reengage', async (r) => {
     if (r.request().method() === 'POST') {
       const body = JSON.parse(r.request().postData() || '{}');
       posts.push(body);
-      if (body.test) return r.fulfill({ status: 200, contentType: 'application/json', body: '{"test":true,"to":"budgetapp2852@gmail.com"}' });
-      return r.fulfill({ status: 200, contentType: 'application/json', body: '{"sent":7,"failed":0}' });
+      if (body.test && testFails) return r.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'השרת לא מחובר לשום שירות לשליחת מיילים (לא Resend ולא Gmail/SMTP).' }) });
+      if (body.test) return r.fulfill({ status: 200, contentType: 'application/json', body: '{"test":true,"to":"budgetapp2852@gmail.com","provider":"smtp"}' });
+      await new Promise((ok) => setTimeout(ok, 120));
+      left -= 1;
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sent: 1, failed: 0, left }) });
     }
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: true }, campaigns: [
       { id: 'start', title: 'נרשמו ולא פתחו משק בית', count: 14, preview: mail('נשארו לך 2 דקות להתחיל') },
@@ -288,17 +293,35 @@ test('emails to users: one per step, read before sending, a test to yourself, an
   const more = card.locator('.campaign-more');
   await more.locator('summary').click();
   assert.match(await more.textContent(), /טיפ קטן שיעשה את התקציב/);
+  // The email itself, with its design.
+  await more.frameLocator('iframe.mail-preview').locator('a:has-text("להוסיף עוד פירוט")').waitFor();
+  assert.ok(await more.frameLocator('iframe.mail-preview').locator('img[src$="/wallet-192.png"]').count());
+  // A test that fails says why, in the row, and stays there.
   await more.locator('button:has-text("ניסיון אליי")').click();
-  await page.waitForSelector('text=נשלח ניסיון אל budgetapp2852@gmail.com');
-  assert.deepEqual(posts, [{ campaign: 'more', test: true }]);
+  await more.locator('.mail-job.is-error').waitFor();
+  assert.match(await more.locator('.mail-job').textContent(), /לא מחובר לשום שירות לשליחת מיילים/);
+  assert.ok(await more.locator('.mail-steps .st-fail').count());
+  // A test that goes: each step gets its ✓, and where it went.
+  testFails = false;
+  await more.locator('button:has-text("ניסיון אליי")').click();
+  await more.locator('.mail-job.is-done').waitFor();
+  assert.equal(await more.locator('.mail-steps .st-ok').count(), 3);
+  assert.match(await more.locator('.mail-job').textContent(), /נשלח אל budgetapp2852@gmail\.com דרך Gmail \/ SMTP/);
+  assert.deepEqual(posts, [{ campaign: 'more', test: true }, { campaign: 'more', test: true }]);
   await more.locator('button:has-text("לשלוח ל-7")').click();
-  assert.equal(posts.length, 1, 'the first tap only asks');
+  assert.equal(posts.length, 2, 'the first tap only asks');
   await more.locator('button:has-text("בטוח? לשלוח עכשיו ל-7")').click();
-  await page.waitForSelector('text=נשלחו 7 מיילים');
-  assert.deepEqual(posts[1], { campaign: 'more', test: false });
+  // While it sends, the envelope flies and the bar fills with the real count.
+  await more.locator('.mail-job.is-active').waitFor();
+  await more.locator('.mail-job.is-done').waitFor({ timeout: 10000 });
+  assert.match(await more.locator('.mail-count').textContent(), /נשלחו 7 מתוך 7/);
+  assert.match(await more.locator('.mail-bar i').getAttribute('style'), /width: ?100%/);
+  const sends = posts.filter((p) => !p.test);
+  assert.equal(sends.length, 7, 'one at a time, so the progress is real');
+  assert.deepEqual(sends[0], { campaign: 'more', test: false, limit: 1 });
   assert.match(await more.textContent(), /אין כרגע למי לשלוח/);
   assert.match(await card.locator('.campaign-start').textContent(), /14/, 'the other emails stay as they were');
-  assert.deepEqual(errors, []);
+  assert.deepEqual(errors.filter((e) => !/status of 502/.test(e)), [], 'only the failed test send, on purpose');
   await page.close();
 });
 

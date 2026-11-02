@@ -22,20 +22,60 @@ export function AdminView({ onBack }) {
   const [backSure, setBackSure] = useState('');
   const [backBusy, setBackBusy] = useState('');
   useEffect(() => { adminReengage().then(setBack); }, []);
+  // What is happening right now with an email, shown step by step in its row.
+  const [job, setJob] = useState({});
+  const setJ = (id, j) => setJob((all) => ({ ...all, [id]: j && { ...(all[id] || {}), ...j } }));
   const sendBack = async (c) => {
     if (backSure !== c.id) { setBackSure(c.id); return; }
-    setBackBusy(c.id);
+    setBackSure(''); setBackBusy(c.id);
+    const total = c.count;
+    setJ(c.id, { kind: 'send', phase: 'sending', step: 1, total, sent: 0, failed: 0, error: '' });
+    let sent = 0, failed = 0, error = '';
     try {
-      const r = await sendReengage(c.id);
-      showToast('נשלחו ' + r.sent + ' מיילים' + (r.failed ? ', ' + r.failed + ' לא נשלחו' : ''));
-      setBack((b) => ({ ...b, campaigns: b.campaigns.map((x) => (x.id === c.id ? { ...x, count: 0 } : x)) }));
-    } catch (err) { showToast(err.message || 'השליחה נכשלה. נסו שוב.'); }
-    setBackBusy(''); setBackSure('');
+      // One at a time, so the bar shows the real progress.
+      for (let guard = 0; guard < 500; guard++) {
+        const r = await sendReengage(c.id, { limit: 1 });
+        sent += r.sent || 0; failed += r.failed || 0; if (r.error) error = r.error;
+        setJ(c.id, { step: 2, sent, failed, error });
+        if (!r.left || (!r.sent && !r.failed)) break;
+      }
+      setJ(c.id, { phase: failed && !sent ? 'error' : 'done', step: 3 });
+      setBack((bk) => ({ ...bk, campaigns: bk.campaigns.map((x) => (x.id === c.id ? { ...x, count: Math.max(0, x.count - sent - failed) } : x)) }));
+    } catch (err) { setJ(c.id, { phase: 'error', error: err.message || 'השליחה נכשלה. נסו שוב.' }); }
+    setBackBusy('');
   };
   const testBack = async (c) => {
     setBackBusy('t' + c.id);
-    try { const r = await sendReengage(c.id, { test: true }); showToast('נשלח ניסיון אל ' + r.to + '. בדקו את תיבת הדואר (וגם בספאם).'); } catch (err) { showToast(err.message || 'הניסיון לא נשלח.'); }
+    setJ(c.id, { kind: 'test', phase: 'sending', step: 1, error: '' });
+    const t = setTimeout(() => setJ(c.id, { step: 2 }), 700);
+    try {
+      const r = await sendReengage(c.id, { test: true });
+      clearTimeout(t);
+      setJ(c.id, { phase: 'done', step: 3, to: r.to, provider: r.provider || '' });
+    } catch (err) { clearTimeout(t); setJ(c.id, { phase: 'error', error: err.message || 'הניסיון לא נשלח.' }); }
     setBackBusy('');
+  };
+  const PROVIDER = { resend: 'Resend', smtp: 'Gmail / SMTP', 'google-gmail': 'Gmail' };
+  const jobView = (c) => {
+    const j = job[c.id];
+    if (!j) return null;
+    const active = j.phase === 'sending';
+    const steps = j.kind === 'test'
+      ? ['מכינים את המייל עם העיצוב', 'שולחים לשרת המיילים', 'השרת קיבל את המייל']
+      : ['מכינים את רשימת הנמענים', 'שולחים אחד אחד', 'סיימנו'];
+    const pct = j.kind === 'send' && j.total ? Math.round(((j.sent + j.failed) / j.total) * 100) : 0;
+    return html`<div class=${'mail-job ' + (active ? 'is-active' : j.phase === 'error' ? 'is-error' : 'is-done')} role="status" aria-live="polite">
+      <div class="mail-fly" aria-hidden="true"><span class="mail-env">✉️</span><span class="mail-trail"></span></div>
+      <ol class="mail-steps">${steps.map((st, i) => {
+        const n = i + 1;
+        const state = j.phase === 'error' && n >= (j.step || 1) ? 'fail' : n < (j.step || 1) || (n === 3 && j.phase === 'done') ? 'ok' : n === j.step && active ? 'now' : 'wait';
+        return html`<li class=${'st-' + state} key=${n}><span class="st-dot">${state === 'ok' ? '✓' : state === 'fail' ? '✗' : ''}</span>${st}</li>`;
+      })}</ol>
+      ${j.kind === 'send' && html`<div class="mail-bar" aria-hidden="true"><i style=${'width:' + pct + '%'}></i></div>
+        <span class="mail-count">נשלחו <b class="num">${j.sent}</b> מתוך <b class="num">${j.total}</b>${j.failed ? html` · <span style="color:var(--danger)">${j.failed} לא נשלחו</span>` : ''}</span>`}
+      ${j.phase === 'done' && j.kind === 'test' && html`<span class="mail-result">נשלח אל <bdi dir="ltr">${j.to}</bdi>${j.provider ? ' דרך ' + (PROVIDER[j.provider] || j.provider) : ''}. אם לא הגיע תוך כמה דקות, בדקו בספאם.</span>`}
+      ${j.error && html`<span class="mail-result" style="color:var(--danger)">${j.error}</span>`}
+    </div>`;
   };
   const [replies, setReplies] = useState({});
   useEffect(() => { adminFeedback().then(setInbox); }, []);
@@ -68,14 +108,14 @@ export function AdminView({ onBack }) {
       ${back.campaigns.map((c) => html`<div class=${'campaign campaign-' + c.id} key=${c.id} style="display:flex;flex-direction:column;gap:6px;padding:8px 0;border-top:1px solid var(--line)">
         <span style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14px">${c.title}</b><b class="num">${c.count}</b></span>
         <details><summary style="cursor:pointer;font-size:13px">איך המייל נראה</summary>
-          <div class="card" style="font-size:13px;white-space:pre-wrap;margin-top:6px"><b>${c.preview.subject}</b>
-
-${c.preview.text}</div></details>
+          <span style="display:block;font-size:13px;margin:6px 0"><span class="faint">נושא:</span> <b>${c.preview.subject}</b></span>
+          <iframe class="mail-preview" src=${'/mail-preview/' + c.id} title=${'המייל: ' + c.preview.subject} sandbox="" loading="lazy" style="width:100%;height:560px;border:0;border-radius:12px;background:#F3EDE6;display:block"></iframe></details>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => testBack(c)}>${backBusy === 't' + c.id ? 'שולח…' : 'ניסיון אליי'}</button>
           ${c.count > 0 && (!back.mail || back.mail.ready) && html`<button type="button" class=${'btn' + (backSure === c.id ? '' : ' btn-ghost')} style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => sendBack(c)}>${backBusy === c.id ? 'שולח…' : backSure === c.id ? 'בטוח? לשלוח עכשיו ל-' + c.count : 'לשלוח ל-' + c.count}</button>`}
           ${c.count === 0 && html`<span class="faint" style="font-size:12px;align-self:center">אין כרגע למי לשלוח</span>`}
         </div>
+        ${jobView(c)}
       </div>`)}
     </div>`}
     ${inbox && html`<div class="card stack admin-inbox"><b>🛠️ תקלות ורעיונות מהמשתמשים${inbox.filter((f) => f.status === 'new').length ? ' · ' + inbox.filter((f) => f.status === 'new').length + ' חדשות' : ''}</b>

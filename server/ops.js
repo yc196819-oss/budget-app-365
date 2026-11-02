@@ -290,6 +290,15 @@ function campaignMail(campaign, link) {
     + '</table></td></tr></table></body></html>';
   return { subject: m.subject, text, html };
 }
+// Why an email did not go, in words the owner can act on.
+function mailErrorText(err) {
+  const m = String((err && err.message) || err || '');
+  if (/No email provider/i.test(m)) return 'השרת לא מחובר לשום שירות לשליחת מיילים (לא Resend ולא Gmail/SMTP).';
+  if (/only send testing emails|verify a domain|not verified/i.test(m)) return 'Resend מוגדר רק במצב ניסיון: הוא שולח רק לכתובת שפתחה את חשבון ה-Resend. צריך לחבר דומיין, או לשלוח דרך Gmail.';
+  if (/Invalid login|Username and Password not accepted|EAUTH|535/i.test(m)) return 'הכניסה לחשבון המייל נכשלה: הסיסמה (סיסמת האפליקציה של Gmail) לא נכונה.';
+  if (/ETIMEDOUT|ECONNREFUSED|ENOTFOUND|timeout/i.test(m)) return 'לא הצלחנו להתחבר לשרת המיילים. נסו שוב בעוד רגע.';
+  return 'השליחה נכשלה: ' + m.slice(0, 160);
+}
 function reengageMail(link) { return campaignMail('start', link); }
 const campaignTitle = (c) => (MAILS[c] ? MAILS[c].title : '');
 
@@ -300,4 +309,4 @@ function mailReady({ resendKey = '', resendFrom = '', smtp = false } = {}) {
   return { ready: smtp || resend, smtp: !!smtp, resend, resendTestOnly: !!resendKey && !resend };
 }
 
-module.exports = { reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

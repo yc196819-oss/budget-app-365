@@ -1952,6 +1952,16 @@ async function campaignData() {
 }
 const appLinkOf = (req) => (process.env.PUBLIC_URL || (req.protocol + '://' + req.get('host'))).replace(/\/$/, '') + '/app/';
 const mailStatus = () => ops.mailReady({ resendKey: RESEND_API_KEY, resendFrom: RESEND_FROM, smtp: !!mailer });
+// How an email looks, with its design, for the dashboard's preview (shown in
+// a frame there). The wording is not private: it is the same for everyone.
+app.get('/mail-preview/:campaign', (req, res) => {
+  const mail = ops.CAMPAIGNS.includes(req.params.campaign) ? ops.campaignMail(req.params.campaign, appLinkOf(req)) : null;
+  if (!mail) return res.status(404).end();
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'");
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.type('html').send(mail.html);
+});
 app.get('/api/admin/reengage', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   try {
@@ -1971,19 +1981,22 @@ app.post('/api/admin/reengage', requireAuth, async (req, res) => {
       const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
       const to = data && data.user && data.user.email;
       if (!to) return res.status(400).json({ error: 'no email' });
-      try { const r = await sendMailWithFallback({ to, ...mail, subject: '[ניסיון] ' + mail.subject }); return res.json({ test: true, to, provider: r && r.provider }); } catch (err) { return res.status(502).json({ error: 'המייל לא נשלח: ' + String(err.message || err).slice(0, 200) }); }
+      try { const r = await sendMailWithFallback({ to, ...mail, subject: '[ניסיון] ' + mail.subject }); return res.json({ test: true, to, provider: r && r.provider }); } catch (err) { console.error('test mail failed:', err.message); return res.status(502).json({ error: ops.mailErrorText(err) }); }
     }
     if (!mailStatus().ready) return res.status(503).json({ error: 'השרת עוד לא מוגדר לשלוח מיילים למשתמשים.' });
-    const list = ops.campaignList(campaign, await campaignData());
-    let sent = 0, failed = 0;
+    const all = ops.campaignList(campaign, await campaignData());
+    // A few at a time, so the dashboard can show the real progress.
+    const limit = Math.max(1, Math.min(50, Number(req.body && req.body.limit) || 50));
+    const list = all.slice(0, limit);
+    let sent = 0, failed = 0, lastError = '';
     for (const u of list) {
       // Marked first: a person never gets the same email twice, even if this is pressed again.
       const { error } = await supabaseAdmin.from('mail_sent').insert({ user_id: u.id, campaign });
       if (error) continue;
-      try { await sendMailWithFallback({ to: u.email, ...mail }); sent++; } catch (_e) { failed++; }
+      try { await sendMailWithFallback({ to: u.email, ...mail }); sent++; } catch (err) { failed++; lastError = ops.mailErrorText(err); }
       await delay(400);
     }
-    return res.json({ sent, failed });
+    return res.json({ sent, failed, left: all.length - list.length, error: lastError || undefined });
   } catch (err) {
     console.error('campaign failed:', err.message);
     return res.status(500).json({ error: 'failed' });
