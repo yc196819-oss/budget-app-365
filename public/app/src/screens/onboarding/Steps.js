@@ -75,7 +75,7 @@ export function StepPrivacy({ a, set }) {
   return html`
     <label class="card check toggle-row" style="align-items:flex-start">
       <span style="flex:1;display:flex;flex-direction:column;gap:4px"><b>יועץ AI</b>
-        <span class="muted" style="font-size:13px;line-height:1.55">כשהיועץ פעיל ושואלים אותו, נשלח סיכום של סכומים לפי קטגוריה וחודש. לא שמות בתי עסק, לא מספרי חשבון או כרטיס. אפשר לכבות אותו לגמרי, וכל השאר ימשיך לעבוד.</span></span>
+        <span class="muted" style="font-size:13px;line-height:1.55">כשהיועץ פעיל ושואלים אותו, הוא מקבל את המספרים שלכם, שמות בתי העסק והתנועות האחרונות, כדי לענות על המקרה שלכם. לא מספרי חשבון או כרטיס. אפשר לכבות אותו לגמרי, וכל השאר ימשיך לעבוד.</span></span>
       <input type="checkbox" role="switch" checked=${a.ai} onChange=${(e) => set({ ai: e.target.checked })} aria-label="יועץ AI" />
     </label>
     <span class="faint" style="font-size:13px;line-height:1.55">אפשר לשנות את זה בכל רגע בפרופיל.</span>`;

@@ -44,6 +44,7 @@ a { color: inherit; }
 .input {
   height: 52px; padding: 0 16px; border-radius: var(--radius-m);
   border: 1.5px solid var(--line); background: var(--surface); outline: 0; font-size: 16px;
+  min-width: 0; /* in a row with a button, the field shrinks instead of pushing the button off screen */
 }
 .input:focus { border-color: var(--accent); }
 .error { color: var(--danger); font-size: 14px; font-weight: 700; }

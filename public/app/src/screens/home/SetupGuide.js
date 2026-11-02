@@ -77,7 +77,7 @@ export function SetupGuide({ data, userId, onImport, onAdd, onAsk }) {
           ${isOpen && html`<div class="stack" style="gap:10px;padding:0 34px 10px 0">
             <span class="muted" style="font-size:14px;line-height:1.55">${s.key === 'sort' && loose ? (loose === 1 ? 'תנועה אחת מחכה לקטגוריה. ' : loose + ' תנועות מחכות לקטגוריה. ') : ''}${s.why}</span>
             ${s.key === 'income' ? html`<form onSubmit=${saveIncome} style="display:flex;gap:8px">
-                <input class="input num" inputmode="numeric" placeholder="למשל 18,000" aria-label="הכנסה חודשית נטו" value=${income} onInput=${(e) => setIncomeText(e.target.value)} style="flex:1" />
+                <input class="input num" inputmode="numeric" placeholder="למשל 18,000" aria-label="הכנסה חודשית נטו" value=${income} onInput=${(e) => setIncomeText(e.target.value)} style="flex:1;width:auto;min-width:0" />
                 <button type="submit" class="btn" style="width:auto" disabled=${busy || !(toNumber(income) > 0)}>${s.cta}</button></form>`
               : s.key === 'partner' ? html`<${InviteButton} hid=${data.hid} userId=${userId} variant="btn" />`
               : html`<button type="button" class="btn" onClick=${() => go(s)}>${s.cta}</button>`}
