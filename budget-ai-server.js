@@ -1446,7 +1446,10 @@ async function remindDecisions() {
   return list.length;
 }
 
-app.get('/api/market/quote', requireAuth, async (req, res) => {
+// Prices and rates come from outside services: a cap per person, so no one
+// can make the server hammer them.
+const marketLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip, message: { error: 'יותר מדי בקשות, נסו שוב בעוד דקה' } });
+app.get('/api/market/quote', requireAuth, marketLimiter, async (req, res) => {
   try {
     const force = req.query.force === '1';
     if (!force && marketQuoteCache && Date.now() - marketQuoteCache.fetchedAt < 5 * 60 * 1000) {
@@ -1472,7 +1475,7 @@ app.get('/api/market/quote', requireAuth, async (req, res) => {
 // ═══ stage 2: market quotes for any holdings ═══
 // ═══ exchange rate for a date (adding an expense in dollars, euros, pounds) ═══
 const fxCache = new Map(); // "USD:2026-09-15" -> { rate, date, source }
-app.get('/api/fx/rate', requireAuth, async (req, res) => {
+app.get('/api/fx/rate', requireAuth, marketLimiter, async (req, res) => {
   const currency = String(req.query.currency || '').toUpperCase();
   const date = String(req.query.date || '');
   if (!fx.validRequest(currency, date, israelToday())) return res.status(400).json({ error: 'bad request' });
@@ -1498,7 +1501,7 @@ app.get('/api/fx/rate', requireAuth, async (req, res) => {
   return res.json(hit);
 });
 
-app.get('/api/market/quotes', requireAuth, async (req, res) => {
+app.get('/api/market/quotes', requireAuth, marketLimiter, async (req, res) => {
   try {
     const symbols = String(req.query.symbols || '').split(',').map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z0-9.\-=^]{1,15}$/.test(x)).slice(0, 20);
     const [fx, boi] = await Promise.all([fetchUsdIlsDetailed(), fetchBoiUsd().catch(() => null)]);

@@ -197,3 +197,16 @@ test('a long statement goes to the AI in parts, each read whole, and every part 
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('where to get the statement: a short how-to right where the file is picked', async () => {
+  const { page, errors } = await open();
+  await page.click('text=העלאת פירוט כרטיס');
+  const how = page.locator('.sheet details.how-to-download');
+  await how.waitFor();
+  assert.equal(await how.getAttribute('open'), null, 'closed until asked, so the screen stays short');
+  await how.locator('summary').click();
+  assert.match(await how.textContent(), /ייצוא לאקסל/);
+  assert.match(await how.textContent(), /צילום מסך/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
