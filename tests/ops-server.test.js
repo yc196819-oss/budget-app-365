@@ -124,3 +124,22 @@ test('the last 14 days: active people and AI cost per day, in Israel time', () =
   assert.deepEqual(d[13], { day: '2026-11-02', active: 2, cost: 2 }, '22:30Z on Nov 1 is already Nov 2 in Israel');
   assert.equal(d[12].active, 0);
 });
+
+const { cleanFeedback, feedbackPatch } = require('../server/ops');
+
+test('a request from a user: a known kind, trimmed text, nothing empty', () => {
+  assert.deepEqual(cleanFeedback({ kind: 'bug', text: '  הייבוא נתקע  ', screen: 'money', device: 'טלפון' }, 'u1'),
+    { user_id: 'u1', kind: 'bug', text: 'הייבוא נתקע', screen: 'money', device: 'טלפון' });
+  assert.equal(cleanFeedback({ kind: 'hack', text: 'שלום רב' }, 'u1').kind, 'other');
+  assert.equal(cleanFeedback({ text: ' a ' }, 'u1'), null);
+  assert.equal(cleanFeedback({ text: 'שלום רב' }, null), null);
+  assert.equal(cleanFeedback({ text: 'x'.repeat(5000) }, 'u1').text.length, 2000);
+});
+
+test('the owner changes a request: only a known status and an answer', () => {
+  const p = feedbackPatch({ status: 'done', owner_note: ' תוקן, תודה! ', user_id: 'other', text: 'x' });
+  assert.deepEqual(Object.keys(p).sort(), ['owner_note', 'status', 'updated_at']);
+  assert.equal(p.owner_note, 'תוקן, תודה!');
+  assert.equal(feedbackPatch({ status: 'deleted' }), null);
+  assert.equal(feedbackPatch({}), null);
+});

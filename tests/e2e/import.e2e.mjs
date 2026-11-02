@@ -191,7 +191,7 @@ test('a long statement goes to the AI in parts, each read whole, and every part 
   await page.waitForSelector('.import-summary');
   const reads = sent.filter((b) => !/מספר \| תיאור/.test(b.prompt));
   assert.ok(reads.length >= 3, 'sent in parts: ' + reads.length);
-  assert.ok(reads.every((b) => b.text.length <= 10000));
+  assert.ok(reads.every((b) => b.text.length <= 6000));
   assert.equal(reads.map((b) => b.text).join('\n').split('\n').filter((l) => /^MOVE/.test(l)).length, 700, 'no line left out');
   assert.match(await page.locator('.import-summary').textContent(), /700 תנועות נמצאו/);
   assert.deepEqual(errors, []);

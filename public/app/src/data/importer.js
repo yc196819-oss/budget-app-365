@@ -13,9 +13,9 @@ import { parseCsv, rowsToTransactions, fromAi, importPrompt, categorizePrompt, c
 // photos have no table to read, so their text or image goes to the AI.
 
 const MAX_IMAGE_BYTES = 1400000; // the server accepts a 2MB request
-// A statement's text goes in parts the AI reads whole (the server takes up
-// to 12,000 characters a request), two at a time.
-const PART = 10000;
+// A statement's text goes in parts the AI reads whole and answers in full
+// (a long part could cut the answer off), three at a time.
+const PART = 6000;
 const MERCHANTS_PER_CALL = 80;
 
 export class ImportError extends Error {}
@@ -45,8 +45,8 @@ async function readTable(file, kind) {
 // Every part of the text, read by the AI; a part that fails fails the file
 // (half a statement saved as if whole would be worse than an error).
 async function aiTextImport(text, categories, today) {
-  const parts = splitText(text, PART);
-  const lists = await inParts(parts, 2, (part) => aiImport({ prompt: importPrompt(categories, today), text: part }));
+  const parts = splitText(text, PART, 16);
+  const lists = await inParts(parts, 3, (part) => aiImport({ prompt: importPrompt(categories, today), text: part }));
   return fromAi(lists.flat(), categories);
 }
 

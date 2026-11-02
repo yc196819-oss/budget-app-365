@@ -126,3 +126,31 @@ returns jsonb language sql security definer set search_path = public as $$
   ) from x;
 $$;
 revoke execute on function public.ops_funnel(timestamptz) from public, anon, authenticated;
+
+-- Applied 2026-11-02 (imports_and_feedback, imports_removed_at): each
+-- uploaded file, so a wrong one can be removed whole; requests to the owner.
+-- (Earlier statements were grouped into imports by household, source and
+-- moment of saving.) See the migration in the project for the full text.
+create table if not exists public.imports (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on update cascade,
+  created_by uuid, file_name text, kind text, rows integer not null default 0,
+  date_from date, date_to date, created_at timestamptz not null default now(), removed_at timestamptz
+);
+alter table public.imports enable row level security;
+create policy imports_household on public.imports for all to authenticated
+  using (household_id in (select public.my_households())) with check (household_id in (select public.my_households()));
+alter table public.transactions add column if not exists import_id uuid references public.imports(id) on update cascade on delete set null;
+
+create table if not exists public.feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid(),
+  kind text not null check (kind in ('bug', 'idea', 'other')),
+  text text not null check (char_length(text) between 3 and 2000),
+  screen text, device text,
+  status text not null default 'new' check (status in ('new', 'working', 'done', 'wontfix')),
+  owner_note text, created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+alter table public.feedback enable row level security;
+create policy feedback_insert_own on public.feedback for insert to authenticated with check (user_id = (select auth.uid()));
+create policy feedback_read_own on public.feedback for select to authenticated using (user_id = (select auth.uid()));

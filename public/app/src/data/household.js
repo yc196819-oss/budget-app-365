@@ -253,11 +253,13 @@ export async function archiveCard(id) {
   emit();
 }
 
-// Saves the lines of an imported statement. Returns the new rows.
-export async function addImported(rows) {
+// Saves the lines of an imported statement, under one "import" (the file),
+// so a wrong file can be removed whole later. Returns the new rows.
+export async function addImported(rows, { fileName = null, kind = null } = {}) {
   const added = [];
+  const importId = await startImport(rows, { fileName, kind });
   for (let i = 0; i < rows.length; i += 500) {
-    const chunk = rows.slice(i, i + 500).map((r) => ({ ...r, household_id: state.hid, created_by: state.userId }));
+    const chunk = rows.slice(i, i + 500).map((r) => ({ ...r, household_id: state.hid, created_by: state.userId, ...(importId ? { import_id: importId } : {}) }));
     const { data, error } = await sb.from('transactions').insert(chunk).select();
     if (error) {
       // Keep the store in step with what did get saved before the failure.
@@ -271,6 +273,34 @@ export async function addImported(rows) {
   state.txs = [...added, ...state.txs];
   emit();
   return added;
+}
+
+async function startImport(rows, { fileName, kind }) {
+  const dates = rows.map((r) => r.tx_date).filter(Boolean).sort();
+  const { data, error } = await sb.from('imports').insert({
+    household_id: state.hid, created_by: state.userId, file_name: fileName ? String(fileName).slice(0, 120) : null,
+    kind: kind ? String(kind).slice(0, 10) : null, rows: rows.length, date_from: dates[0] || null, date_to: dates[dates.length - 1] || null
+  }).select('id').single();
+  // Without the table (an older database) the lines are saved as before.
+  return error || !data ? null : data.id;
+}
+
+// The files uploaded to this household, newest first (not the removed ones).
+export async function listImports() {
+  const { data, error } = await sb.from('imports').select('id,file_name,kind,rows,date_from,date_to,created_at,created_by')
+    .eq('household_id', state.hid).is('removed_at', null).order('created_at', { ascending: false }).limit(100);
+  if (error) throw error;
+  return data || [];
+}
+
+// Removes every line that came from one file (into the recycle bin, so it
+// can be brought back for 30 days) and marks the file removed.
+export async function removeImport(id) {
+  const { error } = await sb.from('transactions').delete().eq('household_id', state.hid).eq('import_id', id);
+  if (error) throw error;
+  await sb.from('imports').update({ removed_at: new Date().toISOString() }).eq('id', id).eq('household_id', state.hid);
+  state.txs = state.txs.filter((t) => t.import_id !== id);
+  emit();
 }
 
 // Undo of an import.

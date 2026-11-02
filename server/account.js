@@ -8,9 +8,9 @@
 // and categories first (they point at the cards and accounts), then the rows
 // the households(id) cascade does not reach. The household goes last, so a
 // failed step leaves it in place and trying again finds everything.
-const HOUSEHOLD_FIRST = ['transactions', 'category_budgets', 'categories', 'credit_cards', 'bank_accounts', 'push_subscriptions', 'user_settings', 'advisor_conversations', 'household_reset_codes'];
+const HOUSEHOLD_FIRST = ['transactions', 'imports', 'category_budgets', 'categories', 'credit_cards', 'bank_accounts', 'push_subscriptions', 'user_settings', 'advisor_conversations', 'household_reset_codes'];
 // The person's own rows in a household that stays.
-const USER_ROWS = ['push_subscriptions', 'user_settings', 'advisor_conversations', 'household_reset_codes', 'checkin_feelings', 'app_events', 'app_errors'];
+const USER_ROWS = ['push_subscriptions', 'user_settings', 'advisor_conversations', 'household_reset_codes', 'checkin_feelings', 'app_events', 'app_errors', 'ai_calls', 'feedback'];
 
 // members: every membership row of the households the person is in.
 // Returns { remove: [household ids], leave: [{ hid, newOwner | null }] }.

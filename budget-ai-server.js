@@ -372,7 +372,8 @@ async function callGemini({ prompt, text, fileData, mimeType, json = false }) {
 
   const payload = {
     contents: [{ parts }],
-    generationConfig: { temperature: 0.1, ...(json ? { responseMimeType: 'application/json' } : {}) }
+    // A statement is structured work: no long thinking (it was 50k tokens a part).
+    generationConfig: { temperature: 0.1, ...(json ? { responseMimeType: 'application/json', ...(/flash/.test(GEMINI_MODEL) ? { thinkingConfig: { thinkingBudget: 0 } } : {}) } : {}) }
   };
 
   const response = await fetch(
@@ -791,8 +792,9 @@ app.post('/api/ai/import', requireAuth, aiLimiter, aiQuota, async (req, res) => 
     }
 
     // Reading a statement is structured work: little thinking, room for a
-    // long JSON answer (one part of the statement is ~60 lines).
-    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType, effort: 'low', maxTokens: 16000, json: true, model: ANTHROPIC_FILES_MODEL });
+    // long JSON answer (a part of the statement is ~40 lines; a cut-off
+    // answer would fall through to the next provider).
+    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType, effort: 'low', maxTokens: 32000, json: true, model: ANTHROPIC_FILES_MODEL });
     const output = aiResult.output || '[]';
     let parsed = null;
     try {
@@ -1880,16 +1882,14 @@ process.on('unhandledRejection', (err) => { console.error('unhandledRejection:',
 
 // The owner's numbers (ADMIN_EMAILS): active people, who came back, what is
 // used, and the week's failures.
-const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || 'budgetapp2852@gmail.com').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || 'budgetapp2852@gmail.com,yc196819@gmail.com').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
 // Salt for the per-person labels, so they cannot be matched to ids elsewhere.
 const ADMIN_SALT = process.env.ADMIN_SALT || VAPID_PRIVATE_KEY || 'budget';
 app.get('/api/admin/stats', requireAuth, async (req, res) => {
   try {
     // Asked of the auth server each time (not the session memory): the
     // official account only, with its email confirmed.
-    const { data: who } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
-    const u = who && who.user;
-    if (!u || !u.email_confirmed_at || !ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())) return res.status(403).json({ error: 'not allowed' });
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
     const since = new Date(Date.now() - 60 * 86400000).toISOString();
     const month = new Date(Date.now() - 30 * 86400000).toISOString();
     const [ev, er, users, calls, people] = await Promise.all([
@@ -1913,12 +1913,64 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
   }
 });
 
+// The owner's accounts only (ADMIN_EMAILS), with the email confirmed; asked
+// of the auth server every time, not taken from the session memory.
+async function isAdmin(userId) {
+  if (!supabaseAdmin || !userId) return false;
+  const { data } = await supabaseAdmin.auth.admin.getUserById(userId);
+  const u = data && data.user;
+  return !!(u && u.email_confirmed_at && ADMIN_EMAILS.includes(String(u.email || '').toLowerCase()));
+}
+
 // The live count alone, refreshed every few seconds on the dashboard.
 app.get('/api/admin/live', requireAuth, async (req, res) => {
-  const { data: who } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
-  const u = who && who.user;
-  if (!u || !u.email_confirmed_at || !ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())) return res.status(403).json({ error: 'not allowed' });
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   return res.json(presence.snapshot());
+});
+
+// ═══ requests from users (a problem or an idea) ═══
+// Saved, and the owner gets an email at once. The owner answers from the
+// dashboard; the person sees the status and the answer in the app.
+const feedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip, message: { error: 'שלחתם הרבה פניות בשעה האחרונה. נסו שוב מאוחר יותר.' } });
+app.post('/api/feedback', requireAuth, feedbackLimiter, async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const row = ops.cleanFeedback(req.body, req.authUserId);
+    if (!row) return res.status(400).json({ error: 'כתבו לפחות כמה מילים.' });
+    const { data, error } = await supabaseAdmin.from('feedback').insert(row).select('id,created_at').single();
+    if (error) throw error;
+    const who = ops.alias(req.authUserId, ADMIN_SALT);
+    const label = { bug: '🐞 תקלה', idea: '💡 הצעה', other: '✉️ פנייה' }[row.kind];
+    const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    // The email never holds the person's address: the answer goes through the app.
+    sendMailWithFallback({
+      to: ADMIN_EMAILS.join(','), subject: `${label} חדשה מ-${who}`,
+      text: `${label} מ-${who} (מסך: ${row.screen || '-'}, ${row.device || '-'})\n\n${row.text}\n\nלענות ולסמן טיפול: לוח הבעלים באפליקציה.`,
+      html: `<div dir="rtl" style="font-family:Arial,sans-serif"><b>${label}</b> מ-${who} <small>(מסך: ${esc(row.screen || '-')}, ${esc(row.device || '-')})</small><p style="white-space:pre-wrap">${esc(row.text)}</p><p style="color:#777">לענות ולסמן טיפול: לוח הבעלים באפליקציה.</p></div>`
+    }).catch((err) => console.error('feedback mail failed:', err.message));
+    return res.json({ ok: true, id: data.id });
+  } catch (err) {
+    console.error('feedback failed:', err.message);
+    return res.status(500).json({ error: 'הפנייה לא נשלחה. נסו שוב.' });
+  }
+});
+app.get('/api/admin/feedback', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  const { data, error } = await supabaseAdmin.from('feedback').select('id,user_id,kind,text,screen,device,status,owner_note,created_at,updated_at').order('created_at', { ascending: false }).limit(300);
+  if (error) return res.status(500).json({ error: 'failed' });
+  return res.json({ items: (data || []).map((f) => ({ ...f, user_id: undefined, who: ops.alias(f.user_id, ADMIN_SALT) })) });
+});
+app.post('/api/admin/feedback/:id', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  const patch = ops.feedbackPatch(req.body);
+  if (!patch) return res.status(400).json({ error: 'bad request' });
+  const { data, error } = await supabaseAdmin.from('feedback').update(patch).eq('id', String(req.params.id)).select('id,user_id,status,owner_note').maybeSingle();
+  if (error || !data) return res.status(404).json({ error: 'not found' });
+  // An answer reaches the person as a notification, opening their requests.
+  if (patch.owner_note && req.body.notify) {
+    sendPushToUser(data.user_id, { title: '📬 קיבלנו את הפנייה שלך', body: String(patch.owner_note).slice(0, 140), url: '/app/#/home' }).catch(() => {});
+  }
+  return res.json({ ok: true });
 });
 
 // ═══ stage 4: monthly report (1st of the month, cron) ═══

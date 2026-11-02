@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { money } from '../../domain/format.js';
 import { toCsv, txRows, TX_COLUMNS, exportName, binLine, daysLeft } from '../../domain/exporting.js';
 import { exportAll, binItems, restore, download } from '../../data/account.js';
+import { listImports, removeImport } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 
 // "Our data": take all of it with you, and bring back what was deleted in
@@ -12,8 +13,24 @@ export function DataView({ hid, userId, onBack }) {
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState('');
 
+  const [files, setFiles] = useState(null);
+  const [sure, setSure] = useState(null);
   const refresh = () => binItems(hid).then(setItems).catch(() => { setFailed(true); setItems([]); });
-  useEffect(() => { refresh(); }, [hid]);
+  const refreshFiles = () => listImports().then(setFiles).catch(() => setFiles([]));
+  useEffect(() => { refresh(); refreshFiles(); }, [hid]);
+  const dm = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().slice(0, 2).join('.') : '');
+  const removeFile = async (f) => {
+    if (sure !== f.id) { setSure(f.id); return; }
+    setBusy('f' + f.id);
+    try {
+      await removeImport(f.id);
+      setFiles((l) => l.filter((x) => x.id !== f.id));
+      setSure(null);
+      refresh();
+      showToast('הקובץ נמחק עם ' + f.rows + ' התנועות שלו. אפשר להחזיר מ"נמחקו לאחרונה".');
+    } catch (_e) { showToast('המחיקה לא הצליחה. נסו שוב.'); }
+    setBusy('');
+  };
 
   const take = async () => {
     setBusy('export');
@@ -41,6 +58,19 @@ export function DataView({ hid, userId, onBack }) {
       <b>📦 ייצוא כל המידע</b>
       <span class="muted" style="font-size:13px;line-height:1.6">שני קבצים: כל מה שנשמר במשק הבית (JSON), והתנועות בגיליון שנפתח באקסל. שלכם, לשמור או להעביר.</span>
       <button type="button" class="btn" disabled=${!!busy} onClick=${take}>${busy === 'export' ? 'מכין…' : 'להוריד את כל המידע'}</button>
+    </div>
+    <div class="card stack import-files" role="region" aria-label="קבצים שהועלו">
+      <b>📄 קבצים שהועלו</b>
+      <span class="muted" style="font-size:13px">העליתם קובץ לא נכון? מוחקים אותו וכל התנועות שנכנסו ממנו יוצאות מהמערכת.</span>
+      ${files === null && html`<span class="muted">טוען…</span>`}
+      ${files && files.length === 0 && html`<span class="muted">עוד לא הועלו קבצים.</span>`}
+      ${files && files.map((f) => html`<div class="file-row" key=${f.id} style="display:flex;align-items:center;gap:10px">
+        <span style="flex:1;display:flex;flex-direction:column;min-width:0">
+          <b style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.file_name || 'פירוט שהועלה ב-' + dm(f.created_at)}</b>
+          <span class="faint" style="font-size:12px"><span class="num">${f.rows}</span> תנועות${f.date_from ? html` · <span class="num">${dm(f.date_from)}–${dm(f.date_to)}</span>` : ''} · הועלה ${dm(f.created_at)}</span>
+        </span>
+        <button type="button" class="btn btn-ghost" style=${'width:auto;padding:6px 12px;' + (sure === f.id ? 'color:var(--danger);border-color:var(--danger)' : '')} disabled=${!!busy} onClick=${() => removeFile(f)} aria-label=${'למחוק את הקובץ ' + (f.file_name || dm(f.created_at))}>${busy === 'f' + f.id ? '…' : sure === f.id ? 'בטוח? למחוק ' + f.rows : 'למחוק'}</button>
+      </div>`)}
     </div>
     <div class="card stack recycle-bin" role="region" aria-label="סל המחזור">
       <b>🗑️ נמחקו לאחרונה</b>

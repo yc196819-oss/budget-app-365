@@ -9,5 +9,5 @@ export const CONFIG = {
   apiBase: '',
   // Who sees the owner's dashboard in the profile. The server checks again
   // (ADMIN_EMAILS); this only saves everyone else a request.
-  adminEmails: ['budgetapp2852@gmail.com']
+  adminEmails: ['budgetapp2852@gmail.com', 'yc196819@gmail.com']
 };

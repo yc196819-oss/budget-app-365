@@ -181,4 +181,23 @@ function daily({ events = [], calls = [], days = 14, now = new Date() }) {
   return keys.map((k) => ({ day: k, active: act.get(k).size, cost: Math.round(cost.get(k) * 100) / 100 }));
 }
 
-module.exports = { EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+// ── requests from users ──
+const FEEDBACK_KINDS = ['bug', 'idea', 'other'];
+const FEEDBACK_STATUS = ['new', 'working', 'done', 'wontfix'];
+function cleanFeedback(body, userId) {
+  const b = body || {};
+  const t = String(b.text ?? '').replace(/\r/g, '').trim().slice(0, 2000);
+  if (!userId || t.replace(/\s/g, '').length < 3) return null;
+  return { user_id: userId, kind: FEEDBACK_KINDS.includes(b.kind) ? b.kind : 'other', text: t, screen: text(b.screen, 40) || null, device: text(b.device, 40) || null };
+}
+function feedbackPatch(body) {
+  const b = body || {};
+  const out = {};
+  if (FEEDBACK_STATUS.includes(b.status)) out.status = b.status;
+  if (typeof b.owner_note === 'string') out.owner_note = b.owner_note.trim().slice(0, 1000) || null;
+  if (!Object.keys(out).length) return null;
+  out.updated_at = new Date().toISOString();
+  return out;
+}
+
+module.exports = { cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

@@ -3,7 +3,7 @@ import { track, reportError } from '../../lib/telemetry.js';
 import { useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { readStatement, ImportError } from '../../data/importer.js';
-import { addImported, removeMany, saveRow } from '../../data/household.js';
+import { addImported, removeMany, removeImport, saveRow } from '../../data/household.js';
 import { toRows, installmentDeals } from '../../domain/statement.js';
 import { showToast } from '../../lib/toast.js';
 import { PickFile } from './PickFile.js';
@@ -54,7 +54,7 @@ export function ImportSheet({ data, onClose }) {
     if (!rows.length || saving) return;
     setSaving(true);
     try {
-      const added = await addImported(rows);
+      const added = await addImported(rows, { fileName, kind: String(fileName).split('.').pop().toLowerCase().slice(0, 5) });
       // Installment payments create (or correct) their deal, so the payments
       // still to come are in the forecast. Never holds up the import.
       const deals = installmentDeals(rows, data.installments);
@@ -62,10 +62,11 @@ export function ImportSheet({ data, onClose }) {
       for (const u of deals.update) await saveRow('installments', u).catch(() => {});
       onClose();
       const ids = added.map((r) => r.id);
+      const importId = added[0] && added[0].import_id;
       track('import_done');
       showToast('נשמרו ' + added.length + ' תנועות מהפירוט', {
         ms: 8000,
-        undo: () => removeMany(ids).then(() => showToast('הייבוא בוטל')).catch(() => showToast('הביטול נכשל. אפשר למחוק את התנועות מהרשימה.'))
+        undo: () => (importId ? removeImport(importId) : removeMany(ids)).then(() => showToast('הייבוא בוטל')).catch(() => showToast('הביטול נכשל. אפשר למחוק את הקובץ מ"קבצים שהועלו" בפרופיל.'))
       });
     } catch (err) {
       setSaving(false);
