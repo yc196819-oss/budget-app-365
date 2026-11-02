@@ -118,7 +118,19 @@ test('the service worker keeps only the app\'s own files; the API and Supabase n
   assert.ok(sw.includes('if (url.search && !/^\\?action=[a-z]+$/.test(url.search)) return'), 'sign-in and invite links go to the network; a shortcut (?action=) opens the shell');
   for (const p of ['/shortcut-add.png', '/shortcut-talk.svg']) assert.ok(rule.test(p), p);
   assert.match(sw, /app-updated/);
-  assert.match(sw, /existing\.navigate/);
+  // A tapped notification opens its screen: the open window is told where to go.
+  assert.match(sw, /postMessage\(\{ type: 'open', url \}\)/);
+  assert.match(sw, /openWindow\(url\)/);
+  // The status-bar icon is a one-color silhouette (a full-color one shows as a white square).
+  assert.match(sw, /badge: '\/badge-96\.png'/);
+  assert.ok(rule.test('/badge-96.png'));
+  // Links from notifications stay inside the app: old ?tab= links and other sites open home.
+  const openUrl = new Function('self', sw.slice(sw.indexOf('function openUrl'), sw.indexOf('// A tap opens')) + '; return openUrl;')({ location: { origin: 'https://x.app' } });
+  assert.equal(openUrl('/app/#/together/abc'), '/app/#/together/abc');
+  assert.equal(openUrl('/app/?action=ask'), '/app/?action=ask');
+  assert.equal(openUrl('https://x.app/?tab=dash'), '/app/#/home');
+  assert.equal(openUrl('https://evil.example/app/'), '/app/#/home');
+  assert.equal(openUrl(undefined), '/app/');
 });
 
 test('decision notifications need a signed-in member', async () => {

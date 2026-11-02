@@ -1,7 +1,7 @@
 // "What the advisor learned from this conversation": the prompt that asks
 // the AI for concrete, approvable updates, and the parsing of its answer.
-// The app checks every item again against the household's data and the
-// person approves each one before anything is saved.
+// The app checks every item again against the household's data, then
+// applies it and shows it with undo (or asks first, if the person chose so).
 
 const KINDS = ['memory', 'goal', 'goal_update', 'budget', 'balance', 'loan', 'installment', 'income'];
 

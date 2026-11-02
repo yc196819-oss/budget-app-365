@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { buildSummary, parseReply, starters, newTitle, historyFor } from '../../domain/advisor.js';
 import { listConversations, openConversation, createConversation, addMessage, setPrivate, loadMemories, streamReply } from '../../data/advisor.js';
-import { setAiEnabled } from '../../lib/settings.js';
+import { setAiEnabled, autoLearn } from '../../lib/settings.js';
 import { canListen, listen, canSpeak, speak, stopSpeaking } from '../../lib/speech.js';
 import { useAiSetting } from './useAiSetting.js';
 import { LearnReview } from './LearnReview.js';
-import { normalizeItems, learnContext, learnMessages, worthLearning } from '../../domain/learn.js';
-import { askLearnings, applyLearnings } from '../../data/learn.js';
+import { normalizeItems, learnContext, learnMessages, worthLearning, isValid, describeItem } from '../../domain/learn.js';
+import { askLearnings, applyLearnings, undoLearning } from '../../data/learn.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { snapshot as decisionsSnapshot } from '../../data/decisions.js';
 import { forAdvisor } from '../../domain/decisions.js';
@@ -42,6 +42,8 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   // "What I learned": null, or { status: loading|review|saving|done|error, items, result, error }
   const [learn, setLearn] = useState(null);
   const [offer, setOffer] = useState(false);
+  // What the advisor updated by itself after the last reply: [{ ...item, undone }].
+  const [updated, setUpdated] = useState([]);
   const memories = useRef(null);
   const logRef = useRef(null);
   const abort = useRef(null);
@@ -62,14 +64,14 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [conv]);
 
   const open = async (id) => {
-    setError(''); setSuggestions([]); setLearn(null); setOffer(false);
+    setError(''); setSuggestions([]); setLearn(null); setOffer(false); setUpdated([]);
     try { setConv(await openConversation(id)); } catch (_err) { setError('לא הצלחנו לפתוח את השיחה. נסו שוב.'); }
   };
 
   const send = async (text) => {
     const msg = String(text || '').trim();
     if (!msg || busy || !aiOn) return null;
-    setBusy(true); setError(''); setSuggestions([]); setDraft(''); setOffer(false);
+    setBusy(true); setError(''); setSuggestions([]); setDraft(''); setOffer(false); setUpdated([]);
     let c = convRef.current;
     let answered = null;
     try {
@@ -100,8 +102,12 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       setSuggestions(reply.suggestions);
       // The full reply is saved, with the follow-ups, as the current app does.
       await addMessage({ conversationId: c.id, hid, userId: me, role: 'ai', text: raw || finalText });
-      // Offer to save what was said, when the person mentioned an amount or a decision.
-      if (worthLearning([...c.messages.slice(0, -1)], learnedFrom(c.id))) setOffer(true);
+      // When the person mentioned an amount or a decision: update the data
+      // from the conversation (shown, with undo), or offer to, if they chose so.
+      if (worthLearning([...c.messages.slice(0, -1)], learnedFrom(c.id))) {
+        if (autoLearn()) learnQuietly({ ...c, messages: c.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me } : m)) });
+        else setOffer(true);
+      }
       refresh();
     } catch (err) {
       setConv((cur) => cur && { ...cur, messages: cur.messages.filter((m) => !m.pending) });
@@ -152,6 +158,26 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     ${talk === 'speaking' && html`<button type="button" class="btn-text" onClick=${() => { stopSpeaking(); talkRound(); }}>לדלג</button>`}
     <button type="button" class="btn btn-ghost talk-end" onClick=${() => endTalk()}>סיום</button>
   </div>`;
+
+  // Reads the conversation and applies what fits the data, without asking;
+  // the note under the conversation says what changed and can undo each.
+  const learnQuietly = async (c) => {
+    try {
+      if (!memories.current) memories.current = await loadMemories(hid).catch(() => []);
+      const ctx = { ...data, memories: memories.current };
+      const raw = await askLearnings({ messages: learnMessages(c.messages, memberName), context: learnContext(ctx) });
+      const items = normalizeItems(raw, ctx).filter(isValid);
+      markLearned(c.id, c.messages.length);
+      if (!items.length) return;
+      const { done } = await applyLearnings(items, { hid, userId: me, conversationId: c.id });
+      memories.current = null;
+      if (done.length) { setUpdated(done.map((it) => ({ ...it, undone: false }))); track('learn_auto'); }
+    } catch (_err) { /* the conversation goes on; "what I learned" still works */ }
+  };
+  const undoOne = async (i) => {
+    const it = updated[i];
+    try { await undoLearning(it, { hid }); memories.current = null; setUpdated((u) => u.map((x, j) => (j === i ? { ...x, undone: true } : x))); track('learn_undo'); } catch (_err) { setError('הביטול לא נשמר. נסו שוב.'); }
+  };
 
   const startLearn = async () => {
     setOffer(false); setError('');
@@ -222,6 +248,13 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
           ${m.role === 'ai' && !m.pending && m.text && canSpeak() && html`<button type="button" class="adv-speak" aria-label=${speaking === i ? 'להפסיק להקריא' : 'להקריא'} onClick=${() => toggleSpeak(i, m.text)}>${speaking === i ? '■' : '🔊'}</button>`}
         </div>`)}
       </div>
+      ${updated.length > 0 && html`<div class="card learn-auto" role="status">
+        <b style="font-size:14px">📝 עדכנתי לפי השיחה</b>
+        ${updated.map((it, i) => html`<div class="learn-auto-row" style="display:flex;align-items:center;gap:8px;font-size:13px">
+          <span style=${'flex:1;' + (it.undone ? 'text-decoration:line-through;opacity:.55' : '')}>${describeItem(it)}</span>
+          ${it.undone ? html`<span class="faint" style="font-size:12px">בוטל</span>` : html`<button type="button" class="btn-text" style="font-size:13px" onClick=${() => undoOne(i)}>ביטול</button>`}
+        </div>`)}
+      </div>`}
       ${suggestions.length > 0 && html`<div class="chips">${suggestions.map((s) => html`<button type="button" class="chip" disabled=${busy || !aiOn} onClick=${() => send(s)}>${s}</button>`)}</div>`}
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
       ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>💡 סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>

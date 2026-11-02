@@ -1,7 +1,8 @@
 // "What the advisor learned": the AI reads a conversation and proposes
 // updates (decisions to remember, goals, budgets, balances, loans,
-// installments, income). Nothing is saved without the person approving each
-// item. This module checks every proposal against the household's real data,
+// installments, income). By default the app applies them by itself and shows
+// each, with undo; with that switched off, the person approves each item.
+// This module checks every proposal against the household's real data,
 // so only updates that make sense, and actually change something, reach the
 // screen. Pure: no DOM, no network.
 
@@ -198,4 +199,21 @@ export function worthLearning(messages, from = 0) {
 export function learnMessages(messages, nameOf) {
   return (messages || []).filter((m) => (m.role === 'user' || m.role === 'ai') && m.text && !m.pending)
     .slice(-30).map((m) => ({ role: m.role, author: m.role === 'user' ? nameOf(m.author_id) : undefined, text: String(m.text).slice(0, 1500) }));
+}
+
+// One line saying what was updated, for the "I updated from our talk" note.
+const ils = (n) => '₪' + Math.round(Number(n) || 0).toLocaleString('he-IL');
+const GOAL_WORD = { target_amount: 'סכום', saved_amount: 'נחסך', target_date: 'תאריך' };
+export function describeItem(item) {
+  switch (item.kind) {
+    case 'memory': return 'זוכר: ' + item.text;
+    case 'goal': return 'יעד חדש: ' + item.name + ' · ' + ils(item.target_amount) + (item.target_date ? ' עד ' + item.target_date.split('-').reverse().join('.') : '');
+    case 'goal_update': return 'יעד ' + item.name + ': ' + Object.entries(item.set).map(([f, v]) => GOAL_WORD[f] + ' ' + (f === 'target_date' ? String(v).split('-').reverse().join('.') : ils(v))).join(', ');
+    case 'budget': return 'תקציב ' + item.category + ': ' + ils(item.amount) + (item.before ? ' (היה ' + ils(item.before) + ')' : '');
+    case 'balance': return 'יתרה ב' + item.account + ': ' + ils(item.balance) + (item.before !== null && item.before !== undefined ? ' (היה ' + ils(item.before) + ')' : '');
+    case 'loan': return (item.direction === 'tome' ? 'חייבים לכם: ' : 'אתם חייבים ל') + item.counterparty + ' ' + ils(item.amount);
+    case 'installment': return 'עסקה בתשלומים: ' + item.description + ' · ' + item.payments_count + ' × ' + ils(item.total_amount / item.payments_count);
+    case 'income': return 'הכנסה חודשית: ' + ils(item.amount) + (item.before ? ' (היה ' + ils(item.before) + ')' : '');
+    default: return '';
+  }
 }

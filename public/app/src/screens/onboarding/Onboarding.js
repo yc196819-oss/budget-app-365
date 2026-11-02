@@ -1,12 +1,14 @@
 import { html } from '../../lib/html.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { createHousehold } from '../../data/onboarding.js';
+import { track } from '../../lib/telemetry.js';
 import { firstPicture } from '../../domain/onboarding.js';
 import { setAiEnabled } from '../../lib/settings.js';
 import { StepWho, StepLife, StepCards, StepMoney, StepPrivacy } from './Steps.js';
 import { DoneScreen } from './DoneScreen.js';
 
 const STEPS = ['מי אתם?', 'מה רלוונטי לכם?', 'איך אתם משלמים?', 'כמה נכנס וכמה קבוע?', 'פרטיות'];
+const reached = new Set();
 const INITIAL = { name: '', mode: 'together', partner: '', life: { car: true, subs: true }, cards: [{ name: 'ויזה', last4: '', day: 10, type: 'credit' }], income: '', fixed: {}, saving: 0, ai: true };
 
 // A new user: welcome, five short steps, then a summary with what to do first.
@@ -15,6 +17,11 @@ export function Onboarding({ session }) {
   const meta = session.user.user_metadata || {};
   const [stage, setStage] = useState('welcome'); // welcome | setup | saving | done
   const [step, setStep] = useState(1);
+  // Which step people reach (and finish), to see where they stop.
+  useEffect(() => {
+    const name = stage === 'welcome' ? 'onboard_0' : stage === 'done' ? 'onboard_done' : 'onboard_' + step;
+    if (!reached.has(name)) { reached.add(name); track(name); }
+  }, [stage, step]);
   const [a, setA] = useState(() => ({ ...INITIAL, name: meta.display_name || (meta.full_name || meta.name || '').split(' ')[0] || '' }));
   const [error, setError] = useState('');
   const [created, setCreated] = useState(null);

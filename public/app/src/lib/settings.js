@@ -13,3 +13,11 @@ export function subscribeSettings(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
+
+// The advisor updates goals, budgets and the rest from what is said in a
+// conversation by itself (each update shown, with undo). Off: it asks first.
+export const autoLearn = () => readLocal('learn:manual', '') !== '1';
+export function setAutoLearn(on) {
+  writeLocal('learn:manual', on ? '' : '1');
+  listeners.forEach((fn) => fn());
+}

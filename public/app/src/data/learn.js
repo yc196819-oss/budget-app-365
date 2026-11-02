@@ -1,6 +1,6 @@
 import { sb } from '../lib/supabase.js';
 import { CONFIG } from '../config.js';
-import { saveGoal, setBudget, setBalance, saveRow, setIncome } from './household.js';
+import { saveGoal, deleteGoal, setBudget, setBalance, saveRow, deleteRow, setIncome } from './household.js';
 
 // What the advisor learned: ask the server, then save what the person
 // approved, each item into the place it belongs. Memories live in
@@ -50,9 +50,27 @@ export async function applyLearnings(items, ctx) {
   const done = [];
   const failed = [];
   for (const item of items) {
-    try { await saveOne(item, ctx); done.push(item); } catch (_err) { failed.push(item); }
+    // The saved row is kept, so the update can be undone.
+    try { const saved = await saveOne(item, ctx); done.push({ ...item, saved: saved && saved.id ? { id: saved.id } : null }); } catch (_err) { failed.push(item); }
   }
   return { done, failed };
+}
+
+// Puts back what an applied item changed (the advisor updated it by itself,
+// and the person said no).
+export function undoLearning(item, { hid }) {
+  const id = item.saved && item.saved.id;
+  switch (item.kind) {
+    case 'memory': return id ? deleteMemory(id, hid) : Promise.resolve();
+    case 'goal': return id ? deleteGoal(id) : Promise.resolve();
+    case 'goal_update': return saveGoal({ id: item.goal_id, ...item.before });
+    case 'budget': return setBudget(item.category_id, item.before || 0);
+    case 'balance': return item.before === null || item.before === undefined ? Promise.resolve() : setBalance(item.account_id, item.before);
+    case 'loan': return id ? deleteRow('loans', id) : Promise.resolve();
+    case 'installment': return id ? deleteRow('installments', id) : Promise.resolve();
+    case 'income': return setIncome(item.before || 0);
+    default: return Promise.resolve();
+  }
 }
 
 // ── memories: what the advisor knows about the household ──

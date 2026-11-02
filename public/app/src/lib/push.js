@@ -10,7 +10,23 @@ import { CONFIG } from '../config.js';
 export function registerWorker(onUpdate) {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('/sw.js').catch(() => {});
-  navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.type === 'app-updated' && onUpdate) onUpdate(); });
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'app-updated' && onUpdate) onUpdate();
+    if (e.data && e.data.type === 'open') openInApp(e.data.url);
+  });
+}
+
+// A tapped notification, while the app is open: go to its screen. An action
+// (?action=ask) or a view inside the tab already showing needs a fresh load,
+// so the screen opens in that state; another tab is just a hash change.
+export function openInApp(url) {
+  let u;
+  try { u = new URL(url, location.origin); } catch (_e) { return; }
+  if (u.origin !== location.origin) return;
+  const tabOf = (h) => String(h || '').replace(/^#\/?/, '').split(/[/?]/)[0];
+  if (u.search || u.pathname !== location.pathname) { location.assign(u.href); return; }
+  if (tabOf(u.hash) === tabOf(location.hash)) { location.hash = u.hash; location.reload(); return; }
+  location.hash = u.hash || '#/home';
 }
 
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);

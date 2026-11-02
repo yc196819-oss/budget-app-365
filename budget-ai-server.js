@@ -233,7 +233,8 @@ async function sendPushToUser(userId, { title, body, url }) {
     throw err;
   }
 
-  const payload = JSON.stringify({ title: title || 'ניהול תקציב', body: body || '', url: url || APP_URL });
+  // url: where a tap on the notification opens the app (a path under /app/).
+  const payload = JSON.stringify({ title: title || 'ניהול תקציב', body: body || '', url: url || '/app/' });
   const results = await Promise.allSettled(subs.map((s) => webpush.sendNotification(
     { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
     payload
@@ -1307,7 +1308,7 @@ app.post('/api/tasks/remind-due', async (req, res) => {
       const title = list.length === 1 ? '📋 משימה מהיועץ מחכה לך' : `📋 ${list.length} משימות מהיועץ מחכות לך`;
       const body = list[0].title + (list.length > 1 ? ` ועוד ${list.length - 1}` : '') + (overdue ? ` (${overdue} באיחור)` : '');
       try {
-        await sendPushToUser(userId, { title, body, url: (APP_URL.replace(/\/$/, '')) + '/?tab=advisor' });
+        await sendPushToUser(userId, { title, body, url: '/app/?action=ask' });
         sentUsers += 1;
       } catch (_e) { /* no subscription for this user – the in-app list still shows it */ }
       await supabaseAdmin.from('advisor_tasks').update({ last_reminded_on: today }).in('id', list.map((t) => t.id));
@@ -1585,7 +1586,7 @@ app.post('/api/alerts/run', async (req, res) => {
       created += fresh.length;
       if (fresh.length) {
         await pushHousehold(hid, { title: fresh.length === 1 ? '💡 היועץ שם לב למשהו' : `💡 היועץ שם לב ל-${fresh.length} דברים`,
-          body: fresh[0].title + (fresh.length > 1 ? ` ועוד ${fresh.length - 1}` : ''), url: APP_URL.replace(/\/$/, '') + '/?tab=dash' });
+          body: fresh[0].title + (fresh.length > 1 ? ` ועוד ${fresh.length - 1}` : ''), url: '/app/#/home' });
       }
     }
     return res.json({ ok: true, households: ids.length, created });
@@ -1640,7 +1641,7 @@ app.post('/api/checkin/run', async (req, res) => {
         .upsert({ household_id: hid, week_start: weekStart, summary, decisions }, { onConflict: 'household_id,week_start', ignoreDuplicates: true }).select('id');
       if (row && row.length) {
         made += 1;
-        await pushHousehold(hid, { title: '📅 רבע השעה הזוגית שלכם מוכנה', body: `השבוע יצאו ₪${summary.spentWeek.toLocaleString('he-IL')}. ${decisions.length ? decisions.length + ' החלטות קטנות מחכות לכם.' : ''}`.trim(), url: APP_URL.replace(/\/$/, '') + '/?tab=dash&checkin=1' });
+        await pushHousehold(hid, { title: '📅 רבע השעה הזוגית שלכם מוכנה', body: `השבוע יצאו ₪${summary.spentWeek.toLocaleString('he-IL')}. ${decisions.length ? decisions.length + ' החלטות קטנות מחכות לכם.' : ''}`.trim(), url: '/app/#/plans/checkin' });
       }
     }
     return res.json({ ok: true, households: ids.length, created: made });
@@ -1917,7 +1918,7 @@ narrative: 2–3 משפטים — מה היה החודש לעומת הקודם, 
         .upsert({ household_id: hid, month, data }, { onConflict: 'household_id,month', ignoreDuplicates: true }).select('id');
       if (row && row.length) {
         made += 1;
-        await pushHousehold(hid, { title: `📊 הדוח של ${data.monthLabel} מוכן`, body: `נשארו ₪${data.balance.toLocaleString('he-IL')} · 3 המלצות לחודש הבא`, url: APP_URL.replace(/\/$/, '') + '/?tab=dash&report=1' });
+        await pushHousehold(hid, { title: `📊 הדוח של ${data.monthLabel} מוכן`, body: `נשארו ₪${data.balance.toLocaleString('he-IL')} · 3 המלצות לחודש הבא`, url: '/app/#/money/report' });
       }
     }
     return res.json({ ok: true, month, households: ids.length, created: made });
@@ -1936,7 +1937,7 @@ app.post('/api/push/test', requireAuth, notifyLimiter, async (req, res) => {
     const result = await sendPushToUser(req.authUserId, {
       title: 'התראת ניסיון 🔔',
       body: 'זו התראה לדוגמה ממערכת התקציב. אם אתה רואה אותה — ההתראות עובדות!',
-      url: APP_URL
+      url: '/app/#/home'
     });
     return res.json({ ok: true, ...result });
   } catch (err) {
