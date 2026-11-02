@@ -227,6 +227,39 @@ test('a wrong file is removed whole: every line it brought, after a second tap t
   await page.close();
 });
 
+test('an uploaded file gets a name of its own, and the original file name stays in view', async () => {
+  const { page, errors, db } = await open({
+    setup: (d) => {
+      d.tables.imports = [
+        { id: 'imp1', household_id: 'h1', file_name: 'Statement_1029384.pdf', kind: 'pdf', rows: 3, date_from: '2026-10-01', date_to: '2026-10-20', created_at: '2026-10-28T20:00:00Z' },
+        { id: 'imp0', household_id: 'h1', file_name: null, kind: 'pdf', rows: 5, created_at: '2026-09-02T20:00:00Z' }
+      ];
+    }
+  });
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=המידע שלנו: קבצים, ייצוא ושחזור');
+  const files = page.locator('.import-files');
+  await files.locator('.file-row').first().waitFor();
+  assert.match(await files.textContent(), /פירוט שהועלה ב-02\.09/, 'a file from before names were kept still shows its date');
+  await files.locator('button[aria-label="לתת שם לקובץ Statement_1029384.pdf"]').click();
+  await files.locator('input[aria-label="שם לקובץ"]').fill('ויזה אוקטובר');
+  await files.locator('button:has-text("לשמור")').click();
+  await page.waitForSelector('text=השם נשמר');
+  assert.equal(db.tables.imports.find((x) => x.id === 'imp1').title, 'ויזה אוקטובר');
+  const row = files.locator('.file-row').first();
+  assert.match(await row.textContent(), /ויזה אוקטובר/);
+  assert.match(await row.locator('.file-original').textContent(), /Statement_1029384\.pdf/);
+  // Clearing the name goes back to the original.
+  await files.locator('button[aria-label="לתת שם לקובץ ויזה אוקטובר"]').click();
+  await files.locator('input[aria-label="שם לקובץ"]').fill('');
+  await files.locator('button:has-text("לשמור")').click();
+  await page.waitForFunction(() => !document.querySelector('.file-name-form'));
+  assert.equal(db.tables.imports.find((x) => x.id === 'imp1').title, null);
+  assert.equal(await files.locator('.file-original').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('the invitation back: shown before it is sent, and sent only after a second tap', async () => {
   const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
   let posts = 0;
