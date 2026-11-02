@@ -72,6 +72,11 @@ test('a new version reaches an app that stays open: the page loads it by itself,
   await mockSupabase(page, makeFakeDb());
   await signIn(page, server.base);
   await page.waitForSelector('.hero');
+  // The worker is installed, then a fresh load runs under it (as on a phone
+  // that already has the app).
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await page.waitForSelector('.hero');
   await page.waitForFunction(() => navigator.serviceWorker.controller);
   await page.evaluate(() => { window.__sameLoad = true; });
   // A deploy: the worker file changes on the server (put back right after).
