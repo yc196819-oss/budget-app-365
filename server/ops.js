@@ -296,6 +296,9 @@ function mailErrorText(err) {
   if (/No email provider/i.test(m)) return 'השרת לא מחובר לשום שירות לשליחת מיילים (לא Resend ולא Gmail/SMTP).';
   if (/only send testing emails|verify a domain|not verified/i.test(m)) return 'Resend מוגדר רק במצב ניסיון: הוא שולח רק לכתובת שפתחה את חשבון ה-Resend. צריך לחבר דומיין, או לשלוח דרך Gmail.';
   if (/Invalid login|Username and Password not accepted|EAUTH|535/i.test(m)) return 'הכניסה לחשבון המייל נכשלה: הסיסמה (סיסמת האפליקציה של Gmail) לא נכונה.';
+  if (/brevo:.*(sender|not valid|not verified)/i.test(m)) return 'Brevo לא מכיר את כתובת השולח: צריך לאשר אותה ב-Brevo (Senders), או לתקן את BREVO_FROM.';
+  if (/brevo:.*(key|unauthorized|401)/i.test(m)) return 'מפתח ה-Brevo לא נכון (BREVO_API_KEY).';
+  if (/smtp:.*(ETIMEDOUT|ECONNREFUSED|timeout)/i.test(m)) return 'השרת חוסם שליחה דרך Gmail/SMTP (בתוכנית החינמית של Render). צריך לחבר את Brevo.';
   if (/ETIMEDOUT|ECONNREFUSED|ENOTFOUND|timeout/i.test(m)) return 'לא הצלחנו להתחבר לשרת המיילים. נסו שוב בעוד רגע.';
   return 'השליחה נכשלה: ' + m.slice(0, 160);
 }
@@ -304,9 +307,10 @@ const campaignTitle = (c) => (MAILS[c] ? MAILS[c].title : '');
 
 // Can the server email people? Resend's shared test address only delivers to
 // the Resend account's own email, so it does not count.
-function mailReady({ resendKey = '', resendFrom = '', smtp = false } = {}) {
+// SMTP is listed but not counted: Render's free plan blocks it.
+function mailReady({ brevo = false, resendKey = '', resendFrom = '', smtp = false } = {}) {
   const resend = !!resendKey && !/@resend\.dev>?\s*$/i.test(String(resendFrom));
-  return { ready: smtp || resend, smtp: !!smtp, resend, resendTestOnly: !!resendKey && !resend };
+  return { ready: !!brevo || resend, brevo: !!brevo, smtp: !!smtp, resend, resendTestOnly: !!resendKey && !resend };
 }
 
 module.exports = { mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

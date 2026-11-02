@@ -199,10 +199,11 @@ test('each email goes to the people at its step of getting started, once each', 
   assert.equal(campaignMail('nope', 'x'), null);
 });
 
-test('mail is ready with SMTP or a Resend sender of your own, not with Resend\'s test address', () => {
+test('mail is ready with Brevo or a Resend sender of your own; not with SMTP (blocked on Render free) or Resend\'s test address', () => {
   assert.equal(mailReady({}).ready, false);
-  assert.equal(mailReady({ smtp: true }).ready, true);
-  assert.deepEqual(mailReady({ resendKey: 'k', resendFrom: 'Budget App <onboarding@resend.dev>' }), { ready: false, smtp: false, resend: false, resendTestOnly: true });
+  assert.equal(mailReady({ smtp: true }).ready, false);
+  assert.equal(mailReady({ brevo: true }).ready, true);
+  assert.deepEqual(mailReady({ resendKey: 'k', resendFrom: 'Budget App <onboarding@resend.dev>' }), { ready: false, brevo: false, smtp: false, resend: false, resendTestOnly: true });
   assert.equal(mailReady({ resendKey: 'k', resendFrom: 'קובי <hi@budget.co.il>' }).ready, true);
 });
 
@@ -210,5 +211,8 @@ test('why an email did not go, in words the owner can act on', () => {
   assert.match(mailErrorText(new Error('No email provider is configured')), /לא מחובר לשום שירות/);
   assert.match(mailErrorText(new Error('resend: You can only send testing emails to your own email address')), /Resend מוגדר רק במצב ניסיון/);
   assert.match(mailErrorText(new Error('smtp: Invalid login: 535-5.7.8 Username and Password not accepted')), /סיסמת האפליקציה של Gmail/);
+  assert.match(mailErrorText(new Error('smtp: Connection timeout')), /חוסם שליחה דרך Gmail\/SMTP/);
+  assert.match(mailErrorText(new Error('brevo: Sender is not valid')), /לאשר אותה ב-Brevo/);
+  assert.match(mailErrorText(new Error('brevo: Key not found')), /מפתח ה-Brevo/);
   assert.match(mailErrorText(new Error('weird')), /השליחה נכשלה: weird/);
 });

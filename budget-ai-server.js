@@ -276,6 +276,11 @@ const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || '';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+// Brevo: sends over HTTPS (Render's free plan blocks SMTP), free up to 300 a
+// day, from a single verified address (no domain of our own needed).
+const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
+const BREVO_FROM = process.env.BREVO_FROM || '';
+const BREVO_NAME = process.env.BREVO_NAME || 'קובי מהתקציב שלנו';
 // resend.dev works immediately with no domain setup -- fine for a personal
 // app. Once/if a real domain is verified on the Resend account, set
 // RESEND_FROM to an address on that domain instead.
@@ -697,6 +702,30 @@ async function sendViaGoogleMail({ userId, to, subject, html, text }) {
   return { provider: 'google-gmail', from: googleMail.email };
 }
 
+async function sendViaBrevo({ to, subject, html, text }) {
+  if (!BREVO_API_KEY || !BREVO_FROM) throw new Error('Brevo is not configured');
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 20000);
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      signal: ac.signal,
+      headers: { 'api-key': BREVO_API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        sender: { name: BREVO_NAME, email: BREVO_FROM },
+        replyTo: { email: BREVO_FROM },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html || undefined,
+        textContent: text || undefined
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error('brevo: ' + (data.message || data.code || 'request failed (' + res.status + ')'));
+    return { provider: 'brevo', from: BREVO_FROM };
+  } finally { clearTimeout(t); }
+}
+
 async function sendViaResend({ to, subject, html, text }) {
   if (!RESEND_API_KEY) {
     throw new Error('Resend is not configured');
@@ -724,6 +753,14 @@ async function sendViaResend({ to, subject, html, text }) {
 
 async function sendMailWithFallback({ userId, to, subject, html, text }) {
   const errors = [];
+
+  if (BREVO_API_KEY && BREVO_FROM) {
+    try {
+      return await sendViaBrevo({ to, subject, html, text });
+    } catch (err) {
+      errors.push(err.message || String(err));
+    }
+  }
 
   if (RESEND_API_KEY) {
     try {
@@ -773,6 +810,7 @@ app.get('/api/health', async (_req, res) => {
     supabaseConfigured: !!supabaseAdmin,
     smtpConfigured: !!mailer,
     resendConfigured: !!RESEND_API_KEY,
+    brevoConfigured: !!(BREVO_API_KEY && BREVO_FROM),
     pushConfigured: PUSH_CONFIGURED
   });
 });
@@ -1951,7 +1989,7 @@ async function campaignData() {
   };
 }
 const appLinkOf = (req) => (process.env.PUBLIC_URL || (req.protocol + '://' + req.get('host'))).replace(/\/$/, '') + '/app/';
-const mailStatus = () => ops.mailReady({ resendKey: RESEND_API_KEY, resendFrom: RESEND_FROM, smtp: !!mailer });
+const mailStatus = () => ops.mailReady({ brevo: !!(BREVO_API_KEY && BREVO_FROM), resendKey: RESEND_API_KEY, resendFrom: RESEND_FROM, smtp: !!mailer });
 // How an email looks, with its design, for the dashboard's preview (shown in
 // a frame there). The wording is not private: it is the same for everyone.
 app.get('/mail-preview/:campaign', (req, res) => {
