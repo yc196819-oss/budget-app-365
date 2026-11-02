@@ -53,8 +53,8 @@ export async function adminStats() {
 export async function adminReengage() {
   try { return await api('/api/admin/reengage'); } catch (_e) { return null; }
 }
-export function sendReengage(campaign = 'start', { test = false } = {}) {
-  return api('/api/admin/reengage', { method: 'POST', body: { campaign, test } });
+export function sendReengage(campaign = 'start', { test = false, limit } = {}) {
+  return api('/api/admin/reengage', { method: 'POST', body: { campaign, test, ...(limit ? { limit } : {}) } });
 }
 
 export async function adminLive() {

@@ -1981,19 +1981,22 @@ app.post('/api/admin/reengage', requireAuth, async (req, res) => {
       const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
       const to = data && data.user && data.user.email;
       if (!to) return res.status(400).json({ error: 'no email' });
-      try { const r = await sendMailWithFallback({ to, ...mail, subject: '[ניסיון] ' + mail.subject }); return res.json({ test: true, to, provider: r && r.provider }); } catch (err) { return res.status(502).json({ error: 'המייל לא נשלח: ' + String(err.message || err).slice(0, 200) }); }
+      try { const r = await sendMailWithFallback({ to, ...mail, subject: '[ניסיון] ' + mail.subject }); return res.json({ test: true, to, provider: r && r.provider }); } catch (err) { console.error('test mail failed:', err.message); return res.status(502).json({ error: ops.mailErrorText(err) }); }
     }
     if (!mailStatus().ready) return res.status(503).json({ error: 'השרת עוד לא מוגדר לשלוח מיילים למשתמשים.' });
-    const list = ops.campaignList(campaign, await campaignData());
-    let sent = 0, failed = 0;
+    const all = ops.campaignList(campaign, await campaignData());
+    // A few at a time, so the dashboard can show the real progress.
+    const limit = Math.max(1, Math.min(50, Number(req.body && req.body.limit) || 50));
+    const list = all.slice(0, limit);
+    let sent = 0, failed = 0, lastError = '';
     for (const u of list) {
       // Marked first: a person never gets the same email twice, even if this is pressed again.
       const { error } = await supabaseAdmin.from('mail_sent').insert({ user_id: u.id, campaign });
       if (error) continue;
-      try { await sendMailWithFallback({ to: u.email, ...mail }); sent++; } catch (_e) { failed++; }
+      try { await sendMailWithFallback({ to: u.email, ...mail }); sent++; } catch (err) { failed++; lastError = ops.mailErrorText(err); }
       await delay(400);
     }
-    return res.json({ sent, failed });
+    return res.json({ sent, failed, left: all.length - list.length, error: lastError || undefined });
   } catch (err) {
     console.error('campaign failed:', err.message);
     return res.status(500).json({ error: 'failed' });
