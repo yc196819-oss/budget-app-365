@@ -181,3 +181,92 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke execute on function public.ops_tx_span() from public, anon, authenticated;
 grant execute on function public.ops_tx_span() to service_role;
+
+-- Applied 2026-11-02 (member_count_own_households): the member count only for
+-- the caller's own households, and nothing of it for someone not signed in.
+create or replace function public.household_member_count(p_hid uuid)
+returns integer language sql stable security definer set search_path to 'public' as $$
+  select count(*)::int from public.memberships where household_id = p_hid and p_hid in (select public.my_households())
+$$;
+revoke execute on function public.household_member_count(uuid) from anon;
+revoke execute on function public.my_households() from anon;
+
+-- Applied 2026-11-03 (two_step_login): a code from an authenticator app
+-- (Supabase MFA, aal2) or a code sent by email (our own, per session).
+-- Whoever turned either on sees no data until the current session passed it.
+create table if not exists public.mfa_email (
+  user_id uuid primary key,
+  enabled boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+create table if not exists public.mfa_email_codes (
+  user_id uuid primary key,
+  code_hash text not null,
+  purpose text not null default 'login' check (purpose in ('login', 'enable')),
+  expires_at timestamptz not null,
+  attempts integer not null default 0,
+  sent_at timestamptz not null default now()
+);
+create table if not exists public.mfa_email_sessions (
+  session_id uuid primary key,
+  user_id uuid not null,
+  verified_at timestamptz not null default now()
+);
+alter table public.mfa_email enable row level security;
+alter table public.mfa_email_codes enable row level security;
+alter table public.mfa_email_sessions enable row level security;
+revoke all on public.mfa_email_codes from anon, authenticated;
+revoke all on public.mfa_email_sessions from anon, authenticated;
+revoke insert, update on public.mfa_email from anon, authenticated;
+create policy mfa_email_read_own on public.mfa_email for select to authenticated using (user_id = (select auth.uid()));
+
+create or replace function public.mfa_state_for(p_user uuid, p_aal text, p_session uuid)
+returns jsonb language sql stable security definer set search_path = public, auth as $$
+  with f as (
+    select exists (select 1 from auth.mfa_factors m where m.user_id = p_user and m.status = 'verified' and m.factor_type = 'totp') as totp,
+           exists (select 1 from public.mfa_email e where e.user_id = p_user and e.enabled) as email
+  )
+  select jsonb_build_object(
+    'totp', f.totp, 'email', f.email, 'required', f.totp or f.email,
+    'ok', not (f.totp or f.email) or p_aal = 'aal2'
+          or (p_session is not null and exists (select 1 from public.mfa_email_sessions s where s.session_id = p_session and s.user_id = p_user))
+  ) from f
+$$;
+revoke execute on function public.mfa_state_for(uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public.mfa_state_for(uuid, text, uuid) to service_role;
+
+create or replace function public.my_mfa_state()
+returns jsonb language sql stable security definer set search_path = public, auth as $$
+  select public.mfa_state_for(auth.uid(), auth.jwt() ->> 'aal', nullif(auth.jwt() ->> 'session_id', '')::uuid)
+$$;
+revoke execute on function public.my_mfa_state() from public, anon;
+grant execute on function public.my_mfa_state() to authenticated;
+
+create or replace function public.mfa_ok()
+returns boolean language sql stable security definer set search_path = public, auth as $$
+  select auth.uid() is null or coalesce((public.my_mfa_state() ->> 'ok')::boolean, true)
+$$;
+revoke execute on function public.mfa_ok() from public, anon;
+grant execute on function public.mfa_ok() to authenticated;
+
+create or replace function public.my_sessions()
+returns table (id uuid, created_at timestamptz, last_seen timestamptz, user_agent text, ip text, current boolean)
+language sql stable security definer set search_path = public, auth as $$
+  select s.id, s.created_at, coalesce(s.refreshed_at, s.updated_at, s.created_at), s.user_agent, host(s.ip)::text,
+         s.id = nullif(auth.jwt() ->> 'session_id', '')::uuid
+  from auth.sessions s
+  where s.user_id = auth.uid() and (s.not_after is null or s.not_after > now())
+  order by coalesce(s.refreshed_at, s.updated_at, s.created_at) desc
+  limit 20
+$$;
+revoke execute on function public.my_sessions() from public, anon;
+grant execute on function public.my_sessions() to authenticated;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['advisor_alerts','advisor_conversations','advisor_memories','advisor_messages','advisor_tasks','agent_actions','ai_usage','bank_accounts','categories','category_budgets','checkin_feelings','credit_cards','decision_messages','decision_reads','decision_votes','feedback','goals','household_reset_codes','households','imports','installments','investment_snapshots','investment_trades','investments','invites','loans','memberships','monthly_reports','news_digests','push_subscriptions','recycle_bin','shared_decisions','transactions','trips','user_settings','weekly_checkins']
+  loop
+    execute format('create policy two_step_required on public.%I as restrictive for all to authenticated using ((select public.mfa_ok())) with check ((select public.mfa_ok()))', t);
+  end loop;
+end $$;

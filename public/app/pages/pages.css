@@ -23,3 +23,8 @@ ol { margin: 0; padding-inline-start: 22px; display: flex; flex-direction: colum
 .share-glyph { vertical-align: -3px; color: var(--accent); }
 .legal h2 { color: var(--accent); }
 .legal p, .legal li { color: var(--text); }
+/* "How we protect you" */
+.secure .shield { color: var(--accent); }
+.layers { list-style: none; padding: 0; gap: 12px; }
+.layers h2 { color: var(--accent); margin: 0; }
+.layers p { margin: 0; }

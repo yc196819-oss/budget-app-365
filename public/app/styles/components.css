@@ -573,3 +573,10 @@ body.chat-open { overflow: hidden; }
 .chip-add { border-style: dashed; color: var(--accent); }
 .new-category { display: flex; flex-direction: column; gap: 10px; }
 .icon-pick .chip { font-size: 18px; padding: 4px 8px; min-width: 40px; }
+/* "Your security" */
+.sec-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.sec-row .btn { flex: none; min-width: 0; }
+.sec-tag { align-self: flex-start; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.sec-tag.sec-on { background: var(--income-tint); color: var(--income); }
+.sec-steps { background: var(--surface-2); }
+.sec-list { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.6; }

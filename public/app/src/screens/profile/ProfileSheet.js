@@ -12,6 +12,7 @@ import { DeleteAccount } from './DeleteAccount.js';
 import { DataView } from './DataView.js';
 import { AdminView } from './AdminView.js';
 import { FeedbackView } from './FeedbackView.js';
+import { SecurityView } from './SecurityView.js';
 import { telemetryOn, setTelemetry } from '../../lib/telemetry.js';
 import { CONFIG } from '../../config.js';
 
@@ -29,6 +30,9 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
   }
   if (view === 'feedback') {
     return html`<${Sheet} title="פנייה אלינו" onClose=${onClose}><${FeedbackView} userId=${userId} onBack=${() => setView('main')} /><//>`;
+  }
+  if (view === 'security') {
+    return html`<${Sheet} title="האבטחה שלך" onClose=${onClose}><${SecurityView} onBack=${() => setView('main')} onOpenData=${hid ? () => setView('data') : null} /><//>`;
   }
   if (view === 'admin') {
     return html`<${Sheet} title="לוח בעלים" onClose=${onClose}><${AdminView} onBack=${() => setView('main')} /><//>`;
@@ -57,6 +61,7 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
           <span class="muted" style="font-size:12px;line-height:1.5">שולח דיווח כשמשהו נשבר, ואילו פעולות נעשו (למשל "נוספה הוצאה"). בלי סכומים, שמות או מה שכתבתם.</span></span>
         <input type="checkbox" role="switch" checked=${usage} onChange=${(e) => { setTelemetry(e.target.checked); setUsage(e.target.checked); }} aria-label="עזרה בשיפור האפליקציה" />
       </label>
+      <button type="button" class="btn btn-ghost" onClick=${() => setView('security')}><${Icon} name="shield" />האבטחה שלך: כניסה בשני שלבים ומכשירים</button>
       <${InstallCard} always=${true} />
       ${hid && html`<${PushToggle} userId=${userId} hid=${hid} />`}
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}>🧠 מה היועץ יודע עלינו</button>`}
