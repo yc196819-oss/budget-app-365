@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { asOfLabel } from '../../domain/numbers.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { threadFor, unreadCount, withDays, readBy, STATUS, outcome, needsMyAnswer, canConclude, isClosed, votesFor, VOTES, answerers } from '../../domain/decisions.js';
 import { money, initials } from '../../domain/format.js';
@@ -133,6 +134,7 @@ export function ChatScreen({ d, dec, data, userId, memberIds, nameOf, onClose, o
           return html`<div class="wa-msg ai" key=${m.id}>
             <span class="wa-ai-head"><span class="wa-orb" aria-hidden="true">✨</span><b>היועץ</b>${m.author_id ? html`<small>לבקשת ${m.author_id === userId ? 'את/ה' : nameOf(m.author_id)}</small>` : ''}</span>
             <${AdvisorText} text=${m.text} />
+            ${asOfLabel(m.created_at) && html`<small class="adv-asof">${asOfLabel(m.created_at)}. בכרטיס מופיע המצב של עכשיו.</small>`}
             <span class="wa-meta">${hm(m.created_at)}</span></div>`;
         }
         const mine = m.author_id === userId;

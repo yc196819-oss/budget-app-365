@@ -3,6 +3,7 @@ import { track } from '../../lib/telemetry.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { buildSummary, parseReply, starters, newTitle, historyFor } from '../../domain/advisor.js';
+import { alignNumbers, truthsOf, asOfLabel } from '../../domain/numbers.js';
 import { listConversations, openConversation, createConversation, addMessage, setPrivate, loadMemories, streamReply } from '../../data/advisor.js';
 import { setAiEnabled, autoLearn } from '../../lib/settings.js';
 import { canListen, listen, canSpeak, speak, stopSpeaking } from '../../lib/speech.js';
@@ -95,6 +96,9 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
         raw += delta;
         setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m === aiMsg || (m.pending && m.role === 'ai') ? { ...m, text: parseReply(raw).text } : m)) });
       }, abort.current.signal);
+      // The numbers in the answer are the screen's numbers, exactly.
+      const truths = truthsOf(summary);
+      raw = alignNumbers(raw, truths);
       const reply = parseReply(raw);
       const finalText = reply.text || 'לא התקבלה תשובה. נסו לנסח אחרת.';
       answered = reply.text || null;
@@ -236,7 +240,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
         ${conv.id && aiOn && !learn && conv.messages.some((m) => m.role === 'user') && html`<button type="button" class="chip learn-btn" disabled=${busy} onClick=${startLearn}>💡 מה למדתי</button>`}
         ${conv.id && mine && html`<button type="button" class="chip" aria-pressed=${String(conv.is_private)} onClick=${togglePrivate}>${conv.is_private ? '🔒 פרטית' : '👥 משותפת'}</button>`}
       </div>
-      ${!mine && html`<span class="faint" style="font-size:12px">שיחה ש${memberName(conv.user_id)} פתח/ה. אפשר להמשיך אותה.</span>`}
+      ${!mine && html`<span class="faint" style="font-size:14px">שיחה ש${memberName(conv.user_id)} פתח/ה. אפשר להמשיך אותה.</span>`}
       ${learn ? html`<${LearnReview} state=${learn} onChange=${(items) => setLearn((l) => ({ ...l, items }))} onApply=${applyLearn} onCancel=${closeLearn} onRetry=${startLearn} />` : html`
       <div class="adv-log" ref=${logRef} aria-live="polite">
         ${conv.messages.length === 0 && html`<div class="muted" style="font-size:14px;text-align:center;padding:16px 0">שאלו כל דבר על הכסף שלכם</div>`}
@@ -245,14 +249,15 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
           ${m.pending && !m.text
             ? html`<span class="adv-thinking" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>היועץ חושב…</span>`
             : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
+          ${m.role === 'ai' && asOfLabel(m.created_at) && html`<small class="adv-asof">${asOfLabel(m.created_at)}</small>`}
           ${m.role === 'ai' && !m.pending && m.text && canSpeak() && html`<button type="button" class="adv-speak" aria-label=${speaking === i ? 'להפסיק להקריא' : 'להקריא'} onClick=${() => toggleSpeak(i, m.text)}>${speaking === i ? '■' : '🔊'}</button>`}
         </div>`)}
       </div>
       ${updated.length > 0 && html`<div class="card learn-auto" role="status">
         <b style="font-size:14px">📝 עדכנתי לפי השיחה</b>
-        ${updated.map((it, i) => html`<div class="learn-auto-row" style="display:flex;align-items:center;gap:8px;font-size:13px">
+        ${updated.map((it, i) => html`<div class="learn-auto-row" style="display:flex;align-items:center;gap:8px;font-size:14px">
           <span style=${'flex:1;' + (it.undone ? 'text-decoration:line-through;opacity:.55' : '')}>${describeItem(it)}</span>
-          ${it.undone ? html`<span class="faint" style="font-size:12px">בוטל</span>` : html`<button type="button" class="btn-text" style="font-size:13px" onClick=${() => undoOne(i)}>ביטול</button>`}
+          ${it.undone ? html`<span class="faint" style="font-size:14px">בוטל</span>` : html`<button type="button" class="btn-text" style="font-size:14px" onClick=${() => undoOne(i)}>ביטול</button>`}
         </div>`)}
       </div>`}
       ${suggestions.length > 0 && html`<div class="chips">${suggestions.map((s) => html`<button type="button" class="chip" disabled=${busy || !aiOn} onClick=${() => send(s)}>${s}</button>`)}</div>`}
@@ -268,16 +273,16 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     ${talkBar}
     ${offCard}
     ${aiOn && html`<div class="stack" style="gap:8px">
-      <b style="font-size:13px;color:var(--muted)">אפשר לשאול למשל</b>
+      <b style="font-size:14px;color:var(--muted)">אפשר לשאול למשל</b>
       <div class="chips">${starters(screen).map((s) => html`<button type="button" class="chip" disabled=${busy} onClick=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(s); }}>${s}</button>`)}</div>
       <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
     </div>`}
     ${error && html`<div class="adv-err" role="alert">${error}</div>`}
     <div class="stack" style="gap:6px">
-      <b style="font-size:13px;color:var(--muted)">שיחות אחרונות</b>
+      <b style="font-size:14px;color:var(--muted)">שיחות אחרונות</b>
       ${list === null && !listError && html`<div class="list" aria-busy="true">${[0, 1, 2].map((i) => html`<div class="skel-row" key=${i}><span class="skel" style="width:60%"></span><span class="skel" style="width:35%"></span></div>`)}</div>`}
-      ${listError && html`<span class="muted" style="font-size:13px">לא הצלחנו לטעון את השיחות. <button type="button" class="btn-text" onClick=${refresh}>לנסות שוב</button></span>`}
-      ${list && list.length === 0 && html`<span class="muted" style="font-size:13px">עוד אין שיחות.</span>`}
+      ${listError && html`<span class="muted" style="font-size:14px">לא הצלחנו לטעון את השיחות. <button type="button" class="btn-text" onClick=${refresh}>לנסות שוב</button></span>`}
+      ${list && list.length === 0 && html`<span class="muted" style="font-size:14px">עוד אין שיחות.</span>`}
       ${list && list.length > 0 && html`<div class="list">${list.map((c) => html`<button type="button" class="row" key=${c.id} onClick=${() => open(c.id)}>
         <span class="row-main"><b>${c.title || 'שיחה'}</b><span>${(c.user_id === me ? 'שלך' : 'של ' + memberName(c.user_id)) + (c.is_private ? ' · 🔒 פרטית' : '') + ' · ' + when(c.updated_at)}</span></span>
       </button>`)}</div>`}

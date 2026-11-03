@@ -137,9 +137,13 @@ export function normalizeMessages(rows, legacy, ownerId) {
   const list = (rows && rows.length ? rows : (Array.isArray(legacy) ? legacy.filter((m) => !m.pending).map((m) => ({ ...m, author_id: m.author_id || ownerId })) : []));
   return list
     .filter((m) => m.role === 'user' || m.role === 'ai' || m.role === 'advice')
-    .map((m) => (m.role === 'advice'
-      ? { id: m.id, role: 'ai', text: adviceText(m.data), author_id: m.author_id }
-      : { id: m.id, role: m.role, text: m.role === 'ai' ? parseReply(m.text).text : String(m.text || ''), author_id: m.author_id }));
+    // With when it was written, if known: the advisor's numbers are as of then.
+    .map((m) => ({
+      ...(m.role === 'advice'
+        ? { id: m.id, role: 'ai', text: adviceText(m.data), author_id: m.author_id }
+        : { id: m.id, role: m.role, text: m.role === 'ai' ? parseReply(m.text).text : String(m.text || ''), author_id: m.author_id }),
+      ...(m.created_at ? { created_at: m.created_at } : {})
+    }));
 }
 
 // The first "analysis" message of the current app is structured; shown as text.

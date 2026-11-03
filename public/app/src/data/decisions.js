@@ -1,4 +1,5 @@
 import { sb } from '../lib/supabase.js';
+import { alignNumbers, truthsOf } from '../domain/numbers.js';
 import { track } from '../lib/telemetry.js';
 import { CONFIG } from '../config.js';
 import { outcome, advisorQuestion, summaryQuestion, voiceBalance, impact, forAdvisor, threadFor, threadHistory } from '../domain/decisions.js';
@@ -239,7 +240,8 @@ export async function askAdvisor({ decision, data, userId, memberIds, onDelta, s
   let raw = '';
   const message = advisorQuestion(decision, state.votes, memberIds, realName, fx, new Date(), thread.length > 0, voiceBalance(thread, memberIds));
   await streamReply({ summary, history: threadHistory(thread, realName), message, authorName: realName(userId) }, (delta) => { raw += delta; onDelta && onDelta(parseReply(raw).text); }, signal);
-  const text = parseReply(raw).text;
+  // The numbers in the answer are the card's numbers, exactly.
+  const text = alignNumbers(parseReply(raw).text, truthsOf({ amount: decision.amount, fx, summary }));
   if (!text) throw new Error('לא התקבלה תשובה מהיועץ. נסו שוב.');
   const msg = await addMessage({ decision_id: decision.id, role: 'ai', author_id: userId, text });
   notify(decision.id, 'advisor');
