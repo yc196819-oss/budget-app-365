@@ -729,7 +729,7 @@ async function sendViaGoogleMail({ userId, to, subject, html, text }) {
   return { provider: 'google-gmail', from: googleMail.email };
 }
 
-async function sendViaBrevo({ to, subject, html, text }) {
+async function sendViaBrevo({ to, subject, html, text, headers }) {
   if (!BREVO_API_KEY || !BREVO_FROM) throw new Error('Brevo is not configured');
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 20000);
@@ -741,10 +741,11 @@ async function sendViaBrevo({ to, subject, html, text }) {
       body: JSON.stringify({
         sender: { name: BREVO_NAME, email: BREVO_FROM },
         replyTo: { email: BREVO_FROM },
-        to: [{ email: to }],
+        to: String(to).split(',').map((e) => e.trim()).filter(Boolean).map((email) => ({ email })),
         subject,
         htmlContent: html || undefined,
-        textContent: text || undefined
+        textContent: text || undefined,
+        headers: headers || undefined
       })
     });
     const data = await res.json().catch(() => ({}));
@@ -778,12 +779,12 @@ async function sendViaResend({ to, subject, html, text }) {
   return { provider: 'resend', from: RESEND_FROM };
 }
 
-async function sendMailWithFallback({ userId, to, subject, html, text }) {
+async function sendMailWithFallback({ userId, to, subject, html, text, headers }) {
   const errors = [];
 
   if (BREVO_API_KEY && BREVO_FROM) {
     try {
-      return await sendViaBrevo({ to, subject, html, text });
+      return await sendViaBrevo({ to, subject, html, text, headers });
     } catch (err) {
       errors.push(err.message || String(err));
     }
@@ -2182,13 +2183,112 @@ app.post('/api/admin/feedback/:id', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   const patch = ops.feedbackPatch(req.body);
   if (!patch) return res.status(400).json({ error: 'bad request' });
-  const { data, error } = await supabaseAdmin.from('feedback').update(patch).eq('id', String(req.params.id)).select('id,user_id,status,owner_note').maybeSingle();
+  const { data, error } = await supabaseAdmin.from('feedback').update(patch).eq('id', String(req.params.id)).select('id,user_id,status,owner_note,text').maybeSingle();
   if (error || !data) return res.status(404).json({ error: 'not found' });
-  // An answer reaches the person as a notification, opening their requests.
+  // An answer reaches the person as a notification and by email.
+  let mailed = false;
   if (patch.owner_note && req.body.notify) {
     sendPushToUser(data.user_id, { title: '📬 קיבלנו את הפנייה שלך', body: String(patch.owner_note).slice(0, 140), url: '/app/#/home' }).catch(() => {});
+    try {
+      const { data: u } = await supabaseAdmin.auth.admin.getUserById(data.user_id);
+      const to = u && u.user && u.user.email;
+      if (to && mailStatus().ready) { await sendMailWithFallback({ to, ...ops.answerMail({ question: data.text, answer: patch.owner_note, link: appLinkOf(req) }) }); mailed = true; }
+    } catch (err) { console.error('answer mail failed:', err.message); }
   }
-  return res.json({ ok: true });
+  return res.json({ ok: true, mailed });
+});
+
+
+// ═══ the monthly summary by email ═══
+// Each member who did not turn it off gets it once a month. The link at the
+// bottom turns it off without signing in (and mail apps show "unsubscribe").
+const UNSUB_SECRET = process.env.UNSUB_SECRET || VAPID_PRIVATE_KEY || ADMIN_SALT;
+const publicOrigin = (req) => (process.env.PUBLIC_URL || (req ? req.protocol + '://' + req.get('host') : 'https://budget-web-u0iy.onrender.com')).replace(/\/$/, '');
+const unsubLinkFor = (userId, origin) => origin + '/unsubscribe?u=' + encodeURIComponent(userId) + '&t=' + ops.unsubToken(userId, UNSUB_SECRET);
+async function mailMonthly(hid, data, { only = null, origin = publicOrigin(null), force = false } = {}) {
+  if (!mailStatus().ready) return { sent: 0 };
+  const ids = only ? [only] : await householdMembers(hid);
+  const { data: prefs } = await supabaseAdmin.from('mail_prefs').select('user_id,monthly').in('user_id', ids);
+  const off = new Set((prefs || []).filter((p) => p.monthly === false).map((p) => p.user_id));
+  let sent = 0;
+  for (const uid of ids) {
+    if (off.has(uid) && !force) continue;
+    const { data: u } = await supabaseAdmin.auth.admin.getUserById(uid);
+    const to = u && u.user && u.user.email;
+    if (!to) continue;
+    const key = 'monthly-' + data.month;
+    // Marked first, so a person never gets the same month twice; a failed send is unmarked.
+    if (!force) { const { error } = await supabaseAdmin.from('mail_sent').insert({ user_id: uid, campaign: key }); if (error) continue; }
+    const unsub = unsubLinkFor(uid, origin);
+    try {
+      await sendMailWithFallback({ to, ...ops.monthlyMail(data, { link: origin + '/app/', unsubLink: unsub }),
+        headers: { 'List-Unsubscribe': '<' + unsub + '>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } });
+      sent++;
+    } catch (err) {
+      if (!force) await supabaseAdmin.from('mail_sent').delete().eq('user_id', uid).eq('campaign', key);
+      throw err;
+    }
+    await delay(400);
+  }
+  return { sent };
+}
+async function latestReport(hid) {
+  const { data } = await supabaseAdmin.from('monthly_reports').select('month,data').eq('household_id', hid).order('month', { ascending: false }).limit(1).maybeSingle();
+  if (!data) return null;
+  const p = new Date(data.month + '-15T12:00:00Z'); p.setUTCMonth(p.getUTCMonth() - 1);
+  return { ...data.data, month: data.month, prev: { ...(data.data.prev || {}), month: p.toISOString().slice(0, 7) } };
+}
+// The owner: see it in their own inbox, with their own household's numbers.
+app.post('/api/admin/monthly-mail/test', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  try {
+    const { data: m } = await supabaseAdmin.from('memberships').select('household_id').eq('user_id', req.authUserId).order('created_at', { ascending: true }).limit(1).maybeSingle();
+    const report = m && await latestReport(m.household_id);
+    if (!report) return res.status(404).json({ error: 'עוד אין דוח חודשי למשק הבית שלך.' });
+    const r = await mailMonthly(m.household_id, report, { only: req.authUserId, origin: publicOrigin(req), force: true });
+    return res.json({ ok: true, sent: r.sent, month: report.month });
+  } catch (err) { return res.status(502).json({ error: ops.mailErrorText(err) }); }
+});
+// The owner: send the latest month's summary to everyone who has not had it.
+app.post('/api/admin/monthly-mail/send', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  if (!mailStatus().ready) return res.status(503).json({ error: 'השרת עוד לא מוגדר לשלוח מיילים.' });
+  try {
+    const { data: rows } = await supabaseAdmin.from('monthly_reports').select('household_id,month').order('month', { ascending: false }).limit(500);
+    const month = rows && rows[0] && rows[0].month;
+    let sent = 0;
+    for (const r of (rows || []).filter((x) => x.month === month)) {
+      const report = await latestReport(r.household_id);
+      if (report && report.month === month) sent += (await mailMonthly(r.household_id, report, { origin: publicOrigin(req) })).sent;
+    }
+    return res.json({ ok: true, month, sent });
+  } catch (err) { return res.status(502).json({ error: ops.mailErrorText(err) }); }
+});
+// Turning it off (or back on) from the email, without signing in. The page
+// asks for one tap, so a mail scanner opening the link changes nothing; mail
+// apps' own "unsubscribe" button posts here directly (RFC 8058).
+function unsubPage(title, body) {
+  return '<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + title + ' · התקציב שלנו</title>'
+    + '<link rel="icon" href="/wallet.svg" type="image/svg+xml"><link rel="stylesheet" href="/app/pages/pages.css"></head><body><main class="page"><section class="hero"><img src="/wallet-512.png" alt=""><h1>' + title + '</h1></section>' + body + '</main></body></html>';
+}
+const unsubForm = (u, t, on, label, ghost) => '<form method="post" action="/unsubscribe"><input type="hidden" name="u" value="' + ops.escHtml(u) + '"><input type="hidden" name="t" value="' + ops.escHtml(t) + '">'
+  + (on ? '<input type="hidden" name="on" value="1">' : '') + '<button class="btn' + (ghost ? ' btn-ghost' : '') + '" type="submit">' + label + '</button></form>';
+app.get('/unsubscribe', (req, res) => {
+  res.setHeader('Content-Security-Policy', NEW_APP_CSP);
+  const u = String(req.query.u || ''), t = String(req.query.t || '');
+  if (!ops.unsubOk(u, t, UNSUB_SECRET)) return res.status(400).type('html').send(unsubPage('הקישור לא תקין', '<p class="lead">אפשר לכבות את הסיכום החודשי גם בפרופיל באפליקציה.</p><a class="btn" href="/app/">לאפליקציה</a>'));
+  return res.type('html').send(unsubPage('הסיכום החודשי במייל', '<p class="lead">להפסיק לקבל את הסיכום החודשי במייל?</p>' + unsubForm(u, t, false, 'כן, להפסיק') + '<a class="btn btn-ghost" href="/app/">לא, להשאיר</a>'));
+});
+app.post('/unsubscribe', express.urlencoded({ extended: false, limit: '2kb' }), async (req, res) => {
+  res.setHeader('Content-Security-Policy', NEW_APP_CSP);
+  const b = req.body || {};
+  const u = String(b.u || req.query.u || ''), t = String(b.t || req.query.t || '');
+  if (!supabaseAdmin || !ops.unsubOk(u, t, UNSUB_SECRET)) return res.status(400).type('html').send(unsubPage('הקישור לא תקין', '<a class="btn" href="/app/">לאפליקציה</a>'));
+  const on = b.on === '1';
+  const { error } = await supabaseAdmin.from('mail_prefs').upsert({ user_id: u, monthly: on, updated_at: new Date().toISOString() });
+  if (error) return res.status(500).type('html').send(unsubPage('משהו נכשל', '<p class="lead">נסו שוב בעוד רגע, או כבו בפרופיל באפליקציה.</p>'));
+  if (on) return res.type('html').send(unsubPage('הסיכום החודשי חזר', '<p class="lead">נשלח לכם סיכום בתחילת כל חודש.</p><a class="btn" href="/app/">לאפליקציה</a>'));
+  return res.type('html').send(unsubPage('הוסרתם מהסיכום החודשי', '<p class="lead">לא נשלח לכם יותר את הסיכום החודשי. מיילים חשובים על החשבון, כמו קוד כניסה, ימשיכו להגיע.</p>' + unsubForm(u, t, true, 'טעיתי, להחזיר', true)));
 });
 
 // ═══ stage 4: monthly report (1st of the month, cron) ═══
@@ -2202,7 +2302,7 @@ app.post('/api/reports/run', async (req, res) => {
     const prevMonth = p.toISOString().slice(0, 7);
     const { data: hhs } = await supabaseAdmin.from('memberships').select('household_id');
     const ids = [...new Set((hhs || []).map((m) => m.household_id))];
-    let made = 0;
+    let made = 0, mailed = 0;
     const monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
     for (const hid of ids) {
       const [{ data: tx }, { data: cats }, { data: goals }, { data: tasks }, { data: mems }] = await Promise.all([
@@ -2250,9 +2350,10 @@ narrative: 2–3 משפטים — מה היה החודש לעומת הקודם, 
       if (row && row.length) {
         made += 1;
         await pushHousehold(hid, { title: `📊 הדוח של ${data.monthLabel} מוכן`, body: `נשארו ₪${data.balance.toLocaleString('he-IL')} · 3 המלצות לחודש הבא`, url: '/app/#/money/report' });
+        try { mailed += (await mailMonthly(hid, { ...data, prev: { ...data.prev, month: prevMonth } })).sent; } catch (err) { console.error('monthly mail failed:', err.message); }
       }
     }
-    return res.json({ ok: true, month, households: ids.length, created: made });
+    return res.json({ ok: true, month, households: ids.length, created: made, mailed });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

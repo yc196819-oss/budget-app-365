@@ -224,3 +224,15 @@ test('two-step login routes need a signed-in person', async () => {
     assert.ok(res.status === 401 || res.status === 503, path + ' ' + res.status);
   }
 });
+
+test('the monthly email: owner routes need sign-in, and a bad unsubscribe link changes nothing', async () => {
+  for (const p of ['/api/admin/monthly-mail/test', '/api/admin/monthly-mail/send']) {
+    const res = await fetch(BASE + p, { method: 'POST' });
+    assert.ok(res.status === 401 || res.status === 503, p + ' ' + res.status);
+  }
+  const bad = await fetch(BASE + '/unsubscribe?u=x&t=y');
+  assert.equal(bad.status, 400);
+  assert.match(await bad.text(), /הקישור לא תקין/);
+  const post = await fetch(BASE + '/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'u=x&t=y' });
+  assert.equal(post.status, 400);
+});

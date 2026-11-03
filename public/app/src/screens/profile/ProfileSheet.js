@@ -4,7 +4,9 @@ import { Icon } from '../../components/Icon.js';
 import { setAiEnabled, autoLearn, setAutoLearn } from '../../lib/settings.js';
 import { useAiSetting } from '../advisor/useAiSetting.js';
 import { InviteButton } from '../../components/InviteButton.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { monthlyMailOn, setMonthlyMail } from '../../data/account.js';
+import { showToast } from '../../lib/toast.js';
 import { MemoriesView } from './MemoriesView.js';
 import { PushToggle } from '../../components/PushToggle.js';
 import { InstallCard } from '../../components/InstallCard.js';
@@ -21,6 +23,12 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
   const [view, setView] = useState('main');
   const [usage, setUsage] = useState(telemetryOn);
   const [learnAuto, setLearnAuto] = useState(autoLearn);
+  const [monthly, setMonthly] = useState(null);
+  useEffect(() => { if (userId) monthlyMailOn(userId).then(setMonthly).catch(() => setMonthly(null)); }, [userId]);
+  const toggleMonthly = async (on) => {
+    setMonthly(on);
+    try { await setMonthlyMail(userId, on); } catch (_e) { setMonthly(!on); showToast('לא נשמר. נסו שוב.'); }
+  };
   const isAdmin = CONFIG.adminEmails.includes(String(profile.email || '').toLowerCase());
   if (view === 'memories') {
     return html`<${Sheet} title="מה היועץ יודע עלינו" onClose=${onClose}><${MemoriesView} hid=${hid} userId=${userId} onBack=${() => setView('main')} /><//>`;
@@ -61,6 +69,11 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
           <span class="muted" style="font-size:12px;line-height:1.5">שולח דיווח כשמשהו נשבר, ואילו פעולות נעשו (למשל "נוספה הוצאה"). בלי סכומים, שמות או מה שכתבתם.</span></span>
         <input type="checkbox" role="switch" checked=${usage} onChange=${(e) => { setTelemetry(e.target.checked); setUsage(e.target.checked); }} aria-label="עזרה בשיפור האפליקציה" />
       </label>
+      ${monthly !== null && html`<label class="check toggle-row">
+        <span style="flex:1;display:flex;flex-direction:column"><b>סיכום חודשי במייל</b>
+          <span class="muted" style="font-size:12px;line-height:1.5">בתחילת כל חודש: כמה נכנס ויצא, מה בלט, ו-3 דברים לחודש הבא.</span></span>
+        <input type="checkbox" role="switch" checked=${monthly} onChange=${(e) => toggleMonthly(e.target.checked)} aria-label="סיכום חודשי במייל" />
+      </label>`}
       <button type="button" class="btn btn-ghost" onClick=${() => setView('security')}><${Icon} name="shield" />האבטחה שלך: כניסה בשני שלבים ומכשירים</button>
       <${InstallCard} always=${true} />
       ${hid && html`<${PushToggle} userId=${userId} hid=${hid} />`}

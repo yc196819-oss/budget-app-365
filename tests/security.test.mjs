@@ -63,3 +63,34 @@ test('sending the code again: a one-minute clock', () => {
   assert.equal(clock(60), '1:00');
   assert.equal(clock(5), '0:05');
 });
+
+test('the monthly summary email: what stood out, safe text, and a working unsubscribe link', () => {
+  const d = { month: '2026-10', income: 12000, expense: 9800, balance: 2200, prev: { expense: 11000 },
+    topCategories: [{ name: 'אוכל <script>', amount: 3000, prev: 2500 }, { name: 'רכב', amount: 900, prev: 1600 }, { name: 'בית', amount: 2500, prev: 2500 }],
+    goals: [{ name: 'חופשה', pct: 40 }], narrative: 'חודש טוב', recommendations: ['לבשל בבית', 'לבטל מנוי', 'לחסוך 300'] };
+  const ins = ops.monthInsights(d);
+  assert.equal(ins.subject, 'אוקטובר שלכם: נשארו ₪2,200');
+  assert.match(ins.lines[0], /11% פחות מאשר בספטמבר/);
+  assert.ok(ins.lines.some((l) => /הקפיצה הכי גדולה: אוכל/.test(l)));
+  assert.ok(ins.lines.some((l) => /חסכתם הכי הרבה ברכב: ₪700/.test(l)));
+  assert.equal(ops.monthInsights({ ...d, balance: -1200 }).subject, 'אוקטובר שלכם: חריגה של ₪1,200');
+  assert.equal(ops.monthInsights({ ...d, income: 0, prev: {} }).subject, 'אוקטובר שלכם: הוצאתם ₪9,800');
+  const m = ops.monthlyMail(d, { link: 'https://x.app/app/', unsubLink: 'https://x.app/unsubscribe?u=a&t=b' });
+  assert.doesNotMatch(m.html, /<script>/, 'what people typed is escaped');
+  assert.match(m.html, /https:\/\/x\.app\/unsubscribe\?u=a&amp;t=b/);
+  assert.match(m.html, /\/#\/money\/report/);
+  assert.match(m.text, /לבשל בבית/);
+  const u = '3f1c2b4a-1111-2222-3333-444455556666';
+  const t = ops.unsubToken(u, 'secret');
+  assert.equal(ops.unsubOk(u, t, 'secret'), true);
+  assert.equal(ops.unsubOk(u, t, 'other'), false);
+  assert.equal(ops.unsubOk('3f1c2b4a-1111-2222-3333-444455556667', t, 'secret'), false, 'a link is for one person');
+  assert.equal(ops.unsubOk('x', 'y', 'secret'), false);
+});
+
+test('an answer to a request, by email', () => {
+  const m = ops.answerMail({ question: 'למה <b>?', answer: 'תוקן!', link: 'https://x.app/app/' });
+  assert.match(m.html, /למה &lt;b&gt;\?/);
+  assert.match(m.html, /תוקן!/);
+  assert.match(m.text, /תוקן!/);
+});

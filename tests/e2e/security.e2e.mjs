@@ -157,3 +157,24 @@ test('an account with a password, when the email code is on for all: it shows as
   assert.equal(await page.locator('.sec-tag').first().textContent(), 'פועל');
   await page.close();
 });
+
+test('the monthly summary email: on unless turned off, and one tap in the profile turns it off', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const errors = collectErrors(page);
+  const db = makeFakeDb();
+  const calls = [];
+  await mockSupabase(page, db, calls);
+  await page.route('**/rest/v1/rpc/my_mfa_state', (r) => r.fulfill(json({ required: false, ok: true })));
+  await signIn(page, server.base);
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  const toggle = page.locator('input[aria-label="סיכום חודשי במייל"]');
+  await toggle.waitFor();
+  assert.equal(await toggle.isChecked(), true, 'on by default');
+  await toggle.click();
+  await page.waitForFunction(() => true);
+  await page.waitForTimeout(300);
+  assert.deepEqual(db.tables.mail_prefs.map((r) => [r.user_id, r.monthly]), [['u1', false]]);
+  assert.equal(await toggle.isChecked(), false);
+  assert.deepEqual(clean(errors), []);
+  await page.close();
+});

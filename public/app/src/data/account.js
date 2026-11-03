@@ -68,3 +68,17 @@ export function download(name, text, type) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+
+// The monthly summary by email: this person's own choice (on unless turned off).
+export async function monthlyMailOn(userId) {
+  const { data, error } = await sb.from('mail_prefs').select('monthly').eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  return data ? data.monthly !== false : true;
+}
+export async function setMonthlyMail(userId, on) {
+  const { error } = await sb.from('mail_prefs').upsert({ user_id: userId, monthly: !!on, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+// The owner: the monthly email to themselves, or to everyone who has not had it.
+export const testMonthlyMail = () => api('/api/admin/monthly-mail/test', { method: 'POST' });
+export const sendMonthlyMail = () => api('/api/admin/monthly-mail/send', { method: 'POST' });

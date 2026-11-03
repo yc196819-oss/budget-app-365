@@ -314,3 +314,20 @@ grant execute on function public.mfa_state_for(uuid, text, uuid) to service_role
 --     where exists (select 1 from auth.identities i where i.user_id = s.user_id and i.provider = 'email')
 --     on conflict (session_id) do nothing;
 --   update public.app_flags set on_ = true, updated_at = now() where key = 'email_code_for_all';
+
+-- Applied 2026-11-03 (monthly_mail): the monthly summary by email; each person
+-- can turn it off (in the app, or with one click from the email).
+create table if not exists public.mail_prefs (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  monthly boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+alter table public.mail_prefs enable row level security;
+revoke all on public.mail_prefs from anon;
+create policy mail_prefs_own on public.mail_prefs for all to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+create policy two_step_required on public.mail_prefs as restrictive for all to authenticated
+  using ((select public.mfa_ok())) with check ((select public.mfa_ok()));
+alter table public.mail_sent drop constraint if exists mail_sent_campaign_check;
+alter table public.mail_sent add constraint mail_sent_campaign_check
+  check (campaign in ('start', 'first', 'more') or campaign ~ '^monthly-[0-9]{4}-[0-9]{2}$');

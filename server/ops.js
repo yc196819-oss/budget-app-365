@@ -351,4 +351,116 @@ function codeMail(code, purpose = 'login') {
   return { subject, text, html };
 }
 
-module.exports = { tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+// ── Emails with the app's look: the shell, the monthly summary, an answer ──
+const escHtml = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nis = (n) => '₪' + Math.round(Math.abs(Number(n) || 0)).toLocaleString('en-US');
+const MONTHS_HE = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+const monthName = (ym) => MONTHS_HE[Number(String(ym).slice(5, 7)) - 1] || '';
+
+function mailShell({ origin, inner, footer }) {
+  return '<!doctype html><html lang="he" dir="rtl"><body style="margin:0;padding:0;background:#F3EDE6">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3EDE6"><tr><td align="center" style="padding:24px 12px">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" dir="rtl" style="max-width:560px;font-family:Arial,Helvetica,sans-serif;text-align:right">'
+    + '<tr><td style="padding:0 4px 14px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+    + '<td><img src="' + origin + '/wallet-192.png" width="40" height="40" alt="" style="display:block;border:0;border-radius:10px"></td>'
+    + '<td style="padding-right:10px;font-size:19px;font-weight:bold;color:#2B2118">התקציב שלנו</td></tr></table></td></tr>'
+    + '<tr><td style="background:#FFFFFF;border-radius:18px;padding:28px 26px;box-shadow:0 1px 3px rgba(0,0,0,.06)">' + inner + '</td></tr>'
+    + '<tr><td style="padding:16px 8px 0;font-size:12px;line-height:1.7;color:#8A7B6E;text-align:center">' + footer + '</td></tr>'
+    + '</table></td></tr></table></body></html>';
+}
+const mailButton = (href, label) => '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 4px"><tr><td style="background:#92490A;border-radius:12px">'
+  + '<a href="' + escHtml(href) + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none">' + label + '</a></td></tr></table>';
+
+// One link per person that turns the monthly email off, without signing in.
+function unsubToken(userId, secret) { return crypto.createHmac('sha256', String(secret || 'x')).update('monthly:' + String(userId)).digest('hex').slice(0, 32); }
+function unsubOk(userId, token, secret) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(userId || '')) || !/^[0-9a-f]{32}$/.test(String(token || ''))) return false;
+  const a = Buffer.from(unsubToken(userId, secret)), b = Buffer.from(String(token));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// What stands out in a month, from the report's numbers. Pure.
+function monthInsights(d) {
+  const out = { headline: '', subject: '', lines: [] };
+  const name = monthName(d.month);
+  const prevName = monthName(d.prev && d.prev.month ? d.prev.month : (() => { const x = new Date(String(d.month) + '-15T12:00:00Z'); x.setUTCMonth(x.getUTCMonth() - 1); return x.toISOString().slice(0, 7); })());
+  if (d.income > 0 && d.balance >= 0) { out.headline = 'נשארו לכם ' + nis(d.balance) + ' ב' + name; out.subject = name + ' שלכם: נשארו ' + nis(d.balance); }
+  else if (d.income > 0) { out.headline = 'הוצאתם ' + nis(d.balance) + ' יותר ממה שנכנס ב' + name; out.subject = name + ' שלכם: חריגה של ' + nis(d.balance); }
+  else { out.headline = 'הוצאתם ' + nis(d.expense) + ' ב' + name; out.subject = name + ' שלכם: הוצאתם ' + nis(d.expense); }
+  const pe = d.prev && d.prev.expense;
+  if (pe > 0 && d.expense > 0) {
+    const pct = Math.round((d.expense - pe) / pe * 100);
+    if (pct <= -3) out.lines.push('הוצאתם ' + Math.abs(pct) + '% פחות מאשר ב' + prevName + '. כל הכבוד!');
+    else if (pct >= 3) out.lines.push('הוצאתם ' + pct + '% יותר מאשר ב' + prevName + '.');
+    else out.lines.push('הוצאתם בערך כמו ב' + prevName + '.');
+  }
+  const cats = (d.topCategories || []).filter((c) => c.prev > 0);
+  const up = cats.map((c) => ({ ...c, diff: c.amount - c.prev })).filter((c) => c.diff >= Math.max(200, c.prev * 0.15)).sort((a, b) => b.diff - a.diff)[0];
+  const down = cats.map((c) => ({ ...c, diff: c.prev - c.amount })).filter((c) => c.diff >= Math.max(200, c.prev * 0.15)).sort((a, b) => b.diff - a.diff)[0];
+  if (up) out.lines.push('הקפיצה הכי גדולה: ' + up.name + ', ' + nis(up.diff) + ' יותר מהחודש שלפני.');
+  if (down) out.lines.push('חסכתם הכי הרבה ב' + down.name + ': ' + nis(down.diff) + ' פחות.');
+  return out;
+}
+
+function monthlyMail(d, { link, unsubLink }) {
+  const origin = String(link).replace(/\/app\/?.*$/, '');
+  const ins = monthInsights(d);
+  const name = monthName(d.month);
+  const P = 'margin:0 0 12px;font-size:16px;line-height:1.65;color:#2B2118';
+  const good = d.income > 0 && d.balance >= 0;
+  let inner = '<p style="margin:0 0 6px;font-size:14px;color:#8A7B6E">הסיכום של ' + escHtml(name + ' ' + String(d.month).slice(0, 4)) + '</p>'
+    + '<p style="margin:0 0 16px;font-size:24px;line-height:1.3;font-weight:bold;color:' + (good || !(d.income > 0) ? '#2B2118' : '#A3361A') + '">' + escHtml(ins.headline) + '</p>';
+  if (d.income > 0) {
+    inner += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;background:#FBF4EA;border-radius:12px"><tr>'
+      + '<td style="padding:12px 14px;font-size:13px;color:#5B4B3D">נכנס<br><b style="font-size:18px;color:#2F6B4F">' + nis(d.income) + '</b></td>'
+      + '<td style="padding:12px 14px;font-size:13px;color:#5B4B3D">יצא<br><b style="font-size:18px;color:#2B2118">' + nis(d.expense) + '</b></td></tr></table>';
+  }
+  for (const l of ins.lines) inner += '<p style="' + P + '">' + escHtml(l) + '</p>';
+  const top = (d.topCategories || []).slice(0, 3);
+  if (top.length) {
+    inner += '<p style="margin:6px 0 8px;font-size:15px;font-weight:bold;color:#2B2118">לאן הלך הכי הרבה</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px">'
+      + top.map((c) => '<tr><td style="padding:6px 0;font-size:15px;color:#2B2118;border-bottom:1px solid #EFE7DC">' + escHtml(c.name) + '</td><td style="padding:6px 0;font-size:15px;font-weight:bold;color:#2B2118;text-align:left;border-bottom:1px solid #EFE7DC">' + nis(c.amount) + '</td></tr>').join('')
+      + '</table>';
+  }
+  if (d.narrative) inner += '<p style="' + P + '">' + escHtml(d.narrative) + '</p>';
+  const recs = (d.recommendations || []).filter(Boolean).slice(0, 3);
+  if (recs.length) {
+    inner += '<p style="margin:6px 0 8px;font-size:15px;font-weight:bold;color:#2B2118">3 דברים לחודש הבא</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;background:#FBF4EA;border-radius:12px">'
+      + recs.map((r) => '<tr><td width="28" valign="top" style="padding:12px 14px 0 0;font-size:16px;color:#92490A">✓</td><td style="padding:12px 0 0 14px;font-size:15px;line-height:1.6;color:#2B2118">' + escHtml(r) + '</td></tr>').join('')
+      + '<tr><td colspan="2" style="height:12px"></td></tr></table>';
+  }
+  const goals = (d.goals || []).filter((g) => g && g.name).slice(0, 2);
+  if (goals.length) {
+    inner += '<p style="margin:6px 0 8px;font-size:15px;font-weight:bold;color:#2B2118">היעדים שלכם</p>'
+      + goals.map((g) => { const pct = Math.max(0, Math.min(100, Math.round(Number(g.pct) || 0))); return '<p style="margin:0 0 4px;font-size:14px;color:#2B2118">' + escHtml(g.name) + ' · ' + pct + '%</p>'
+        + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;background:#EFE7DC;border-radius:6px"><tr><td width="' + Math.max(pct, 1) + '%" style="height:8px;background:#2F6B4F;border-radius:6px;font-size:0;line-height:0">&nbsp;</td><td style="font-size:0;line-height:0">&nbsp;</td></tr></table>'; }).join('');
+  }
+  inner += '<p style="' + P + '">כשיגיע פירוט האשראי של ' + escHtml(name) + ', העלו אותו כדי שהמספרים יהיו מלאים.</p>'
+    + mailButton(String(link).replace(/\/$/, '') + '/#/money/report', 'לדוח המלא באפליקציה');
+  const footer = 'קיבלתם את המייל כי אתם משתמשים ב"התקציב שלנו". מגיע פעם בחודש.<br>'
+    + '<a href="' + escHtml(unsubLink) + '" style="color:#8A7B6E">להפסיק לקבל את הסיכום החודשי</a> · אפשר גם בפרופיל באפליקציה.';
+  const text = ins.headline + '\n\n' + ins.lines.join('\n') + (top.length ? '\n\nלאן הלך הכי הרבה:\n' + top.map((c) => '• ' + c.name + ': ' + nis(c.amount)).join('\n') : '')
+    + (d.narrative ? '\n\n' + d.narrative : '') + (recs.length ? '\n\n3 דברים לחודש הבא:\n' + recs.map((r) => '• ' + r).join('\n') : '')
+    + '\n\nלדוח המלא: ' + String(link).replace(/\/$/, '') + '/#/money/report\n\nלהפסיק לקבל את הסיכום החודשי: ' + unsubLink;
+  return { subject: ins.subject, text, html: mailShell({ origin, inner, footer }) };
+}
+
+// The owner answered a request: the person gets the answer by email too.
+function answerMail({ question, answer, link }) {
+  const origin = String(link).replace(/\/app\/?.*$/, '');
+  const inner = '<p style="margin:0 0 14px;font-size:20px;font-weight:bold;color:#2B2118">ענינו על הפנייה שלך</p>'
+    + '<p style="margin:0 0 6px;font-size:13px;color:#8A7B6E">כתבת:</p>'
+    + '<p style="margin:0 0 16px;padding:12px 14px;background:#FBF4EA;border-radius:12px;font-size:15px;line-height:1.6;color:#5B4B3D;white-space:pre-wrap">' + escHtml(String(question || '').slice(0, 600)) + '</p>'
+    + '<p style="margin:0 0 6px;font-size:13px;color:#8A7B6E">התשובה:</p>'
+    + '<p style="margin:0 0 18px;font-size:16px;line-height:1.65;color:#2B2118;white-space:pre-wrap">' + escHtml(answer) + '</p>'
+    + mailButton(link, 'לאפליקציה')
+    + '<p style="margin:14px 0 0;font-size:15px;color:#5B4B3D">רוצה להוסיף משהו? אפשר לענות למייל הזה.</p>'
+    + '<p style="margin:10px 0 0;font-size:15px;font-weight:bold;color:#2B2118">קובי</p>';
+  return {
+    subject: 'ענינו על הפנייה שלך ב"התקציב שלנו"',
+    text: 'כתבת:\n' + String(question || '').slice(0, 600) + '\n\nהתשובה:\n' + answer + '\n\nלאפליקציה: ' + link + '\n\nקובי',
+    html: mailShell({ origin, inner, footer: 'קיבלת את המייל כי שלחת פנייה מתוך האפליקציה.' })
+  };
+}
+
+module.exports = { unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
