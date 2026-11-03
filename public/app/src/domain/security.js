@@ -9,3 +9,15 @@ export function deviceName(ua) {
   const br = /Edg\//.test(s) ? 'Edge' : /SamsungBrowser/.test(s) ? 'Samsung' : /Firefox\//.test(s) ? 'Firefox' : /Chrome\//.test(s) ? 'Chrome' : /Safari\//.test(s) ? 'Safari' : '';
   return br ? os + ' · ' + br : os;
 }
+
+// Sending the email code again: allowed once a minute has passed.
+export const RESEND_AFTER_S = 60;
+export function secondsLeft(sentAt, now = Date.now(), wait = RESEND_AFTER_S) {
+  if (!sentAt) return 0;
+  return Math.min(wait, Math.max(0, Math.ceil(wait - (now - sentAt) / 1000)));
+}
+// 42 -> "0:42"
+export function clock(sec) {
+  const s = Math.max(0, Math.round(sec));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}

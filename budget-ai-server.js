@@ -2137,6 +2137,8 @@ app.post('/api/2fa/email/disable', requireAuth, async (req, res) => {
   try {
     const st = await mfaStateOf(req);
     if (st.required && !st.ok) return res.status(403).json({ error: 'צריך לאשר את הכניסה בקוד', mfa: true });
+    // For an account with a password it is required, unless an app code protects it instead.
+    if (st.mandatory && !st.totp) return res.status(400).json({ error: 'בחשבון עם סיסמה הקוד במייל הוא חובה. אפשר להפעיל קוד מאפליקציה במקומו, ואז לכבות את המייל.' });
     const { error } = await supabaseAdmin.from('mfa_email').upsert({ user_id: req.authUserId, enabled: false, updated_at: new Date().toISOString() });
     if (error) throw error;
     mfaCache.delete(req.authToken);

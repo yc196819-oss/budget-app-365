@@ -580,3 +580,10 @@ body.chat-open { overflow: hidden; }
 .sec-tag.sec-on { background: var(--income-tint); color: var(--income); }
 .sec-steps { background: var(--surface-2); }
 .sec-list { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.6; }
+/* Sending an emailed code again */
+.resend { display: flex; flex-direction: column; gap: 10px; }
+.resend-help { gap: 6px; background: var(--surface-2); animation: rise .25s ease both; }
+.resend-help ul { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.6; }
+.resend-clock { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+.resend-track { fill: none; stroke: var(--line); stroke-width: 3; }
+.resend-ring { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }

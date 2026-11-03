@@ -1,6 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { showToast } from '../../lib/toast.js';
+import { ResendCode } from '../../components/ResendCode.js';
 import { totpApps, startTotp, confirmTotp, removeTotp, emailStatus, sendEmailCode, enableEmail, disableEmail, mySessions, signOutOthers, cleanCode, deviceName } from '../../data/security.js';
 
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' }) : '');
@@ -30,6 +31,7 @@ export function SecurityView({ onBack, onOpenData }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [sure, setSure] = useState('');
+  const [sentAt, setSentAt] = useState(0);
 
   const load = () => {
     totpApps().then(setApps).catch(() => setApps([]));
@@ -50,7 +52,7 @@ export function SecurityView({ onBack, onOpenData }) {
   };
   const startEmail = async () => {
     setBusy('email'); setError('');
-    try { await sendEmailCode('enable'); setAdding('email'); } catch (e) { setError(e.message); }
+    try { await sendEmailCode('enable'); setAdding('email'); setSentAt(Date.now()); } catch (e) { setError(e.message); }
     setBusy('');
   };
 
@@ -88,8 +90,9 @@ export function SecurityView({ onBack, onOpenData }) {
 
       <div class="sec-row">
         <span style="flex:1;display:flex;flex-direction:column;gap:2px"><b>קוד במייל</b>
-          <span class="muted" style="font-size:12px;line-height:1.5">${emailOn ? html`נשלח ל-<span dir="ltr">${mail.emailMasked}</span> בכל כניסה.` : 'בכל כניסה נשלח קוד למייל של החשבון.'}</span></span>
+          <span class="muted" style="font-size:12px;line-height:1.5">${emailOn ? html`נשלח ל-<span dir="ltr">${mail.emailMasked}</span> בכל כניסה ממכשיר חדש.${mail.mandatory && !appOn ? ' מופעל לכל חשבון עם סיסמה. אפשר להחליף לקוד מאפליקציה.' : ''}` : 'בכל כניסה ממכשיר חדש נשלח קוד למייל של החשבון.'}</span></span>
         ${mail === null ? html`<span class="skel" style="width:60px"></span>`
+          : emailOn && mail.mandatory && !appOn ? html`<span class="sec-tag sec-on" title="בחשבון עם סיסמה הקוד במייל הוא חובה">חובה</span>`
           : emailOn ? (sure === 'email'
             ? html`<button type="button" class="btn btn-ghost" style="color:var(--danger)" disabled=${busy === 'email'} onClick=${() => run('email', disableEmail, 'הקוד במייל כובה')}>בטוח? לכבות</button>`
             : html`<button type="button" class="btn btn-ghost" onClick=${() => setSure('email')}>לכבות</button>`)
@@ -100,6 +103,7 @@ export function SecurityView({ onBack, onOpenData }) {
         <span>שלחנו קוד ל-<span dir="ltr">${mail && mail.emailMasked}</span>. הקלידו אותו כאן כדי להפעיל:</span>
         <${CodeForm} label="הקוד מהמייל" busy=${busy === 'emailok'} onCancel=${() => { setAdding(null); setError(''); }}
           onSubmit=${(code) => run('emailok', () => enableEmail(code), 'מעולה! מעכשיו נשלח קוד למייל בכל כניסה')} />
+        <${ResendCode} sentAt=${sentAt} onResend=${startEmail} busy=${busy === 'email'} />
       </div>`}
       ${error && html`<p class="error" role="alert">${error}</p>`}
     </section>

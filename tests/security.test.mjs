@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { cleanCode, deviceName } from '../public/app/src/domain/security.js';
+import { cleanCode, deviceName, secondsLeft, clock } from '../public/app/src/domain/security.js';
 
 const ops = createRequire(import.meta.url)('../server/ops.js');
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -49,4 +49,17 @@ test('what is typed in the code box, and the name of a signed-in device', () => 
   assert.equal(deviceName('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit Version/17 Mobile Safari/604.1'), 'אייפון · Safari');
   assert.equal(deviceName('Mozilla/5.0 (Windows NT 10.0) Chrome/130 Safari/537.36 Edg/130'), 'מחשב Windows · Edge');
   assert.equal(deviceName(''), 'מכשיר');
+});
+
+test('sending the code again: a one-minute clock', () => {
+  const t = Date.parse('2026-11-03T10:00:00Z');
+  assert.equal(secondsLeft(t, t), 60);
+  assert.equal(secondsLeft(t, t + 18200), 42);
+  assert.equal(secondsLeft(t, t + 60000), 0);
+  assert.equal(secondsLeft(t, t + 90000), 0);
+  assert.equal(secondsLeft(0, t), 0, 'nothing sent yet: nothing to wait for');
+  assert.equal(secondsLeft(t + 2000, t), 60, "a clock a moment behind never shows more than a minute");
+  assert.equal(clock(42), '0:42');
+  assert.equal(clock(60), '1:00');
+  assert.equal(clock(5), '0:05');
 });
