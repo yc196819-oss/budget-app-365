@@ -94,7 +94,7 @@ export function LoginScreen() {
         <button class="btn" type="submit" disabled=${busy}>${busy ? '…' : mode === 'register' ? 'הרשמה' : 'כניסה'}</button>
         ${mode === 'login' && html`<button class="btn-text" type="button" onClick=${reset}>שכחתי סיסמה</button>`}
       </form>
-      <p class="login-safe" role="note"><${Icon} name="shield" size=${18} /><span>בלי חיבור לבנק ובלי סיסמת בנק. החיבור מוצפן, כל משק בית רואה רק את הנתונים שלו, ואפשר להפעיל כניסה בשני שלבים.</span></p>
+      <p class="login-safe" role="note"><${Icon} name="shield" size=${18} /><span>בלי חיבור לבנק ובלי סיסמת בנק. החיבור מוצפן, כל משק בית רואה רק את הנתונים שלו, ואפשר להפעיל כניסה בשני שלבים. <a href="/security">איך אנחנו שומרים עליכם</a></span></p>
       <${InstallCard} always=${true} />
       <a class="btn-text" href="/download" style="text-align:center">📲 הורדת האפליקציה לטלפון</a>
       <p class="faint legal-links" style="font-size:13px"><a href="/terms">תנאי שימוש</a> · <a href="/privacy">מדיניות פרטיות</a> · <a href="/accessibility">הצהרת נגישות</a> · <a href="/old/">לגרסה הקודמת</a></p>

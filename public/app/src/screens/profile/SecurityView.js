@@ -128,6 +128,7 @@ export function SecurityView({ onBack, onOpenData }) {
         <li>כל החיבור לאתר מוצפן (HTTPS).</li>
       </ul>
       ${onOpenData && html`<button type="button" class="btn btn-ghost" onClick=${onOpenData}>להוריד הכל או למחוק קבצים</button>`}
+      <a href="/security" target="_blank" rel="noopener" style="font-size:13px">כל שכבות ההגנה: איך אנחנו שומרים עליכם</a>
       <a href="/privacy" target="_blank" rel="noopener" style="font-size:13px">מדיניות הפרטיות המלאה</a>
     </section>
   </div>`;

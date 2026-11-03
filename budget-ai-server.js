@@ -2512,7 +2512,7 @@ app.get('/', (req, res) => {
 // Pages that work without signing in: downloading the app, the privacy
 // policy and how to delete an account (Google Play links to the last two),
 // the terms of use and the accessibility statement (required by law).
-for (const [route, file] of [['/download', 'download.html'], ['/privacy', 'privacy.html'], ['/delete-account', 'delete-account.html'], ['/terms', 'terms.html'], ['/accessibility', 'accessibility.html']]) {
+for (const [route, file] of [['/download', 'download.html'], ['/privacy', 'privacy.html'], ['/delete-account', 'delete-account.html'], ['/terms', 'terms.html'], ['/accessibility', 'accessibility.html'], ['/security', 'security.html']]) {
   app.get(route, (req, res) => { res.setHeader('Content-Security-Policy', NEW_APP_CSP); res.sendFile(path.join(NEW_APP_DIR, 'pages', file)); });
 }
 // Google Play (Trusted Web Activity): proves the Android app and this site
