@@ -6,6 +6,7 @@ import { LoginScreen } from '../screens/auth/LoginScreen.js';
 import { Onboarding } from '../screens/onboarding/Onboarding.js';
 import { JoinInvite } from '../screens/onboarding/JoinInvite.js';
 import { NewPassword } from '../screens/auth/NewPassword.js';
+import { TwoStepGate } from '../screens/auth/TwoStepGate.js';
 import { TermsGate } from '../screens/legal/TermsGate.js';
 import { needsConsent } from '../domain/legal.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
@@ -31,6 +32,7 @@ export function App() {
       <button type="button" class="btn" onClick=${() => location.reload()}>לנסות שוב</button></div></main>`;
   }
   if (!session.user) return html`<${LoginScreen} />`;
+  if (session.mfa) return html`<${TwoStepGate} session=${session} />`;
   if (session.recovery) return html`<${NewPassword} onDone=${session.doneRecovery} />`;
   // The terms of use and privacy policy, confirmed once per version.
   if (needsConsent(session.user)) return html`<${TermsGate} session=${session} />`;

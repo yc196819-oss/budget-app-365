@@ -313,4 +313,42 @@ function mailReady({ brevo = false, resendKey = '', resendFrom = '', smtp = fals
   return { ready: !!brevo || resend, brevo: !!brevo, smtp: !!smtp, resend, resendTestOnly: !!resendKey && !resend };
 }
 
-module.exports = { mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+
+// ── Two-step login by email: a 6-digit code, kept only as a hash ──
+const crypto = require('crypto');
+function tokenClaims(token) {
+  try { const c = JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString()); return { sub: c.sub || null, aal: c.aal || 'aal1', sessionId: c.session_id || null }; } catch (_e) { return { sub: null, aal: 'aal1', sessionId: null }; }
+}
+function makeCode() { return String(crypto.randomInt(0, 1000000)).padStart(6, '0'); }
+function hashCode(code, userId, salt = '') { return crypto.createHash('sha256').update(String(salt) + ':' + String(userId) + ':' + String(code)).digest('hex'); }
+const CODE_TTL_MS = 10 * 60 * 1000;
+const CODE_TRIES = 5;
+// 'ok' | 'missing' | 'expired' | 'locked' | 'wrong' (a wrong guess counts a try)
+function checkCode(row, code, { userId, salt = '', purpose = null, now = Date.now() } = {}) {
+  if (!row || (purpose && row.purpose !== purpose)) return 'missing';
+  if (new Date(row.expires_at).getTime() <= now) return 'expired';
+  if ((row.attempts || 0) >= CODE_TRIES) return 'locked';
+  const given = hashCode(String(code || '').replace(/\D/g, ''), userId, salt);
+  const a = Buffer.from(given), b = Buffer.from(String(row.code_hash));
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? 'ok' : 'wrong';
+}
+const CODE_ERRORS = { missing: 'אין קוד פעיל. שלחו קוד חדש.', expired: 'הקוד פג (10 דקות). שלחו קוד חדש.', locked: 'יותר מדי ניסיונות. שלחו קוד חדש.', wrong: 'הקוד לא נכון. נסו שוב.' };
+function maskEmail(email) {
+  const [u, d] = String(email || '').split('@');
+  if (!d) return '';
+  return (u.length <= 2 ? u[0] + '*' : u.slice(0, 2) + '***') + '@' + d;
+}
+function codeMail(code, purpose = 'login') {
+  const what = purpose === 'enable' ? 'להפעלת כניסה בשני שלבים' : 'לכניסה לחשבון';
+  const subject = code + ' הוא הקוד שלך ' + what;
+  const text = 'הקוד שלך ' + what + ' ב"התקציב שלנו": ' + code + '\n\nהקוד בתוקף ל-10 דקות. אם לא ביקשתם אותו, אפשר להתעלם מהמייל, ולשנות סיסמה ליתר ביטחון.';
+  const html = '<!doctype html><html lang="he" dir="rtl"><body style="margin:0;padding:24px 12px;background:#F3EDE6;font-family:Arial,Helvetica,sans-serif">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" dir="rtl" style="max-width:480px;margin:0 auto;background:#FFFFFF;border-radius:16px"><tr><td style="padding:26px 24px;text-align:right">'
+    + '<p style="margin:0 0 10px;font-size:16px;color:#2B2118">הקוד שלך ' + what + ':</p>'
+    + '<p dir="ltr" style="margin:0 0 14px;font-size:34px;font-weight:bold;letter-spacing:8px;color:#2B2118;text-align:center">' + code + '</p>'
+    + '<p style="margin:0;font-size:14px;line-height:1.6;color:#5B4B3D">הקוד בתוקף ל-10 דקות. אם לא ביקשתם אותו, אפשר להתעלם מהמייל, ולשנות סיסמה ליתר ביטחון.</p>'
+    + '</td></tr></table></body></html>';
+  return { subject, text, html };
+}
+
+module.exports = { tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

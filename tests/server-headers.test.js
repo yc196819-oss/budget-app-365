@@ -217,3 +217,10 @@ test('the preview of an email: its design, framed only by the app itself, with n
   assert.match(res.headers.get('content-security-policy'), /frame-ancestors 'self'/);
   assert.equal((await fetch(BASE + '/mail-preview/nope')).status, 404);
 });
+
+test('two-step login routes need a signed-in person', async () => {
+  for (const [method, path] of [['GET', '/api/2fa/status'], ['POST', '/api/2fa/email/send'], ['POST', '/api/2fa/email/verify'], ['POST', '/api/2fa/email/enable'], ['POST', '/api/2fa/email/disable']]) {
+    const res = await fetch(BASE + path, { method, headers: { 'Content-Type': 'application/json' }, body: method === 'POST' ? '{}' : undefined });
+    assert.ok(res.status === 401 || res.status === 503, path + ' ' + res.status);
+  }
+});

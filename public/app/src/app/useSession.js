@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { sb } from '../lib/supabase.js';
-import { clearSensitiveLocal, readCache, writeCache } from '../lib/storage.js';
+import { clearSensitiveLocal, readCache, writeCache, readLocal, writeLocal } from '../lib/storage.js';
+import { mfaState } from '../data/security.js';
 
 // A slow or stalled connection (mobile data, a sign-in being renewed) must
 // never leave the app on "loading" for good: past this, it says so and offers
@@ -24,17 +25,28 @@ export function useSession() {
       if (!user) { if (alive) setState({ loading: false, user: null, household: null }); return; }
       // The household seen last time on this device: the app opens with it at
       // once, and the check below confirms or corrects it.
-      const cached = readCache('member:' + user.id);
+      // Not for someone with two-step login: they are asked for the code first.
+      const twoStep = readLocal('twostep:' + user.id, '') === '1';
+      const cached = twoStep ? null : readCache('member:' + user.id);
       if (cached && alive) setState({ loading: false, user, household: cached.data });
-      let res;
+      let res, mfa;
       try {
-        res = await timeout(sb.from('memberships')
-          .select('household_id,display_name,role')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: true })
-          .limit(1), START_TIMEOUT_MS);
+        [res, mfa] = await Promise.all([
+          timeout(sb.from('memberships')
+            .select('household_id,display_name,role')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: true })
+            .limit(1), START_TIMEOUT_MS),
+          timeout(mfaState().catch(() => null), START_TIMEOUT_MS)
+        ]);
       } catch (_err) { res = { error: true }; }
       if (!alive) return;
+      // Two-step login is on and this sign-in has not passed it yet: the
+      // database shows nothing until it does, so the code screen comes first.
+      if (mfa && !mfa.timedOut) {
+        writeLocal('twostep:' + user.id, mfa.required ? '1' : '0');
+        if (mfa.required && !mfa.ok) { setState({ loading: false, user, household: null, mfa }); return; }
+      }
       const { data, error } = res.timedOut ? { error: true } : res;
       // A failed check (weak connection) must not look like "no household".
       if (error) { if (!cached) setState({ loading: false, user, household: null, offline: true }); return; }

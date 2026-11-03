@@ -159,8 +159,9 @@ async function requireAuth(req, res, next) {
   }
   // A session verified in the last few minutes is not asked about again
   // (the auth server is far away; see ops.sessionCache).
+  req.authToken = token;
   const known = sessions.get(token);
-  if (known) { req.authUserId = known; return next(); }
+  if (known) { req.authUserId = known; return mfaGate(req, res, next); }
   try {
     const { data, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !data?.user?.id) {
@@ -169,10 +170,36 @@ async function requireAuth(req, res, next) {
     req.authUserId = data.user.id;
     req.authEmail = data.user.email || '';
     sessions.set(token, data.user.id, ops.tokenExp(token));
-    return next();
+    return mfaGate(req, res, next);
   } catch (_err) {
     return res.status(401).json({ error: 'Authentication failed' });
   }
+}
+
+// Two-step login: whoever turned it on is let through only once this
+// session passed it (the data rules in the database say the same). The
+// two-step routes themselves are how a session passes, so they are open.
+const mfaCache = new Map(); // token -> { state, until }
+async function mfaStateOf(req) {
+  const hit = mfaCache.get(req.authToken);
+  if (hit && hit.until > Date.now()) return hit.state;
+  const c = ops.tokenClaims(req.authToken);
+  const { data, error } = await supabaseAdmin.rpc('mfa_state_for', { p_user: req.authUserId, p_aal: c.aal, p_session: c.sessionId });
+  if (error) throw error;
+  if (mfaCache.size > 5000) mfaCache.clear();
+  mfaCache.set(req.authToken, { state: data, until: Date.now() + 30 * 1000 });
+  return data;
+}
+async function mfaGate(req, res, next) {
+  if (req.path.startsWith('/api/2fa/')) return next();
+  try {
+    const st = await mfaStateOf(req);
+    if (st && st.required && !st.ok) return res.status(403).json({ error: 'צריך לאשר את הכניסה בקוד', mfa: true });
+  } catch (err) {
+    // The database rules still hold; a failed check must not lock everyone out.
+    console.error('mfa check failed:', err.message);
+  }
+  return next();
 }
 
 async function isHouseholdMember(userId, householdId) {
@@ -2042,6 +2069,79 @@ app.post('/api/admin/reengage', requireAuth, async (req, res) => {
     console.error('campaign failed:', err.message);
     return res.status(500).json({ error: 'failed' });
   }
+});
+
+// ═══ two-step login: status, and the code by email ═══
+const MFA_SALT = process.env.MFA_SALT || process.env.ADMIN_SALT || '';
+const mfaMailLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip, message: { error: 'שלחנו כבר כמה קודים. נסו שוב בעוד רבע שעה.' } });
+const mfaTryLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip, message: { error: 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.' } });
+async function emailOf(req) {
+  if (req.authEmail) return req.authEmail;
+  const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
+  return (data && data.user && data.user.email) || '';
+}
+app.get('/api/2fa/status', requireAuth, async (req, res) => {
+  try {
+    const st = await mfaStateOf(req);
+    return res.json({ ...st, mailReady: mailStatus().ready, email: undefined, emailOn: !!st.email, emailMasked: ops.maskEmail(await emailOf(req)) });
+  } catch (err) { return res.status(500).json({ error: 'failed' }); }
+});
+app.post('/api/2fa/email/send', requireAuth, mfaMailLimiter, async (req, res) => {
+  try {
+    const purpose = req.body && req.body.purpose === 'enable' ? 'enable' : 'login';
+    if (purpose === 'login') {
+      const st = await mfaStateOf(req);
+      if (!st.email) return res.status(400).json({ error: 'קוד במייל לא מופעל בחשבון הזה.' });
+    }
+    const to = await emailOf(req);
+    if (!to) return res.status(400).json({ error: 'אין כתובת מייל בחשבון.' });
+    const code = ops.makeCode();
+    const { error } = await supabaseAdmin.from('mfa_email_codes').upsert({ user_id: req.authUserId, code_hash: ops.hashCode(code, req.authUserId, MFA_SALT), purpose, expires_at: new Date(Date.now() + ops.CODE_TTL_MS).toISOString(), attempts: 0, sent_at: new Date().toISOString() });
+    if (error) throw error;
+    try { await sendMailWithFallback({ to, ...ops.codeMail(code, purpose) }); } catch (err) { return res.status(502).json({ error: ops.mailErrorText(err) }); }
+    return res.json({ sent: true, to: ops.maskEmail(to) });
+  } catch (err) { console.error('2fa send failed:', err.message); return res.status(500).json({ error: 'לא הצלחנו לשלוח קוד. נסו שוב.' }); }
+});
+// Checks the code; on success the code is used up and this session passes.
+async function useEmailCode(req, purpose) {
+  const { data: row } = await supabaseAdmin.from('mfa_email_codes').select('*').eq('user_id', req.authUserId).maybeSingle();
+  const result = ops.checkCode(row, req.body && req.body.code, { userId: req.authUserId, salt: MFA_SALT, purpose });
+  if (result === 'wrong') await supabaseAdmin.from('mfa_email_codes').update({ attempts: (row.attempts || 0) + 1 }).eq('user_id', req.authUserId);
+  if (result !== 'ok') return result;
+  await supabaseAdmin.from('mfa_email_codes').delete().eq('user_id', req.authUserId);
+  const sid = ops.tokenClaims(req.authToken).sessionId;
+  if (sid) await supabaseAdmin.from('mfa_email_sessions').upsert({ session_id: sid, user_id: req.authUserId, verified_at: new Date().toISOString() });
+  mfaCache.delete(req.authToken);
+  return 'ok';
+}
+app.post('/api/2fa/email/verify', requireAuth, mfaTryLimiter, async (req, res) => {
+  try {
+    const r = await useEmailCode(req, 'login');
+    return r === 'ok' ? res.json({ ok: true }) : res.status(400).json({ error: ops.CODE_ERRORS[r] });
+  } catch (err) { console.error('2fa verify failed:', err.message); return res.status(500).json({ error: 'הבדיקה נכשלה. נסו שוב.' }); }
+});
+app.post('/api/2fa/email/enable', requireAuth, mfaTryLimiter, async (req, res) => {
+  try {
+    // Turning it on from a session that has not passed an existing two-step is not allowed.
+    const st = await mfaStateOf(req);
+    if (st.required && !st.ok) return res.status(403).json({ error: 'צריך לאשר את הכניסה בקוד', mfa: true });
+    const r = await useEmailCode(req, 'enable');
+    if (r !== 'ok') return res.status(400).json({ error: ops.CODE_ERRORS[r] });
+    const { error } = await supabaseAdmin.from('mfa_email').upsert({ user_id: req.authUserId, enabled: true, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    mfaCache.delete(req.authToken);
+    return res.json({ ok: true });
+  } catch (err) { console.error('2fa enable failed:', err.message); return res.status(500).json({ error: 'ההפעלה נכשלה. נסו שוב.' }); }
+});
+app.post('/api/2fa/email/disable', requireAuth, async (req, res) => {
+  try {
+    const st = await mfaStateOf(req);
+    if (st.required && !st.ok) return res.status(403).json({ error: 'צריך לאשר את הכניסה בקוד', mfa: true });
+    const { error } = await supabaseAdmin.from('mfa_email').upsert({ user_id: req.authUserId, enabled: false, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    mfaCache.delete(req.authToken);
+    return res.json({ ok: true });
+  } catch (err) { return res.status(500).json({ error: 'הכיבוי נכשל. נסו שוב.' }); }
 });
 
 // ═══ requests from users (a problem or an idea) ═══
