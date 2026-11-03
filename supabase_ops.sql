@@ -270,3 +270,47 @@ begin
     execute format('create policy two_step_required on public.%I as restrictive for all to authenticated using ((select public.mfa_ok())) with check ((select public.mfa_ok()))', t);
   end loop;
 end $$;
+
+-- Applied 2026-11-03 (email_code_for_all): the email code for everyone who
+-- signs in with a password, behind one switch (app_flags.email_code_for_all,
+-- off until sending email is confirmed to work). A sign-in that already proved
+-- the inbox (a link from an email) or came through Google passes it.
+create table if not exists public.app_flags (
+  key text primary key,
+  on_ boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+alter table public.app_flags enable row level security;
+revoke all on public.app_flags from anon, authenticated;
+insert into public.app_flags (key, on_) values ('email_code_for_all', false) on conflict (key) do nothing;
+
+create or replace function public.mfa_state_for(p_user uuid, p_aal text, p_session uuid)
+returns jsonb language sql stable security definer set search_path = public, auth as $$
+  with f as (
+    select exists (select 1 from auth.mfa_factors m where m.user_id = p_user and m.status = 'verified' and m.factor_type = 'totp') as totp,
+           coalesce((select e.enabled from public.mfa_email e where e.user_id = p_user), false) as chosen,
+           coalesce((select a.on_ from public.app_flags a where a.key = 'email_code_for_all'), false)
+             and exists (select 1 from auth.identities i where i.user_id = p_user and i.provider = 'email') as mandatory
+  ), g as (
+    select f.*, f.chosen or (f.mandatory and not f.totp) as email,
+           (f.mandatory and not f.totp and not f.chosen and p_session is not null and exists (
+              select 1 from auth.mfa_amr_claims c where c.session_id = p_session
+                and c.authentication_method in ('oauth', 'otp', 'magiclink', 'recovery', 'invite', 'email/signup', 'email_change'))) as link_ok
+    from f
+  )
+  select jsonb_build_object(
+    'totp', g.totp, 'email', g.email, 'mandatory', g.mandatory, 'required', g.totp or g.email,
+    'ok', not (g.totp or g.email) or p_aal = 'aal2' or g.link_ok
+          or (p_session is not null and exists (select 1 from public.mfa_email_sessions s where s.session_id = p_session and s.user_id = p_user))
+  ) from g
+$$;
+revoke execute on function public.mfa_state_for(uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public.mfa_state_for(uuid, text, uuid) to service_role;
+
+-- To turn it on (only once a test email arrived), keeping everyone already
+-- signed in signed in:
+--   insert into public.mfa_email_sessions (session_id, user_id)
+--     select s.id, s.user_id from auth.sessions s
+--     where exists (select 1 from auth.identities i where i.user_id = s.user_id and i.provider = 'email')
+--     on conflict (session_id) do nothing;
+--   update public.app_flags set on_ = true, updated_at = now() where key = 'email_code_for_all';

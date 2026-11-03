@@ -1,5 +1,5 @@
 import { html } from '../../lib/html.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { setScreen } from '../../lib/telemetry.js';
 import { Icon } from '../../components/Icon.js';
 import { passTotp, passEmail, sendEmailCode, cleanCode } from '../../data/security.js';
@@ -30,6 +30,8 @@ export function TwoStepGate({ session }) {
       session.refresh();
     } catch (err) { setError(err.message || 'הבדיקה נכשלה. נסו שוב.'); setBusy(false); }
   };
+  // Only the email way: the code is sent at once, no extra tap.
+  useEffect(() => { if (!st.totp && st.email) send(); }, []);
   const pick = (w) => { setWay(w); setCode(''); setError(''); };
   const ready = way === 'app' || sentTo;
 
@@ -38,7 +40,7 @@ export function TwoStepGate({ session }) {
       <div class="brand-login"><img class="brand-mark" src="/wallet.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
       <div class="stack" style="gap:8px">
         <h1 class="display" style="font-size:30px;line-height:1.15;margin:0;display:flex;align-items:center;gap:10px"><${Icon} name="shield" size=${28} />עוד שלב אחד</h1>
-        <p class="muted" style="margin:0;line-height:1.6">הפעלתם כניסה בשני שלבים. ${way === 'app' ? 'פתחו את אפליקציית הקודים (כמו Google Authenticator) והקלידו את הקוד שמופיע בה.' : 'נשלח קוד של 6 ספרות למייל שלכם.'}</p>
+        <p class="muted" style="margin:0;line-height:1.6">${st.mandatory && !st.totp ? 'כדי לשמור על החשבון, בכניסה עם סיסמה ממכשיר חדש מאשרים גם בקוד.' : 'הפעלתם כניסה בשני שלבים.'} ${way === 'app' ? 'פתחו את אפליקציית הקודים (כמו Google Authenticator) והקלידו את הקוד שמופיע בה.' : 'נשלח קוד של 6 ספרות למייל שלכם.'}</p>
       </div>
       ${st.totp && st.email && html`<div class="seg" role="group" aria-label="איך לקבל קוד">
         <button type="button" aria-pressed=${String(way === 'app')} onClick=${() => pick('app')}>קוד מהאפליקציה</button>

@@ -88,8 +88,9 @@ export function SecurityView({ onBack, onOpenData }) {
 
       <div class="sec-row">
         <span style="flex:1;display:flex;flex-direction:column;gap:2px"><b>קוד במייל</b>
-          <span class="muted" style="font-size:12px;line-height:1.5">${emailOn ? html`נשלח ל-<span dir="ltr">${mail.emailMasked}</span> בכל כניסה.` : 'בכל כניסה נשלח קוד למייל של החשבון.'}</span></span>
+          <span class="muted" style="font-size:12px;line-height:1.5">${emailOn ? html`נשלח ל-<span dir="ltr">${mail.emailMasked}</span> בכל כניסה ממכשיר חדש.${mail.mandatory && !appOn ? ' מופעל לכל חשבון עם סיסמה. אפשר להחליף לקוד מאפליקציה.' : ''}` : 'בכל כניסה ממכשיר חדש נשלח קוד למייל של החשבון.'}</span></span>
         ${mail === null ? html`<span class="skel" style="width:60px"></span>`
+          : emailOn && mail.mandatory && !appOn ? html`<span class="sec-tag sec-on" title="בחשבון עם סיסמה הקוד במייל הוא חובה">חובה</span>`
           : emailOn ? (sure === 'email'
             ? html`<button type="button" class="btn btn-ghost" style="color:var(--danger)" disabled=${busy === 'email'} onClick=${() => run('email', disableEmail, 'הקוד במייל כובה')}>בטוח? לכבות</button>`
             : html`<button type="button" class="btn btn-ghost" onClick=${() => setSure('email')}>לכבות</button>`)

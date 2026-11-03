@@ -35,7 +35,7 @@ test('two-step login by email: no data until the code is right, then the app ope
   const errors = collectErrors(page);
   const db = makeFakeDb();
   await mockSupabase(page, db);
-  let state = { totp: false, email: true, required: true, ok: false };
+  let state = { totp: false, email: true, mandatory: true, required: true, ok: false };
   await page.route('**/rest/v1/rpc/my_mfa_state', (r) => r.fulfill(json(state)));
   const sent = [];
   await page.route('**/api/2fa/email/send', (r) => { sent.push(JSON.parse(r.request().postData())); return r.fulfill(json({ sent: true, to: 'yo***@example.com' })); });
@@ -48,10 +48,10 @@ test('two-step login by email: no data until the code is right, then the app ope
   await signIn(page, server.base);
   await page.waitForSelector('text=עוד שלב אחד');
   assert.equal(await page.locator('nav').count(), 0, 'the app is not shown yet');
-  assert.equal(await page.locator('input[autocomplete="one-time-code"]').count(), 0, 'the box appears once a code was sent');
-  await page.click('button:has-text("שלחו לי קוד במייל")');
+  // Email is the only way: the code goes out at once.
   await page.waitForSelector('text=yo***@example.com');
   assert.deepEqual(sent, [{ purpose: 'login' }]);
+  assert.match(await page.locator('main.login').textContent(), /בכניסה עם סיסמה ממכשיר חדש/);
   await page.fill('input[autocomplete="one-time-code"]', '111111');
   await page.click('button[type="submit"]:has-text("אישור")');
   assert.match(await page.locator('.error').textContent(), /לא נכון/);
@@ -126,5 +126,24 @@ test('"your security": turn on an app code, see the devices, sign out the others
   assert.equal(others, 'others');
   assert.match(await page.locator('.security').textContent(), /אין לנו חיבור לבנק/);
   assert.deepEqual(clean(errors), []);
+  await page.close();
+});
+
+test('an account with a password, when the email code is on for all: it shows as required, with no way to turn it off', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const db = makeFakeDb();
+  await mockSupabase(page, db);
+  await page.route('**/rest/v1/rpc/my_mfa_state', (r) => r.fulfill(json({ totp: false, email: true, mandatory: true, required: true, ok: true })));
+  await page.route('**/rest/v1/rpc/my_sessions', (r) => r.fulfill(json([])));
+  await page.route('**/api/2fa/status', (r) => r.fulfill(json({ totp: false, email: true, mandatory: true, required: true, ok: true, mailReady: true, emailOn: true, emailMasked: 'yo***@example.com' })));
+  await page.route('**/auth/v1/user', (r) => r.fulfill(json({ id: 'u1', email: 'yossi@example.com', aud: 'authenticated', user_metadata: { terms_version: '2026-10' }, factors: [] })));
+  await signIn(page, server.base);
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('button:has-text("האבטחה שלך")');
+  const row = page.locator('.sec-row', { hasText: 'קוד במייל' });
+  await row.locator('.sec-tag:has-text("חובה")').waitFor();
+  assert.equal(await row.locator('button').count(), 0);
+  assert.match(await row.textContent(), /אפשר להחליף לקוד מאפליקציה/);
+  assert.equal(await page.locator('.sec-tag').first().textContent(), 'פועל');
   await page.close();
 });
