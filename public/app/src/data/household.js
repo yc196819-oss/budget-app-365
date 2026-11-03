@@ -37,6 +37,7 @@ export function subscribe(fn) {
 export function snapshot() {
   return {
     hid: state.hid,
+    userId: state.userId,
     status: state.status,
     error: state.error,
     refreshing: state.refreshing,

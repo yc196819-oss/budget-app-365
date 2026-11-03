@@ -23,6 +23,7 @@ export function Review({ items, categories, cards = [], cardId, onCard, onChange
       <b>${s.found} תנועות נמצאו</b>
       <span>${[
         s.auto + ' סווגו לבד',
+        s.byRule ? s.byRule + ' מהן לפי הכללים שלכם' : null,
         s.waiting ? s.waiting + ' מחכות לכם' : null,
         s.likely ? s.likely + ' כבר במערכת ולא יישמרו' : null,
         s.maybe ? s.maybe + ' אולי כפולות' : null
@@ -62,7 +63,7 @@ function Line({ t, byId, categories, open, onToggle, onOpen, onChoose }) {
   if (t.dupe === 'likely') note = html`<span class="warn">כבר קיימת: ${shortDate(t.dupeOf.date)} ${t.dupeOf.description}</span>`;
   else if (t.dupe === 'maybe') note = html`<span class="warn">אולי כפולה: ${shortDate(t.dupeOf.date)} ${t.dupeOf.description}</span>`;
   else if (!cat) note = html`<span class="warn">מחכה לקטגוריה</span>`;
-  else note = html`<span>${(sub ? sub.name : cat.name) + (t.auto === 'history' ? ' · כמו בפעם הקודמת' : t.auto === 'ai' ? ' · הצעה' : '')}</span>`;
+  else note = html`<span>${(sub ? sub.name : cat.name) + (t.auto === 'rule' ? ' · לפי הכלל שלכם' : t.auto === 'history' ? ' · כמו בפעם הקודמת' : t.auto === 'ai' ? ' · הצעה' : '')}</span>`;
   return html`<div class=${'import-line' + (t.include ? '' : ' off')}>
     <div class="row">
       <input type="checkbox" class="import-check" checked=${t.include} onChange=${onToggle} aria-label=${'לשמור את ' + t.description} />

@@ -1,4 +1,5 @@
 import { api } from '../lib/api.js';
+import { applyRules } from '../domain/rules.js';
 import { readXlsx } from '../lib/xlsx.js';
 import { pdfText } from '../lib/pdf.js';
 import { fileKind, decodeText, isBinaryXls, htmlTables, base64 } from '../lib/files.js';
@@ -51,7 +52,7 @@ async function aiTextImport(text, categories, today) {
 }
 
 // steps: 'read' -> 'find' -> 'sort' -> 'dupes'
-export async function readStatement(file, { categories, history, today = new Date(), onStep = () => {} }) {
+export async function readStatement(file, { categories, history, rules = [], today = new Date(), onStep = () => {} }) {
   const kind = fileKind(file);
   if (!kind) throw new ImportError('סוג הקובץ לא נתמך. אפשר אקסל, CSV, PDF או צילום של הפירוט.');
   onStep('read');
@@ -85,8 +86,9 @@ export async function readStatement(file, { categories, history, today = new Dat
   if (!items.length) throw new ImportError('לא מצאנו תנועות בקובץ. בדקו שזה הפירוט עצמו ולא סיכום.');
 
   onStep('sort');
-  // The household's own past choices come first, then the AI for the rest.
-  items = categorizeFromHistory(items, history);
+  // The household's own rules first, then their past choices, then the AI for the rest.
+  items = applyRules(items, rules);
+  items = items.map((t) => (t.auto === 'rule' ? t : categorizeFromHistory([t], history)[0]));
   const sent = waitingMerchants(items);
   if (sent.length && aiEnabled()) {
     const groups = [];

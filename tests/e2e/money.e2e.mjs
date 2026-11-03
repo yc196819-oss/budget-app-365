@@ -204,3 +204,32 @@ test('managing categories: add one, add a sub-category, rename; one with no spen
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('after a change: "always file it like this?" makes a rule, listed in categories, where it can be changed or deleted', async () => {
+  const { page, db } = await openMoney();
+  await page.click('button[aria-label="החודש הקודם"]');
+  await page.locator('.row', { hasText: 'ארומה' }).first().click();
+  await page.locator('.sheet .chip', { hasText: 'רכב' }).click();
+  const ask = page.locator('.rule-ask');
+  await ask.waitFor();
+  assert.match(await ask.textContent(), /לסווג תמיד את ארומה כ"רכב"\?/);
+  await ask.locator('button:has-text("כן, תמיד")').click();
+  await page.waitForSelector('.rule-saved');
+  assert.deepEqual(db.tables.category_rules.map((r) => [r.match, r.category_id, r.type, r.household_id]), [['ארומה', 'car', 'expense', 'h1']]);
+  // "Only this time" saves nothing.
+  await page.locator('.sheet .chip', { hasText: 'אוכל' }).first().click();
+  await page.locator('.rule-ask button:has-text("רק הפעם")').click();
+  assert.equal(db.tables.category_rules.length, 1);
+  await page.click('.sheet button[aria-label="סגירה"]');
+  // The list, in managing categories.
+  await page.locator('[role=tab]:has-text("קטגוריות"), button:has-text("קטגוריות")').first().click();
+  await page.click('button.manage-cats');
+  const row = page.locator('.rule-row', { hasText: 'ארומה' });
+  await row.waitFor();
+  assert.match(await row.textContent(), /← רכב/);
+  await row.locator('.rule-del').click();
+  await row.locator('.rule-del:has-text("בטוח?")').click();
+  await page.waitForSelector('text=הכלל נמחק');
+  assert.equal(db.tables.category_rules.length, 0);
+  await page.close();
+});
