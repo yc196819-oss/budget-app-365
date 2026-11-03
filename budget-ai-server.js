@@ -2200,7 +2200,7 @@ app.post('/api/admin/feedback/:id', requireAuth, async (req, res) => {
 
 
 // ═══ the monthly summary by email ═══
-// Each member who did not turn it off gets it once a month. The link at the
+// Each member who asked for it gets it once a month. The link at the
 // bottom turns it off without signing in (and mail apps show "unsubscribe").
 const UNSUB_SECRET = process.env.UNSUB_SECRET || VAPID_PRIVATE_KEY || ADMIN_SALT;
 const publicOrigin = (req) => (process.env.PUBLIC_URL || (req ? req.protocol + '://' + req.get('host') : 'https://budget-web-u0iy.onrender.com')).replace(/\/$/, '');
@@ -2209,10 +2209,11 @@ async function mailMonthly(hid, data, { only = null, origin = publicOrigin(null)
   if (!mailStatus().ready) return { sent: 0 };
   const ids = only ? [only] : await householdMembers(hid);
   const { data: prefs } = await supabaseAdmin.from('mail_prefs').select('user_id,monthly').in('user_id', ids);
-  const off = new Set((prefs || []).filter((p) => p.monthly === false).map((p) => p.user_id));
+  // Only for whoever said yes in the app.
+  const yes = new Set((prefs || []).filter((p) => p.monthly === true).map((p) => p.user_id));
   let sent = 0;
   for (const uid of ids) {
-    if (off.has(uid) && !force) continue;
+    if (!yes.has(uid) && !force) continue;
     const { data: u } = await supabaseAdmin.auth.admin.getUserById(uid);
     const to = u && u.user && u.user.email;
     if (!to) continue;

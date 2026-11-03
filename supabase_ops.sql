@@ -315,11 +315,12 @@ grant execute on function public.mfa_state_for(uuid, text, uuid) to service_role
 --     on conflict (session_id) do nothing;
 --   update public.app_flags set on_ = true, updated_at = now() where key = 'email_code_for_all';
 
--- Applied 2026-11-03 (monthly_mail): the monthly summary by email; each person
--- can turn it off (in the app, or with one click from the email).
+-- Applied 2026-11-03 (monthly_mail, monthly_mail_opt_in): the monthly summary
+-- by email, only for whoever said yes in the app; it can be turned off in the
+-- app or with one click from the email.
 create table if not exists public.mail_prefs (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  monthly boolean not null default true,
+  monthly boolean not null default false,
   updated_at timestamptz not null default now()
 );
 alter table public.mail_prefs enable row level security;

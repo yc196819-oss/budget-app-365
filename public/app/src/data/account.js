@@ -69,14 +69,15 @@ export function download(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-// The monthly summary by email: this person's own choice (on unless turned off).
-export async function monthlyMailOn(userId) {
+// The monthly summary by email: only for whoever said yes. null = not asked yet.
+export async function monthlyMailChoice(userId) {
   const { data, error } = await sb.from('mail_prefs').select('monthly').eq('user_id', userId).maybeSingle();
   if (error) throw error;
-  return data ? data.monthly !== false : true;
+  return data ? data.monthly === true : null;
 }
+export async function monthlyMailOn(userId) { return (await monthlyMailChoice(userId)) === true; }
 export async function setMonthlyMail(userId, on) {
-  const { error } = await sb.from('mail_prefs').upsert({ user_id: userId, monthly: !!on, updated_at: new Date().toISOString() });
+  const { error } = await sb.from('mail_prefs').upsert({ user_id: userId, monthly: !!on, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (error) throw error;
 }
 // The owner: the monthly email to themselves, or to everyone who has not had it.
