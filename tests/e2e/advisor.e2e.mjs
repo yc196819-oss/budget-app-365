@@ -188,12 +188,19 @@ test('the question box: a long question is shown in full (the box grows), Enter 
 });
 
 test('desktop: the advisor opens in its own window, with only the conversation', async () => {
-  const { page } = await open({ width: 1280 });
+  const { page, errors } = await open({ width: 1280 });
   await page.waitForSelector('.rail .rail-pop');
-  const [win] = await Promise.all([page.waitForEvent('popup'), page.click('.rail .rail-pop')]);
-  await win.waitForSelector('.advisor-solo [aria-label="שאלה ליועץ"]');
-  assert.match(win.url(), /#\/advisor$/);
-  assert.equal(await win.locator('.sidebar:visible, nav:visible').count(), 0, 'no tabs, only the advisor');
-  await win.close();
+  // The button asks the browser for a separate window at #/advisor.
+  await page.evaluate(() => { window.__opened = []; window.open = (...a) => { window.__opened.push(a); return { focus() {} }; }; });
+  await page.click('.rail .rail-pop');
+  const [[url, name, features]] = await page.evaluate(() => window.__opened);
+  assert.match(url, /#\/advisor$/);
+  assert.equal(name, 'budget-advisor');
+  assert.match(features, /popup/);
+  // What that window shows: only the conversation, no tabs.
+  await page.goto(server.base + '/app/#/advisor');
+  await page.waitForSelector('.advisor-solo [aria-label="שאלה ליועץ"]');
+  assert.equal(await page.locator('.sidebar:visible, nav:visible, .rail:visible').count(), 0, 'no tabs, only the advisor');
+  assert.deepEqual(errors, []);
   await page.close();
 });

@@ -43,7 +43,12 @@ export function Shell({ tab, session }) {
   // One overlay at a time: 'profile' | 'add' | 'voice' | 'import' | 'learn' | 'advisor' | 'talk' | null.
   const [overlay, setOverlay] = useState(null);
   // Opened as the advisor's own window (desktop): only the conversation.
-  const [solo] = useState(() => /^#\/advisor/.test(location.hash));
+  const [solo, setSolo] = useState(() => /^#\/advisor/.test(location.hash));
+  useEffect(() => {
+    const on = () => setSolo(/^#\/advisor/.test(location.hash));
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
   const [theme, setTheme] = useState(() => readLocal('theme', ''));
   const data = useHousehold(session.household?.household_id, session.user.id);
   // The desktop rail and the mobile sheet hold the same advisor; only one is mounted.
