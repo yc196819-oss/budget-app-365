@@ -18,7 +18,6 @@ import { useTrips } from '../../data/useTrips.js';
 import { SetupGuide } from './SetupGuide.js';
 import { ImportNotice } from './ImportNotice.js';
 import { MonthlyAsk } from './MonthlyAsk.js';
-import { AddressAsk } from './AddressAsk.js';
 import { SortSheet } from '../money/SortSheet.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
@@ -63,7 +62,6 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
   return html`<div class="stack home">
     <div class="home-main stack">
       <${ImportNotice} data=${data} onImport=${onImport} />
-      <${AddressAsk} userId=${userId} data=${data} />
       <${MonthlyAsk} userId=${userId} data=${data} />
       ${guide}
       <${Hero} plan=${plan} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />

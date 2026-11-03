@@ -258,18 +258,6 @@ export async function setIncome(amount) {
   emit();
 }
 
-// How to address me: my name and "אתה" or "את", seen by the household.
-export async function setMyAddress({ name, gender }) {
-  const patch = { gender: gender === 'f' ? 'f' : 'm' };
-  const n = String(name || '').trim().slice(0, 40);
-  if (n) patch.display_name = n;
-  const { error } = await sb.from('memberships').update(patch).eq('user_id', state.userId);
-  if (error) throw error;
-  state.genders = { ...state.genders, [state.userId]: patch.gender };
-  if (n) state.members = { ...state.members, [state.userId]: n };
-  emit();
-}
-
 export async function deleteRow(table, id) {
   const key = LISTS[table];
   if (!key) throw new Error('unknown table ' + table);
