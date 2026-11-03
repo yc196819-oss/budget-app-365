@@ -1,11 +1,14 @@
 import { html } from '../../lib/html.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { NewCategory } from '../../components/NewCategory.js';
 import { Sheet } from '../../components/Sheet.js';
 import { CatIcon } from '../../components/CatIcon.js';
 import { dayLabel, sameMerchantIds } from '../../domain/money.js';
 import { money } from '../../domain/format.js';
-import { setCategory, restoreCategories, deleteWithUndo } from '../../data/household.js';
+import { setCategory, restoreCategories, deleteWithUndo, snapshot } from '../../data/household.js';
+import { listRules, saveRule } from '../../data/rules.js';
+import { shouldAskRule } from '../../domain/rules.js';
+import { Icon } from '../../components/Icon.js';
 import { showToast } from '../../lib/toast.js';
 
 // Details of one transaction: change its category (optionally for all
@@ -13,6 +16,11 @@ import { showToast } from '../../lib/toast.js';
 export function TxSheet({ tx, txs, categories, members, onClose }) {
   const [applyAll, setApplyAll] = useState(true);
   const [busy, setBusy] = useState(false);
+  // After a change: offer to keep it as a rule for this merchant.
+  const [ask, setAsk] = useState(null);
+  const [rules, setRules] = useState([]);
+  const hid = snapshot().hid;
+  useEffect(() => { if (hid) listRules(hid).then(setRules).catch(() => setRules([])); }, [hid]);
   const byId = new Map(categories.map((c) => [c.id, c]));
   const kind = tx.type === 'income' ? 'income' : 'expense';
   const tops = categories.filter((c) => !c.parent_id && (c.kind || 'expense') === kind);
@@ -28,6 +36,7 @@ export function TxSheet({ tx, txs, categories, members, onClose }) {
     try {
       const before = await setCategory(ids, category_id, subcategory_id);
       const name = (created || byId.get(subcategory_id) || byId.get(category_id) || { name: 'בלי קטגוריה' }).name;
+      setAsk(shouldAskRule(rules, tx, category_id, subcategory_id) ? { category_id, subcategory_id, name, state: 'ask' } : null);
       showToast(ids.length > 1 ? 'עודכנו ' + ids.length + ' תנועות של ' + tx.description + ' ← ' + name : 'עודכן ← ' + name, {
         undo: () => restoreCategories(before).catch(() => showToast('הביטול נכשל. נסו שוב.'))
       });
@@ -35,6 +44,14 @@ export function TxSheet({ tx, txs, categories, members, onClose }) {
       showToast('השינוי נכשל. נסו שוב.');
     }
     setBusy(false);
+  };
+
+  const keepRule = async () => {
+    try {
+      const r = await saveRule({ hid, tx, category_id: ask.category_id, subcategory_id: ask.subcategory_id });
+      setRules((l) => [r, ...l.filter((x) => x.id !== r.id)]);
+      setAsk({ ...ask, state: 'saved' });
+    } catch (_e) { showToast('הכלל לא נשמר. נסו שוב.'); }
   };
 
   const remove = () => {
@@ -64,6 +81,15 @@ export function TxSheet({ tx, txs, categories, members, onClose }) {
         ${subs.map((c) => html`<button type="button" class="chip" aria-pressed=${String(tx.subcategory_id === c.id)} disabled=${busy} onClick=${() => choose(tx.category_id, c.id)}>${c.name}</button>`)}
         <${NewCategory} categories=${categories} kind=${kind} parentId=${tx.category_id} onCreated=${(c) => choose(tx.category_id, c.id, c)} />
       </div>`}
+      ${ask && ask.state === 'ask' && html`<div class="card stack rule-ask" role="status">
+        <b class="rule-ask-q"><${Icon} name="bulb" size=${18} />לסווג תמיד את ${tx.description} כ"${ask.name}"?</b>
+        <span class="muted" style="font-size:14px;line-height:1.55">גם בפירוטים הבאים, ואצל שניכם. אפשר לשנות בכל רגע בניהול הקטגוריות.</span>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn" style="flex:1" onClick=${keepRule}>כן, תמיד</button>
+          <button type="button" class="btn btn-ghost" style="flex:1" onClick=${() => setAsk(null)}>רק הפעם</button>
+        </div>
+      </div>`}
+      ${ask && ask.state === 'saved' && html`<div class="card rule-saved" role="status"><${Icon} name="check" size=${18} />נשמר: ${tx.description} ← ${ask.name}. מעכשיו זה יסווג לבד.</div>`}
       ${others.length > 0 && html`<label class="check"><input type="checkbox" checked=${applyAll} onChange=${(e) => setApplyAll(e.target.checked)} />
         <span>לשנות גם ב-${others.length} התנועות האחרות של ${tx.description}</span></label>`}
     </div>

@@ -42,7 +42,7 @@ export function MoneyScreen({ data, onAdd, onImport }) {
     ${view === 'cats' && html`<${CategoriesView} ...${common} onOpenCategory=${(id) => setSheet({ kind: 'cat', id })} onManage=${() => setSheet({ kind: 'manage' })} />`}
     ${view === 'report' && html`<${ReportView} ...${common} />`}
     ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
-    ${sheet && sheet.kind === 'manage' && html`<${ManageCategories} categories=${data.categories} onClose=${() => setSheet(null)} />`}
+    ${sheet && sheet.kind === 'manage' && html`<${ManageCategories} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
     ${sheet && sheet.kind === 'cat' && html`<${CategorySheet} categoryId=${sheet.id} ...${common} months=${months} onOpenTx=${openTx} onClose=${() => setSheet(null)} />`}
   </div>`;
 }

@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { listRules } from '../../data/rules.js';
 import { track, reportError } from '../../lib/telemetry.js';
 import { useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
@@ -32,6 +33,7 @@ export function ImportSheet({ data, onClose }) {
       const out = await readStatement(file, {
         categories: data.categories,
         history: data.txs,
+        rules: await listRules(data.hid).catch(() => []),
         onStep: (s) => { if (run.current === id) setStep(s); }
       });
       if (run.current !== id) return;

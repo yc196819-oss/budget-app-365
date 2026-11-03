@@ -238,7 +238,7 @@ test('summary and rows to save', () => {
     { date: '2026-08-12', amount: 100, type: 'expense', description: 'a', category_id: 'food', subcategory_id: null }
   ], []);
   const s = summary(items);
-  assert.deepEqual({ ...s }, { found: 4, chosen: 4, auto: 2, waiting: 2, likely: 0, maybe: 1, expense: 240, income: 20, from: '2026-08-12', to: '2026-08-15' });
+  assert.deepEqual({ ...s }, { found: 4, chosen: 4, auto: 2, byRule: 0, waiting: 2, likely: 0, maybe: 1, expense: 240, income: 20, from: '2026-08-12', to: '2026-08-15' });
   const rows = toRows(items);
   assert.equal(rows.length, 4);
   assert.deepEqual(rows[0], { type: 'expense', amount: 100, description: 'a', tx_date: '2026-08-12', category_id: 'food', subcategory_id: null, nature: 'variable', spread: 'month', source: 'pdf' });

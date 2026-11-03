@@ -386,6 +386,7 @@ export function summary(items) {
     found: items.length,
     chosen: chosen.length,
     auto: chosen.filter((t) => t.category_id).length,
+    byRule: chosen.filter((t) => t.auto === 'rule').length,
     waiting: chosen.filter((t) => !t.category_id).length,
     likely: items.filter((t) => t.dupe === 'likely').length,
     maybe: items.filter((t) => t.dupe === 'maybe').length,

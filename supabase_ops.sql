@@ -336,3 +336,27 @@ alter table public.mail_sent add constraint mail_sent_campaign_check
 -- Applied 2026-11-03 (member_gender): how to address each person ("אתה" or
 -- "את"), chosen once by the person, seen by the household like the name.
 alter table public.memberships add column if not exists gender text check (gender in ('m', 'f'));
+
+-- Applied 2026-11-03 (category_rules): "always file X as Y", chosen by the
+-- household after a correction; applied first when a statement is read.
+create table if not exists public.category_rules (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  type text not null default 'expense' check (type in ('expense', 'income')),
+  match text not null check (length(match) between 1 and 80),
+  label text not null default '' check (length(label) <= 120),
+  category_id uuid references public.categories(id) on delete cascade,
+  subcategory_id uuid references public.categories(id) on delete set null,
+  created_by uuid default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (household_id, type, match)
+);
+alter table public.category_rules enable row level security;
+revoke all on public.category_rules from anon;
+create policy category_rules_household on public.category_rules for all to authenticated
+  using (household_id in (select public.my_households()))
+  with check (household_id in (select public.my_households()));
+create policy two_step_required on public.category_rules as restrictive for all to authenticated
+  using ((select public.mfa_ok())) with check ((select public.mfa_ok()));
+create index if not exists category_rules_household on public.category_rules (household_id);

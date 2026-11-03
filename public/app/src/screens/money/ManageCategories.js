@@ -7,10 +7,11 @@ import { renameCategory } from '../../data/household.js';
 import { checkCategoryName } from '../../domain/categories.js';
 import { showToast } from '../../lib/toast.js';
 import { Segmented } from '../../components/Segmented.js';
+import { RulesList } from './RulesList.js';
 
 // All the categories in one place: add a category or a sub-category, and
 // rename one. (Categories with no spending yet show here too.)
-export function ManageCategories({ categories, onClose }) {
+export function ManageCategories({ categories, members = {}, onClose }) {
   const [kind, setKind] = useState('expense');
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState('');
@@ -46,6 +47,7 @@ export function ManageCategories({ categories, onClose }) {
         </div>
       </div>`)}</div>
       ${tops.length === 0 && html`<div class="card empty">עוד אין קטגוריות מהסוג הזה. מוסיפים למעלה.</div>`}
+      <${RulesList} categories=${categories} kind=${kind} members=${members} />
     </div>
   <//>`;
 }

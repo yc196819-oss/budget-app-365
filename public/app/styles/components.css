@@ -606,3 +606,12 @@ body.chat-open { overflow: hidden; }
 .learn-btn svg, .adv .chip svg { flex: none; }
 .adv-talk { display: inline-flex; align-items: center; gap: 8px; }
 .adv-speak svg { vertical-align: middle; }
+/* "Always file X as Y?" after a category change */
+.rule-ask { gap: 10px; border: 1.5px solid var(--accent); }
+.rule-ask-q { display: flex; align-items: center; gap: 8px; font-size: 16px; line-height: 1.4; }
+.rule-ask-q svg { flex: none; color: var(--accent); }
+.rule-saved { display: flex; align-items: center; gap: 8px; background: var(--income-tint); color: var(--income); font-weight: 700; font-size: 15px; }
+.rule-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+.rule-pick { flex: 0 1 150px; height: 44px; padding: 0 8px; font-size: 14px; }
+.rule-del { width: 44px; height: 44px; flex: none; color: var(--danger); }
+.rule-del.sure { width: auto; padding: 0 10px; font-size: 14px; font-weight: 700; }
