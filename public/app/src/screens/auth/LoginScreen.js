@@ -95,6 +95,10 @@ export function LoginScreen() {
         ${mode === 'login' && html`<button class="btn-text" type="button" onClick=${reset}>שכחתי סיסמה</button>`}
       </form>
       <p class="login-safe" role="note"><${Icon} name="shield" size=${18} /><span>בלי חיבור לבנק ובלי סיסמת בנק. החיבור מוצפן, כל משק בית רואה רק את הנתונים שלו, ואפשר להפעיל כניסה בשני שלבים. <a href="/security">איך אנחנו שומרים עליכם</a></span></p>
+      <a class="soc-badge" href="https://supabase.com/security" target="_blank" rel="noopener" aria-label="הנתונים מאוחסנים בשרתים בתקן SOC 2 Type 2. פתיחת דף האבטחה של ספק השרתים">
+        <${Icon} name="shield" size=${30} stroke=${1.8} />
+        <span><b dir="ltr">SOC 2 Type 2</b><small>הנתונים שמורים בשרתים בתקן אבטחה בינלאומי</small></span>
+      </a>
       <${InstallCard} always=${true} />
       <a class="btn-text" href="/download" style="text-align:center">📲 הורדת האפליקציה לטלפון</a>
       <p class="faint legal-links" style="font-size:13px"><a href="/terms">תנאי שימוש</a> · <a href="/privacy">מדיניות פרטיות</a> · <a href="/accessibility">הצהרת נגישות</a> · <a href="/old/">לגרסה הקודמת</a></p>

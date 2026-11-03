@@ -16,12 +16,16 @@ test('the sign-in screen says how the data is protected, and no longer "under co
   const text = await page.locator('main.login').textContent();
   assert.doesNotMatch(text, /בבנייה/);
   assert.match(await page.locator('.login-safe').textContent(), /בלי חיבור לבנק.*מוצפן.*כניסה בשני שלבים/s);
+  // The standard is the providers', and the badge says so and leads to their own page.
+  assert.equal(await page.locator('a.soc-badge').getAttribute('href'), 'https://supabase.com/security');
+  assert.match(await page.locator('a.soc-badge').textContent(), /SOC 2 Type 2.*בשרתים/s);
   await page.click('.login-safe a[href="/security"]');
   await page.waitForSelector('h1:has-text("איך אנחנו שומרים עליכם")');
   const layers = await page.locator('.layers > li').allTextContents();
   assert.equal(layers.length, 8);
   assert.match(layers.join(' '), /SOC 2 Type 2.*/s);
   assert.match(layers.join(' '), /AES-256/);
+  assert.deepEqual(await page.locator('.soc-badge').evaluateAll((l) => l.map((a) => a.getAttribute('href'))), ['https://supabase.com/security', 'https://render.com/trust']);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'nothing off screen on a phone');
   await page.close();
 });
