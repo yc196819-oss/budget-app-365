@@ -1,6 +1,6 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminReengage, sendReengage } from '../../data/account.js';
+import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail } from '../../data/account.js';
 import { adminFeedback, setFeedback, FEEDBACK_KIND, FEEDBACK_STATUS } from '../../data/feedback.js';
 import { showToast } from '../../lib/toast.js';
 
@@ -8,6 +8,26 @@ const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', pl
 const NAMES = { app_open: 'פתיחות', tx_add: 'הוספת תנועה', import_done: 'ייבוא', advisor_ask: 'שאלות ליועץ', advisor_talk: 'שיחה קולית', decision_open: 'החלטה חדשה', decision_message: 'הודעות ביחד', trip_plan: 'תכנון טיול', news_open: 'חדשות', lesson_done: 'שיעור', shortcut: 'קיצור דרך', export: 'ייצוא', restore: 'שחזור', import_fail: 'ייבוא שנכשל', guide_step: 'צעד במסלול התחלה', guide_skip: 'דילוג במסלול', learn_auto: 'עדכון אוטומטי מהיועץ', learn_undo: 'ביטול עדכון של היועץ', onboard_0: 'הרשמה: מסך פתיחה', onboard_1: 'הרשמה: מי אתם', onboard_2: 'הרשמה: מה רלוונטי', onboard_3: 'הרשמה: כרטיסים', onboard_4: 'הרשמה: הכנסה', onboard_5: 'הרשמה: פרטיות', onboard_done: 'הרשמה הושלמה' };
 
 // The owner's dashboard: who uses the app, who came back, what broke.
+// The monthly summary email: see it in your own inbox, then send it to all.
+function MonthlyMailCard() {
+  const [busy, setBusy] = useState('');
+  const [sure, setSure] = useState(false);
+  const [note, setNote] = useState('');
+  const run = async (key, fn, done) => {
+    setBusy(key); setNote('');
+    try { setNote(done(await fn())); } catch (e) { setNote(e.message || 'לא נשלח. נסו שוב.'); }
+    setBusy(''); setSure(false);
+  };
+  return html`<div class="card stack admin-monthly"><b>📊 סיכום חודשי במייל</b>
+    <span class="muted" style="font-size:13px;line-height:1.55">נשלח לבד ב-1 לכל חודש, יחד עם הדוח החודשי, רק למי שאישר באפליקציה שהוא רוצה. כל אחד מקבל כל חודש פעם אחת, ויכול להסיר את עצמו בלחיצה מהמייל או בפרופיל.</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => run('t', testMonthlyMail, (r) => 'נשלח אליך הסיכום של ' + r.month + ', עם המספרים של משק הבית שלך.')}>${busy === 't' ? 'שולח…' : 'ניסיון אליי'}</button>
+      <button type="button" class=${'btn' + (sure ? '' : ' btn-ghost')} style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => (sure ? run('s', sendMonthlyMail, (r) => 'נשלחו ' + r.sent + ' מיילים (' + (r.month || '') + ').') : setSure(true))}>${busy === 's' ? 'שולח…' : sure ? 'בטוח? לשלוח לכולם' : 'לשלוח עכשיו את החודש האחרון'}</button>
+    </div>
+    ${note && html`<span role="status" style="font-size:13px">${note}</span>`}
+  </div>`;
+}
+
 export function AdminView({ onBack }) {
   const [s, setS] = useState(undefined);
   const [live, setLive] = useState(null);
@@ -81,9 +101,9 @@ export function AdminView({ onBack }) {
   useEffect(() => { adminFeedback().then(setInbox); }, []);
   const act = async (f, patch, done) => {
     try {
-      await setFeedback(f.id, patch);
+      const r = await setFeedback(f.id, patch);
       setInbox((l) => l.map((x) => (x.id === f.id ? { ...x, ...patch } : x)));
-      if (done) showToast(done);
+      if (done) showToast(typeof done === 'function' ? done(r || {}) : done);
     } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
   };
   const today = s && s.daily ? s.daily[s.daily.length - 1] : null;
@@ -118,6 +138,7 @@ export function AdminView({ onBack }) {
         ${jobView(c)}
       </div>`)}
     </div>`}
+    ${back && html`<${MonthlyMailCard} />`}
     ${inbox && html`<div class="card stack admin-inbox"><b>🛠️ תקלות ורעיונות מהמשתמשים${inbox.filter((f) => f.status === 'new').length ? ' · ' + inbox.filter((f) => f.status === 'new').length + ' חדשות' : ''}</b>
       ${inbox.length === 0 && html`<span class="muted" style="font-size:13px">עוד אין פניות.</span>`}
       ${inbox.filter((f) => f.status !== 'done' && f.status !== 'wontfix').concat(inbox.filter((f) => f.status === 'done' || f.status === 'wontfix')).slice(0, 40).map((f) => html`<div class="inbox-item" key=${f.id} style=${'display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line);' + (f.status === 'done' || f.status === 'wontfix' ? 'opacity:.6' : '')}>
@@ -129,7 +150,7 @@ export function AdminView({ onBack }) {
         </div>
         <div style="display:flex;gap:6px">
           <input class="input" style="flex:1" placeholder="תשובה למשתמש (תגיע אליו כהתראה ובאפליקציה)" aria-label=${'תשובה לפנייה של ' + f.who} value=${replies[f.id] || ''} onInput=${(e) => setReplies((r) => ({ ...r, [f.id]: e.target.value }))} />
-          <button type="button" class="btn" style="width:auto" disabled=${!(replies[f.id] || '').trim()} onClick=${() => act(f, { owner_note: replies[f.id].trim(), status: f.status === 'new' ? 'working' : f.status, notify: true }, 'התשובה נשלחה').then(() => setReplies((r) => ({ ...r, [f.id]: '' })))}>לענות</button>
+          <button type="button" class="btn" style="width:auto" disabled=${!(replies[f.id] || '').trim()} onClick=${() => act(f, { owner_note: replies[f.id].trim(), status: f.status === 'new' ? 'working' : f.status, notify: true }, (r) => (r.mailed ? 'התשובה נשלחה, גם למייל שלו' : 'התשובה נשלחה')).then(() => setReplies((r) => ({ ...r, [f.id]: '' })))}>לענות</button>
         </div>
       </div>`)}
     </div>`}

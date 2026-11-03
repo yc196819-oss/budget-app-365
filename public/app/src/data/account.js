@@ -68,3 +68,18 @@ export function download(name, text, type) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+
+// The monthly summary by email: only for whoever said yes. null = not asked yet.
+export async function monthlyMailChoice(userId) {
+  const { data, error } = await sb.from('mail_prefs').select('monthly').eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  return data ? data.monthly === true : null;
+}
+export async function monthlyMailOn(userId) { return (await monthlyMailChoice(userId)) === true; }
+export async function setMonthlyMail(userId, on) {
+  const { error } = await sb.from('mail_prefs').upsert({ user_id: userId, monthly: !!on, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+  if (error) throw error;
+}
+// The owner: the monthly email to themselves, or to everyone who has not had it.
+export const testMonthlyMail = () => api('/api/admin/monthly-mail/test', { method: 'POST' });
+export const sendMonthlyMail = () => api('/api/admin/monthly-mail/send', { method: 'POST' });
