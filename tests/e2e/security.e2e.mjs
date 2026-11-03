@@ -45,6 +45,7 @@ test('two-step login by email: no data until the code is right, then the app ope
     state = { ...state, ok: true };
     return r.fulfill(json({ ok: true }));
   });
+  await page.clock.install();
   await signIn(page, server.base);
   await page.waitForSelector('text=עוד שלב אחד');
   assert.equal(await page.locator('nav').count(), 0, 'the app is not shown yet');
@@ -52,6 +53,15 @@ test('two-step login by email: no data until the code is right, then the app ope
   await page.waitForSelector('text=yo***@example.com');
   assert.deepEqual(sent, [{ purpose: 'login' }]);
   assert.match(await page.locator('main.login').textContent(), /בכניסה עם סיסמה ממכשיר חדש/);
+  // Did not get it: what to check, and a one-minute clock before sending again.
+  assert.match(await page.locator('.resend-clock').textContent(), /אפשר לשלוח קוד חדש בעוד (1:00|0:[0-5]\d)/);
+  await page.click('button:has-text("לא קיבלתי את המייל")');
+  assert.match(await page.locator('.resend-help').textContent(), /ספאם/);
+  assert.equal(await page.locator('.resend button:has-text("לשלוח קוד חדש")').count(), 0, 'not before the minute is up');
+  await page.clock.fastForward(61000);
+  await page.click('.resend button:has-text("לשלוח קוד חדש")');
+  await page.waitForFunction(() => document.querySelector('.resend-clock'));
+  assert.equal(sent.length, 2);
   await page.fill('input[autocomplete="one-time-code"]', '111111');
   await page.click('button[type="submit"]:has-text("אישור")');
   assert.match(await page.locator('.error').textContent(), /לא נכון/);

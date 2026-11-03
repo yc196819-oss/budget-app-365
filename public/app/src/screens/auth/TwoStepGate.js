@@ -2,6 +2,7 @@ import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { setScreen } from '../../lib/telemetry.js';
 import { Icon } from '../../components/Icon.js';
+import { ResendCode } from '../../components/ResendCode.js';
 import { passTotp, passEmail, sendEmailCode, cleanCode } from '../../data/security.js';
 
 // After the password: the second step, for whoever turned it on. Until it
@@ -14,10 +15,11 @@ export function TwoStepGate({ session }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sentTo, setSentTo] = useState('');
+  const [sentAt, setSentAt] = useState(0);
 
   const send = async () => {
     setError(''); setBusy(true);
-    try { const r = await sendEmailCode('login'); setSentTo(r.to || 'המייל שלכם'); } catch (e) { setError(e.message); }
+    try { const r = await sendEmailCode('login'); setSentTo(r.to || 'המייל שלכם'); setSentAt(Date.now()); setCode(''); } catch (e) { setError(e.message); }
     setBusy(false);
   };
   const submit = async (e) => {
@@ -47,8 +49,8 @@ export function TwoStepGate({ session }) {
         <button type="button" aria-pressed=${String(way === 'email')} onClick=${() => pick('email')}>קוד במייל</button>
       </div>`}
       ${way === 'email' && html`<div class="stack" style="gap:8px">
-        ${sentTo && html`<p class="notice" role="status">שלחנו קוד ל-<span dir="ltr">${sentTo}</span>. הוא בתוקף ל-10 דקות. לא הגיע? בדקו בספאם.</p>`}
-        <button type="button" class=${sentTo ? 'btn-text' : 'btn'} onClick=${send} disabled=${busy}>${sentTo ? 'לשלוח קוד חדש' : 'שלחו לי קוד במייל'}</button>
+        ${sentTo && html`<p class="notice" role="status">שלחנו קוד ל-<span dir="ltr">${sentTo}</span>. הוא בתוקף ל-10 דקות.</p>`}
+        ${!sentTo && html`<button type="button" class="btn" onClick=${send} disabled=${busy}>שלחו לי קוד במייל</button>`}
       </div>`}
       ${ready && html`<form class="stack" onSubmit=${submit} noValidate>
         <label class="field"><span>הקוד</span>
@@ -57,6 +59,7 @@ export function TwoStepGate({ session }) {
         <button class="btn" type="submit" disabled=${busy}>${busy ? '…' : 'אישור'}</button>
       </form>`}
       ${error && html`<p class="error" role="alert">${error}</p>`}
+      ${way === 'email' && sentTo && html`<${ResendCode} sentAt=${sentAt} onResend=${send} busy=${busy} />`}
       <button type="button" class="btn-text" onClick=${session.signOut}>יציאה, ולהיכנס עם חשבון אחר</button>
     </main>`;
 }
