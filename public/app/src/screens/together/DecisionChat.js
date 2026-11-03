@@ -1,4 +1,6 @@
 import { html } from '../../lib/html.js';
+import { g as gWord, genderOf } from '../../domain/people.js';
+import { Icon } from '../../components/Icon.js';
 import { asOfLabel } from '../../domain/numbers.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { threadFor, unreadCount, withDays, readBy, STATUS, outcome, needsMyAnswer, canConclude, isClosed, votesFor, VOTES, answerers } from '../../domain/decisions.js';
@@ -12,7 +14,8 @@ const SEND = html`<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="t
 
 // Words to start with, so each of us says what is going on inside, not only
 // yes or no. They only begin the sentence; the rest is yours.
-const OPENERS = ['💭 אני מרגיש/ה ש', '❤️ חשוב לי ש', '😟 מה שמדאיג אותי זה', '🤝 מה אם', '🙏 אני מבין/ה אותך, '];
+// Ways to start a message, in the person's own form.
+const openers = (gender) => [gWord(gender, 'אני מרגיש ש', 'אני מרגישה ש'), 'חשוב לי ש', 'מה שמדאיג אותי זה', 'מה אם', gWord(gender, 'אני מבין אותך, ', 'אני מבינה אותך, ')];
 
 // Messages of the same person a few minutes apart sit together; only the
 // first of a run has the bubble's tail.
@@ -33,9 +36,9 @@ export function ChatPreview({ d, dec, userId, nameOf, onOpen }) {
   const last = thread.at(-1);
   const unread = unreadCount(d, dec.messages || [], userId, seenAt(d.id, userId));
   const typing = dec.typing && dec.typing[d.id];
-  const who = (m) => (m.role === 'ai' ? '✨ היועץ' : m.author_id === userId ? 'אני' : nameOf(m.author_id));
+  const who = (m) => (m.role === 'ai' ? 'היועץ' : m.author_id === userId ? 'אני' : nameOf(m.author_id));
   return html`<button type="button" class=${'chat-preview' + (unread ? ' unread' : '')} onClick=${onOpen} aria-label=${'לפתוח את השיחה על ' + d.title + (unread ? ', ' + unread + ' הודעות חדשות' : '')}>
-    <span class="chat-preview-ic" aria-hidden="true">💬</span>
+    <span class="chat-preview-ic" aria-hidden="true"><${Icon} name="chat" size=${18} /></span>
     <span class="chat-preview-text">${typing ? html`<i>${nameOf(typing.userId)} ${typingWord(nameOf, typing.userId)}…</i>` : last ? html`<b>${who(last)}:</b> ${last.text.split('\n')[0]}` : html`<span class="muted">לדבר על זה ביחד</span>`}</span>
     ${last && html`<span class="chat-preview-time">${hm(last.created_at)}</span>`}
     ${unread > 0 ? html`<span class="chat-preview-count" aria-hidden="true">${unread}</span>` : html`<span class="chat-preview-go" aria-hidden="true">‹</span>`}
@@ -94,7 +97,7 @@ export function ChatScreen({ d, dec, data, userId, memberIds, nameOf, onClose, o
     try { await deleteMessage(id); } catch (_err) { setError('המחיקה נכשלה. נסו שוב.'); }
   };
   const opener = (o) => {
-    const words = o.replace(/^\S+\s/, '');
+    const words = o;
     setDraft(words);
     setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(words.length, words.length); grow(el); } }, 0);
   };
@@ -116,25 +119,25 @@ export function ChatScreen({ d, dec, data, userId, memberIds, nameOf, onClose, o
         <span class="wa-votes">${answerers(d, memberIds).map((id) => { const v = votes.find((x) => x.user_id === id); return html`<span key=${id}>${v ? VOTES[v.vote].icon : '⏳'} ${nameOf(id)}</span>`; })}</span>
         ${!isClosed(d) && html`<span class="wa-pin-acts">
           ${needsMyAnswer(d, dec.votes, userId, memberIds) && html`<button type="button" class="wa-pill strong" onClick=${onAnswer}>לענות</button>`}
-          ${canConclude(d) && partners.length > 0 && html`<button type="button" class="wa-pill" onClick=${() => setConcluding(true)}>📌 ${d.status === 'planned' ? 'לעדכן החלטה' : 'לסכם החלטה'}</button>`}
+          ${canConclude(d) && partners.length > 0 && html`<button type="button" class="wa-pill" onClick=${() => setConcluding(true)}>${d.status === 'planned' ? 'לעדכן החלטה' : 'לסכם החלטה'}</button>`}
         </span>`}
       </div>
-      ${d.summary && html`<div class="wa-summary"><b>📌 מה החלטנו</b><span>${d.summary}</span></div>`}
+      ${d.summary && html`<div class="wa-summary"><b><${Icon} name="pin" size=${16} />מה החלטנו</b><span>${d.summary}</span></div>`}
     </div>
 
     <div class="wa-log" ref=${logRef} aria-live="polite" onClick=${(e) => { if (!e.target.closest('.wa-msg.me')) { setPicked(null); setConfirmDel(false); } }}>
       ${thread.length === 0 && !thinking && html`<div class="wa-empty">
-        <span class="wa-empty-art" aria-hidden="true">💞</span>
+        <span class="wa-empty-art" aria-hidden="true"><${Icon} name="heart" size=${30} /></span>
         <b>איך כל אחד מכם מרגיש עם זה?</b>
         <span>כאן מדברים בנחת: מה חשוב לכל אחד, מה מדאיג, ומה יכול לעבוד לשניכם. השיחה נשארת פתוחה עד שתסכמו יחד.</span>
-        ${aiOn && html`<span class="wa-empty-hint">✨ אפשר להזמין את היועץ בכל רגע, והוא ייתן מקום לשניכם.</span>`}
+        ${aiOn && html`<span class="wa-empty-hint">אפשר להזמין את היועץ בכל רגע, והוא ייתן מקום לשניכם.</span>`}
       </div>`}
       ${items.map((m, i) => {
         if (m.day) return html`<div class="wa-day" key=${m.key}><span>${m.day}</span></div>`;
         const tail = !sameRun(items[i - 1], m);
         if (m.role === 'ai') {
           return html`<div class="wa-msg ai" key=${m.id}>
-            <span class="wa-ai-head"><span class="wa-orb" aria-hidden="true">✨</span><b>היועץ</b>${m.author_id ? html`<small>${m.author_id === userId ? 'לבקשתי' : 'לבקשת ' + nameOf(m.author_id)}</small>` : ''}</span>
+            <span class="wa-ai-head"><span class="wa-orb" aria-hidden="true"><${Icon} name="spark" size=${14} /></span><b>היועץ</b>${m.author_id ? html`<small>${m.author_id === userId ? 'לבקשתי' : 'לבקשת ' + nameOf(m.author_id)}</small>` : ''}</span>
             <${AdvisorText} text=${m.text} />
             ${asOfLabel(m.created_at) && html`<small class="adv-asof">${asOfLabel(m.created_at)}. בכרטיס מופיע המצב של עכשיו.</small>`}
             <span class="wa-meta">${hm(m.created_at)}</span></div>`;
@@ -148,19 +151,19 @@ export function ChatScreen({ d, dec, data, userId, memberIds, nameOf, onClose, o
             : html`<button type="button" class="btn-text" aria-label=${'למחוק את ההודעה: ' + m.text} onClick=${() => setConfirmDel(true)}>מחיקה</button>`}</span>`}
         </div>`;
       })}
-      ${thinking && html`<div class="wa-msg ai"><span class="wa-ai-head"><span class="wa-orb" aria-hidden="true">✨</span><b>היועץ</b></span>${live ? html`<${AdvisorText} text=${live} />` : html`<span class="adv-thinking"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>קורא את השיחה ואת המספרים…</span>`}</div>`}
+      ${thinking && html`<div class="wa-msg ai"><span class="wa-ai-head"><span class="wa-orb" aria-hidden="true"><${Icon} name="spark" size=${14} /></span><b>היועץ</b></span>${live ? html`<${AdvisorText} text=${live} />` : html`<span class="adv-thinking"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>קורא את השיחה ואת המספרים…</span>`}</div>`}
       ${typing && html`<div class="wa-msg them tail wa-typing" aria-label=${nameOf(typing.userId) + ' ' + typingWord(nameOf, typing.userId)}><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>`}
     </div>
 
     ${error && html`<span class="hint wa-error" role="alert">${error}</span>`}
     ${!isClosed(d) && html`<div class="wa-foot">
-      ${!draft && html`<div class="wa-openers" role="group" aria-label="להתחיל משפט">${OPENERS.map((o) => html`<button type="button" class="wa-opener" key=${o} onClick=${() => opener(o)}>${o}</button>`)}</div>`}
+      ${!draft && html`<div class="wa-openers" role="group" aria-label="להתחיל משפט">${openers(genderOf(data.genders, userId)).map((o) => html`<button type="button" class="wa-opener" key=${o} onClick=${() => opener(o)}>${o}</button>`)}</div>`}
       <form class="wa-compose" onSubmit=${(e) => { e.preventDefault(); send(); }}>
         <span class="wa-bar">
           <textarea ref=${inputRef} class="wa-input" rows="1" maxlength="4000" value=${draft} disabled=${sending} placeholder="הודעה" aria-label="הודעה בשיחה"
             onInput=${(e) => { setDraft(e.target.value); grow(e.target); sendTyping(d.id, userId); }}
             onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } }}></textarea>
-          ${aiOn && html`<button type="button" class="wa-ai" disabled=${thinking} onClick=${ask} aria-label=${thread.some((m) => m.role === 'ai') ? 'לשאול את היועץ שוב' : 'להזמין את היועץ לשיחה'} title="להזמין את היועץ"><span class="wa-orb" aria-hidden="true">✨</span></button>`}
+          ${aiOn && html`<button type="button" class="wa-ai" disabled=${thinking} onClick=${ask} aria-label=${thread.some((m) => m.role === 'ai') ? 'לשאול את היועץ שוב' : 'להזמין את היועץ לשיחה'} title="להזמין את היועץ"><span class="wa-orb" aria-hidden="true"><${Icon} name="spark" size=${14} /></span></button>`}
         </span>
         <button type="submit" class="wa-send" disabled=${sending || !draft.trim()} aria-label="שליחה">${SEND}</button>
       </form>

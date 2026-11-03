@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
 import { createHousehold } from '../../data/onboarding.js';
 import { track, setScreen } from '../../lib/telemetry.js';
@@ -48,7 +49,7 @@ export function Onboarding({ session }) {
       <div class="brand-login"><img class="brand-mark" src="/wallet.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
       <h1 class="display" style="font-size:34px;line-height:1.15;margin:0">לדעת בכל רגע כמה נשאר להוציא</h1>
       <div class="stack" style="gap:10px">
-        ${[['⚡', 'כל הוצאה במקום אחד', 'הקלדה מהירה או העלאת פירוט מחברת האשראי'], ['✨', 'יועץ שמכיר את המספרים', 'תשובות קצרות, מחושבות מהנתונים שלכם'], ['👥', 'ביחד עם בן או בת הזוג', 'תקציב אחד, שני טלפונים']].map(([i, t, d]) => html`<div class="card onb-perk"><span aria-hidden="true">${i}</span><span><b>${t}</b><small>${d}</small></span></div>`)}
+        ${[['plus', 'כל הוצאה במקום אחד', 'הקלדה מהירה או העלאת פירוט מחברת האשראי'], ['spark', 'יועץ שמכיר את המספרים', 'תשובות קצרות, מחושבות מהנתונים שלכם'], ['together', 'ביחד עם בן או בת הזוג', 'תקציב אחד, שני טלפונים']].map(([i, t, d]) => html`<div class="card onb-perk"><span aria-hidden="true"><${Icon} name=${i} size=${22} /></span><span><b>${t}</b><small>${d}</small></span></div>`)}
       </div>
       <button type="button" class="btn" onClick=${() => setStage('setup')}>מתחילים · 2 דקות</button>
       <button type="button" class="btn-text" onClick=${session.signOut}>זה לא החשבון שלי, להתנתק</button>

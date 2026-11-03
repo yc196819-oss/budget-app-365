@@ -80,9 +80,9 @@ test('planning the next trip: the advisor checks the destination, the local curr
       percent_vs_past: { food: 70, transport: 60, attractions: 50, shopping: 10, other: 0 }, daily_per_person_local: 120, season: 'shoulder', cheaper_months: ['2099-02'], cheaper_note: 'אחרי החגים', tips: ['כרטיס מטרו שבועי'], confidence: 'medium' } }) });
   });
   await page.route('**/api/fx/rate**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"rate":3.7,"date":"2026-10-12","source":"boi"}' }));
-  await page.click('text=✈️ לתכנן טיול');
+  await page.click('button:has-text("לתכנן טיול")');
   await page.fill('.sheet input[placeholder^="למשל: יוון"]', 'ניו יורק');
-  await page.click('.sheet button:has-text("✨ לבדוק")');
+  await page.click('.sheet button:has-text("לבדוק")');
   await page.waitForSelector('.sheet .trip-est');
   const est = await page.locator('.sheet .trip-est').textContent();
   assert.match(est, /₪2,800–₪4,200/);
@@ -116,7 +116,7 @@ test('the trip chat fits the plan: no lodging, meals paid for, money already asi
       : { funding: 1000, days: 5 };
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ reply: said.length === 1 ? 'הורדתי לינה, והאוכל ממומן.' : 'רשמתי ₪1,000 בצד ו-5 ימים.', changes }) });
   });
-  await page.click('text=✈️ לתכנן טיול');
+  await page.click('button:has-text("לתכנן טיול")');
   await page.waitForSelector('.sheet .trip-total');
   const before = await page.locator('.sheet .trip-total').textContent();
   await page.fill('.trip-chat input', 'אנחנו אצל המשפחה, הם מארחים ומאכילים');
@@ -158,7 +158,7 @@ test('a saved trip opens again with its plan and conversation, and the advisor k
     const changes = n === 1 ? { skip: ['lodging'], notes_add: ['לינה אצל האח'] } : { funding: 1500 };
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ reply: n === 1 ? 'הורדתי את הלינה.' : 'רשמתי ₪1,500 בצד.', changes }) });
   });
-  await page.click('text=✈️ לתכנן טיול');
+  await page.click('button:has-text("לתכנן טיול")');
   await page.fill('.sheet input[placeholder^="למשל: יוון"]', 'פריז');
   await page.fill('.trip-chat input', 'אנחנו אצל אחי');
   await page.click('.trip-chat button:has-text("שליחה")');
@@ -193,7 +193,7 @@ test('a saved trip opens again with its plan and conversation, and the advisor k
   // From "budget and goals" too.
   await page.click('text=תקציב ויעדים');
   await page.click('.goal-head:has-text("חופשה בפריז")');
-  await page.click('text=✈️ לפתוח בתכנון הטיול');
+  await page.click('button:has-text("לפתוח בתכנון הטיול")');
   await page.waitForSelector('.trip-chat .dmsg.ai:has-text("רשמתי")');
 
   // And deleted from there.

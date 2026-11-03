@@ -158,7 +158,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   };
   useEffect(() => { if (startTalk && hid) startTalking(); return () => endTalk(); }, []);
   const talkBar = talk && html`<div class=${'talk-bar ' + talk} role="status">
-    <span class="talk-orb" aria-hidden="true">✨</span>
+    <span class="talk-orb" aria-hidden="true"><${Icon} name="spark" size=${20} /></span>
     <span class="talk-text"><b>${talk === 'listening' ? 'מקשיב…' : talk === 'thinking' ? 'חושב…' : 'מדבר…'}</b><span>${talk === 'listening' ? (heard || 'דברו כרגיל, ואחרי הפסקה קצרה היועץ יענה') : 'שיחה קולית'}</span></span>
     ${talk === 'speaking' && html`<button type="button" class="btn-text" onClick=${() => { stopSpeaking(); talkRound(); }}>לדלג</button>`}
     <button type="button" class="btn btn-ghost talk-end" onClick=${() => endTalk()}>סיום</button>
@@ -238,8 +238,8 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       <div class="adv-bar">
         <button type="button" class="btn-text" onClick=${() => { stopSpeaking(); setConv(null); setSuggestions([]); setLearn(null); setOffer(false); refresh(); }}>‹ כל השיחות</button>
         <span style="flex:1"></span>
-        ${conv.id && aiOn && !learn && conv.messages.some((m) => m.role === 'user') && html`<button type="button" class="chip learn-btn" disabled=${busy} onClick=${startLearn}>💡 מה למדתי</button>`}
-        ${conv.id && mine && html`<button type="button" class="chip" aria-pressed=${String(conv.is_private)} onClick=${togglePrivate}>${conv.is_private ? '🔒 פרטית' : '👥 משותפת'}</button>`}
+        ${conv.id && aiOn && !learn && conv.messages.some((m) => m.role === 'user') && html`<button type="button" class="chip learn-btn" disabled=${busy} onClick=${startLearn}><${Icon} name="bulb" size=${16} />מה למדתי</button>`}
+        ${conv.id && mine && html`<button type="button" class="chip" aria-pressed=${String(conv.is_private)} onClick=${togglePrivate}>${conv.is_private ? html`<${Icon} name="lock" size=${16} />פרטית` : html`<${Icon} name="together" size=${16} />משותפת`}</button>`}
       </div>
       ${!mine && html`<span class="faint" style="font-size:14px">שיחה ש${memberName(conv.user_id)} פתח/ה. אפשר להמשיך אותה.</span>`}
       ${learn ? html`<${LearnReview} state=${learn} onChange=${(items) => setLearn((l) => ({ ...l, items }))} onApply=${applyLearn} onCancel=${closeLearn} onRetry=${startLearn} />` : html`
@@ -251,11 +251,11 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
             ? html`<span class="adv-thinking" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>היועץ חושב…</span>`
             : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
           ${m.role === 'ai' && asOfLabel(m.created_at) && html`<small class="adv-asof">${asOfLabel(m.created_at)}</small>`}
-          ${m.role === 'ai' && !m.pending && m.text && canSpeak() && html`<button type="button" class="adv-speak" aria-label=${speaking === i ? 'להפסיק להקריא' : 'להקריא'} onClick=${() => toggleSpeak(i, m.text)}>${speaking === i ? '■' : '🔊'}</button>`}
+          ${m.role === 'ai' && !m.pending && m.text && canSpeak() && html`<button type="button" class="adv-speak" aria-label=${speaking === i ? 'להפסיק להקריא' : 'להקריא'} onClick=${() => toggleSpeak(i, m.text)}>${speaking === i ? '■' : html`<${Icon} name="speaker" size=${18} />`}</button>`}
         </div>`)}
       </div>
       ${updated.length > 0 && html`<div class="card learn-auto" role="status">
-        <b style="font-size:14px">📝 עדכנתי לפי השיחה</b>
+        <b style="font-size:14px;display:flex;align-items:center;gap:6px"><${Icon} name="edit" size=${16} />עדכנתי לפי השיחה</b>
         ${updated.map((it, i) => html`<div class="learn-auto-row" style="display:flex;align-items:center;gap:8px;font-size:14px">
           <span style=${'flex:1;' + (it.undone ? 'text-decoration:line-through;opacity:.55' : '')}>${describeItem(it)}</span>
           ${it.undone ? html`<span class="faint" style="font-size:14px">בוטל</span>` : html`<button type="button" class="btn-text" style="font-size:14px" onClick=${() => undoOne(i)}>ביטול</button>`}
@@ -263,7 +263,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       </div>`}
       ${suggestions.length > 0 && html`<div class="chips">${suggestions.map((s) => html`<button type="button" class="chip" disabled=${busy || !aiOn} onClick=${() => send(s)}>${s}</button>`)}</div>`}
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
-      ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>💡 סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>
+      ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>
         <div class="learn-actions"><button type="button" class="btn" onClick=${startLearn}>לבדוק מה למדתי</button><button type="button" class="btn-text" onClick=${dismissOffer}>לא עכשיו</button></div></div>`}
       ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => send(draft)} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
     </div>`;
@@ -285,7 +285,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       ${listError && html`<span class="muted" style="font-size:14px">לא הצלחנו לטעון את השיחות. <button type="button" class="btn-text" onClick=${refresh}>לנסות שוב</button></span>`}
       ${list && list.length === 0 && html`<span class="muted" style="font-size:14px">עוד אין שיחות.</span>`}
       ${list && list.length > 0 && html`<div class="list">${list.map((c) => html`<button type="button" class="row" key=${c.id} onClick=${() => open(c.id)}>
-        <span class="row-main"><b>${c.title || 'שיחה'}</b><span>${(c.user_id === me ? 'שלך' : 'של ' + memberName(c.user_id)) + (c.is_private ? ' · 🔒 פרטית' : '') + ' · ' + when(c.updated_at)}</span></span>
+        <span class="row-main"><b>${c.title || 'שיחה'}</b><span>${(c.user_id === me ? 'שלך' : 'של ' + memberName(c.user_id)) + (c.is_private ? ' · פרטית' : '') + ' · ' + when(c.updated_at)}</span></span>
       </button>`)}</div>`}
     </div>
   </div>`;
@@ -307,9 +307,9 @@ function Composer({ draft, setDraft, busy, onSend, onMic, listening, onTalk }) {
       onInput=${(e) => { setDraft(e.target.value); grow(e.target); }}
       onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!busy && draft.trim()) onSend(); } }}
       placeholder=${listening ? 'מקשיב…' : 'שאלו את היועץ'} aria-label="שאלה ליועץ" disabled=${busy}></textarea>
-    ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}>🎙️</button>`}
+    ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}><${Icon} name="mic" size=${20} /></button>`}
     <button type="submit" class="btn" disabled=${busy || !draft.trim()}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>
   </form>
-  ${onTalk && html`<button type="button" class="btn-text adv-talk" onClick=${onTalk}>🗣️ שיחה קולית: לדבר עם היועץ בלי להקליד</button>`}
+  ${onTalk && html`<button type="button" class="btn-text adv-talk" onClick=${onTalk}><${Icon} name="wave" size=${18} />שיחה קולית: לדבר עם היועץ בלי להקליד</button>`}
   <p class="adv-legal">מידע כללי, לא ייעוץ השקעות, מס או משפט. בינה מלאכותית יכולה לטעות. <a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a></p>`;
 }

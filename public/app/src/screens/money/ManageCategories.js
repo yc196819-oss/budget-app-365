@@ -31,7 +31,7 @@ export function ManageCategories({ categories, onClose }) {
         <button type="button" class="btn-text" onClick=${() => setEditing(null)}>ביטול</button>
       </form>`
     : html`<span style=${'flex:1;' + (small ? 'font-size:14px' : 'font-size:15px;font-weight:700')}>${c.name}</span>
-      <button type="button" class="btn-text" style="font-size:13px" aria-label=${'לשנות שם: ' + c.name} onClick=${() => startEdit(c)}>✏️ שם</button>`);
+      <button type="button" class="btn-text" style="font-size:13px" aria-label=${'לשנות שם: ' + c.name} onClick=${() => startEdit(c)}>שם</button>`);
   return html`<${Sheet} title="ניהול קטגוריות" onClose=${onClose}>
     <div class="stack manage-categories">
       <span class="muted" style="font-size:14px;line-height:1.55">מוסיפים קטגוריה משלכם, או תת-קטגוריה בתוך קטגוריה (למשל "חוגים" בתוך "ילדים"). אפשר גם לשנות שם.</span>

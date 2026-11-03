@@ -137,7 +137,7 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   const row = await s.locator('.per-user tbody tr').first().textContent();
   assert.match(row, /#a1b2c3/);
   assert.match(row, /51,000/);
-  assert.match(await s.locator('.per-user tr.owner-row').textContent(), /👑 #ffee00 \(אתה\)/);
+  assert.match(await s.locator('.per-user tr.owner-row').textContent(), /#ffee00 \(שלך\)/);
   assert.match(t, /\$1\.23/);
   assert.doesNotMatch(t, /@/);
   // Live: who is on now, by screen and device; refreshed every 15 seconds.

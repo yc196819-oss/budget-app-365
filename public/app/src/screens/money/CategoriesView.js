@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { CatIcon } from '../../components/CatIcon.js';
 import { categoryRows } from '../../domain/money.js';
 import { catColor } from '../../domain/colors.js';
@@ -7,7 +8,7 @@ import { money } from '../../domain/format.js';
 export function CategoriesView({ txs, categories, budgets, periodMonths, period, onOpenCategory, onManage }) {
   const rows = categoryRows(txs, categories, budgets, periodMonths);
   const total = rows.reduce((s, r) => s + r.spent, 0);
-  const manage = onManage && html`<button type="button" class="btn btn-ghost manage-cats" onClick=${onManage}>⚙️ ניהול קטגוריות: להוסיף או לשנות שם</button>`;
+  const manage = onManage && html`<button type="button" class="btn btn-ghost manage-cats" onClick=${onManage}><${Icon} name="edit" size=${18} /> ניהול קטגוריות: להוסיף או לשנות שם</button>`;
   if (!rows.length) return html`<div class="stack"><div class="card empty">אין הוצאות בתקופה הזו.</div>${manage}</div>`;
   const byId = new Map(categories.map((c) => [c.id, c]));
   return html`<div class="stack">

@@ -18,8 +18,8 @@ export function PrefChips({ prefs, onClear, onForget }) {
   if (!chips.length && !prefs.notes.length && !prefs.funding) return null;
   return html`<div class="trip-prefs">
     ${chips.map((c) => html`<span class="trip-pref" key=${c.text}>${c.text}<button type="button" aria-label=${'לבטל: ' + c.text} onClick=${() => onClear(c.k)}>✕</button></span>`)}
-    ${prefs.funding > 0 && html`<span class="trip-pref">💰 כבר יש ${money(prefs.funding)}<button type="button" aria-label="לבטל את הכסף שכבר יש" onClick=${() => onClear('funding')}>✕</button></span>`}
-    ${prefs.notes.map((n) => html`<span class="trip-pref note" key=${n}>📝 ${n}<button type="button" aria-label=${'לשכוח: ' + n} onClick=${() => onForget(n)}>✕</button></span>`)}
+    ${prefs.funding > 0 && html`<span class="trip-pref">כבר יש ${money(prefs.funding)}<button type="button" aria-label="לבטל את הכסף שכבר יש" onClick=${() => onClear('funding')}>✕</button></span>`}
+    ${prefs.notes.map((n) => html`<span class="trip-pref note" key=${n}>${n}<button type="button" aria-label=${'לשכוח: ' + n} onClick=${() => onForget(n)}>✕</button></span>`)}
   </div>`;
 }
 
@@ -49,13 +49,13 @@ export function TripChat({ context, onChanges, msgs, setMsgs }) {
     } finally { setBusy(false); }
   };
 
-  if (!aiOn) return html`<div class="card muted" style="font-size:14px">💬 כדי להתאים את הטיול בשיחה, הפעילו את היועץ (AI) בפרופיל.</div>`;
+  if (!aiOn) return html`<div class="card muted" style="font-size:14px">כדי להתאים את הטיול בשיחה, הפעילו את היועץ (AI) בפרופיל.</div>`;
   return html`<div class="card stack trip-chat" style="gap:10px">
-    <b>💬 לדבר עם היועץ על הטיול</b>
+    <b>לדבר עם היועץ על הטיול</b>
     <span class="faint" style="font-size:13px">שאלו כל דבר על הטיול, או ספרו מה שונה אצלכם: איפה ישנים, מה ממומן, מחיר שכבר ידוע, כסף שכבר יש בצד. התוכנית תתעדכן.</span>
     ${msgs.length > 0 && html`<div class="dchat-log" ref=${logRef} aria-live="polite">
-      ${msgs.map((m, i) => html`<div class=${'dmsg ' + (m.role === 'ai' ? 'ai' : 'me')} key=${i}>${m.role === 'ai' && html`<small>✨ היועץ</small>`}<span>${m.text}</span></div>`)}
-      ${busy && html`<div class="dmsg ai"><small>✨ היועץ</small><span class="adv-thinking"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>מעדכן את התוכנית…</span></div>`}
+      ${msgs.map((m, i) => html`<div class=${'dmsg ' + (m.role === 'ai' ? 'ai' : 'me')} key=${i}>${m.role === 'ai' && html`<small>היועץ</small>`}<span>${m.text}</span></div>`)}
+      ${busy && html`<div class="dmsg ai"><small>היועץ</small><span class="adv-thinking"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>מעדכן את התוכנית…</span></div>`}
     </div>`}
     ${msgs.length === 0 && html`<div class="chips">${STARTERS.map((s) => html`<button type="button" class="chip" disabled=${busy} onClick=${() => send(s)}>${s}</button>`)}</div>`}
     ${error && html`<span class="hint" role="alert" style="color:var(--danger)">${error}</span>`}

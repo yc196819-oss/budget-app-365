@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
 import { monthlyMailChoice, setMonthlyMail } from '../../data/account.js';
 import { showToast } from '../../lib/toast.js';
@@ -20,7 +21,7 @@ export function MonthlyAsk({ userId, data }) {
     setBusy(false);
   };
   return html`<div class="card stack monthly-ask" role="region" aria-label="סיכום חודשי במייל" style="border-inline-start:4px solid var(--accent)">
-    <b>📬 לקבל סיכום חודשי למייל?</b>
+    <b class="ask-title"><${Icon} name="mail" />לקבל סיכום חודשי למייל?</b>
     <span class="muted" style="font-size:14px;line-height:1.6">בתחילת כל חודש: כמה נכנס ויצא, מה בלט לעומת החודש הקודם, ו-3 דברים לחודש הבא. אפשר להפסיק בכל רגע.</span>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button type="button" class="btn" style="width:auto" disabled=${busy} onClick=${() => answer(true)}>כן, אשמח</button>

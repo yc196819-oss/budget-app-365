@@ -90,7 +90,7 @@ function GoalEdit({ goal, onDone, onTrip }) {
     try { await deleteGoal(goal.id); onDone(); showToast(goal.name + ' נמחק'); } catch (_err) { showToast('המחיקה נכשלה. נסו שוב.'); }
   };
   return html`<form class="stack rise" style="gap:8px" onSubmit=${save}>
-    ${goal.icon === '✈️' && onTrip && html`<button type="button" class="btn btn-ghost" onClick=${() => onTrip(goal.id)}>✈️ לפתוח בתכנון הטיול · 💬 לדבר עם היועץ</button>`}
+    ${goal.icon === '✈️' && onTrip && html`<button type="button" class="btn btn-ghost" onClick=${() => onTrip(goal.id)}>לפתוח בתכנון הטיול · לדבר עם היועץ</button>`}
     ${Array.isArray(goal.plan_items) && goal.plan_items.length > 0 && html`<div class="facts">${goal.plan_items.map((p) => html`<div><span>${p.name}</span><b class="num">${money(p.amount)}</b></div>`)}</div>`}
     <span style="display:flex;gap:8px">
       <input class="input num" inputmode="decimal" aria-label=${'כמה הפרשתם ל' + goal.name} placeholder="כמה הפרשתם?" value=${add} onInput=${(e) => setAdd(e.target.value)} style="flex:1" />

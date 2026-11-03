@@ -597,3 +597,12 @@ body.chat-open { overflow: hidden; }
 .adv-msg small { font-size: 14px; }
 .adv-legal { font-size: 14px; color: var(--muted); }
 .rail .muted { font-size: 14px; }
+/* Line icons where emojis were */
+.ask-title { display: flex; align-items: center; gap: 8px; }
+.ask-title svg { color: var(--accent); flex: none; }
+.wa-orb svg, .talk-orb svg { color: #5A2E06; }
+.wa-empty-art { color: var(--accent); }
+.wa-summary b, .decision-summary b { display: inline-flex; align-items: center; gap: 6px; }
+.learn-btn svg, .adv .chip svg { flex: none; }
+.adv-talk { display: inline-flex; align-items: center; gap: 8px; }
+.adv-speak svg { vertical-align: middle; }

@@ -20,7 +20,7 @@ test('an answer goes to the others, with the reason', () => {
   assert.equal(m.title, '⏳ יוסי: לא עכשיו — מכונת כביסה');
   assert.equal(m.body, 'אחרי החגים');
   const [ok] = messagesFor('answered', { decision: { ...decision, status: 'approved' }, actorId: 'u1', members, vote: { vote: 'approve', note: null } });
-  assert.equal(ok.title, '✅ יוסי: מאשר/ת (אושר) — מכונת כביסה');
+  assert.equal(ok.title, '✅ יוסי: בעד (אושר) — מכונת כביסה');
   assert.deepEqual(messagesFor('answered', { decision, actorId: 'u1', members, vote: null }), []);
   assert.deepEqual(messagesFor('hack', { decision, actorId: 'u1', members }), []);
 });

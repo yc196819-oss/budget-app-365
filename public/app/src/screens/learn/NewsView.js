@@ -1,9 +1,10 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
 import { todaysNews } from '../../data/news.js';
 import { personalLine } from '../../domain/news.js';
 
-const TOPIC = { rate: '🏦 ריבית', currency: '💵 מטבע', prices: '📈 מחירים', jobs: '💼 עבודה ושכר', tax: '🧾 מיסים', housing: '🏠 דיור', markets: '📊 שוק ההון', energy: '⛽ אנרגיה', benefits: '🎁 הטבות', other: '📰 כלכלה' };
+const TOPIC = { rate: 'ריבית', currency: 'מטבע', prices: 'מחירים', jobs: 'עבודה ושכר', tax: 'מיסים', housing: 'דיור', markets: 'שוק ההון', energy: 'אנרגיה', benefits: 'הטבות', other: 'כלכלה' };
 const isoToday = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 
 // Morning news in the learning corner: what happened in the economy, and what
@@ -33,9 +34,9 @@ export function NewsView({ data }) {
         <span class="news-cat">${TOPIC[it.topic] || TOPIC.other}</span>
         <h3>${it.title}</h3>
         <p>${it.summary}</p>
-        <div class=${'news-you' + (own ? '' : ' general')}><span aria-hidden="true">${own ? '👨‍👩‍👧' : '💡'}</span><span><b>${own ? 'מה זה אומר עליכם: ' : 'מה זה אומר למשפחות: '}</b>${own || it.families}</span></div>
+        <div class=${'news-you' + (own ? '' : ' general')}><span aria-hidden="true">${own ? html`<${Icon} name="together" size=${18} />` : html`<${Icon} name="bulb" size=${18} />`}</span><span><b>${own ? 'מה זה אומר עליכם: ' : 'מה זה אומר למשפחות: '}</b>${own || it.families}</span></div>
         <div class="news-foot"><span class="faint">מקור: <a href=${it.source.link} target="_blank" rel="noopener">${it.source.name}</a></span>
-          ${it.question && html`<button type="button" class="chip" aria-expanded=${String(open === i)} onClick=${() => setOpen(open === i ? null : i)}>✨ ${it.question}</button>`}</div>
+          ${it.question && html`<button type="button" class="chip" aria-expanded=${String(open === i)} onClick=${() => setOpen(open === i ? null : i)}>${it.question}</button>`}</div>
         ${open === i && html`<p class="news-answer">${it.answer}</p>`}
       </article>`;
     })}

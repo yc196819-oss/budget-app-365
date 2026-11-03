@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { useEffect } from 'preact/hooks';
 import { money } from '../../domain/format.js';
 import { reviewValid, inShekels, CURRENCIES } from '../../domain/voice.js';
@@ -70,7 +71,7 @@ export function VoiceReview({ items, unclear = [], categories, busy, onChange, o
     <div class="review-actions">
       <button type="button" class="btn" disabled=${busy || !ok} onClick=${onSave}>${busy ? html`<span class="spinner" aria-label="מוסיף"></span>` : items.length === 1 ? 'להוסיף' : 'להוסיף ' + items.length + ' תנועות'}</button>
       <button type="button" class="btn btn-ghost" disabled=${busy} onClick=${onCancel}>ביטול</button>
-      ${onMore && html`<button type="button" class="btn-text" disabled=${busy} onClick=${onMore}>🎙️ להקליט עוד</button>`}
+      ${onMore && html`<button type="button" class="btn-text" disabled=${busy} onClick=${onMore}><${Icon} name="mic" size=${16} />להקליט עוד</button>`}
       ${items.length > 1 && html`<span class="faint num" style="font-size:12px;margin-inline-start:auto">סה״כ ${total < 0 ? '−' : '+'}${money(total)}</span>`}
     </div>
   </div>`;

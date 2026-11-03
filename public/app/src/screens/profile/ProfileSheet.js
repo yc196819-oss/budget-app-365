@@ -77,11 +77,11 @@ export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid,
       <button type="button" class="btn btn-ghost" onClick=${() => setView('security')}><${Icon} name="shield" />האבטחה שלך: כניסה בשני שלבים ומכשירים</button>
       <${InstallCard} always=${true} />
       ${hid && html`<${PushToggle} userId=${userId} hid=${hid} />`}
-      ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}>🧠 מה היועץ יודע עלינו</button>`}
-      ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('data')}>📦 המידע שלנו: קבצים, ייצוא ושחזור</button>`}
+      ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}><${Icon} name="book" />מה היועץ יודע עלינו</button>`}
+      ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('data')}><${Icon} name="box" />המידע שלנו: קבצים, ייצוא ושחזור</button>`}
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
-      <button type="button" class="btn btn-ghost" onClick=${() => setView('feedback')}>🛠️ תקלות ורעיונות לשיפור</button>
-      ${isAdmin && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('admin')}>📊 לוח בעלים</button>`}
+      <button type="button" class="btn btn-ghost" onClick=${() => setView('feedback')}><${Icon} name="wrench" />תקלות ורעיונות לשיפור</button>
+      ${isAdmin && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('admin')}><${Icon} name="chart" />לוח בעלים</button>`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
       <a class="btn btn-ghost" href="/old/" style="text-decoration:none">לגרסה הקודמת של האפליקציה</a>
       <button type="button" class="btn btn-ghost" style="color:var(--danger)" onClick=${onSignOut}><${Icon} name="logout" />יציאה</button>

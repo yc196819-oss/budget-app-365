@@ -54,7 +54,7 @@ export function TripSheet({ row, data, onPlan, onClose }) {
     <b>בזמן הטיול · <span class="num">${sum(during)}</span></b>
     <div class="list">${during.map(line)}</div>
     <p class="faint" style="font-size:13px;margin:0">הוצאה ששויכה בטעות? מורידים את הסימון והיא יוצאת מהחישוב.</p>
-    <button type="button" class="btn" onClick=${onPlan}>✈️ לתכנן את הטיול הבא לפי הטיול הזה</button>
+    <button type="button" class="btn" onClick=${onPlan}>לתכנן את הטיול הבא לפי הטיול הזה</button>
     <button type="button" class="btn-text" style="color:var(--danger);align-self:flex-start" onClick=${remove}>${sure ? 'כן, למחוק את התיקייה' : 'למחוק את התיקייה'}</button>
   <//>`;
 }
