@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { useState } from 'preact/hooks';
 import { money } from '../../domain/format.js';
 import { tripSummary } from '../../domain/trips.js';
@@ -19,7 +20,7 @@ export function TripFound({ data, trips }) {
     try { await after(await fn(found)); } catch (_err) { showToast('לא נשמר. נסו שוב.'); } finally { setBusy(false); }
   };
   return html`<div class="card trip-found" role="region" aria-label="נמצא טיול">
-    <div class="trip-found-head"><span class="trip-ic" aria-hidden="true">✈️</span>
+    <div class="trip-found-head"><span class="trip-ic" aria-hidden="true"><${Icon} name="plane" size=${20} /></span>
       <span class="stack" style="gap:2px;min-width:0"><b>נראה שהייתם ${found.country ? 'ב' + found.country : 'בחו״ל'}</b>
         <span class="muted" style="font-size:14px;line-height:1.5">${dateRange(found.start, found.end)} · ${found.items.length} הוצאות · <span class="num">${money(s.total)}</span>. לאסוף אותן לתיקייה אחת?</span></span></div>
     <div class="trip-found-acts">

@@ -166,7 +166,7 @@ export function AddSheet({ data, onClose, onImport, startVoice = false }) {
         <select class="input cur-select" value=${currency} aria-label="מטבע" onChange=${(e) => setCurrency(e.target.value)} disabled=${listening}>
           ${Object.entries(CURRENCIES).map(([code, c]) => html`<option value=${code}>${c.symbol}</option>`)}
         </select>
-        ${canListen() && html`<button type="button" class=${'icon-btn add-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'לסיים הקלטה' : 'להוסיף בקול'} aria-pressed=${String(listening)} onClick=${mic}>${listening ? '⏹' : '🎙️'}</button>`}
+        ${canListen() && html`<button type="button" class=${'icon-btn add-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'לסיים הקלטה' : 'להוסיף בקול'} aria-pressed=${String(listening)} onClick=${mic}>${listening ? '⏹' : html`<${Icon} name="mic" size=${20} />`}</button>`}
       </span>
     </label>
     ${listening && html`<${LiveTranscript} text=${transcript} interim=${heard} liveRef=${liveRef} onStop=${mic} />`}
@@ -202,7 +202,7 @@ function PaidWith({ cards, value, onChange }) {
   if (!cards.length) return null;
   return html`<div class="field"><span>שולם ב</span>
     <div class="pay-chips" role="group" aria-label="שולם ב">
-      ${cards.map((c) => html`<button type="button" class="chip" aria-pressed=${String(value === c.id)} onClick=${() => onChange(c.id)}>💳 ${cardLabel(c)}</button>`)}
+      ${cards.map((c) => html`<button type="button" class="chip" aria-pressed=${String(value === c.id)} onClick=${() => onChange(c.id)}>${cardLabel(c)}</button>`)}
       <button type="button" class="chip" aria-pressed=${String(!value)} onClick=${() => onChange(null)}>לא בכרטיס</button>
     </div></div>`;
 }

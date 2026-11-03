@@ -18,11 +18,11 @@ export function PushNudge({ userId, hid, partnerPush, names }) {
   };
   return html`
     ${(state === 'off' || state === 'install') && html`<div class="card stack push-nudge">
-      <b>🔔 שההודעות של ${who} יקפצו לך</b>
+      <b>שההודעות של ${who} יקפצו לך</b>
       <span class="muted" style="font-size:14px">${state === 'install' ? 'באייפון: שיתוף ← הוסף למסך הבית, פותחים משם ומפעילים כאן.' : 'כל כרטיס, תשובה והודעה בשיחה יגיעו כהתראה לטלפון, גם כשהאפליקציה סגורה.'}</span>
       ${state === 'off' && html`<button type="button" class="btn" disabled=${busy} onClick=${turnOn}>להפעיל התראות</button>`}
     </div>`}
     ${partnerPush === 0 && html`<div class="card push-nudge partner" role="status">
-      <span>📵 ${who} עוד לא הפעילו התראות בטלפון, אז ההודעות שלך יחכו להם באפליקציה. אפשר לבקש מהם: פרופיל ← התראות.</span>
+      <span>${who} עוד לא הפעילו התראות בטלפון, אז ההודעות שלך יחכו להם באפליקציה. אפשר לבקש מהם: פרופיל ← התראות.</span>
     </div>`}`;
 }

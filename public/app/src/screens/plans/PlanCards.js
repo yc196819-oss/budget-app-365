@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { nextHoliday, holidayGoalName, lastHolidayExtra, checkinDue, quarterOf } from '../../domain/calendar.js';
 import { MONTH_NAMES } from '../../domain/money.js';
 import { money } from '../../domain/format.js';
@@ -17,7 +18,7 @@ export function PlanCards({ data, onSheet, today = new Date() }) {
   const when = h && (h.inDays === 0 ? 'מתחיל היום' : h.inDays === 1 ? 'מתחיל מחר' : 'מתחיל בעוד ' + h.inDays + ' ימים');
   return html`<div class="stack" style="gap:8px">
     ${h && html`<button type="button" class="card plan-card" onClick=${() => onSheet({ kind: 'holiday', holiday: h })}>
-      <span class="plan-icon" aria-hidden="true">🎉</span>
+      <span class="plan-icon" aria-hidden="true"><${Icon} name="plans" size=${22} /></span>
       <span class="plan-main"><small>חג בפתח</small><b>${h.name} ${when}</b>
         <span>${planned ? 'תכננתם ' + money(planned.target_amount) + ' לחג, וזה כבר בתחזית של החודשים הקרובים.'
           : extra ? 'בפעם הקודמת החודש של ' + h.name + ' עלה כ-' + money(extra) + ' יותר מחודש רגיל. כדאי לתכנן מראש.'
@@ -25,7 +26,7 @@ export function PlanCards({ data, onSheet, today = new Date() }) {
         <span class="plan-cta">${planned ? 'לערוך' : 'לתכנן את החג'}</span></span>
     </button>`}
     ${due && html`<button type="button" class="card plan-card" onClick=${() => onSheet({ kind: 'checkin' })}>
-      <span class="plan-icon" aria-hidden="true">🗓️</span>
+      <span class="plan-icon" aria-hidden="true"><${Icon} name="calendar" size=${22} /></span>
       <span class="plan-main"><small>בדיקה רבעונית · 30 שניות</small>
         <b>צפויות הוצאות גדולות ב${q.months.map((m) => MONTH_NAMES[m.m]).join(', ')}?</b>
         <span>למשל טיפול ברכב, מוצר לבית או אירוע משפחתי. ככה הן ייכנסו לתחזית.</span>

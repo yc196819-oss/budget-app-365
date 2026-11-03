@@ -70,7 +70,7 @@ export function CardSheet({ card, accounts, members, userId, onClose }) {
       <label class="field"><span>מסגרת אשראי (לא חובה)</span><input class="input num" inputmode="decimal" value=${limit} onInput=${(e) => setLimit(e.target.value)} placeholder="למשל 15,000" /></label>
       ${accounts.length > 1 && html`<label class="field"><span>יורד מחשבון</span>
         <select class="input" value=${account} onChange=${(e) => setAccount(e.target.value)}>${accounts.map((a) => html`<option value=${a.id}>${a.name}</option>`)}</select></label>`}
-      <span class="hint">🔒 לא שומרים כאן מספר כרטיס מלא, תוקף, CVV או קוד סודי. את הקוד הסודי עדיף לשמור במנהל הסיסמאות של הטלפון.</span>
+      <span class="hint">לא שומרים כאן מספר כרטיס מלא, תוקף, CVV או קוד סודי. את הקוד הסודי עדיף לשמור במנהל הסיסמאות של הטלפון.</span>
       <button type="submit" class="btn" disabled=${busy || !ok}>${busy ? 'שומר…' : 'שמירה'}</button>
       ${card && html`<button type="button" class="btn-text" style="color:var(--danger);align-self:flex-start" onClick=${remove}>${sure ? 'כן, להסיר (ההוצאות שנרשמו בו יישארו)' : 'להסיר את הכרטיס'}</button>`}
     </form>

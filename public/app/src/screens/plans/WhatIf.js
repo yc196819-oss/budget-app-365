@@ -1,11 +1,12 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { useState } from 'preact/hooks';
 import { money } from '../../domain/format.js';
 
 const KINDS = {
-  buy: { label: 'קנייה גדולה', icon: '🛒', amounts: [5000, 10000, 20000, 40000], text: (a) => money(a), name: (a) => 'קנייה של ' + money(a) },
-  income: { label: 'שינוי בהכנסה', icon: '💼', amounts: [1500, 3500, -4000], text: (a) => (a > 0 ? '+' : '−') + money(a) + ' בחודש', name: (a) => (a > 0 ? 'הכנסה עולה ב-' : 'הכנסה יורדת ב-') + money(a) },
-  cut: { label: 'חיסכון בהוצאות', icon: '🐷', amounts: [300, 600, 1000], text: (a) => money(a) + ' בחודש', name: (a) => 'חוסכים ' + money(a) + ' בחודש' }
+  buy: { label: 'קנייה גדולה', icon: 'plus', amounts: [5000, 10000, 20000, 40000], text: (a) => money(a), name: (a) => 'קנייה של ' + money(a) },
+  income: { label: 'שינוי בהכנסה', icon: 'money', amounts: [1500, 3500, -4000], text: (a) => (a > 0 ? '+' : '−') + money(a) + ' בחודש', name: (a) => (a > 0 ? 'הכנסה עולה ב-' : 'הכנסה יורדת ב-') + money(a) },
+  cut: { label: 'חיסכון בהוצאות', icon: 'assets', amounts: [300, 600, 1000], text: (a) => money(a) + ' בחודש', name: (a) => 'חוסכים ' + money(a) + ' בחודש' }
 };
 
 // "Check a decision before making it": nothing is saved, only the bars move.
@@ -24,7 +25,7 @@ export function WhatIf({ months, scenarios, onChange, result }) {
   return html`<div class="card stack whatif" style="gap:10px">
     <span><b>לבדוק החלטה לפני שעושים אותה</b><br /><span class="muted" style="font-size:13px">שום דבר לא נשמר. רק רואים איך זה ישפיע על העמודות.</span></span>
     <div class="chips" role="group" aria-label="סוג">
-      ${Object.entries(KINDS).map(([k, d]) => html`<button type="button" class="chip" aria-pressed=${String(kind === k)} onClick=${() => { setKind(kind === k ? null : k); setAmount(null); setMonth(null); }}>${d.icon} ${d.label}</button>`)}
+      ${Object.entries(KINDS).map(([k, d]) => html`<button type="button" class="chip" aria-pressed=${String(kind === k)} onClick=${() => { setKind(kind === k ? null : k); setAmount(null); setMonth(null); }}><${Icon} name=${d.icon} size=${16} />${d.label}</button>`)}
     </div>
     ${kind && html`<div class="stack rise" style="gap:8px">
       <b style="font-size:13px;color:var(--muted)">כמה?</b>

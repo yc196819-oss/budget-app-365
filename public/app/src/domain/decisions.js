@@ -13,9 +13,9 @@ import { MONTH_NAMES, parseDate } from './money.js';
 import { money } from './format.js';
 
 export const VOTES = {
-  approve: { icon: '✅', label: 'מאשר/ת', tone: 'var(--income)' },
-  not_now: { icon: '⏳', label: 'לא עכשיו', tone: 'var(--warn, #c98a12)' },
-  talk: { icon: '💬', label: 'בואו נדבר', tone: 'var(--accent)' }
+  approve: { icon: '✓', label: 'בעד', tone: 'var(--income)' },
+  not_now: { icon: '…', label: 'לא עכשיו', tone: 'var(--warn, #c98a12)' },
+  talk: { icon: '?', label: 'בואו נדבר', tone: 'var(--accent)' }
 };
 
 export const STATUS = {

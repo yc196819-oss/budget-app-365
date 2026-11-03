@@ -2,7 +2,7 @@
 // the recipients can be tested without push keys.
 
 const ICON = { approve: '✅', not_now: '⏳', talk: '💬' };
-const LABEL = { approve: 'מאשר/ת', not_now: 'לא עכשיו', talk: 'בואו נדבר' };
+const LABEL = { approve: 'בעד', not_now: 'לא עכשיו', talk: 'בואו נדבר' };
 const money = (n) => '₪' + Math.round(Number(n) || 0).toLocaleString('en-US');
 const URL = '/app/#/together';
 // A notification opens the card's conversation itself.

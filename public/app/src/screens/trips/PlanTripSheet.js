@@ -122,7 +122,7 @@ export function PlanTripSheet({ data, row, goal = null, onClose }) {
     <div class="card stack" style="gap:12px">
       <label class="field"><span>לאן?</span>
         <span class="add-input"><input class="input" value=${dest} onInput=${(e) => setDest(e.target.value)} placeholder="למשל: יוון, ניו יורק, תאילנד" onKeyDown=${(e) => { if (e.key === 'Enter') check(); }} />
-          <button type="button" class="btn" style="flex:none" disabled=${!dest.trim() || busy} onClick=${() => check()}>${busy ? 'בודק…' : '✨ לבדוק'}</button></span></label>
+          <button type="button" class="btn" style="flex:none" disabled=${!dest.trim() || busy} onClick=${() => check()}>${busy ? 'בודק…' : 'לבדוק'}</button></span></label>
       <label class="field"><span>מתי</span><select class="input" value=${month} onChange=${(e) => setMonth(e.target.value)}>${months.map((m) => html`<option value=${m}>${monthLabel(m)}</option>`)}</select></label>
       <div class="sec-row"><span class="muted">כמה ימים</span><span class="stepper"><button type="button" aria-label="פחות ימים" disabled=${days <= 2} onClick=${() => setDays(days - 1)}>−</button><b class="num">${days}</b><button type="button" aria-label="יותר ימים" onClick=${() => setDays(Math.min(60, days + 1))}>+</button></span></div>
       <div class="sec-row"><span class="muted">כמה נוסעים</span><span class="stepper"><button type="button" aria-label="פחות נוסעים" disabled=${people <= 1} onClick=${() => setPeople(people - 1)}>−</button><b class="num">${people}</b><button type="button" aria-label="יותר נוסעים" onClick=${() => setPeople(Math.min(20, people + 1))}>+</button></span></div>
@@ -132,11 +132,11 @@ export function PlanTripSheet({ data, row, goal = null, onClose }) {
     </div>
 
     ${est && html`<div class="card stack trip-est" style="gap:8px">
-      <b>✨ ${est.destination || dest}${est.country && est.country !== est.destination ? ', ' + est.country : ''}</b>
-      <span>✈️ טיסה הלוך-חזור: <b class="num">${money(est.flight_per_person.low)}–${money(est.flight_per_person.high)}</b> לאדם (בדרך כלל ${money(est.flight_per_person.typical)})</span>
-      <span>🏨 לינה: <b class="num">${money(est.lodging_per_night.low)}–${money(est.lodging_per_night.high)}</b> ללילה לזוג</span>
-      ${est.daily_per_person_local > 0 && est.currency && html`<span>💱 הוצאה יומית לאדם: כ-<b class="num">${est.daily_per_person_local.toLocaleString('en-US')} ${est.currency}</b>${rate ? html` ≈ <b class="num">${money(est.daily_per_person_local * rate)}</b> (שער היום ${rate.toFixed(3)})` : ''}</span>`}
-      ${est.season && html`<span>📅 ${monthLabel(month)}: ${SEASON[est.season]}</span>`}
+      <b>${est.destination || dest}${est.country && est.country !== est.destination ? ', ' + est.country : ''}</b>
+      <span>טיסה הלוך-חזור: <b class="num">${money(est.flight_per_person.low)}–${money(est.flight_per_person.high)}</b> לאדם (בדרך כלל ${money(est.flight_per_person.typical)})</span>
+      <span>לינה: <b class="num">${money(est.lodging_per_night.low)}–${money(est.lodging_per_night.high)}</b> ללילה לזוג</span>
+      ${est.daily_per_person_local > 0 && est.currency && html`<span>הוצאה יומית לאדם: כ-<b class="num">${est.daily_per_person_local.toLocaleString('en-US')} ${est.currency}</b>${rate ? html` ≈ <b class="num">${money(est.daily_per_person_local * rate)}</b> (שער היום ${rate.toFixed(3)})` : ''}</span>`}
+      ${est.season && html`<span>${monthLabel(month)}: ${SEASON[est.season]}</span>`}
       ${est.cheaper_months.length > 0 && html`<div class="stack" style="gap:6px"><span class="muted" style="font-size:14px">זול יותר ב: ${est.cheaper_note}</span>
         <div class="chips">${est.cheaper_months.map((m) => html`<button type="button" class="chip" aria-pressed=${String(month === m)} onClick=${() => setMonth(m)}>${monthLabel(m)}</button>`)}</div></div>`}
       ${est.tips.length > 0 && html`<ul class="trip-tips">${est.tips.map((t) => html`<li>${t}</li>`)}</ul>`}
@@ -162,12 +162,12 @@ export function PlanTripSheet({ data, row, goal = null, onClose }) {
     ${chat}
     <div class="card stack trip-save" style="gap:6px">
       <span class="muted">כדי שהכסף יהיה מוכן ב${monthLabel(month)}</span>
-      <b class="trip-monthly num">${fit.toSave > 0 ? money(sv.monthly) + ' בחודש' : 'הכל מכוסה 🎉'}</b>
+      <b class="trip-monthly num">${fit.toSave > 0 ? money(sv.monthly) + ' בחודש' : 'הכל מכוסה '}</b>
       <span class="faint" style="font-size:13px">${sv.months} חודשים. טיסה ולינה משולמות בדרך כלל 2–4 חודשים לפני.</span>
       ${ready && html`<span style="font-size:14px">בקצב שמתאים לכם, <b class="num">${money(capacity)}</b> בחודש (חצי ממה שנשאר בחודש רגיל), הכסף מוכן ב<b>${monthLabel(ready)}</b>.
         ${ready !== month && html` <button type="button" class="btn-text" onClick=${() => setMonth(months.includes(ready) ? ready : month)}>לתכנן ל${monthLabel(ready)}</button>`}</span>`}
       <button type="button" class="btn" disabled=${saving} onClick=${save}>${saving ? 'שומר…' : goal ? 'לשמור שינויים' : 'לשמור ביעדים'}</button>
-    </div>` : html`<div class="card muted" style="font-size:14px">כתבו לאן, ולחצו "✨ לבדוק". היועץ יעריך טיסות, לינה ויוקר מחיה ויציע תקציב.</div>
+    </div>` : html`<div class="card muted" style="font-size:14px">כתבו לאן, ולחצו "לבדוק". היועץ יעריך טיסות, לינה ויוקר מחיה ויציע תקציב.</div>
     ${chat}`}
     ${goal && html`<div class="trip-del">${confirmDel
       ? html`<span>למחוק את התוכנית?</span><button type="button" class="btn-text danger" onClick=${remove}>כן, למחוק</button><button type="button" class="btn-text" onClick=${() => setConfirmDel(false)}>ביטול</button>`

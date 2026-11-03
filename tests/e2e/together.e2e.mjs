@@ -75,7 +75,7 @@ test('"not now" needs a reason; the answer is saved and the partner is notified'
 test('approving adds the purchase to the plan; when the transaction shows up it can be closed as bought', async () => {
   const { page, db } = await open({ prep: (db) => db.tables.transactions.push({ id: 'tx-wm', household_id: 'h1', type: 'expense', amount: 2390, description: 'מחסני חשמל', tx_date: iso(new Date()), category_id: 'home', created_at: new Date().toISOString() }) });
   await page.click('.decision button:has-text("לענות")');
-  await page.click('.vote-choice:has-text("מאשר/ת")');
+  await page.click('.vote-choice:has-text("בעד")');
   await page.click('.sheet button[type="submit"]');
   await page.waitForSelector('.decision.st-approved');
   const d = db.tables.shared_decisions[0];

@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
 import { money } from '../../domain/format.js';
 import { toCsv, txRows, TX_COLUMNS, exportName, binLine, daysLeft } from '../../domain/exporting.js';
@@ -70,13 +71,13 @@ export function DataView({ hid, userId, onBack }) {
   return html`<div class="stack">
     <button type="button" class="btn-text" style="align-self:flex-start" onClick=${onBack}>→ חזרה</button>
     <div class="card stack">
-      <b>📦 ייצוא כל המידע</b>
+      <b>ייצוא כל המידע</b>
       <span class="muted" style="font-size:13px;line-height:1.6">שני קבצים: כל מה שנשמר במשק הבית (JSON), והתנועות בגיליון שנפתח באקסל. שלכם, לשמור או להעביר.</span>
       <button type="button" class="btn" disabled=${!!busy} onClick=${take}>${busy === 'export' ? 'מכין…' : 'להוריד את כל המידע'}</button>
     </div>
     <div class="card stack import-files" role="region" aria-label="קבצים שהועלו">
-      <b>📄 קבצים שהועלו</b>
-      <span class="muted" style="font-size:13px">העליתם קובץ לא נכון? מוחקים אותו וכל התנועות שנכנסו ממנו יוצאות מהמערכת. ✏️ נותן לקובץ שם משלכם, כדי שיהיה קל למצוא אותו.</span>
+      <b>קבצים שהועלו</b>
+      <span class="muted" style="font-size:13px">העליתם קובץ לא נכון? מוחקים אותו וכל התנועות שנכנסו ממנו יוצאות מהמערכת. נותן לקובץ שם משלכם, כדי שיהיה קל למצוא אותו.</span>
       ${files === null && html`<span class="muted">טוען…</span>`}
       ${files && files.length === 0 && html`<span class="muted">עוד לא הועלו קבצים.</span>`}
       ${files && files.map((f) => html`<div class="file-row" key=${f.id} style="display:flex;flex-direction:column;gap:8px">
@@ -86,7 +87,7 @@ export function DataView({ hid, userId, onBack }) {
             ${f.title && f.file_name && html`<span class="faint file-original" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">הקובץ המקורי: <bdi dir="ltr">${f.file_name}</bdi></span>`}
             <span class="faint" style="font-size:12px"><span class="num">${f.rows}</span> תנועות${f.date_from ? html` · <span class="num">${dm(f.date_from)}–${dm(f.date_to)}</span>` : ''} · הועלה ${dm(f.created_at)}</span>
           </span>
-          <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 10px" disabled=${!!busy} onClick=${() => startNaming(f)} aria-label=${'לתת שם לקובץ ' + fileTitle(f)}>✏️</button>
+          <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 10px" disabled=${!!busy} onClick=${() => startNaming(f)} aria-label=${'לתת שם לקובץ ' + fileTitle(f)}><${Icon} name="edit" size=${18} /></button>
           <button type="button" class="btn btn-ghost" style=${'width:auto;padding:6px 12px;' + (sure === f.id ? 'color:var(--danger);border-color:var(--danger)' : '')} disabled=${!!busy} onClick=${() => removeFile(f)} aria-label=${'למחוק את הקובץ ' + fileTitle(f)}>${busy === 'f' + f.id ? '…' : sure === f.id ? 'בטוח? למחוק ' + f.rows : 'למחוק'}</button>
         </div>
         ${naming === f.id && html`<form class="file-name-form" style="display:flex;gap:8px" onSubmit=${(e) => saveName(e, f)}>
@@ -97,11 +98,11 @@ export function DataView({ hid, userId, onBack }) {
       </div>`)}
     </div>
     <div class="card stack recycle-bin" role="region" aria-label="סל המחזור">
-      <b>🗑️ נמחקו לאחרונה</b>
+      <b>נמחקו לאחרונה</b>
       <span class="muted" style="font-size:13px">כל מה שנמחק נשמר כאן 30 יום, ואפשר להחזיר בלחיצה.</span>
       ${items === null && html`<span class="muted">טוען…</span>`}
       ${failed && html`<span class="muted">לא הצלחנו לטעון את סל המחזור.</span>`}
-      ${items && !failed && items.length === 0 && html`<span class="muted">אין כאן כלום. 🎉</span>`}
+      ${items && !failed && items.length === 0 && html`<span class="muted">אין כאן כלום. </span>`}
       ${items && items.map((it) => {
         const l = binLine(it);
         return html`<div class="bin-row" key=${it.id} style="display:flex;align-items:center;gap:10px">

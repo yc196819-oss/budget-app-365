@@ -44,7 +44,7 @@ export function DecisionCard({ d, data, dec, userId, memberIds, nameOf, onAnswer
         </div>`;
       })}
     </div>
-    ${d.summary && html`<p class="decision-summary"><b>📌 מה החלטנו:</b> ${d.summary}</p>`}
+    ${d.summary && html`<p class="decision-summary"><b>מה החלטנו:</b> ${d.summary}</p>`}
     <${ChatPreview} d=${d} dec=${dec} userId=${userId} nameOf=${nameOf} onOpen=${onChat} />
     ${bought && html`<div class="decision-match"><span>נראה שזה נקנה: ${bought.description} · ${shortDate(bought.tx_date)} · <span class="num">${money(bought.amount)}</span></span>
       <button type="button" class="btn-text" onClick=${() => finish('bought', bought.id)}>כן, לסגור</button></div>`}

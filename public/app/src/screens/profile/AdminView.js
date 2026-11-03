@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
 import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail } from '../../data/account.js';
 import { adminFeedback, setFeedback, FEEDBACK_KIND, FEEDBACK_STATUS } from '../../data/feedback.js';
@@ -18,7 +19,7 @@ function MonthlyMailCard() {
     try { setNote(done(await fn())); } catch (e) { setNote(e.message || 'לא נשלח. נסו שוב.'); }
     setBusy(''); setSure(false);
   };
-  return html`<div class="card stack admin-monthly"><b>📊 סיכום חודשי במייל</b>
+  return html`<div class="card stack admin-monthly"><b>סיכום חודשי במייל</b>
     <span class="muted" style="font-size:13px;line-height:1.55">נשלח לבד ב-1 לכל חודש, יחד עם הדוח החודשי, רק למי שאישר באפליקציה שהוא רוצה. כל אחד מקבל כל חודש פעם אחת, ויכול להסיר את עצמו בלחיצה מהמייל או בפרופיל.</span>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => run('t', testMonthlyMail, (r) => 'נשלח אליך הסיכום של ' + r.month + ', עם המספרים של משק הבית שלך.')}>${busy === 't' ? 'שולח…' : 'ניסיון אליי'}</button>
@@ -85,7 +86,7 @@ export function AdminView({ onBack }) {
       : ['מכינים את רשימת הנמענים', 'שולחים אחד אחד', 'סיימנו'];
     const pct = j.kind === 'send' && j.total ? Math.round(((j.sent + j.failed) / j.total) * 100) : 0;
     return html`<div class=${'mail-job ' + (active ? 'is-active' : j.phase === 'error' ? 'is-error' : 'is-done')} role="status" aria-live="polite">
-      <div class="mail-fly" aria-hidden="true"><span class="mail-env">✉️</span><span class="mail-trail"></span></div>
+      <div class="mail-fly" aria-hidden="true"><span class="mail-env"><${Icon} name="mail" size=${20} /></span><span class="mail-trail"></span></div>
       <ol class="mail-steps">${steps.map((st, i) => {
         const n = i + 1;
         const state = j.phase === 'error' && n >= (j.step || 1) ? 'fail' : n < (j.step || 1) || (n === 3 && j.phase === 'done') ? 'ok' : n === j.step && active ? 'now' : 'wait';
@@ -122,9 +123,9 @@ export function AdminView({ onBack }) {
         <span class="faint" style="font-size:12px">טלפון ${live.devices.mobile} · מחשב ${live.devices.desktop} · מותקנת ${live.installed}</span>`}
       <span class="faint" style="font-size:11px">מתעדכן כל 15 שניות. נספר מי שהאפליקציה פתוחה אצלו ב-2 הדקות האחרונות.</span>
     </div>`}
-    ${back && back.campaigns && html`<div class="card stack admin-reengage"><b>✉️ מיילים למשתמשים</b>
+    ${back && back.campaigns && html`<div class="card stack admin-reengage"><b>מיילים למשתמשים</b>
       <span class="muted" style="font-size:13px;line-height:1.55">כל מייל נשלח לכל אדם פעם אחת בלבד, ורק כשלוחצים כאן פעמיים. קודם כדאי לשלוח ניסיון לעצמכם.</span>
-      ${back.mail && !back.mail.ready && html`<span class="card mail-not-ready" role="status" style="font-size:13px;line-height:1.55;border:1px solid var(--danger)">⚠️ השרת עוד לא מוגדר לשלוח מיילים למשתמשים${back.mail.resendTestOnly ? ' (Resend מוגדר רק בכתובת הניסיון שלו, שמגיעה רק אליכם)' : ''}. צריך לחבר את Brevo (חינם): BREVO_API_KEY ו-BREVO_FROM בהגדרות השרת ב-Render.</span>`}
+      ${back.mail && !back.mail.ready && html`<span class="card mail-not-ready" role="status" style="font-size:13px;line-height:1.55;border:1px solid var(--danger)">השרת עוד לא מוגדר לשלוח מיילים למשתמשים${back.mail.resendTestOnly ? ' (Resend מוגדר רק בכתובת הניסיון שלו, שמגיעה רק אליכם)' : ''}. צריך לחבר את Brevo (חינם): BREVO_API_KEY ו-BREVO_FROM בהגדרות השרת ב-Render.</span>`}
       ${back.campaigns.map((c) => html`<div class=${'campaign campaign-' + c.id} key=${c.id} style="display:flex;flex-direction:column;gap:6px;padding:8px 0;border-top:1px solid var(--line)">
         <span style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14px">${c.title}</b><b class="num">${c.count}</b></span>
         <details><summary style="cursor:pointer;font-size:13px">איך המייל נראה</summary>
@@ -139,7 +140,7 @@ export function AdminView({ onBack }) {
       </div>`)}
     </div>`}
     ${back && html`<${MonthlyMailCard} />`}
-    ${inbox && html`<div class="card stack admin-inbox"><b>🛠️ תקלות ורעיונות מהמשתמשים${inbox.filter((f) => f.status === 'new').length ? ' · ' + inbox.filter((f) => f.status === 'new').length + ' חדשות' : ''}</b>
+    ${inbox && html`<div class="card stack admin-inbox"><b>תקלות ורעיונות מהמשתמשים${inbox.filter((f) => f.status === 'new').length ? ' · ' + inbox.filter((f) => f.status === 'new').length + ' חדשות' : ''}</b>
       ${inbox.length === 0 && html`<span class="muted" style="font-size:13px">עוד אין פניות.</span>`}
       ${inbox.filter((f) => f.status !== 'done' && f.status !== 'wontfix').concat(inbox.filter((f) => f.status === 'done' || f.status === 'wontfix')).slice(0, 40).map((f) => html`<div class="inbox-item" key=${f.id} style=${'display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line);' + (f.status === 'done' || f.status === 'wontfix' ? 'opacity:.6' : '')}>
         <span style="display:flex;gap:8px;font-size:12px" class="muted"><b>${FEEDBACK_KIND[f.kind].icon} ${FEEDBACK_KIND[f.kind].label}</b><span>${f.who}</span><span>${String(f.created_at).slice(0, 16).replace('T', ' ')}</span><span>${f.screen || ''} ${f.device || ''}</span><span style="margin-inline-start:auto"><b>${FEEDBACK_STATUS[f.status]}</b></span></span>
@@ -177,10 +178,10 @@ export function AdminView({ onBack }) {
       <div class="card stack"><b>מה משתמשים (30 יום)</b>
         ${s.use.length === 0 ? html`<span class="muted">עוד אין.</span>` : s.use.map((u) => html`<div style="display:flex;justify-content:space-between"><span>${NAMES[u.name] || u.name}</span><b class="num">${u.count}</b></div>`)}</div>
       ${s.users && html`<div class="card stack per-user"><b>פעילות לפי משתמש (30 יום)</b>
-        <span class="faint" style="font-size:12px;line-height:1.5">כל משתמש מסומן בקוד, בלי שם או אימייל, ובלי שום תוכן שכתבו. החשבונות שלך מסומנים ב-👑. עלות AI משוערת החודש: <b class="num">$${s.aiCost30d}</b>${s.systemCost30d ? ' (מתוכם $' + s.systemCost30d + ' משימות מערכת: חדשות, דוחות)' : ''}.</span>
+        <span class="faint" style="font-size:12px;line-height:1.5">כל משתמש מסומן בקוד, בלי שם או אימייל, ובלי שום תוכן שכתבו. החשבונות שלך מסומנים ב-. עלות AI משוערת החודש: <b class="num">$${s.aiCost30d}</b>${s.systemCost30d ? ' (מתוכם $' + s.systemCost30d + ' משימות מערכת: חדשות, דוחות)' : ''}.</span>
         <div style="overflow-x:auto"><table class="num" style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
           <thead><tr>${['משתמש', 'הצטרף', 'נראה', 'פתיחות', 'הוספות', 'ייבוא', 'נכשלו', 'שאלות', 'קריאות AI', 'טוקנים', '$'].map((h) => html`<th style="text-align:start;padding:4px 6px;border-bottom:1px solid var(--line)">${h}</th>`)}</tr></thead>
-          <tbody>${s.users.map((u) => html`<tr class=${u.owner ? 'owner-row' : ''} style=${u.owner ? 'background:color-mix(in srgb, var(--accent) 14%, transparent)' : ''}>${[u.owner ? '👑 ' + u.who + ' (אתה)' : u.who, u.joined ? u.joined.slice(5).split('-').reverse().join('.') : '', u.lastSeen ? u.lastSeen.slice(5).split('-').reverse().join('.') : '—', u.opens, u.added, u.imports, u.importFails || '', u.asked, u.aiCalls, u.tokens.toLocaleString('he-IL'), u.cost ? u.cost.toFixed(3) : ''].map((v) => html`<td style="padding:4px 6px;border-bottom:1px solid var(--line)">${v}</td>`)}</tr>`)}</tbody>
+          <tbody>${s.users.map((u) => html`<tr class=${u.owner ? 'owner-row' : ''} style=${u.owner ? 'background:color-mix(in srgb, var(--accent) 14%, transparent)' : ''}>${[u.owner ? '' + u.who + ' (אתה)' : u.who, u.joined ? u.joined.slice(5).split('-').reverse().join('.') : '', u.lastSeen ? u.lastSeen.slice(5).split('-').reverse().join('.') : '—', u.opens, u.added, u.imports, u.importFails || '', u.asked, u.aiCalls, u.tokens.toLocaleString('he-IL'), u.cost ? u.cost.toFixed(3) : ''].map((v) => html`<td style="padding:4px 6px;border-bottom:1px solid var(--line)">${v}</td>`)}</tr>`)}</tbody>
         </table></div></div>`}
       <div class="card stack"><b>תקלות השבוע: <span class="num">${s.errors.week}</span></b>
         ${s.errors.top.map((e) => html`<div style="font-size:13px"><b class="num">${e.count}×</b> ${e.message}<div class="faint" style="font-size:11px">${e.path || ''}</div></div>`)}</div>`}

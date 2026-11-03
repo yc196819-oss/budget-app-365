@@ -82,7 +82,7 @@ test('planning the next trip: the advisor checks the destination, the local curr
   await page.route('**/api/fx/rate**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"rate":3.7,"date":"2026-10-12","source":"boi"}' }));
   await page.click('text=✈️ לתכנן טיול');
   await page.fill('.sheet input[placeholder^="למשל: יוון"]', 'ניו יורק');
-  await page.click('.sheet button:has-text("✨ לבדוק")');
+  await page.click('.sheet button:has-text("לבדוק")');
   await page.waitForSelector('.sheet .trip-est');
   const est = await page.locator('.sheet .trip-est').textContent();
   assert.match(est, /₪2,800–₪4,200/);

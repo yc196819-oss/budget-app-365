@@ -47,9 +47,9 @@ export function SortSheet({ data, onClose }) {
   };
 
   return html`<${Sheet} title="סיווג תנועות" onClose=${onClose}>
-    ${groups.length === 0 ? html`<div class="card empty"><b style="color:var(--text)">הכול מסווג 🎉</b><span>כל התנועות שייכות לקטגוריה.</span></div>` : html`<div class="stack sort-sheet">
+    ${groups.length === 0 ? html`<div class="card empty"><b style="color:var(--text)">הכול מסווג </b><span>כל התנועות שייכות לקטגוריה.</span></div>` : html`<div class="stack sort-sheet">
       <span class="muted" style="font-size:14px;line-height:1.55">${groups.length} בתי עסק בלי קטגוריה. בוחרים פעם אחת, וכל התנועות שלהם מסתדרות.</span>
-      ${aiOn && html`<button type="button" class="btn" disabled=${asking || saving} onClick=${suggest}>${asking ? '✨ היועץ חושב…' : '✨ שהיועץ יציע לכולם'}</button>`}
+      ${aiOn && html`<button type="button" class="btn" disabled=${asking || saving} onClick=${suggest}>${asking ? 'היועץ חושב…' : 'שהיועץ יציע לכולם'}</button>`}
       <div class="list">${groups.map((g) => html`<div class="sort-row" key=${g.key} style="display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)">
         <span style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.description}</b>
           <span class="num muted" style="font-size:13px;white-space:nowrap">${g.ids.length > 1 ? g.ids.length + ' × · ' : ''}${g.type === 'income' ? '+' : ''}${money(g.total)}</span></span>

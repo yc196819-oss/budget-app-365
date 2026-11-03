@@ -58,7 +58,7 @@ function Lesson({ lesson, progress, streakDays, isToday, onFinish, onNext }) {
   const right = answers.filter((a, i) => a === quiz[i].answer).length;
 
   return html`<article class="lesson stack" style="gap:12px">
-    <span class="muted" style="font-size:13px;font-weight:700">${lesson.icon} ${lesson.topicTitle} · חלק ${lesson.part} מתוך ${lesson.parts}${streakDays > 0 ? ' · 🔥 ' + streakDays + ' ימים ברצף' : ''}</span>
+    <span class="muted" style="font-size:13px;font-weight:700">${lesson.icon} ${lesson.topicTitle} · חלק ${lesson.part} מתוך ${lesson.parts}${streakDays > 0 ? ' · ' + streakDays + ' ימים ברצף' : ''}</span>
     <h3 class="lesson-title">${lesson.title}</h3>
     ${step === 'read' && html`
       ${lesson.body.map((p) => html`<p class="lesson-p">${p}</p>`)}
@@ -82,7 +82,7 @@ function Lesson({ lesson, progress, streakDays, isToday, onFinish, onNext }) {
     ${step === 'done' && html`<div class="stack" style="gap:10px">
       <div class="lesson-take done"><b>${wasDone && !answers.length ? 'השיעור הזה כבר הושלם' : right === quiz.length ? 'שתי תשובות נכונות!' : right + ' מתוך ' + quiz.length + ' נכונות'}</b>
         <span>${lesson.takeaway}</span></div>
-      ${isToday && html`<span class="muted" style="font-size:14px;text-align:center">${streakDays > 0 ? '🔥 ' + streakDays + ' ימים ברצף. ' : ''}מחר מחכה מושג חדש.</span>`}
+      ${isToday && html`<span class="muted" style="font-size:14px;text-align:center">${streakDays > 0 ? '' + streakDays + ' ימים ברצף. ' : ''}מחר מחכה מושג חדש.</span>`}
       <button type="button" class="btn btn-ghost" onClick=${onNext}>לשיעור הבא</button>
       ${wasDone && html`<button type="button" class="btn-text" onClick=${() => { setAnswers([]); setStep('read'); }}>לקרוא שוב</button>`}
     </div>`}
