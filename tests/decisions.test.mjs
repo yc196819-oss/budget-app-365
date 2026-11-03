@@ -115,14 +115,18 @@ test('the advisor is asked with the purchase, the reasons, both answers and the 
   const fx = { roomBefore: 1200, roomAfter: -1200, hasBalance: true, month: 'אוקטובר', endBefore: 3000, endAfter: 600, turnsNegative: false };
   const q = advisorQuestion(d({ note: 'הישנה נשברה' }), [v('not_now', 'u1', 'd1', 'אחרי החגים')], members, nameOf, fx, new Date(2026, 9, 1));
   assert.match(q, /דני רוצה לקנות: מכונת כביסה, ב-₪2,400, החודש/);
-  assert.match(q, /למה זה חשוב לו\/לה: הישנה נשברה/);
-  assert.match(q, /יוסי ענה\/תה: לא עכשיו — אחרי החגים/);
+  assert.match(q, /למה זה חשוב לדני: הישנה נשברה/);
+  assert.match(q, /יוסי ענה או ענתה: לא עכשיו — אחרי החגים/, 'both forms until the person chooses');
   assert.match(q, /נשארים ₪1,200 לפני הקנייה, חריגה של ₪1,200 אחריה/);
   assert.match(q, /₪3,000 בלי הקנייה, ₪600 איתה/);
   assert.match(q, /לא מכריע ביניהם/);
-  assert.match(q, /במשפט קצר לכל אחד, מה חשוב לו\/לה/);
+  assert.match(q, /במשפט קצר לכל אחד, מה חשוב לכל אחד/);
+  assert.doesNotMatch(q, /\/ה|\/תה|לו\/לה/, 'no slashed forms');
+  // Once each person chose how to be addressed, their own form.
+  const g = { u1: 'f', u2: 'm' };
+  assert.match(advisorQuestion(d(), [v('not_now', 'u1', 'd1', 'x')], members, nameOf, null, undefined, false, null, (id) => g[id] || null), /יוסי ענתה: לא עכשיו/);
   assert.match(q, /ההמלצה שלי:/);
-  assert.match(advisorQuestion(d(), [], members, nameOf, null), /יוסי עוד לא ענה\/תה/);
+  assert.match(advisorQuestion(d(), [], members, nameOf, null), /יוסי עוד לא ענה או ענתה/);
 });
 
 test('the conversation on a card: order, unread, and what the advisor gets', () => {
@@ -156,7 +160,7 @@ test('the quieter partner gets room: the advisor is told who wrote less', () => 
   assert.equal(voiceBalance([m('u1'), m('u2')], members).quiet, null);
   const q = advisorQuestion(d(), [], members, nameOf, null, new Date(2026, 9, 1), true, vb);
   assert.match(q, /יוסי 1 הודעות, דני 3 הודעות/);
-  assert.match(q, /יוסי כתב\/ה פחות; תן לו\/ה מקום/);
+  assert.match(q, /יוסי כתב או כתבה פחות; תן ליוסי מקום/);
 });
 
 test('the decision in words: the advisor drafts it from both answers', () => {

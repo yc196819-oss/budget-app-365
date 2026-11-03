@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { partnerWord, genderOf, g as gWord } from '../../domain/people.js';
 import { useEffect, useState } from 'preact/hooks';
 import { routeView } from '../../domain/routes.js';
 import { ChatScreen } from './DecisionChat.js';
@@ -37,8 +38,11 @@ export function TogetherScreen({ data, dec, userId }) {
 
   const names = data.members || {};
   const memberIds = Object.keys(names);
-  const nameOf = (id) => (id === userId ? 'את/ה' : names[id] || 'בן/בת הזוג');
+  // The person themselves is "אני"; the others by name, in their own form.
+  const nameOf = (id) => (id === userId ? 'אני' : names[id] || partnerWord(genderOf(data.genders, id)));
+  nameOf.g = (id, m, f) => gWord(genderOf(data.genders, id), m, f);
   const partners = memberIds.filter((id) => id !== userId);
+  const partnerLabel = partners.length ? nameOf(partners[0]) : 'בן או בת הזוג';
   const g = groups(dec.decisions, dec.votes, userId, memberIds);
   const card = (d) => html`<${DecisionCard} key=${d.id} d=${d} data=${data} dec=${dec} userId=${userId} memberIds=${memberIds} nameOf=${nameOf} onAnswer=${() => setSheet({ kind: 'answer', decision: d })} onChat=${() => openChat(d.id)} />`;
   const chat = chatId && dec.decisions.find((d) => d.id === chatId);
@@ -57,7 +61,7 @@ export function TogetherScreen({ data, dec, userId }) {
       <button type="button" class="btn" onClick=${() => setSheet({ kind: 'new' })}>+ אני רוצה לקנות משהו</button>
       ${partners.length > 0 && html`<${PushNudge} userId=${userId} hid=${data.hid} partnerPush=${dec.partnerPush} names=${partners.map(nameOf)} />`}
       ${partners.length === 0 && html`<div class="card stack"><b>מחליטים ביחד עובד כששניכם באפליקציה</b>
-        <span class="muted" style="font-size:14px">הזמינו את בן/בת הזוג, ואז כל כרטיס יגיע אליהם לאישור עם התראה.</span>
+        <span class="muted" style="font-size:14px">הזמינו את בן או בת הזוג, ואז כל כרטיס יגיע לאישור שלהם עם התראה.</span>
         <${InviteButton} hid=${data.hid} userId=${userId} /></div>`}
     </aside>
     <div class="stack together-main">
@@ -66,7 +70,7 @@ export function TogetherScreen({ data, dec, userId }) {
       ${section('מחכה לתשובה', g.waiting)}
       ${section('סוכם, עוד לא נקנה', g.approved)}
       ${dec.decisions.length === 0 && html`<div class="card empty"><b style="color:var(--text)">עוד אין כרטיסים</b>
-        <span>רוצים לקנות משהו מעל ${money(dec.threshold)}? פתחו כרטיס, ובן/בת הזוג יקבלו אותו לאישור.</span></div>`}
+        <span>רוצים לקנות משהו מעל ${money(dec.threshold)}? פתחו כרטיס, והוא יגיע לאישור של ${partnerLabel}.</span></div>`}
       ${g.history.length > 0 && html`<details class="history"><summary>היסטוריה (${g.history.length})</summary><div class="stack" style="gap:10px;margin-top:10px">${g.history.map(card)}</div></details>`}
     </div>
 

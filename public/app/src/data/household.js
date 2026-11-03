@@ -13,12 +13,12 @@ const PAGE = 1000;
 const MONTHS_BACK = 23;
 const DELETE_DELAY_MS = 5000;
 
-const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, accounts: [], cards: [], goals: [], installments: [], loans: [], investments: [], income: [], hidden: new Set(), refreshing: false };
+const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, genders: {}, accounts: [], cards: [], goals: [], installments: [], loans: [], investments: [], income: [], hidden: new Set(), refreshing: false };
 const listeners = new Set();
 const pendingDeletes = new Map();
 
 // What is kept on the device for an instant start (not the pending deletes).
-const CACHED = ['txs', 'categories', 'budgets', 'members', 'accounts', 'cards', 'goals', 'installments', 'loans', 'investments', 'income'];
+const CACHED = ['txs', 'categories', 'budgets', 'members', 'genders', 'accounts', 'cards', 'goals', 'installments', 'loans', 'investments', 'income'];
 let saveTimer = null;
 function emit() {
   listeners.forEach((fn) => fn());
@@ -44,6 +44,7 @@ export function snapshot() {
     categories: state.categories,
     budgets: state.budgets,
     members: state.members,
+    genders: state.genders,
     accounts: state.accounts,
     cards: state.cards,
     goals: state.goals,
@@ -86,7 +87,7 @@ export async function load(hid, userId, { force = false } = {}) {
       fetchAllTransactions(hid, since),
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
-      sb.from('memberships').select('user_id,display_name').eq('household_id', hid),
+      sb.from('memberships').select('user_id,display_name,gender').eq('household_id', hid),
       sb.from('bank_accounts').select('id,name,balance,balance_updated_at').eq('household_id', hid),
       sb.from('credit_cards').select('id,name,bank_account_id,billing_day,last4,owner_user_id,credit_limit,is_active').eq('household_id', hid),
       sb.from('goals').select('*').eq('household_id', hid),
@@ -106,6 +107,7 @@ export async function load(hid, userId, { force = false } = {}) {
       categories: cats.data || [],
       budgets: budgets.data || [],
       members: Object.fromEntries((mems.data || []).map((m) => [m.user_id, m.display_name || ''])),
+      genders: Object.fromEntries((mems.data || []).map((m) => [m.user_id, m.gender || null])),
       accounts: accounts.error ? [] : accounts.data || [],
       cards: cards.error ? [] : (cards.data || []).filter((c) => c.is_active !== false),
       goals: goals.error ? [] : goals.data || [],
@@ -253,6 +255,18 @@ export async function setIncome(amount) {
   const { error } = await sb.from('households').update({ income_expectations: next }).eq('id', state.hid);
   if (error) throw error;
   state.income = next;
+  emit();
+}
+
+// How to address me: my name and "אתה" or "את", seen by the household.
+export async function setMyAddress({ name, gender }) {
+  const patch = { gender: gender === 'f' ? 'f' : 'm' };
+  const n = String(name || '').trim().slice(0, 40);
+  if (n) patch.display_name = n;
+  const { error } = await sb.from('memberships').update(patch).eq('user_id', state.userId);
+  if (error) throw error;
+  state.genders = { ...state.genders, [state.userId]: patch.gender };
+  if (n) state.members = { ...state.members, [state.userId]: n };
   emit();
 }
 

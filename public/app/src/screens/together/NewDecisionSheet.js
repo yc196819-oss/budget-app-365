@@ -44,7 +44,7 @@ export function NewDecisionSheet({ data, threshold, userId, onClose }) {
     <form class="stack" onSubmit=${submit}>
       <label class="field"><span>מה</span><input class="input" value=${title} maxlength="80" onInput=${(e) => setTitle(e.target.value)} placeholder="למשל: מכונת כביסה חדשה" required /></label>
       <label class="field"><span>כמה (₪)</span><input class="input num" inputmode="decimal" value=${amount} onInput=${(e) => setAmount(e.target.value)} required /></label>
-      ${n > 0 && !needsCard(n, threshold) && html`<span class="hint">זה מתחת ל-${money(threshold)} שסיכמתם, אפשר לקנות בלי לשאול. רוצים בכל זאת לשמוע מה בן/בת הזוג חושבים? אפשר.</span>`}
+      ${n > 0 && !needsCard(n, threshold) && html`<span class="hint">זה מתחת ל-${money(threshold)} שסיכמתם, אפשר לקנות בלי לשאול. רוצים בכל זאת לשמוע מה בן או בת הזוג חושבים? אפשר.</span>`}
       <div class="field"><span class="field-label">מתי</span>
         <${Segmented} label="מתי" value=${when} onChange=${setWhen} options=${[{ key: 'this', label: 'החודש' }, { key: 'next', label: 'בחודש הבא' }, { key: 'date', label: 'תאריך' }]} /></div>
       ${when === 'date' && html`<label class="field"><span>עד מתי</span><input class="input num" type="date" value=${date} onInput=${(e) => setDate(e.target.value)} required /></label>`}

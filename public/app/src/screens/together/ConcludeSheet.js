@@ -42,7 +42,7 @@ export function ConcludeSheet({ d, data, dec, userId, memberIds, onClose }) {
 
   return html`<${Sheet} title="מה החלטנו?" onClose=${onClose}>
     <form class="stack" onSubmit=${save}>
-      <span class="muted" style="font-size:14px">${d.title} · <b class="num">${money(d.amount)}</b>. ההחלטה תישמר על הכרטיס ובן/בת הזוג יקבלו עליה הודעה.</span>
+      <span class="muted" style="font-size:14px">${d.title} · <b class="num">${money(d.amount)}</b>. ההחלטה תישמר על הכרטיס, ושניכם תקבלו עליה הודעה.</span>
       <div class="vote-choices" role="radiogroup" aria-label="ההחלטה">
         <button type="button" role="radio" aria-checked=${String(kind === 'plan')} class=${'vote-choice' + (kind === 'plan' ? ' on' : '')} style="--tone:var(--income)" onClick=${() => setKind('plan')}><span class="vote-icon">✅</span>קונים, נכנס לתוכנית</button>
         <button type="button" role="radio" aria-checked=${String(kind === 'decline')} class=${'vote-choice' + (kind === 'decline' ? ' on' : '')} style="--tone:var(--danger)" onClick=${() => setKind('decline')}><span class="vote-icon">🙅</span>החלטנו לא לקנות</button>
@@ -52,7 +52,7 @@ export function ConcludeSheet({ d, data, dec, userId, memberIds, onClose }) {
         <textarea class="input" rows="4" maxlength="1000" value=${summary} onInput=${(e) => setSummary(e.target.value)} placeholder="למשל: קונים בדצמבר מהבונוס. עד אז דני בודק מחירים, ונעמי מעבירה ₪300 בחודש לחיסכון."></textarea></label>
       ${aiOn && html`<button type="button" class="btn-text" style="align-self:flex-start" disabled=${drafting} onClick=${draft}>${drafting ? '✨ מנסח…' : '✨ שהיועץ ינסח מהשיחה'}</button>`}
       <button type="submit" class="btn" disabled=${!kind || busy}>${busy ? 'שומר…' : 'לסגור עם ההחלטה'}</button>
-      ${dec && dec.partnerPush === 0 && html`<span class="hint">בן/בת הזוג עוד לא הפעילו התראות בטלפון, אז יראו את זה כשייכנסו לאפליקציה.</span>`}
+      ${dec && dec.partnerPush === 0 && html`<span class="hint">בן או בת הזוג עוד לא הפעילו התראות בטלפון, אז יראו את זה כשייכנסו לאפליקציה.</span>`}
     </form>
   <//>`;
 }

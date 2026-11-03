@@ -1,4 +1,5 @@
 // "מחליטים ביחד": a purchase above the amount the couple agreed on gets a
+import { g as gWord } from './people.js';
 // card, and every partner other than the one who wants it answers: approve,
 // not now, or let's talk. Pure: no DOM, no network.
 //
@@ -173,15 +174,16 @@ export function forAdvisor(decisions, votes, memberIds) {
 // is asked, with the purchase, why it is wanted, each partner's answer and
 // what it does to the numbers. It is asked to weigh both sides, not to take
 // one, and to end with a clear recommendation.
-export function advisorQuestion(d, votes, memberIds, nameOf, fx, today = new Date(), hasThread = false, voices = null) {
+export function advisorQuestion(d, votes, memberIds, nameOf, fx, today = new Date(), hasThread = false, voices = null, genderOf = () => null) {
+  const say = (id, m, f) => gWord(genderOf(id), m, f);
   const lines = [
     `בני הזוג מתלבטים יחד על קנייה ומבקשים שתצטרף לשיחה שלהם, תעזור לכל אחד להישמע ותגיד את דעתך לפי הנתונים.`,
     `${nameOf(d.created_by)} רוצה לקנות: ${d.title}, ב-${money(d.amount)}, ${wantedLabel(d.wanted_by, today)}.`,
-    d.note ? `למה זה חשוב לו/לה: ${d.note}` : null
+    d.note ? `למה זה חשוב ל${nameOf(d.created_by)}: ${d.note}` : null
   ];
   for (const id of answerers(d, memberIds)) {
     const v = votesFor(d, votes).find((x) => x.user_id === id);
-    lines.push(v ? `${nameOf(id)} ענה/תה: ${VOTES[v.vote].label}${v.note ? ' — ' + v.note : ''}` : `${nameOf(id)} עוד לא ענה/תה.`);
+    lines.push(v ? `${nameOf(id)} ${say(id, 'ענה', 'ענתה')}: ${VOTES[v.vote].label}${v.note ? ' — ' + v.note : ''}` : `${nameOf(id)} עוד לא ${say(id, 'ענה', 'ענתה')}.`);
   }
   if (fx) {
     if (fx.roomBefore !== null) lines.push(`בתקציב החודש: ${roomText(fx.roomBefore)} לפני הקנייה, ${roomText(fx.roomAfter)} אחריה.`);
@@ -190,7 +192,7 @@ export function advisorQuestion(d, votes, memberIds, nameOf, fx, today = new Dat
   if (hasThread) lines.push('בני הזוג כבר מדברים על זה (השיחה מופיעה למעלה). התייחס למה שנאמר, ובעיקר להודעה האחרונה, בלי לחזור על מה שכבר אמרת.');
   if (voices) {
     const quiet = voices.quiet ? nameOf(voices.quiet) : null;
-    lines.push(`בשיחה עד עכשיו: ${voices.counts.map(([id, n]) => nameOf(id) + ' ' + n + ' הודעות').join(', ')}.${quiet ? ' ' + quiet + ' כתב/ה פחות; תן לו/ה מקום.' : ''}`);
+    lines.push(`בשיחה עד עכשיו: ${voices.counts.map(([id, n]) => nameOf(id) + ' ' + n + ' הודעות').join(', ')}.${quiet ? ' ' + quiet + ' ' + say(voices.quiet, 'כתב', 'כתבה') + ' פחות; תן ל' + quiet + ' מקום.' : ''}`);
   }
   lines.push(COUPLE_RULES);
   return lines.filter(Boolean).join('\n');
@@ -200,9 +202,11 @@ export function advisorQuestion(d, votes, memberIds, nameOf, fx, today = new Dat
 // each, never as a judge.
 const COUPLE_RULES = [
   'אתה מדבר עם זוג, לא מכריע ביניהם. פנה לשניהם בשמם.',
-  'קודם שקף בחום, במשפט קצר לכל אחד, מה חשוב לו/לה ומה הוא/היא מרגיש/ה לפי מה שכתבו, בלי לפרש מעבר למה שנאמר. אם מישהו עוד לא אמר מה חשוב לו, הזמן אותו בשאלה פתוחה אחת.',
+  'קודם שקף בחום, במשפט קצר לכל אחד, מה חשוב לכל אחד ומה כל אחד מרגיש לפי מה שכתבו, בלי לפרש מעבר למה שנאמר. אם מישהו עוד לא אמר מה חשוב לו, הזמן אותו בשאלה פתוחה אחת.',
   'אחר כך המספרים: מה הקנייה עושה לתקציב, לתחזית וליעדים, בעובדות.',
   'בלי האשמה, בלי "צריך" ובלי לקחת צד. אם יש מתח, הכר בו בעדינות והצע דרך שבה שניהם מרוויחים (פשרה, תנאי, מועד).',
+  'מספרים: העתק את הסכומים בדיוק כמו שהם כתובים כאן (הם המספרים שבכרטיס). אל תחשב סכומים או הפרשים חדשים.',
+  'בלי פתיחות כמו "אני מבין ש..." או "שאלה מצוינת", ובלי לחזור על מה שכתבו.',
   'עד 6 משפטים קצרים, בעברית חמה ופשוטה. סיים בשורה שמתחילה ב"ההמלצה שלי:" — לקנות עכשיו, לחכות (ועד מתי), או לקנות בתנאי (איזה) — ואחריה שאלה אחת לשניהם שתעזור להחליט.'
 ].join('\n');
 

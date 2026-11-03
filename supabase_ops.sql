@@ -332,3 +332,7 @@ create policy two_step_required on public.mail_prefs as restrictive for all to a
 alter table public.mail_sent drop constraint if exists mail_sent_campaign_check;
 alter table public.mail_sent add constraint mail_sent_campaign_check
   check (campaign in ('start', 'first', 'more') or campaign ~ '^monthly-[0-9]{4}-[0-9]{2}$');
+
+-- Applied 2026-11-03 (member_gender): how to address each person ("אתה" or
+-- "את"), chosen once by the person, seen by the household like the name.
+alter table public.memberships add column if not exists gender text check (gender in ('m', 'f'));

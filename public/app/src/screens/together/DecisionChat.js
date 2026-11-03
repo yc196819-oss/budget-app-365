@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { asOfLabel } from '../../domain/numbers.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { threadFor, unreadCount, withDays, readBy, STATUS, outcome, needsMyAnswer, canConclude, isClosed, votesFor, VOTES, answerers } from '../../domain/decisions.js';
 import { money, initials } from '../../domain/format.js';
@@ -25,15 +26,17 @@ function AdvisorText({ text }) {
 }
 
 // On the card: the last message and how many are new; opens the conversation.
+const typingWord = (nameOf, id) => (nameOf.g ? nameOf.g(id, 'מקליד', 'מקלידה') : 'מקלידים');
+
 export function ChatPreview({ d, dec, userId, nameOf, onOpen }) {
   const thread = threadFor(d, dec.messages || []);
   const last = thread.at(-1);
   const unread = unreadCount(d, dec.messages || [], userId, seenAt(d.id, userId));
   const typing = dec.typing && dec.typing[d.id];
-  const who = (m) => (m.role === 'ai' ? '✨ היועץ' : m.author_id === userId ? 'את/ה' : nameOf(m.author_id));
+  const who = (m) => (m.role === 'ai' ? '✨ היועץ' : m.author_id === userId ? 'אני' : nameOf(m.author_id));
   return html`<button type="button" class=${'chat-preview' + (unread ? ' unread' : '')} onClick=${onOpen} aria-label=${'לפתוח את השיחה על ' + d.title + (unread ? ', ' + unread + ' הודעות חדשות' : '')}>
     <span class="chat-preview-ic" aria-hidden="true">💬</span>
-    <span class="chat-preview-text">${typing ? html`<i>${nameOf(typing.userId)} מקליד/ה…</i>` : last ? html`<b>${who(last)}:</b> ${last.text.split('\n')[0]}` : html`<span class="muted">לדבר על זה ביחד</span>`}</span>
+    <span class="chat-preview-text">${typing ? html`<i>${nameOf(typing.userId)} ${typingWord(nameOf, typing.userId)}…</i>` : last ? html`<b>${who(last)}:</b> ${last.text.split('\n')[0]}` : html`<span class="muted">לדבר על זה ביחד</span>`}</span>
     ${last && html`<span class="chat-preview-time">${hm(last.created_at)}</span>`}
     ${unread > 0 ? html`<span class="chat-preview-count" aria-hidden="true">${unread}</span>` : html`<span class="chat-preview-go" aria-hidden="true">‹</span>`}
   </button>`;
@@ -97,7 +100,7 @@ export function ChatScreen({ d, dec, data, userId, memberIds, nameOf, onClose, o
   };
 
   const votes = votesFor(d, dec.votes);
-  const sub = typing ? nameOf(typing.userId) + ' מקליד/ה…' : partners.length ? 'את/ה, ' + partners.map(nameOf).join(', ') + (aiOn ? ' והיועץ' : '') : 'רק את/ה כרגע';
+  const sub = typing ? nameOf(typing.userId) + ' ' + typingWord(nameOf, typing.userId) + '…' : partners.length ? 'אני, ' + partners.map(nameOf).join(', ') + (aiOn ? ' והיועץ' : '') : 'רק אני כרגע';
   return html`<div class="wa-scrim" onClick=${onClose}></div>
   <section class="wa" role="dialog" aria-modal="true" aria-label=${'שיחה: ' + d.title}>
     <header class="wa-head">
@@ -131,8 +134,9 @@ export function ChatScreen({ d, dec, data, userId, memberIds, nameOf, onClose, o
         const tail = !sameRun(items[i - 1], m);
         if (m.role === 'ai') {
           return html`<div class="wa-msg ai" key=${m.id}>
-            <span class="wa-ai-head"><span class="wa-orb" aria-hidden="true">✨</span><b>היועץ</b>${m.author_id ? html`<small>לבקשת ${m.author_id === userId ? 'את/ה' : nameOf(m.author_id)}</small>` : ''}</span>
+            <span class="wa-ai-head"><span class="wa-orb" aria-hidden="true">✨</span><b>היועץ</b>${m.author_id ? html`<small>${m.author_id === userId ? 'לבקשתי' : 'לבקשת ' + nameOf(m.author_id)}</small>` : ''}</span>
             <${AdvisorText} text=${m.text} />
+            ${asOfLabel(m.created_at) && html`<small class="adv-asof">${asOfLabel(m.created_at)}. בכרטיס מופיע המצב של עכשיו.</small>`}
             <span class="wa-meta">${hm(m.created_at)}</span></div>`;
         }
         const mine = m.author_id === userId;
@@ -145,7 +149,7 @@ export function ChatScreen({ d, dec, data, userId, memberIds, nameOf, onClose, o
         </div>`;
       })}
       ${thinking && html`<div class="wa-msg ai"><span class="wa-ai-head"><span class="wa-orb" aria-hidden="true">✨</span><b>היועץ</b></span>${live ? html`<${AdvisorText} text=${live} />` : html`<span class="adv-thinking"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>קורא את השיחה ואת המספרים…</span>`}</div>`}
-      ${typing && html`<div class="wa-msg them tail wa-typing" aria-label=${nameOf(typing.userId) + ' מקליד/ה'}><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>`}
+      ${typing && html`<div class="wa-msg them tail wa-typing" aria-label=${nameOf(typing.userId) + ' ' + typingWord(nameOf, typing.userId)}><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>`}
     </div>
 
     ${error && html`<span class="hint wa-error" role="alert">${error}</span>`}

@@ -13,7 +13,7 @@ export function StepWho({ a, set }) {
       <button type="button" aria-pressed=${String(a.mode === 'solo')} onClick=${() => set({ mode: 'solo' })}>לבד</button>
       <button type="button" aria-pressed=${String(a.mode === 'together')} onClick=${() => set({ mode: 'together' })}>ביחד</button>
     </div>
-    ${a.mode === 'together' && html`<label class="field rise"><span>השם של בן/בת הזוג</span>
+    ${a.mode === 'together' && html`<label class="field rise"><span>השם של בן או בת הזוג</span>
       <input class="input" value=${a.partner} onInput=${(e) => set({ partner: e.target.value })} placeholder="נשלח הזמנה בסוף" /></label>`}`;
 }
 

@@ -47,7 +47,7 @@ test('the partner\'s card waits for my answer: badge on the tab, the reason, the
   assert.match(card, /דני רוצה/);
   assert.match(card, /למה: הישנה נשברה/);
   assert.match(card, /בסוף .* בחשבון/);
-  assert.match(card, /את\/ה: עוד לא ענית/);
+  assert.match(card, /אני: עוד לא ענית/);
   assert.match(card, /החודש: (נשארים|חריגה של) ₪/);
   assert.match(await page.locator('.agreement').textContent(), /מעל ₪500 .*עד ₪400 בחודש בלי לשאול/);
   assert.deepEqual(errors, []);
@@ -113,7 +113,7 @@ test('opening a card: what, how much, when, why; the effect shows before sending
   assert.equal(row.wanted_by, `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`);
   assert.deepEqual(notified, [{ decisionId: row.id, event: 'opened' }]);
   assert.match(await page.locator('.together').textContent(), /מחכה לתשובה/);
-  assert.match(await page.locator('.decision').textContent(), /דני: עוד לא ענה\/תה/);
+  assert.match(await page.locator('.decision').textContent(), /דני: עוד לא ענה או ענתה/);
   // The opener can withdraw.
   await page.click('.decision button:has-text("לבטל את הבקשה")');
   await page.waitForSelector('details.history');

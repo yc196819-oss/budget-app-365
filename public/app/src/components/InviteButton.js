@@ -21,7 +21,7 @@ export function InviteButton({ hid, userId, partner, variant = 'btn btn-ghost' }
     }
   };
   return html`<div class="stack" style="gap:6px">
-    <button type="button" class=${variant} disabled=${state === 'busy'} onClick=${make}>${state === 'busy' ? 'יוצרים קישור…' : 'הזמנת ' + (partner || 'בן/בת הזוג')}</button>
+    <button type="button" class=${variant} disabled=${state === 'busy'} onClick=${make}>${state === 'busy' ? 'יוצרים קישור…' : 'הזמנת ' + (partner || 'בן או בת הזוג')}</button>
     ${link && html`<input class="input num" readonly value=${link} aria-label="קישור הזמנה" onFocus=${(e) => e.target.select()} />`}
     ${state === 'copied' && html`<span class="muted" style="font-size:13px" role="status">הקישור הועתק. שלחו אותו בוואטסאפ או במייל. הוא עובד פעם אחת, במשך 7 ימים.</span>`}
     ${state === 'shared' && html`<span class="muted" style="font-size:13px" role="status">נשלח. הקישור עובד פעם אחת, במשך 7 ימים.</span>`}

@@ -162,3 +162,21 @@ test('the month number counts up and lands exactly on the amount; with reduced m
   assert.equal(await still.evaluate(() => getComputedStyle(document.querySelector('.hero')).animationName), 'none');
   await still.close();
 });
+
+test('asked once how to address me: my name and "אתה" or "את", saved for the household', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const db = makeFakeDb();
+  db.tables.memberships.forEach((m) => { if (m.user_id === 'u1') { m.display_name = 'yossi'; delete m.gender; } });
+  await mockSupabase(page, db);
+  await signIn(page, server.base);
+  const ask = page.locator('.address-ask');
+  await ask.waitFor();
+  assert.equal(await ask.locator('input').inputValue(), '', 'a username is not offered as a name');
+  await ask.locator('input').fill('יוסי');
+  await ask.locator('button:has-text("לשון זכר")').click();
+  await ask.waitFor({ state: 'detached' });
+  const me = db.tables.memberships.find((m) => m.user_id === 'u1');
+  assert.equal(me.gender, 'm');
+  assert.equal(me.display_name, 'יוסי');
+  await page.close();
+});

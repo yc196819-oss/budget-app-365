@@ -45,7 +45,7 @@ export function usage(card, txs, today) {
 // The line under the card's name: whose it is and when it is charged.
 export function cardSub(card, cyc, members = {}, me = null) {
   const parts = [];
-  if (card.owner_user_id) parts.push(card.owner_user_id === me ? 'שלי' : 'של ' + (members[card.owner_user_id] || 'בן/בת הזוג'));
+  if (card.owner_user_id) parts.push(card.owner_user_id === me ? 'שלי' : 'של ' + (members[card.owner_user_id] || 'בן או בת הזוג'));
   parts.push('יורד ב-' + Number(cyc.next.slice(8, 10)) + '.' + Number(cyc.next.slice(5, 7)));
   return parts.join(' · ');
 }

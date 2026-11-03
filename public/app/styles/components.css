@@ -590,3 +590,10 @@ body.chat-open { overflow: hidden; }
 .resend-clock { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
 .resend-track { fill: none; stroke: var(--line); stroke-width: 3; }
 .resend-ring { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.adv-asof { font-size: 14px; color: var(--muted); }
+/* The advisor and its conversation list: nothing smaller than 14px, grey text with enough contrast */
+.adv .row-main span { font-size: 14px; color: var(--muted); }
+.adv .chip { font-size: 14px; }
+.adv-msg small { font-size: 14px; }
+.adv-legal { font-size: 14px; color: var(--muted); }
+.rail .muted { font-size: 14px; }

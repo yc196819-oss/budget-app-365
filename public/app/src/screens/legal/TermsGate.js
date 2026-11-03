@@ -31,7 +31,7 @@ export function TermsGate({ session }) {
     <form class="stack" onSubmit=${accept}>
       <label class="check terms-check">
         <input type="checkbox" checked=${ok} onChange=${(e) => setOk(e.target.checked)} />
-        <span>קראתי ואני מסכים/ה ל<a href="/terms" target="_blank" rel="noopener">תנאי השימוש</a> ול<a href="/privacy" target="_blank" rel="noopener">מדיניות הפרטיות</a></span>
+        <span>קראתי ואישרתי את <a href="/terms" target="_blank" rel="noopener">תנאי השימוש</a> ואת <a href="/privacy" target="_blank" rel="noopener">מדיניות הפרטיות</a></span>
       </label>
       ${error && html`<p class="error" role="alert">${error}</p>`}
       <button class="btn" type="submit" disabled=${!ok || busy}>${busy ? 'שומר…' : 'להמשיך'}</button>
