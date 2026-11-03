@@ -104,17 +104,17 @@ test('when there is nothing new, it says so; when the server fails, it can be re
 
 test('asking first (switched in the profile): after an amount it offers to save what it learned; "not now" hides it for those messages', async () => {
   const { page } = await open({ manual: true });
-  await page.fill('input[aria-label="שאלה ליועץ"]', 'המשכורת שלי עלתה ל-12,500');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'המשכורת שלי עלתה ל-12,500');
   await page.click('.adv-compose button[type="submit"]');
   await page.waitForSelector('.learn-offer');
   await page.click('.learn-offer button:has-text("לא עכשיו")');
   assert.equal(await page.locator('.learn-offer').count(), 0);
-  await page.fill('input[aria-label="שאלה ליועץ"]', 'תודה');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'תודה');
   await page.click('.adv-compose button[type="submit"]');
   await page.waitForSelector('.adv-msg.ai:has-text("רשמתי.") >> nth=1');
   assert.equal(await page.locator('.learn-offer').count(), 0);
   // A new amount brings the offer back, and it opens the review.
-  await page.fill('input[aria-label="שאלה ליועץ"]', 'החלטנו לחסוך 1,000 בחודש');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'החלטנו לחסוך 1,000 בחודש');
   await page.click('.adv-compose button[type="submit"]');
   await page.waitForSelector('.learn-offer');
   await page.click('.learn-offer button:has-text("לבדוק מה למדתי")');
@@ -125,7 +125,7 @@ test('asking first (switched in the profile): after an amount it offers to save 
 test('by default the advisor updates the data from the conversation by itself, says what changed, and each change can be undone', async () => {
   const { page, db, errors, sent } = await open();
   const carBefore = db.tables.category_budgets.find((b) => b.category_id === 'car').monthly_amount;
-  await page.fill('input[aria-label="שאלה ליועץ"]', 'החלטנו: רכב 700 בחודש, ויש לנו כבר 15,000 בקרן החירום');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'החלטנו: רכב 700 בחודש, ויש לנו כבר 15,000 בקרן החירום');
   await page.click('.adv-compose button[type="submit"]');
   const note = page.locator('.learn-auto');
   await note.waitFor();

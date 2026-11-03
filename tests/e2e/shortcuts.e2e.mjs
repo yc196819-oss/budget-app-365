@@ -76,7 +76,7 @@ test('"add by voice": the add sheet opens already listening', async () => {
 
 test('"ask the advisor": the advisor opens, with the mic and the voice conversation', async () => {
   const { page } = await open('ask');
-  await page.waitForSelector('.sheet .adv input[aria-label="שאלה ליועץ"]');
+  await page.waitForSelector('.sheet .adv [aria-label="שאלה ליועץ"]');
   assert.equal(await page.locator('.sheet .adv-mic').count(), 1);
   assert.equal(await page.locator('.sheet .adv-talk').count(), 1);
   await page.close();

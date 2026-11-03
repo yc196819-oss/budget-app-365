@@ -42,6 +42,13 @@ export function Shell({ tab, session }) {
   setScreen(tab);
   // One overlay at a time: 'profile' | 'add' | 'voice' | 'import' | 'learn' | 'advisor' | 'talk' | null.
   const [overlay, setOverlay] = useState(null);
+  // Opened as the advisor's own window (desktop): only the conversation.
+  const [solo, setSolo] = useState(() => /^#\/advisor/.test(location.hash));
+  useEffect(() => {
+    const on = () => setSolo(/^#\/advisor/.test(location.hash));
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
   const [theme, setTheme] = useState(() => readLocal('theme', ''));
   const data = useHousehold(session.household?.household_id, session.user.id);
   // The desktop rail and the mobile sheet hold the same advisor; only one is mounted.
@@ -79,7 +86,7 @@ export function Shell({ tab, session }) {
     if (!session.household) return;
     if (action === 'add' || action === 'voice' || action === 'talk') setOverlay(action);
     else if (action === 'ask') {
-      if (desktop) setTimeout(() => document.querySelector('.rail input[aria-label="שאלה ליועץ"]')?.focus(), 300);
+      if (desktop) setTimeout(() => document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus(), 300);
       else setOverlay('advisor');
     }
   }, []);
@@ -95,12 +102,22 @@ export function Shell({ tab, session }) {
       e.preventDefault();
       if (action === 'add') setOverlay('add');
       else if (action === 'import' && session.household) setOverlay('import');
-      else if (action === 'advisor') document.querySelector('.rail input[aria-label="שאלה ליועץ"]')?.focus();
+      else if (action === 'advisor') document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus();
       else if (action.startsWith('tab:')) location.hash = hrefFor(action.slice(4));
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [desktop, overlay, session.household]);
+  if (solo) {
+    return html`<main class="advisor-solo" aria-label="היועץ">
+      <header class="rail-head">
+        <span class="orb"><${Icon} name="spark" size=${19} stroke=${2.2} /></span>
+        <span style="display:flex;flex-direction:column"><b style="font-size:17px">היועץ</b><span class="muted" style="font-size:12px">מכיר את המספרים שלכם</span></span>
+      </header>
+      ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen="home" />` : html`<${Loading} />`}
+      <${ToastHost} />
+    </main>`;
+  }
   const Screen = SCREENS[tab];
   const title = TABS.find((t) => t.key === tab).label;
   const close = () => setOverlay(null);
@@ -115,7 +132,7 @@ export function Shell({ tab, session }) {
             <button type="button" class="icon-btn only-mobile" aria-label="פרופיל והגדרות" onClick=${() => setOverlay('profile')}>${profile.initials}</button>
           </div>
         </header>
-        ${session.household ? html`<${Screen} key=${tab} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} onLearn=${() => setOverlay('learn')} onAsk=${() => (desktop ? document.querySelector('.rail input[aria-label="שאלה ליועץ"]')?.focus() : setOverlay('advisor'))} userId=${session.user.id} />`
+        ${session.household ? html`<${Screen} key=${tab} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} onLearn=${() => setOverlay('learn')} onAsk=${() => (desktop ? document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus() : setOverlay('advisor'))} userId=${session.user.id} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
       ${desktop && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} />`}

@@ -169,3 +169,8 @@ kbd { font-family: inherit; font-size: 11px; font-weight: 800; padding: 1px 6px;
 .soc-badge span { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
 .soc-badge b { font-size: 16px; letter-spacing: .3px; text-align: right; }
 .soc-badge small { font-size: 12px; color: var(--muted); }
+/* The advisor in its own window */
+.advisor-solo { max-width: 760px; margin: 0 auto; min-height: 100vh; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+.advisor-solo .adv-log { max-height: none; flex: 1; }
+.rail-pop { width: 36px; height: 36px; flex: none; }
+.advisor-solo .rail-head { display: flex; align-items: center; gap: 10px; }

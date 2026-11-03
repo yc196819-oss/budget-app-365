@@ -285,9 +285,22 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   </div>`;
 }
 
+// The question box grows with what is typed (up to a few lines, then it
+// scrolls), so every word stays visible. Enter sends; Shift+Enter is a new line.
+function grow(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight + 2, 168) + 'px';
+}
 function Composer({ draft, setDraft, busy, onSend, onMic, listening, onTalk }) {
+  const box = useRef(null);
+  // Back to one line once the question was sent (or the mic filled it in).
+  useEffect(() => { grow(box.current); }, [draft]);
   return html`<form class="adv-compose" onSubmit=${(e) => { e.preventDefault(); onSend(); }}>
-    <input class="input" value=${draft} onInput=${(e) => setDraft(e.target.value)} placeholder=${listening ? 'מקשיב…' : 'שאלו את היועץ'} aria-label="שאלה ליועץ" disabled=${busy} />
+    <textarea class="input adv-input" rows="1" value=${draft} ref=${box}
+      onInput=${(e) => { setDraft(e.target.value); grow(e.target); }}
+      onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!busy && draft.trim()) onSend(); } }}
+      placeholder=${listening ? 'מקשיב…' : 'שאלו את היועץ'} aria-label="שאלה ליועץ" disabled=${busy}></textarea>
     ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}>🎙️</button>`}
     <button type="submit" class="btn" disabled=${busy || !draft.trim()}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>
   </form>

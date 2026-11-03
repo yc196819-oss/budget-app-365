@@ -72,7 +72,7 @@ test('continuing an old conversation: the answer streams, both turns are saved, 
   await page.waitForSelector('.adv-msg');
   assert.match(await page.locator('.adv-log').textContent(), /באוכל בחוץ\./);
   assert.doesNotMatch(await page.locator('.adv-log').textContent(), /@@/);
-  await page.fill('input[aria-label="שאלה ליועץ"]', 'ובכמה בדיוק?');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'ובכמה בדיוק?');
   await page.click('.adv-compose button[type="submit"]');
   await page.waitForSelector('.adv .chip:has-text("איך מתחילים?")');
   assert.match(await page.locator('.adv-msg.ai').last().textContent(), /כדאי לקצץ באוכל בחוץ ב-400 ש"ח\./);
@@ -113,13 +113,13 @@ test('with the advisor off nothing is sent, and old conversations can still be r
   await page.keyboard.press('Escape');
   await page.click('.ask-fab');
   await page.waitForSelector('.adv-off');
-  assert.equal(await page.locator('input[aria-label="שאלה ליועץ"]').count(), 0);
+  assert.equal(await page.locator('[aria-label="שאלה ליועץ"]').count(), 0);
   await page.locator('.adv .row', { hasText: 'איפה לחסוך' }).click();
   await page.waitForSelector('.adv-msg');
-  assert.equal(await page.locator('input[aria-label="שאלה ליועץ"]').count(), 0);
+  assert.equal(await page.locator('[aria-label="שאלה ליועץ"]').count(), 0);
   assert.equal(asked.length, 0);
   await page.click('text=להפעיל את היועץ');
-  await page.waitForSelector('input[aria-label="שאלה ליועץ"]');
+  await page.waitForSelector('[aria-label="שאלה ליועץ"]');
   await page.close();
 });
 
@@ -140,7 +140,7 @@ test('while the advisor thinks, an animated indicator shows; it gives way to the
     return r.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: {"delta":"תשובה קצרה."}\n\ndata: {"done":true}\n\n' });
   });
   await page.click('.ask-fab');
-  await page.fill('input[aria-label="שאלה ליועץ"]', 'מה המצב?');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'מה המצב?');
   await page.click('.adv-compose button[type="submit"]');
   await page.waitForSelector('.adv-msg.ai .adv-thinking .dots i');
   assert.match(await page.locator('.adv-thinking').textContent(), /היועץ חושב/);
@@ -156,11 +156,51 @@ test('when the AI fails, a clear message shows and the question is not lost from
   const { page } = await open();
   await page.route('**/api/ai/advice-chat-stream', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ error: 'היועץ לא הצליח לענות כרגע. נסו שוב בעוד דקה.' }) + '\n\n' }));
   await page.click('.ask-fab');
-  await page.fill('input[aria-label="שאלה ליועץ"]', 'מה המצב?');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'מה המצב?');
   await page.click('.adv-compose button[type="submit"]');
   await page.waitForSelector('.adv-err');
   assert.match(await page.locator('.adv-err').textContent(), /נסו שוב/);
   assert.equal(await page.locator('.adv-thinking').count(), 0);
   assert.match(await page.locator('.adv-log').textContent(), /מה המצב\?/);
+  await page.close();
+});
+
+test('the question box: a long question is shown in full (the box grows), Enter sends, Shift+Enter is a new line', async () => {
+  const { page, asked, errors } = await open();
+  await page.click('.ask-fab');
+  const box = page.locator('[aria-label="שאלה ליועץ"]');
+  await box.waitFor();
+  const one = (await box.boundingBox()).height;
+  const long = 'אני רוצה לדעת איך אפשר לחסוך יותר כסף בחודש הבא, במיוחד על אוכל בחוץ, דלק, מנויים וקניות אונליין שמצטברות';
+  await box.fill(long);
+  const grown = await box.evaluate((el) => ({ h: el.getBoundingClientRect().height, sh: el.scrollHeight, ch: el.clientHeight }));
+  assert.ok(grown.h > one + 20, 'the box grew to show more lines');
+  assert.ok(grown.sh <= grown.ch + 2, 'every word is visible, nothing hidden');
+  await box.press('Shift+Enter');
+  assert.match(await box.inputValue(), /\n$/);
+  await box.press('Enter');
+  await page.waitForSelector('.adv-msg.ai:has-text("לקצץ באוכל בחוץ")');
+  assert.equal(asked.length, 1);
+  assert.equal(await box.inputValue(), '');
+  assert.ok((await box.boundingBox()).height <= one + 2, 'back to one line after sending');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('desktop: the advisor opens in its own window, with only the conversation', async () => {
+  const { page, errors } = await open({ width: 1280 });
+  await page.waitForSelector('.rail .rail-pop');
+  // The button asks the browser for a separate window at #/advisor.
+  await page.evaluate(() => { window.__opened = []; window.open = (...a) => { window.__opened.push(a); return { focus() {} }; }; });
+  await page.click('.rail .rail-pop');
+  const [[url, name, features]] = await page.evaluate(() => window.__opened);
+  assert.match(url, /#\/advisor$/);
+  assert.equal(name, 'budget-advisor');
+  assert.match(features, /popup/);
+  // What that window shows: only the conversation, no tabs.
+  await page.goto(server.base + '/app/#/advisor');
+  await page.waitForSelector('.advisor-solo [aria-label="שאלה ליועץ"]');
+  assert.equal(await page.locator('.sidebar:visible, nav:visible, .rail:visible').count(), 0, 'no tabs, only the advisor');
+  assert.deepEqual(errors, []);
   await page.close();
 });
