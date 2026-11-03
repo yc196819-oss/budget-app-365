@@ -307,7 +307,7 @@ $$;
 revoke execute on function public.mfa_state_for(uuid, text, uuid) from public, anon, authenticated;
 grant execute on function public.mfa_state_for(uuid, text, uuid) to service_role;
 
--- To turn it on (only once a test email arrived), keeping everyone already
+-- Turned on 2026-11-03 after a test email arrived. To turn it on, keeping everyone already
 -- signed in signed in:
 --   insert into public.mfa_email_sessions (session_id, user_id)
 --     select s.id, s.user_id from auth.sessions s

@@ -15,7 +15,7 @@ test('the sign-in screen says how the data is protected, and no longer "under co
   await page.goto(server.base + '/app/');
   const text = await page.locator('main.login').textContent();
   assert.doesNotMatch(text, /בבנייה/);
-  assert.match(await page.locator('.login-safe').textContent(), /בלי חיבור לבנק.*מוצפן.*כניסה בשני שלבים/s);
+  assert.match(await page.locator('.login-safe').textContent(), /בלי חיבור לבנק.*מוצפן.*מאושרת בקוד/s);
   // The standard is the providers', and the badge says so and leads to their own page.
   assert.equal(await page.locator('a.soc-badge').getAttribute('href'), 'https://supabase.com/security');
   assert.match(await page.locator('a.soc-badge').textContent(), /SOC 2 Type 2.*בשרתים/s);
