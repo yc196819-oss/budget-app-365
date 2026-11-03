@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { partnerWord, genderOf, realName } from '../../domain/people.js';
 import { track } from '../../lib/telemetry.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
@@ -58,7 +59,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   const talkStop = useRef(null);
 
   const names = data.members || {};
-  const memberName = (id) => (id === me ? (names[id] || 'אני') : (names[id] || 'בן/בת הזוג'));
+  const memberName = (id) => (id === me ? (names[id] || 'אני') : (names[id] || partnerWord(genderOf(data.genders, id))));
 
   const refresh = () => listConversations(hid).then((l) => { setList(l); setListError(false); }).catch(() => setListError(true));
   useEffect(() => { if (hid) refresh(); return () => { if (abort.current) abort.current.abort(); stopSpeaking(); }; }, [hid]);
@@ -89,10 +90,10 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       if (!memories.current) memories.current = await loadMemories(hid).catch(() => []);
       const dec = decisionsSnapshot();
       const sharedDecisions = dec.status === 'ready' ? forAdvisor(dec.decisions, dec.votes, Object.keys(names)) : [];
-      const summary = buildSummary({ ...data, sharedDecisions, userId: me, userName: memberName(me), memories: memories.current, screen });
+      const summary = buildSummary({ ...data, sharedDecisions, userId: me, userName: realName(names[me]), memories: memories.current, screen });
       let raw = '';
       abort.current = new AbortController();
-      await streamReply({ summary, history, message: msg, authorName: memberName(me) }, (delta) => {
+      await streamReply({ summary, history, message: msg, authorName: realName(names[me]), authorGender: genderOf(data.genders, me) }, (delta) => {
         raw += delta;
         setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m === aiMsg || (m.pending && m.role === 'ai') ? { ...m, text: parseReply(raw).text } : m)) });
       }, abort.current.signal);

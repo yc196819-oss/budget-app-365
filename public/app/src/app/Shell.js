@@ -1,4 +1,5 @@
 import { html } from '../lib/html.js';
+import { partnerWord, genderOf } from '../domain/people.js';
 import { track, setScreen } from '../lib/telemetry.js';
 import { Loading } from '../components/Loading.js';
 import { useEffect, useState } from 'preact/hooks';
@@ -60,7 +61,7 @@ export function Shell({ tab, session }) {
   // A new message from the partner while the app is open: a banner, unless that conversation is on the screen.
   useEffect(() => onIncoming((m) => {
     if (document.querySelector('.wa') || document.visibilityState !== 'visible') return;
-    const who = m.role === 'ai' ? '🤖 היועץ' : (data.members || {})[m.author_id] || 'בן/בת הזוג';
+    const who = m.role === 'ai' ? '🤖 היועץ' : (data.members || {})[m.author_id] || partnerWord(genderOf(data.genders, m.author_id));
     if (navigator.vibrate) navigator.vibrate(30);
     showToast('💬 ' + who + ': ' + String(m.text).split('\n')[0].slice(0, 80), { undo: () => { location.hash = '#/together/' + m.decision_id; }, label: 'לפתוח', ms: 6000 });
   }), [data.members]);

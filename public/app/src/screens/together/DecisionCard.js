@@ -26,7 +26,7 @@ export function DecisionCard({ d, data, dec, userId, memberIds, nameOf, onAnswer
   return html`<article class=${'card decision st-' + st}>
     <div class="decision-head">
       <span class="stack" style="gap:2px;min-width:0"><b class="decision-title">${d.title}</b>
-        <span class="muted" style="font-size:13px">${mine ? 'את/ה רוצה' : nameOf(d.created_by) + ' רוצה'} · ${wantedLabel(d.wanted_by, today)}${cat ? ' · ' + cat.name : ''}</span></span>
+        <span class="muted" style="font-size:13px">${mine ? 'אני רוצה' : nameOf(d.created_by) + ' רוצה'} · ${wantedLabel(d.wanted_by, today)}${cat ? ' · ' + cat.name : ''}</span></span>
       <span class="stack" style="gap:4px;align-items:flex-end"><b class="num decision-amount">${money(d.amount)}</b><span class="status-chip">${STATUS[st]}</span></span>
     </div>
     ${d.note && html`<p class="decision-note"><span class="faint">למה: </span>${d.note}</p>`}
@@ -39,7 +39,7 @@ export function DecisionCard({ d, data, dec, userId, memberIds, nameOf, onAnswer
       ${answerers(d, memberIds).map((id) => {
         const v = votes.find((x) => x.user_id === id);
         return html`<div class="answer" key=${id}>
-          <span class="answer-who">${v ? VOTES[v.vote].icon : '…'} <b>${nameOf(id)}</b>: ${v ? VOTES[v.vote].label : id === userId ? 'עוד לא ענית' : 'עוד לא ענה/תה'}</span>
+          <span class="answer-who">${v ? VOTES[v.vote].icon : '…'} <b>${nameOf(id)}</b>: ${v ? VOTES[v.vote].label : id === userId ? 'עוד לא ענית' : 'עוד לא ' + (nameOf.g ? nameOf.g(id, 'ענה', 'ענתה') : 'ענו')}</span>
           ${v && v.note && html`<span class="answer-note">${v.note}</span>`}
         </div>`;
       })}

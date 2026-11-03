@@ -1252,12 +1252,12 @@ ${rows}
 const ADVISOR_STYLE = `מספרים: העתק כל סכום בדיוק כמו שהוא מופיע בנתונים (יתרה, תחזית, נשאר להוציא, סכום קנייה). אל תחשב בעצמך סכומים, הפרשים או ממוצעים שלא מופיעים בנתונים. אם חייבים הערכה, כתוב "בערך" ועגל למאות. אם מספר לא מופיע בנתונים, אמור שאין לך אותו.
 סגנון: תשובה רגילה עד 4 משפטים. קודם המספר שעונה על השאלה, אחר כך המלצה אחת ברורה. בלי פתיחות כמו "אני מבין ש...", "שאלה מצוינת" או "חשוב לך מאוד", ובלי לחזור על מה שנכתב לך.
 פנייה: אל תפנה בשם משתמש או בכתובת מייל. פנה בשם רק אם זה שם פרטי, ורק כשזה טבעי.`;
-function buildChatPrompt(summary, history, message, authorName, fixContext) {
+function buildChatPrompt(summary, history, message, authorName, fixContext, authorGender) {
   // The last 12 messages; the 4 newest in full, older ones shortened (tokens).
   const recent = Array.isArray(history) ? history.slice(-12) : [];
   const historyText = recent.map((h, i) => `${h.role === 'user' ? (h.author || 'משתמש') : 'יועץ'}: ${String(h.text || '').slice(0, i >= recent.length - 4 ? 2000 : 400)}`).join('\n');
   return `אתה יועץ פיננסי חם, ענייני ומקצועי למשק בית בישראל. עונים בעברית פשוטה.
-בשיחה יכולים להשתתף שני בני הזוג; ההודעה הנוכחית נכתבה על ידי ${authorName || 'משתמש'}.
+בשיחה יכולים להשתתף שני בני הזוג; ההודעה הנוכחית נכתבה על ידי ${authorName || 'אחד מבני הבית'}.${authorGender === 'f' ? ' פנה אליה בלשון נקבה.' : authorGender === 'm' ? ' פנה אליו בלשון זכר.' : ' אם צריך לפנות אליו או אליה, נסח בלי מגדר (למשל "כדאי", "אפשר").'}
 הנתונים (JSON) כוללים categorySpendingHistory ברמת משק הבית, personalCategoryBreakdown של המשתמש, תקציבים, יעדים ומשימות. ענה על סמך המספרים בפועל, בלי markdown ובלי כותרות.
 ${ADVISOR_STYLE}
 בהחלטות גדולות (משכנתא, השקעות) תן מידע, חישובים ושאלות לבדיקה, וציין שכדאי להתייעץ עם יועץ מורשה; אל תמליץ על נייר ערך או מוצר ספציפי.
@@ -1272,7 +1272,7 @@ ${historyText ? '\nהשיחה עד עכשיו:\n' + historyText + '\n' : ''}
 }
 
 app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (req, res) => {
-  const { summary, history, message, authorName, candidates, categories } = req.body || {};
+  const { summary, history, message, authorName, authorGender, candidates, categories } = req.body || {};
   if (!message) return res.status(400).json({ error: 'message is required' });
   if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'No AI key configured' });
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -1280,7 +1280,7 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders && res.flushHeaders();
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, authorName, buildFixContext(candidates, categories)));
+  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender));
   // The household's numbers and lines (about 6-8k tokens at most).
   const text = JSON.stringify(summary || {}).slice(0, 24000);
   try {

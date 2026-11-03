@@ -63,7 +63,7 @@ export function CardSheet({ card, accounts, members, userId, onClose }) {
       ${people.length > 1 && html`<label class="field"><span>של מי הכרטיס</span>
         <select class="input" value=${owner} onChange=${(e) => setOwner(e.target.value)}>
           <option value="">משותף</option>
-          ${people.map(([id, n]) => html`<option value=${id}>${id === userId ? 'שלי' : n || 'בן/בת הזוג'}</option>`)}
+          ${people.map(([id, n]) => html`<option value=${id}>${id === userId ? 'שלי' : n || 'בן או בת הזוג'}</option>`)}
         </select></label>`}
       <label class="field"><span>יום החיוב בחודש</span><input class="input num" inputmode="numeric" value=${day} onInput=${(e) => setDay(e.target.value.replace(/\D/g, '').slice(0, 2))} />
         ${!billingDayValid(day) && html`<span class="hint" style="color:var(--danger)">יום בין 1 ל-28</span>`}</label>

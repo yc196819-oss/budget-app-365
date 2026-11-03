@@ -1,4 +1,5 @@
 import { sb } from '../lib/supabase.js';
+import { partnerWord, genderOf, realName as nameFor } from '../domain/people.js';
 import { alignNumbers, truthsOf } from '../domain/numbers.js';
 import { track } from '../lib/telemetry.js';
 import { CONFIG } from '../config.js';
@@ -232,14 +233,15 @@ export async function sendMessage({ decision, userId, text }) {
 // the thread for both partners (who are notified). Streams into onDelta.
 export async function askAdvisor({ decision, data, userId, memberIds, onDelta, signal }) {
   const names = data.members || {};
-  const realName = (id) => names[id] || 'בן/בת הזוג';
+  // The advisor never addresses anyone by a username or an email.
+  const realName = (id) => nameFor(names[id]) || partnerWord(genderOf(data.genders, id));
   const thread = threadFor(decision, state.messages);
   const fx = impact(decision, data, new Date());
   const memories = await loadMemories(state.hid).catch(() => []);
   const summary = buildSummary({ ...data, userId, userName: realName(userId), memories, screen: 'together', sharedDecisions: forAdvisor(state.decisions, state.votes, memberIds) });
   let raw = '';
-  const message = advisorQuestion(decision, state.votes, memberIds, realName, fx, new Date(), thread.length > 0, voiceBalance(thread, memberIds));
-  await streamReply({ summary, history: threadHistory(thread, realName), message, authorName: realName(userId) }, (delta) => { raw += delta; onDelta && onDelta(parseReply(raw).text); }, signal);
+  const message = advisorQuestion(decision, state.votes, memberIds, realName, fx, new Date(), thread.length > 0, voiceBalance(thread, memberIds), (id) => genderOf(data.genders, id));
+  await streamReply({ summary, history: threadHistory(thread, realName), message, authorName: realName(userId), authorGender: genderOf(data.genders, userId) }, (delta) => { raw += delta; onDelta && onDelta(parseReply(raw).text); }, signal);
   // The numbers in the answer are the card's numbers, exactly.
   const text = alignNumbers(parseReply(raw).text, truthsOf({ amount: decision.amount, fx, summary }));
   if (!text) throw new Error('לא התקבלה תשובה מהיועץ. נסו שוב.');
@@ -252,11 +254,12 @@ export async function askAdvisor({ decision, data, userId, memberIds, onDelta, s
 // couple edits it before closing the card. Nothing is written here.
 export async function suggestSummary({ decision, data, userId, memberIds, onDelta }) {
   const names = data.members || {};
-  const realName = (id) => names[id] || 'בן/בת הזוג';
+  // The advisor never addresses anyone by a username or an email.
+  const realName = (id) => nameFor(names[id]) || partnerWord(genderOf(data.genders, id));
   const thread = threadFor(decision, state.messages);
   const summary = buildSummary({ ...data, userId, userName: realName(userId), screen: 'together', sharedDecisions: forAdvisor(state.decisions, state.votes, memberIds) });
   let raw = '';
-  await streamReply({ summary, history: threadHistory(thread, realName), message: summaryQuestion(decision, state.votes, memberIds, realName), authorName: realName(userId) }, (delta) => { raw += delta; onDelta && onDelta(parseReply(raw).text); });
+  await streamReply({ summary, history: threadHistory(thread, realName), message: summaryQuestion(decision, state.votes, memberIds, realName), authorName: realName(userId), authorGender: genderOf(data.genders, userId) }, (delta) => { raw += delta; onDelta && onDelta(parseReply(raw).text); });
   return parseReply(raw).text.trim();
 }
 

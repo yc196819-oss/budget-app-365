@@ -88,7 +88,7 @@ export function LoginScreen() {
         <label class="field"><span>סיסמה</span>
           <input class="input" type="password" autocomplete=${mode === 'register' ? 'new-password' : 'current-password'} dir="ltr" value=${password} onInput=${(e) => setPassword(e.target.value)} /></label>
         ${mode === 'register' && html`<label class="check terms-check"><input type="checkbox" checked=${agreed} onChange=${(e) => setAgreed(e.target.checked)} />
-          <span>קראתי ואני מסכים/ה ל<a href="/terms" target="_blank" rel="noopener">תנאי השימוש</a> ול<a href="/privacy" target="_blank" rel="noopener">מדיניות הפרטיות</a></span></label>`}
+          <span>קראתי ואישרתי את <a href="/terms" target="_blank" rel="noopener">תנאי השימוש</a> ואת <a href="/privacy" target="_blank" rel="noopener">מדיניות הפרטיות</a></span></label>`}
         ${error && html`<p class="error" role="alert">${error}</p>`}
         ${notice && html`<p class="notice" role="status">${notice}</p>`}
         <button class="btn" type="submit" disabled=${busy}>${busy ? '…' : mode === 'register' ? 'הרשמה' : 'כניסה'}</button>
