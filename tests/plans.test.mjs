@@ -143,3 +143,24 @@ test('installments: a payment already charged this month is not counted again, a
   assert.ok(!fc.months[0].lines.some((l) => l.kind === 'installment'), 'October is already charged');
   assert.equal(fc.months[1].lines.find((l) => l.kind === 'installment').amount, -250, 'November counts it from the deal');
 });
+
+test('a month whose salary has not come in yet still expects it; the income told to the app is the coming months\' income', () => {
+  const today = new Date(2026, 10, 4); // early in the month, nothing uploaded for it yet
+  const txs = [];
+  for (const m of [7, 8, 9]) {
+    txs.push(tx({ type: 'income', amount: 16000, tx_date: `2026-${String(m + 1).padStart(2, '0')}-10`, category_id: 'sal' }));
+    txs.push(tx({ amount: 15000, tx_date: `2026-${String(m + 1).padStart(2, '0')}-12` }));
+  }
+  // Without lines: the 3-month average salary is still expected this month.
+  const plain = forecast({ txs, today });
+  const now = plain.months[0].lines.find((l) => l.kind === 'income');
+  assert.equal(Math.round(now.amount), 16000);
+  assert.ok(plain.months[0].net > 0, 'not "no income this month"');
+  // With income lines (one per person), they are the income of every month.
+  const lines = [{ label: 'משכורת דנה', amount: 11000 }, { label: 'משכורת יוסי', amount: 6000 }];
+  const told = forecast({ txs, today, income: lines });
+  assert.equal(Math.round(told.months[0].lines.find((l) => l.kind === 'income').amount), 17000);
+  assert.equal(told.months[2].lines.find((l) => l.kind === 'income').label, 'הכנסה צפויה (כפי שעדכנתם)');
+  assert.equal(Math.round(told.months[2].lines.find((l) => l.kind === 'income').amount), 17000);
+  assert.equal(told.expectedIncome, 17000);
+});
