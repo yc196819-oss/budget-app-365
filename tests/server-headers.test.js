@@ -241,3 +241,10 @@ test("the owner's evening email runs only with the cron secret", async () => {
   const res = await fetch(BASE + '/api/admin/daily/run', { method: 'POST', headers: { 'X-Cron-Secret': 'wrong' } });
   assert.equal(res.status, 401);
 });
+
+test('the stop-these-emails link: a wrong one changes nothing', async () => {
+  const bad = await fetch(BASE + '/unsubscribe?u=3f1c2b4a-1111-2222-3333-444455556666&t=' + 'a'.repeat(32) + '&k=news');
+  assert.equal(bad.status, 400);
+  const post = await fetch(BASE + '/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'u=x&t=y&k=news' });
+  assert.equal(post.status, 400);
+});

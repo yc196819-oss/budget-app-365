@@ -339,3 +339,27 @@ test("Israel's clock in winter and summer: the evening email's 23:45 and today's
   assert.equal(israelClock(new Date('2026-11-04T20:45:00Z')).hour, 22);
   assert.equal(israelClock(new Date('2026-07-04T21:45:00Z')).day, '2026-07-05');
 });
+
+test('getting-started emails: a one-click link to stop them, and whoever stopped is skipped', () => {
+  const { campaignMail, campaignList, campaignStats, unsubToken, unsubOk } = require('../server/ops');
+  const m = campaignMail('first', 'https://app.example/app/', 'https://app.example/unsubscribe?u=a&t=b&k=news');
+  assert.match(m.html, /href="https:\/\/app\.example\/unsubscribe\?u=a&amp;t=b&amp;k=news"[^>]*>להפסיק לקבל מיילים כאלה/);
+  assert.match(m.text, /להפסיק לקבל מיילים כאלה: https:\/\/app\.example\/unsubscribe/);
+  assert.doesNotMatch(m.html, /תענה "הסר"/);
+  const old = new Date(Date.now() - 10 * 86400000).toISOString();
+  const users = [{ id: 'u1', email: 'a@example.test', email_confirmed_at: old, created_at: old }, { id: 'u2', email: 'b@example.test', email_confirmed_at: old, created_at: old }];
+  assert.deepEqual(campaignList('start', { users, stopped: ['u2'] }).map((u) => u.id), ['u1']);
+  // A link stops one kind for one person.
+  const id = '3f1c2b4a-1111-2222-3333-444455556666';
+  const t = unsubToken(id, 's', 'news');
+  assert.equal(unsubOk(id, t, 's', 'news'), true);
+  assert.equal(unsubOk(id, t, 's', 'monthly'), false);
+  assert.equal(unsubOk(id, t, 's', 'other'), false);
+  assert.equal(unsubToken(id, 's'), unsubToken(id, 's', 'monthly'), 'old monthly links keep working');
+  // What the dashboard shows.
+  const st = campaignStats([
+    { campaign: 'start', ok: true, sent_at: '2026-11-04T19:28:00Z' }, { campaign: 'start', sent_at: '2026-11-04T19:29:00Z' },
+    { campaign: 'start', ok: false, sent_at: '2026-11-03T10:00:00Z' }, { campaign: 'monthly-2026-10', ok: true }
+  ], ['x', 'y']);
+  assert.deepEqual(st, { byCampaign: { start: { sent: 2, failed: 1, last: '2026-11-04T19:29:00Z' } }, stopped: 2 });
+});

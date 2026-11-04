@@ -442,3 +442,9 @@ select cron.schedule('owner-daily-digest', '45 20,21 * * *', $$
     headers := jsonb_build_object('Content-Type','application/json','x-cron-secret',(select value from public.app_secrets where key='cron_secret')),
     body := '{}'::jsonb, timeout_milliseconds := 120000);
 $$);
+
+-- Applied 2026-11-04 (mail_news_unsub_and_failed): a one-click link in the
+-- getting-started emails stops them (news = false); a send that failed is
+-- still marked, so it is not repeated by itself, and counted as failed.
+alter table public.mail_prefs add column if not exists news boolean not null default true;
+alter table public.mail_sent add column if not exists ok boolean not null default true;
