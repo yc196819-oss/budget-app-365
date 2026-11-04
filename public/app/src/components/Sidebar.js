@@ -19,10 +19,10 @@ export function Sidebar({ tab, onAdd, onImport, onLearn, onProfile, profile, bad
       ${onLearn && html`<button type="button" class="side-item" style="border:0;background:transparent;margin-top:8px" onClick=${onLearn}><${Icon} name="book" />פינת הלמידה</button>`}
       <div class="side-spacer"></div>
       <button type="button" class="side-profile" onClick=${onProfile}>
-        <span class="icon-btn" style="width:38px;height:38px;font-size:14px">${profile.initials}</span>
+        <span class="icon-btn" style="width:38px;height:38px;font-size:14px;position:relative">${profile.initials}${badges.profile > 0 && html`<span class="fb-dot" aria-hidden="true">${badges.profile}</span>`}</span>
         <span style="display:flex;flex-direction:column">
           <b style="font-size:14px">${profile.name}</b>
-          <span class="muted" style="font-size:12px">פרופיל והגדרות</span>
+          <span class="muted" style="font-size:12px">${badges.profile > 0 ? 'יש תשובה לפנייה שלך' : 'פרופיל והגדרות'}</span>
         </span>
       </button>
     </aside>`;

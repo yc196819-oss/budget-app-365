@@ -287,7 +287,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
       ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>
         <div class="learn-actions"><button type="button" class="btn" onClick=${startLearn}>לבדוק מה למדתי</button><button type="button" class="btn-text" onClick=${dismissOffer}>לא עכשיו</button></div></div>`}
-      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => send(draft)} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
+      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${(v) => send(v ?? draft)} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
     </div>`;
   }
 
@@ -298,7 +298,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     ${aiOn && html`<div class="stack" style="gap:8px">
       <b style="font-size:14px;color:var(--muted)">אפשר לשאול למשל</b>
       <div class="chips">${starters(screen).map((s) => html`<button type="button" class="chip" disabled=${busy} onClick=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(s); }}>${s}</button>`)}</div>
-      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
+      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${(v) => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(v ?? draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
     </div>`}
     ${error && html`<div class="adv-err" role="alert">${error}</div>`}
     <div class="stack" style="gap:6px">
@@ -324,10 +324,12 @@ function Composer({ draft, setDraft, busy, onSend, onMic, listening, onTalk }) {
   const box = useRef(null);
   // Back to one line once the question was sent (or the mic filled it in).
   useEffect(() => { grow(box.current); }, [draft]);
-  return html`<form class="adv-compose" onSubmit=${(e) => { e.preventDefault(); onSend(); }}>
+  // What is in the box right now (not the last render's draft: a fast
+  // Enter right after typing would otherwise send nothing).
+  return html`<form class="adv-compose" onSubmit=${(e) => { e.preventDefault(); const v = box.current ? box.current.value : draft; if (!busy && v.trim()) onSend(v); }}>
     <textarea class="input adv-input" rows="1" value=${draft} ref=${box}
       onInput=${(e) => { setDraft(e.target.value); grow(e.target); }}
-      onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!busy && draft.trim()) onSend(); } }}
+      onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); const v = e.target.value; if (!busy && v.trim()) onSend(v); } }}
       placeholder=${listening ? 'מקשיב…' : 'שאלו את היועץ'} aria-label="שאלה ליועץ" disabled=${busy}></textarea>
     ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}><${Icon} name="mic" size=${20} /></button>`}
     <button type="submit" class="btn" disabled=${busy || !draft.trim()}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>

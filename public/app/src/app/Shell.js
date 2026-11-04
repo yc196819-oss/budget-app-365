@@ -32,6 +32,7 @@ import { useHousehold } from '../data/useHousehold.js';
 import { useMedia } from '../lib/useMedia.js';
 import { AdvisorPanel } from '../screens/advisor/AdvisorPanel.js';
 import { parseGo, go } from '../lib/go.js';
+import { useFeedbackUnread } from '../data/feedback.js';
 import { GO_TARGETS } from '../content/howto.js';
 
 const SCREENS = { home: HomeScreen, money: MoneyScreen, together: TogetherScreen, plans: PlansScreen, assets: AssetsScreen };
@@ -55,6 +56,8 @@ export function Shell({ tab, session }) {
   // "Take me there" (the advisor's instant answers): a sheet, or a tab and
   // view, opened fresh (the screen is remounted to read its view).
   const [profileView, setProfileView] = useState('main');
+  // Answers to my requests I have not opened yet.
+  const answers = useFeedbackUnread(session.user.id);
   const [visit, setVisit] = useState(0);
   useEffect(() => {
     const on = (e) => {
@@ -150,12 +153,12 @@ export function Shell({ tab, session }) {
 
   return html`
     <div class="shell">
-      <${Sidebar} tab=${tab} badges=${badges} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => setOverlay('import') : null} onLearn=${() => setOverlay('learn')} onProfile=${() => { setProfileView('main'); setOverlay('profile'); }} />
+      <${Sidebar} tab=${tab} badges=${{ ...badges, profile: answers }} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => setOverlay('import') : null} onLearn=${() => setOverlay('learn')} onProfile=${() => { setProfileView('main'); setOverlay('profile'); }} />
       <main class="shell-main">
         <header class="topbar">
           <div class="topbar-title"><small>${dateLabel(new Date())}${data.refreshing && data.status === 'ready' ? html` <span class="refreshing" role="status"><span class="spinner" aria-hidden="true"></span> מתעדכן…</span>` : ''}</small><h1>${title}</h1></div>
           <div class="topbar-actions">
-            <button type="button" class="icon-btn only-mobile" aria-label="פרופיל והגדרות" onClick=${() => { setProfileView('main'); setOverlay('profile'); }}>${profile.initials}</button>
+            <button type="button" class="icon-btn only-mobile" aria-label=${answers > 0 ? 'פרופיל והגדרות, יש תשובה לפנייה שלך' : 'פרופיל והגדרות'} style="position:relative" onClick=${() => { setProfileView('main'); setOverlay('profile'); }}>${profile.initials}${answers > 0 && html`<span class="fb-dot" aria-hidden="true">${answers}</span>`}</button>
           </div>
         </header>
         ${session.household ? html`<${Screen} key=${tab + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} onLearn=${() => setOverlay('learn')} onAsk=${() => (desktop ? document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus() : setOverlay('advisor'))} userId=${session.user.id} />`
@@ -165,7 +168,7 @@ export function Shell({ tab, session }) {
       <button type="button" class="ask-fab" onClick=${() => setOverlay('advisor')}><span class="orb"><${Icon} name="spark" size=${18} stroke=${2.2} /></span>שאל את היועץ</button>
       <${BottomNav} tab=${tab} badges=${badges} onAdd=${() => setOverlay('add')} />
 
-      ${overlay === 'profile' && html`<${ProfileSheet} start=${profileView} profile=${profile} hid=${session.household ? session.household.household_id : null} userId=${session.user.id} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
+      ${overlay === 'profile' && html`<${ProfileSheet} answers=${answers} start=${profileView} profile=${profile} hid=${session.household ? session.household.household_id : null} userId=${session.user.id} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
       ${(overlay === 'add' || overlay === 'voice') && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => setOverlay('import')} startVoice=${overlay === 'voice'} />`}
       ${overlay === 'talk' && html`<${Sheet} title="שיחה קולית עם היועץ" onClose=${close}>
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} startTalk=${true} />` : html`<${Loading} />`}

@@ -2198,8 +2198,8 @@ app.post('/api/feedback', requireAuth, feedbackLimiter, async (req, res) => {
     if (!row) return res.status(400).json({ error: 'כתבו לפחות כמה מילים.' });
     const { data, error } = await supabaseAdmin.from('feedback').insert(row).select('id,created_at').single();
     if (error) throw error;
-    const who = ops.alias(req.authUserId, ADMIN_SALT);
-    const label = { bug: '🐞 תקלה', idea: '💡 הצעה', other: '✉️ פנייה' }[row.kind];
+    const who = (await feedbackNames([req.authUserId]))[req.authUserId] || ops.alias(req.authUserId, ADMIN_SALT);
+    const label = { bug: 'תקלה', idea: 'הצעה', other: 'פנייה' }[row.kind];
     const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     // The email never holds the person's address: the answer goes through the app.
     sendMailWithFallback({
@@ -2213,29 +2213,87 @@ app.post('/api/feedback', requireAuth, feedbackLimiter, async (req, res) => {
     return res.status(500).json({ error: 'הפנייה לא נשלחה. נסו שוב.' });
   }
 });
+// The owner's inbox: every request as a short conversation. The owner sees
+// the person's first name from the app (or a label when there is none),
+// never their email.
+const FEEDBACK_COLS = 'id,user_id,kind,text,screen,device,status,owner_note,created_at,updated_at,pinned,archived,closed,helped,last_at,last_by,owner_seen_at,user_seen_at';
+async function feedbackNames(ids) {
+  if (!ids.length) return {};
+  const { data } = await supabaseAdmin.from('memberships').select('user_id,display_name').in('user_id', ids);
+  const out = {};
+  for (const m of data || []) if (!out[m.user_id]) out[m.user_id] = ops.firstName(m.display_name);
+  return out;
+}
 app.get('/api/admin/feedback', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
-  const { data, error } = await supabaseAdmin.from('feedback').select('id,user_id,kind,text,screen,device,status,owner_note,created_at,updated_at').order('created_at', { ascending: false }).limit(300);
+  const { data, error } = await supabaseAdmin.from('feedback').select(FEEDBACK_COLS).order('last_at', { ascending: false }).limit(300);
   if (error) return res.status(500).json({ error: 'failed' });
-  return res.json({ items: (data || []).map((f) => ({ ...f, user_id: undefined, who: ops.alias(f.user_id, ADMIN_SALT) })) });
+  const rows = data || [];
+  const ids = rows.map((f) => f.id);
+  const { data: msgs } = ids.length ? await supabaseAdmin.from('feedback_messages').select('feedback_id,author,text,created_at').in('feedback_id', ids).order('created_at', { ascending: true }) : { data: [] };
+  const names = await feedbackNames([...new Set(rows.map((f) => f.user_id))]);
+  const by = {};
+  for (const m of msgs || []) (by[m.feedback_id] = by[m.feedback_id] || []).push(m);
+  return res.json({ items: rows.map((f) => ops.threadView(f, by[f.id] || [], { name: names[f.user_id] || '', label: ops.alias(f.user_id, ADMIN_SALT) })) });
 });
+// Answer (and close, or ask and keep open), a note only the owner sees,
+// status, pin, archive, unread/seen.
 app.post('/api/admin/feedback/:id', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
-  const patch = ops.feedbackPatch(req.body);
-  if (!patch) return res.status(400).json({ error: 'bad request' });
-  const { data, error } = await supabaseAdmin.from('feedback').update(patch).eq('id', String(req.params.id)).select('id,user_id,status,owner_note,text').maybeSingle();
+  const act = ops.ownerAction(req.body);
+  if (!act) return res.status(400).json({ error: 'bad request' });
+  const id = String(req.params.id);
+  const { data, error } = await supabaseAdmin.from('feedback').update(act.row).eq('id', id).select('id,user_id,text').maybeSingle();
   if (error || !data) return res.status(404).json({ error: 'not found' });
-  // An answer reaches the person as a notification and by email.
+  const rows = [];
+  if (act.note) rows.push({ feedback_id: id, author: 'note', text: act.note });
+  if (act.message) rows.push({ feedback_id: id, author: 'owner', text: act.message });
+  if (rows.length) {
+    const { error: mErr } = await supabaseAdmin.from('feedback_messages').insert(rows);
+    if (mErr) return res.status(500).json({ error: 'failed' });
+  }
+  // An answer reaches the person as a notification and, if asked, by email.
   let mailed = false;
-  if (patch.owner_note && req.body.notify) {
-    sendPushToUser(data.user_id, { title: '📬 קיבלנו את הפנייה שלך', body: String(patch.owner_note).slice(0, 140), url: '/app/#/home' }).catch(() => {});
-    try {
-      const { data: u } = await supabaseAdmin.auth.admin.getUserById(data.user_id);
-      const to = u && u.user && u.user.email;
-      if (to && mailStatus().ready) { await sendMailWithFallback({ to, ...ops.answerMail({ question: data.text, answer: patch.owner_note, link: appLinkOf(req) }) }); mailed = true; }
-    } catch (err) { console.error('answer mail failed:', err.message); }
+  if (act.message) {
+    sendPushToUser(data.user_id, { title: 'יש תשובה לפנייה שלך', body: act.message.slice(0, 140), url: '/app/?go=profile%2Ffeedback#/home' }).catch(() => {});
+    if (req.body.mail !== false) {
+      try {
+        const { data: u } = await supabaseAdmin.auth.admin.getUserById(data.user_id);
+        const to = u && u.user && u.user.email;
+        if (to && mailStatus().ready) { await sendMailWithFallback({ to, ...ops.answerMail({ question: data.text, answer: act.message, link: appLinkOf(req) }) }); mailed = true; }
+      } catch (err) { console.error('answer mail failed:', err.message); }
+    }
   }
   return res.json({ ok: true, mailed });
+});
+// The person's side of their own request: a reply (it reopens a closed
+// one: "still not working"), "it helped", or "I read the answer".
+const replyLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip, message: { error: 'שלחתם הרבה הודעות בשעה האחרונה. נסו שוב מאוחר יותר.' } });
+app.post('/api/feedback/:id', requireAuth, replyLimiter, async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const id = String(req.params.id);
+    const { data: f } = await supabaseAdmin.from('feedback').select('id,user_id,kind,status,closed,helped').eq('id', id).maybeSingle();
+    if (!f || f.user_id !== req.authUserId) return res.status(404).json({ error: 'not found' });
+    const act = ops.userAction(req.body, f);
+    if (!act) return res.status(400).json({ error: 'כתבו לפחות כמה מילים.' });
+    const { error } = await supabaseAdmin.from('feedback').update(act.row).eq('id', id);
+    if (error) throw error;
+    if (act.message) {
+      const { error: mErr } = await supabaseAdmin.from('feedback_messages').insert({ feedback_id: id, author: 'user', text: act.message });
+      if (mErr) throw mErr;
+      const who = (await feedbackNames([req.authUserId]))[req.authUserId] || ops.alias(req.authUserId, ADMIN_SALT);
+      sendMailWithFallback({
+        to: FEEDBACK_TO, subject: (act.reopened ? 'פנייה נפתחה מחדש: ' : 'הודעה חדשה בפנייה של ') + who,
+        text: `${who}${act.reopened ? ' כתב/ה שזה עדיין לא עובד' : ''}:\n\n${act.message}\n\nלענות: לוח הבעלים באפליקציה.`,
+        html: `<div dir="rtl" style="font-family:Arial,sans-serif"><b>${ops.escHtml(who)}</b>${act.reopened ? ' כתב/ה שזה עדיין לא עובד' : ''}:<p style="white-space:pre-wrap">${ops.escHtml(act.message)}</p><p style="color:#777">לענות: לוח הבעלים באפליקציה.</p></div>`
+      }).catch((err) => console.error('feedback reply mail failed:', err.message));
+    }
+    return res.json({ ok: true, reopened: !!act.reopened });
+  } catch (err) {
+    console.error('feedback reply failed:', err.message);
+    return res.status(500).json({ error: 'לא נשלח. נסו שוב.' });
+  }
 });
 
 

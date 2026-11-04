@@ -2,7 +2,7 @@ import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
 import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail } from '../../data/account.js';
-import { adminFeedback, setFeedback, FEEDBACK_KIND, FEEDBACK_STATUS } from '../../data/feedback.js';
+import { InboxView } from './InboxView.js';
 import { showToast } from '../../lib/toast.js';
 
 const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', plans: 'תוכניות', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
@@ -44,7 +44,6 @@ export function AdminView({ onBack }) {
     const t = setInterval(() => { if (document.visibilityState === 'visible') adminLive().then((l) => l && setLive(l)); }, 15000);
     return () => clearInterval(t);
   }, []);
-  const [inbox, setInbox] = useState(null);
   const [back, setBack] = useState(null);
   const [backSure, setBackSure] = useState('');
   const [backBusy, setBackBusy] = useState('');
@@ -104,21 +103,13 @@ export function AdminView({ onBack }) {
       ${j.error && html`<span class="mail-result" style="color:var(--danger)">${j.error}</span>`}
     </div>`;
   };
-  const [replies, setReplies] = useState({});
-  useEffect(() => { adminFeedback().then(setInbox); }, []);
-  const act = async (f, patch, done) => {
-    try {
-      const r = await setFeedback(f.id, patch);
-      setInbox((l) => l.map((x) => (x.id === f.id ? { ...x, ...patch } : x)));
-      if (done) showToast(typeof done === 'function' ? done(r || {}) : done);
-    } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
-  };
   const today = s && s.daily ? s.daily[s.daily.length - 1] : null;
   const f = s && s.funnel;
   const pct = (n) => (f && f.signups ? Math.round((n / f.signups) * 100) + '%' : '');
   const tile = (label, value) => html`<div class="card" style="flex:1;text-align:center;padding:12px"><b class="num" style="font-size:22px">${value}</b><div class="muted" style="font-size:12px">${label}</div></div>`;
   return html`<div class="stack admin-stats">
     <button type="button" class="btn-text" style="align-self:flex-start" onClick=${onBack}>→ חזרה</button>
+    <${InboxView} />
     ${s === undefined && html`<span class="muted">טוען…</span>`}
     ${s === null && html`<span class="muted">הנתונים לא זמינים כרגע.</span>`}
     ${live && html`<div class="card stack admin-live" role="status">
@@ -146,21 +137,6 @@ export function AdminView({ onBack }) {
       </div>`)}
     </div>`}
     ${back && html`<${MonthlyMailCard} />`}
-    ${inbox && html`<div class="card stack admin-inbox"><b>תקלות ורעיונות מהמשתמשים${inbox.filter((f) => f.status === 'new').length ? ' · ' + inbox.filter((f) => f.status === 'new').length + ' חדשות' : ''}</b>
-      ${inbox.length === 0 && html`<span class="muted" style="font-size:13px">עוד אין פניות.</span>`}
-      ${inbox.filter((f) => f.status !== 'done' && f.status !== 'wontfix').concat(inbox.filter((f) => f.status === 'done' || f.status === 'wontfix')).slice(0, 40).map((f) => html`<div class="inbox-item" key=${f.id} style=${'display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line);' + (f.status === 'done' || f.status === 'wontfix' ? 'opacity:.6' : '')}>
-        <span style="display:flex;gap:8px;font-size:12px" class="muted"><b>${FEEDBACK_KIND[f.kind].icon} ${FEEDBACK_KIND[f.kind].label}</b><span>${f.who}</span><span>${String(f.created_at).slice(0, 16).replace('T', ' ')}</span><span>${f.screen || ''} ${f.device || ''}</span><span style="margin-inline-start:auto"><b>${FEEDBACK_STATUS[f.status]}</b></span></span>
-        <span style="font-size:14px;white-space:pre-wrap">${f.text}</span>
-        ${f.owner_note && html`<span class="faint" style="font-size:12px">התשובה שלך: ${f.owner_note}</span>`}
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${['working', 'done', 'wontfix'].filter((st) => st !== f.status).map((st) => html`<button type="button" class="chip" onClick=${() => act(f, { status: st })}>${FEEDBACK_STATUS[st]}</button>`)}
-        </div>
-        <div style="display:flex;gap:6px">
-          <input class="input" style="flex:1" placeholder="תשובה למשתמש (תגיע אליו כהתראה ובאפליקציה)" aria-label=${'תשובה לפנייה של ' + f.who} value=${replies[f.id] || ''} onInput=${(e) => setReplies((r) => ({ ...r, [f.id]: e.target.value }))} />
-          <button type="button" class="btn" style="width:auto" disabled=${!(replies[f.id] || '').trim()} onClick=${() => act(f, { owner_note: replies[f.id].trim(), status: f.status === 'new' ? 'working' : f.status, notify: true }, (r) => (r.mailed ? 'התשובה נשלחה, גם למייל שלו' : 'התשובה נשלחה')).then(() => setReplies((r) => ({ ...r, [f.id]: '' })))}>לענות</button>
-        </div>
-      </div>`)}
-    </div>`}
     ${s && html`
       <div style="display:flex;gap:8px">${tile('פעילים היום', s.active.day)}${tile('השבוע', s.active.week)}${tile('החודש', s.active.month)}</div>
       ${today && html`<div style="display:flex;gap:8px">${tile('נרשמו היום', (f && f.byDay && f.byDay[today.day]) || 0)}${tile('עלות AI היום', '$' + today.cost)}${tile('עלות AI ב-30 יום', '$' + (s.aiCost30d ?? 0))}</div>`}

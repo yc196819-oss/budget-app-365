@@ -155,48 +155,103 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   await page.close();
 });
 
-test('writing to the owner: a problem goes to the server, and the answer shows in "my requests"', async () => {
+test('writing to the owner: an answer waits on the profile and home, opens as a conversation, and "still not working" reopens it', async () => {
   const sentReq = [];
-  const { page, errors, db } = await open({ setup: (d) => { d.tables.feedback = [{ id: 'f0', user_id: 'u1', kind: 'idea', text: 'רשימת קניות', status: 'done', owner_note: 'בדרך!', created_at: '2026-10-30T10:00:00Z' }]; } });
+  const replies = [];
+  const { page, errors } = await open({ setup: (d) => {
+    d.tables.feedback = [
+      { id: 'f0', user_id: 'u1', kind: 'idea', text: 'רשימת קניות', status: 'done', owner_note: 'בדרך!', closed: true, helped: null, last_by: 'owner', last_at: '2026-11-03T10:00:00Z', user_seen_at: null, created_at: '2026-10-30T10:00:00Z' },
+      { id: 'f9', user_id: 'u1', kind: 'bug', text: 'משהו ישן', status: 'new', closed: false, last_by: 'user', last_at: '2026-10-01T10:00:00Z', created_at: '2026-10-01T10:00:00Z' }
+    ];
+    d.tables.feedback_messages = [{ feedback_id: 'f0', author: 'owner', text: 'בדרך!', created_at: '2026-11-03T10:00:00Z' }];
+  } });
   await page.route('**/api/feedback', (r) => { sentReq.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
-  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.route('**/api/feedback/f0', (r) => { replies.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, reopened: true }) }); });
+  // The answer is waiting: on the home screen and on the profile button.
+  await page.waitForSelector('.answer-notice:has-text("יש תשובה לפנייה שלך")');
+  assert.equal(await page.locator('.topbar .fb-dot').textContent(), '1');
+  await page.click('.topbar .icon-btn');
+  await page.waitForSelector('.fb-has-answer:has-text("תשובה חדשה")');
   await page.click('text=תקלות ורעיונות לשיפור');
   const fb = page.locator('.feedback');
-  await fb.locator('.my-feedback').waitFor();
-  assert.match(await fb.locator('.my-feedback').textContent(), /תשובה: בדרך!/);
-  assert.ok(await fb.locator('button:has-text("לשלוח")').isDisabled());
-  await fb.locator('textarea[aria-label="הפנייה"]').fill('הייבוא של הפירוט נתקע');
-  await fb.locator('button:has-text("לשלוח")').click();
+  await fb.locator('.fb-item').first().waitFor();
+  assert.match(await fb.locator('.fb-item').first().textContent(), /תשובה חדשה/);
+  assert.match(await fb.locator('.fb-item').nth(1).textContent(), /פתוחה · מחכה לתשובה/);
+  // Opening it shows the conversation and marks the answer read.
+  await fb.locator('.fb-item').first().click();
+  await page.waitForSelector('.fb-msg.them:has-text("בדרך!")');
+  for (let i = 0; i < 50 && !replies.length; i++) await page.waitForTimeout(100);
+  assert.deepEqual(replies[0], { seen: true });
+  // Closed: "it helped" or "still not working" (one message reopens it).
+  await page.click('.fb-closed button:has-text("עדיין לא עובד")');
+  await page.fill('textarea[aria-label="מה עדיין לא עובד"]', 'עדיין אין רשימה');
+  await page.click('.fb-compose button:has-text("לשלוח")');
+  await page.waitForSelector('text=הפנייה נפתחה מחדש');
+  assert.deepEqual(replies[1], { message: 'עדיין אין רשימה' });
+  // A new request.
+  await page.click('text=→ הפניות שלי');
+  await page.click('button:has-text("+ פנייה חדשה")');
+  assert.ok(await page.locator('.feedback button[type=submit]').isDisabled());
+  await page.fill('textarea[aria-label="הפנייה"]', 'הייבוא של הפירוט נתקע');
+  await page.click('.feedback button[type=submit]');
   await page.waitForSelector('text=נשלח. תודה!');
   assert.equal(sentReq.length, 1);
   assert.equal(sentReq[0].kind, 'bug');
   assert.equal(sentReq[0].text, 'הייבוא של הפירוט נתקע');
-  assert.ok(db);
   assert.deepEqual(errors, []);
   await page.close();
 });
 
-test('owner inbox: requests by label, mark as working or done, and answer', async () => {
+test('owner inbox: like a messaging app; unread first, the name, answer and close or ask, notes, read ticks', async () => {
   const { page, errors } = await open({ email: 'yc196819@gmail.com' });
-  const patches = [];
+  const acts = [];
+  const items = [
+    { id: 'f1', who: 'רון', label: '#abc123', kind: 'bug', status: 'new', screen: 'money', device: 'טלפון', created_at: '2026-11-02T10:00:00Z', last_at: '2026-11-02T10:05:00Z', last_by: 'user', unread: 2, pinned: false, archived: false, closed: false, helped: null, readByUser: false,
+      messages: [{ author: 'user', text: 'הייבוא נתקע', created_at: '2026-11-02T10:00:00Z' }, { author: 'user', text: 'גם בקובץ השני', created_at: '2026-11-02T10:05:00Z' }] },
+    { id: 'f2', who: '#ffee11', label: '#ffee11', kind: 'idea', status: 'done', created_at: '2026-11-01T10:00:00Z', last_at: '2026-11-01T12:00:00Z', last_by: 'owner', unread: 0, pinned: false, archived: false, closed: true, helped: true, readByUser: true,
+      messages: [{ author: 'user', text: 'רעיון', created_at: '2026-11-01T10:00:00Z' }, { author: 'owner', text: 'נכנס לרשימה', created_at: '2026-11-01T12:00:00Z' }] }
+  ];
   await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
   await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
-  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ id: 'f1', who: '#abc123', kind: 'bug', text: 'הייבוא נתקע', screen: 'money', device: 'טלפון', status: 'new', created_at: '2026-11-02T10:00:00Z' }] }) }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items }) }));
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
-  await page.route('**/api/admin/feedback/f1', (r) => { patches.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
+  await page.route('**/api/admin/feedback/f1', (r) => { const b = JSON.parse(r.request().postData()); acts.push(b); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, mailed: !!b.mail }) }); });
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
   const inbox = page.locator('.admin-inbox');
   await inbox.waitFor();
-  assert.match(await inbox.textContent(), /1 חדשות/);
-  assert.match(await inbox.textContent(), /#abc123/);
+  assert.equal(await inbox.locator('.inbox-unread-count').textContent(), '1');
+  const rows = inbox.locator('.inbox-row');
+  assert.match(await rows.first().textContent(), /רון/);
+  assert.equal(await rows.first().locator('.inbox-badge').textContent(), '2');
+  assert.match(await rows.nth(1).textContent(), /✓✓ נכנס לרשימה/);
   assert.doesNotMatch(await inbox.textContent(), /@/);
-  await inbox.locator('button.chip:has-text("בטיפול")').click();
-  await page.waitForFunction(() => /בטיפול/.test(document.querySelector('.inbox-item').textContent));
-  await inbox.locator('input[aria-label="תשובה לפנייה של #abc123"]').fill('תוקן, נסו שוב');
-  await inbox.locator('button:has-text("לענות")').click();
-  await page.waitForSelector('text=התשובה נשלחה');
-  assert.deepEqual(patches, [{ status: 'working' }, { owner_note: 'תוקן, נסו שוב', status: 'working', notify: true }]);
+  // Filters.
+  await inbox.locator('button.chip:has-text("רעיונות")').click();
+  assert.equal(await inbox.locator('.inbox-row').count(), 1);
+  await inbox.locator('button.chip:has-text("הכול")').click();
+  // Open: marked read; answer with a quick reply, ask (stays open).
+  await rows.first().click();
+  const t = page.locator('.inbox-thread');
+  await t.waitFor();
+  assert.match(await t.textContent(), /גם בקובץ השני/);
+  await t.locator('.inbox-quick button:has-text("אפשר צילום מסך?")').click();
+  await t.locator('button:has-text("לשאול אותו")').click();
+  await page.waitForSelector('text=נשלח, הפנייה נשארת פתוחה');
+  // A note only the owner sees.
+  await t.locator('button[aria-label="אפשרויות"]').click();
+  await t.locator('button:has-text("הערה פנימית")').click();
+  await t.locator('textarea[aria-label="הערה פנימית"]').fill('לבדוק את הקובץ של מקס');
+  await t.locator('button:has-text("לשמור הערה")').click();
+  await page.waitForSelector('text=ההערה נשמרה');
+  // Answer and close; pin.
+  await t.locator('textarea[aria-label="תשובה לרון"]').fill('תוקן, נסו שוב');
+  await t.locator('button:has-text("לענות ולסגור")').click();
+  await page.waitForSelector('text=נשלח והפנייה נסגרה');
+  await t.locator('button[aria-label="אפשרויות"]').click();
+  await t.locator('button:has-text("להצמיד למעלה")').click();
+  await page.waitForSelector('text=הוצמד למעלה');
+  assert.deepEqual(acts, [{ seen: true }, { message: 'אפשר צילום מסך?', close: false, mail: true }, { note: 'לבדוק את הקובץ של מקס' }, { message: 'תוקן, נסו שוב', close: true, mail: true }, { pinned: true }]);
   assert.deepEqual(errors, []);
   await page.close();
 });

@@ -18,7 +18,7 @@ import { SecurityView } from './SecurityView.js';
 import { telemetryOn, setTelemetry } from '../../lib/telemetry.js';
 import { CONFIG } from '../../config.js';
 
-export function ProfileSheet({ start = 'main', profile, theme, onTheme, onSignOut, onClose, hid, userId }) {
+export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTheme, onSignOut, onClose, hid, userId }) {
   const aiOn = useAiSetting();
   const [view, setView] = useState(() => ((hid && ['memories', 'data'].includes(start)) || ['feedback', 'security'].includes(start) ? start : 'main'));
   const [usage, setUsage] = useState(telemetryOn);
@@ -80,7 +80,7 @@ export function ProfileSheet({ start = 'main', profile, theme, onTheme, onSignOu
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}><${Icon} name="book" />מה היועץ יודע עלינו</button>`}
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('data')}><${Icon} name="box" />המידע שלנו: קבצים, ייצוא ושחזור</button>`}
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
-      <button type="button" class="btn btn-ghost" onClick=${() => setView('feedback')}><${Icon} name="wrench" />תקלות ורעיונות לשיפור</button>
+      <button type="button" class=${'btn btn-ghost' + (answers > 0 ? ' fb-has-answer' : '')} onClick=${() => setView('feedback')}><${Icon} name="wrench" /><span style="flex:1;text-align:start">תקלות ורעיונות לשיפור</span>${answers > 0 && html`<span class="fb-pill fb-pill-new">${answers === 1 ? 'תשובה חדשה' : answers + ' תשובות חדשות'}</span>`}</button>
       ${isAdmin && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('admin')}><${Icon} name="chart" />לוח בעלים</button>`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
       <a class="btn btn-ghost" href="/old/" style="text-decoration:none">לגרסה הקודמת של האפליקציה</a>

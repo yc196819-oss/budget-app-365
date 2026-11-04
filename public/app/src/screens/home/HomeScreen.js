@@ -17,6 +17,7 @@ import { TripFound } from '../trips/TripFound.js';
 import { useTrips } from '../../data/useTrips.js';
 import { SetupGuide } from './SetupGuide.js';
 import { ImportNotice } from './ImportNotice.js';
+import { AnswerNotice } from './AnswerNotice.js';
 import { MonthlyAsk } from './MonthlyAsk.js';
 import { SortSheet } from '../money/SortSheet.js';
 
@@ -45,6 +46,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
   const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} />`;
   if (!data.txs.length) {
     return html`<div class="stack">
+      <${AnswerNotice} userId=${userId} />
       ${guide}
       <${InstallCard} />
     </div>`;
@@ -61,6 +63,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
 
   return html`<div class="stack home">
     <div class="home-main stack">
+      <${AnswerNotice} userId=${userId} />
       <${ImportNotice} data=${data} onImport=${onImport} />
       <${MonthlyAsk} userId=${userId} data=${data} />
       ${guide}

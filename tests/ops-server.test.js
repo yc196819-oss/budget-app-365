@@ -228,3 +228,53 @@ test('why an email did not go, in words the owner can act on', () => {
   assert.match(mailErrorText(new Error('brevo: Key not found')), /מפתח ה-Brevo/);
   assert.match(mailErrorText(new Error('weird')), /השליחה נכשלה: weird/);
 });
+
+const { firstName, ownerAction, userAction, threadView } = require('../server/ops');
+
+test('the owner sees a first name, never a username or an email', () => {
+  assert.equal(firstName('יוסי כהן'), 'יוסי');
+  assert.equal(firstName('Dana'), 'Dana');
+  for (const n of ['yossi123', 'dani', 'a@b.com', '', null]) assert.equal(firstName(n), '');
+});
+
+test('owner actions: answer and close (default) or ask and keep open, a note, status, pin, unread', () => {
+  const now = new Date('2026-11-04T12:00:00Z');
+  const close = ownerAction({ message: ' תוקן ' }, now);
+  assert.equal(close.message, 'תוקן');
+  assert.deepEqual([close.row.closed, close.row.status, close.row.last_by], [true, 'done', 'owner']);
+  const ask = ownerAction({ message: 'צילום מסך?', close: false }, now);
+  assert.deepEqual([ask.row.closed, ask.row.status], [false, 'working']);
+  assert.deepEqual(ownerAction({ note: 'לבדוק' }, now).note, 'לבדוק');
+  assert.equal(ownerAction({ note: 'x' }, now).row.last_by, undefined, 'a note does not count as an answer');
+  assert.equal(ownerAction({ pinned: true }, now).row.pinned, true);
+  assert.equal(ownerAction({ unread: true }, now).row.owner_seen_at, null);
+  assert.deepEqual([ownerAction({ status: 'wontfix' }, now).row.closed], [true]);
+  assert.equal(ownerAction({ status: 'deleted' }, now), null);
+  assert.equal(ownerAction({ user_id: 'x', text: 'y' }, now), null);
+});
+
+test('the person: a reply reopens a closed request once; "it helped" and "seen" write nothing else', () => {
+  const now = new Date('2026-11-04T12:00:00Z');
+  const re = userAction({ message: 'עדיין לא עובד' }, { closed: true, status: 'done' }, now);
+  assert.deepEqual([re.reopened, re.row.closed, re.row.status, re.row.last_by], [true, false, 'new', 'user']);
+  const more = userAction({ message: 'הנה צילום' }, { closed: false, status: 'working' }, now);
+  assert.deepEqual([more.reopened, more.row.status], [false, 'working']);
+  assert.deepEqual(Object.keys(userAction({ helped: true }, {}, now).row).sort(), ['helped', 'updated_at', 'user_seen_at']);
+  assert.deepEqual(Object.keys(userAction({ seen: true }, {}, now).row), ['user_seen_at']);
+  assert.equal(userAction({ message: ' ' }, {}, now), null);
+  assert.equal(userAction({ status: 'done', closed: true }, {}, now), null, 'cannot close or change status');
+});
+
+test('a request as the owner sees it: first message, unread since last look, read by the person', () => {
+  const f = { id: 'f', kind: 'bug', text: 'נתקע', status: 'working', created_at: '2026-11-01T10:00:00Z', owner_seen_at: '2026-11-01T11:00:00Z', user_seen_at: '2026-11-01T12:30:00Z', last_at: '2026-11-01T13:00:00Z', last_by: 'user' };
+  const v = threadView(f, [
+    { author: 'owner', text: 'צילום?', created_at: '2026-11-01T12:00:00Z' },
+    { author: 'note', text: 'לבדוק', created_at: '2026-11-01T12:01:00Z' },
+    { author: 'user', text: 'הנה', created_at: '2026-11-01T13:00:00Z' }
+  ], { name: 'רון', label: '#abc' });
+  assert.equal(v.who, 'רון');
+  assert.equal(v.messages[0].text, 'נתקע');
+  assert.equal(v.unread, 1);
+  assert.equal(v.readByUser, true);
+  assert.equal(threadView(f, [], { label: '#abc' }).who, '#abc');
+});
