@@ -164,3 +164,26 @@ test('a month whose salary has not come in yet still expects it; the income told
   assert.equal(Math.round(told.months[2].lines.find((l) => l.kind === 'income').amount), 17000);
   assert.equal(told.expectedIncome, 17000);
 });
+
+import { householdForecast } from '../public/app/src/domain/forecast.js';
+import { buildSummary } from '../public/app/src/domain/advisor.js';
+import { impact } from '../public/app/src/domain/decisions.js';
+test('one calculation: Plans, a shared decision and the advisor show the same month the same way', () => {
+  const today = new Date(2026, 10, 4);
+  const txs = [];
+  for (const m of [8, 9, 10]) {
+    txs.push(tx({ type: 'income', amount: 15000, tx_date: `2026-${String(m).padStart(2, '0')}-10`, category_id: 'sal' }));
+    txs.push(tx({ amount: 9000, tx_date: `2026-${String(m).padStart(2, '0')}-12` }));
+  }
+  const data = { txs, goals: [], installments: [], budgets: [], categories: [{ id: 'food', name: 'אוכל' }, { id: 'sal', name: 'משכורת', kind: 'income' }],
+    income: [{ label: 'משכורת דנה', amount: 11000 }, { label: 'משכורת יוסי', amount: 6000 }],
+    accounts: [{ id: 'a1', name: 'דנה', balance: -1800 }, { id: 'a2', name: 'יוסי', balance: 350 }], cards: [] };
+  const fc = householdForecast(data, today);
+  assert.equal(fc.hasBalance, true);
+  const s = buildSummary({ ...data, today });
+  assert.deepEqual(s.comingMonths.months.map((m) => m.net), fc.months.map((m) => Math.round(m.net)));
+  assert.deepEqual(s.comingMonths.months.map((m) => m.endBalance), fc.months.map((m) => Math.round(m.end)));
+  const d = impact({ amount: 300, wanted_by: null }, data, today);
+  assert.equal(d.endBefore, fc.months[0].end);
+  assert.equal(Math.round(d.endBefore - d.endAfter), 300);
+});

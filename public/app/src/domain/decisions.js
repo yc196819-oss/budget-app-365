@@ -8,7 +8,7 @@ import { g as gWord } from './people.js';
 //   vote     { decision_id, user_id, vote: 'approve'|'not_now'|'talk', note }
 
 import { monthPlan } from './home.js';
-import { forecast } from './forecast.js';
+import { householdForecast } from './forecast.js';
 import { MONTH_NAMES, parseDate } from './money.js';
 import { money } from './format.js';
 
@@ -113,11 +113,11 @@ export function monthIndex(wantedBy, today) {
 export function impact({ amount, wanted_by }, data, today) {
   const amt = Number(amount) || 0;
   const i = monthIndex(wanted_by, today);
-  const start = (data.accounts || []).filter((a) => a.balance !== null && a.balance !== undefined && a.balance !== '');
-  const startBalance = start.length ? start.reduce((s, a) => s + Number(a.balance), 0) : null;
-  const args = { txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], budgets: data.budgets || [], income: data.income || [], today, startBalance };
-  const before = forecast(args).months[i];
-  const after = forecast({ ...args, scenarios: [{ kind: 'buy', amount: amt, month: i }] }).months[i];
+  // The same forecast as Plans → the coming months.
+  const fcBefore = householdForecast(data, today);
+  const before = fcBefore.months[i];
+  const after = householdForecast(data, today, [{ kind: 'buy', amount: amt, month: i }]).months[i];
+  const known = fcBefore.hasBalance;
   const plan = monthPlan({ txs: data.txs || [], budgets: data.budgets || [], today });
   return {
     month: MONTH_NAMES[before.month.m],
@@ -126,8 +126,8 @@ export function impact({ amount, wanted_by }, data, today) {
     roomAfter: i === 0 && plan.hasBudget ? plan.remaining - amt : null,
     endBefore: before.end,
     endAfter: after.end,
-    hasBalance: startBalance !== null,
-    turnsNegative: startBalance !== null && before.end >= 0 && after.end < 0
+    hasBalance: known,
+    turnsNegative: known && before.end >= 0 && after.end < 0
   };
 }
 

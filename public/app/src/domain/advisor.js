@@ -4,7 +4,7 @@
 
 import { MONTH_NAMES, monthShare, monthsBack, merchantKey } from './money.js';
 import { monthPlan } from './home.js';
-import { forecast, verdict } from './forecast.js';
+import { householdForecast, verdict } from './forecast.js';
 
 const round = Math.round;
 const sum = (list, f) => list.reduce((s, x) => s + f(x), 0);
@@ -56,7 +56,7 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
   }).filter(Boolean);
   const savingsGoals = goals.map((g) => ({ name: g.name, target: Number(g.target_amount) || 0, saved: Number(g.saved_amount) || 0, targetDate: g.target_date || null }));
   const plan = monthPlan({ txs, budgets, today });
-  const fc = forecast({ txs, goals, installments, budgets, income, today });
+  const fc = householdForecast({ txs, goals, installments, budgets, income, accounts, cards }, today);
   const v = verdict(fc);
   const detail = spendingDetail({ txs, categories, today });
   return {
@@ -76,7 +76,7 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
     thisMonth: { budget: round(plan.budget), spent: round(plan.spent), projectedEnd: plan.canForecast ? round(plan.projectedEnd) : null, daysLeft: plan.daysLeft },
     // Each coming month with its lines, so the advisor can say where a number
     // comes from (the same lines as Plans → the coming months).
-    comingMonths: { verdict: v.title, months: fc.months.map((m) => ({ month: m.name, net: round(m.net), lines: m.lines.map((l) => ({ what: l.label, amount: round(l.amount) })) })) },
+    comingMonths: { verdict: v.title, startsFromFreeMoneyNow: fc.hasBalance, months: fc.months.map((m) => ({ month: m.name, net: round(m.net), ...(fc.hasBalance ? { endBalance: round(m.end) } : {}), lines: m.lines.map((l) => ({ what: l.label, amount: round(l.amount) })) })) },
     // The expected income lines, one per person (what the forecast uses).
     incomeLines: (Array.isArray(income) ? income : []).map((l) => ({ label: l.label || '', amount: round(Number(l.amount) || 0) })),
     // Where the money goes, by business: so "which subscriptions?" or "why

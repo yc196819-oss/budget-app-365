@@ -7,7 +7,7 @@
 // current month uses the month plan (what already happened + the rest).
 
 import { MONTH_NAMES, monthShare, parseDate } from './money.js';
-import { monthPlan } from './home.js';
+import { monthPlan, cashNow } from './home.js';
 import { holidaysBetween, holidayGoalName, lastHolidayExtra } from './calendar.js';
 import { installmentOf, similarText } from './statement.js';
 
@@ -85,6 +85,15 @@ function scenarioLines(scenarios, i) {
     if (s.kind === 'cut' && i >= s.month) out.push({ label: 'בדיקה: חיסכון בהוצאות', amount: s.amount, kind: 'scenario' });
   }
   return out;
+}
+
+// The household's forecast: the one calculation Plans, a shared decision
+// and the advisor all show, so the same month has the same number
+// everywhere. Starts from the free money now (balances minus card charges
+// not taken yet), when balances are known.
+export function householdForecast(data, today = new Date(), scenarios = []) {
+  const cash = cashNow(data.accounts || [], data.cards || [], data.txs || [], today);
+  return forecast({ txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], budgets: data.budgets || [], income: data.income || [], today, startBalance: cash.known ? cash.free : null, scenarios });
 }
 
 // income: the household's expected monthly income lines (what they told the
