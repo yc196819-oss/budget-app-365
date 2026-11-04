@@ -1,7 +1,6 @@
 import { html } from '../../lib/html.js';
 import { useState } from 'preact/hooks';
-import { forecast, verdict, cutIdeas } from '../../domain/forecast.js';
-import { cashNow } from '../../domain/home.js';
+import { householdForecast, verdict, cutIdeas } from '../../domain/forecast.js';
 import { money } from '../../domain/format.js';
 import { PlanCards } from './PlanCards.js';
 import { ForecastBars } from './ForecastBars.js';
@@ -15,10 +14,8 @@ export function ComingMonths({ data, onSheet, onBudget }) {
   const [open, setOpen] = useState(null);
   const [scenarios, setScenarios] = useState([]);
   const today = new Date();
-  const cash = cashNow(data.accounts, data.cards, data.txs, today);
-  const args = { txs: data.txs, goals: data.goals, installments: data.installments, budgets: data.budgets, income: data.income, today, startBalance: cash.known ? cash.free : null };
-  const fc = forecast({ ...args, scenarios });
-  const base = scenarios.length ? forecast(args) : null;
+  const fc = householdForecast(data, today, scenarios);
+  const base = scenarios.length ? householdForecast(data, today) : null;
   const v = verdict(fc);
   const gap = -fc.regularNet;
   const ideas = gap > 0 ? cutIdeas(data.txs, data.categories, data.budgets, today) : [];
