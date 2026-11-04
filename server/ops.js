@@ -275,7 +275,7 @@ function campaignMail(campaign, link, unsubLink) {
   const m = MAILS[campaign];
   if (!m) return null;
   const sign = 'אם משהו לא עבד או לא היה ברור, פשוט תענה למייל הזה. אני קורא כל תשובה.';
-  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + link + '\n\n' + sign + '\nקובי\n\n' + (unsubLink ? 'להפסיק לקבל מיילים כאלה: ' + unsubLink : 'לא רוצה לקבל עוד מיילים? תענה "הסר".');
+  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + link + '\n\n' + sign + '\nקובי\n\n' + (unsubLink ? 'לא רוצה לקבל עוד מיילים כאלה? להסרה: ' + unsubLink : 'לא רוצה לקבל עוד מיילים? תענה "הסר".');
   let body = '';
   let list = [];
   const P = 'margin:0 0 14px;font-size:16px;line-height:1.65;color:#2B2118';
@@ -304,7 +304,7 @@ function campaignMail(campaign, link, unsubLink) {
     + '<a href="' + link + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none">' + m.button + '</a></td></tr></table>'
     + '<p style="margin:0;font-size:15px;line-height:1.6;color:#5B4B3D">' + sign + '</p>'
     + '<p style="margin:10px 0 0;font-size:15px;font-weight:bold;color:#2B2118">קובי</p></td></tr>'
-    + '<tr><td style="padding:16px 8px 0;font-size:12px;line-height:1.6;color:#8A7B6E;text-align:center">קיבלת את המייל כי נרשמת ל"התקציב שלנו". ' + (unsubLink ? '<a href="' + escHtml(unsubLink) + '" style="color:#8A7B6E">להפסיק לקבל מיילים כאלה</a>' : 'לא רוצה לקבל עוד מיילים? תענה "הסר".') + '</td></tr>'
+    + '<tr><td style="padding:16px 8px 0;font-size:13px;line-height:1.7;color:#8A7B6E;text-align:center">קיבלת את המייל כי נרשמת ל"התקציב שלנו".<br>לא רוצה לקבל עוד מיילים כאלה? ' + (unsubLink ? '<a href="' + escHtml(unsubLink) + '" style="color:#92490A;font-weight:bold;text-decoration:underline">להסרה לחץ כאן</a>' : 'תענה "הסר".') + '</td></tr>'
     + '</table></td></tr></table></body></html>';
   return { subject: m.subject, text, html };
 }

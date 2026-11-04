@@ -343,8 +343,8 @@ test("Israel's clock in winter and summer: the evening email's 23:45 and today's
 test('getting-started emails: a one-click link to stop them, and whoever stopped is skipped', () => {
   const { campaignMail, campaignList, campaignStats, unsubToken, unsubOk } = require('../server/ops');
   const m = campaignMail('first', 'https://app.example/app/', 'https://app.example/unsubscribe?u=a&t=b&k=news');
-  assert.match(m.html, /href="https:\/\/app\.example\/unsubscribe\?u=a&amp;t=b&amp;k=news"[^>]*>להפסיק לקבל מיילים כאלה/);
-  assert.match(m.text, /להפסיק לקבל מיילים כאלה: https:\/\/app\.example\/unsubscribe/);
+  assert.match(m.html, /לא רוצה לקבל עוד מיילים כאלה\? <a href="https:\/\/app\.example\/unsubscribe\?u=a&amp;t=b&amp;k=news"[^>]*>להסרה לחץ כאן<\/a>/);
+  assert.match(m.text, /להסרה: https:\/\/app\.example\/unsubscribe/);
   assert.doesNotMatch(m.html, /תענה "הסר"/);
   const old = new Date(Date.now() - 10 * 86400000).toISOString();
   const users = [{ id: 'u1', email: 'a@example.test', email_confirmed_at: old, created_at: old }, { id: 'u2', email: 'b@example.test', email_confirmed_at: old, created_at: old }];
