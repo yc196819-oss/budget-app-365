@@ -3,79 +3,60 @@ import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
 import { createHousehold } from '../../data/onboarding.js';
 import { track, setScreen } from '../../lib/telemetry.js';
-import { firstPicture } from '../../domain/onboarding.js';
 import { setAiEnabled } from '../../lib/settings.js';
-import { StepWho, StepLife, StepCards, StepMoney, StepPrivacy } from './Steps.js';
-import { DoneScreen } from './DoneScreen.js';
+import { QUICK_START } from '../../domain/onboarding.js';
 
-const STEPS = ['מי אתם?', 'מה רלוונטי לכם?', 'איך אתם משלמים?', 'כמה נכנס וכמה קבוע?', 'פרטיות'];
-const reached = new Set();
-const INITIAL = { name: '', mode: 'together', partner: '', life: { car: true, subs: true }, cards: [{ name: 'ויזה', last4: '', day: 10, type: 'credit' }], income: '', fixed: {}, saving: 0, ai: true };
+let reported = false;
 
-// A new user: welcome, five short steps, then a summary with what to do first.
-// Every step after the first can be skipped; everything can be changed later.
+// A new user: two questions on one screen (a name, alone or together), and
+// straight into the app. Everything else (cards, income, fixed costs, the
+// partner's invite) is asked later, in the setup guide on the home screen.
 export function Onboarding({ session }) {
   setScreen('onboarding');
   const meta = session.user.user_metadata || {};
-  const [stage, setStage] = useState('welcome'); // welcome | setup | saving | done
-  const [step, setStep] = useState(1);
-  // Which step people reach (and finish), to see where they stop.
-  useEffect(() => {
-    const name = stage === 'welcome' ? 'onboard_0' : stage === 'done' ? 'onboard_done' : 'onboard_' + step;
-    if (!reached.has(name)) { reached.add(name); track(name); }
-  }, [stage, step]);
-  const [a, setA] = useState(() => ({ ...INITIAL, name: meta.display_name || (meta.full_name || meta.name || '').split(' ')[0] || '' }));
+  const [name, setName] = useState(() => meta.display_name || (meta.full_name || meta.name || '').split(' ')[0] || '');
+  const [mode, setMode] = useState('together');
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [created, setCreated] = useState(null);
-  const set = (patch) => setA((cur) => ({ ...cur, ...patch }));
-  const canNext = step !== 1 || a.name.trim();
+  useEffect(() => { if (!reported) { reported = true; track('onboard_0'); } }, []);
 
-  const finish = async () => {
-    setStage('saving'); setError('');
+  const start = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || saving) return;
+    setSaving(true); setError('');
     try {
-      setAiEnabled(a.ai);
-      const membership = await createHousehold(session.user, a);
-      setCreated(membership);
-      setStage('done');
+      setAiEnabled(true);
+      await createHousehold(session.user, { ...QUICK_START, name: name.trim(), mode });
+      track('onboard_done');
+      location.hash = '#/home';
+      session.refresh();
     } catch (err) {
       setError('לא הצלחנו לשמור. בדקו את החיבור ונסו שוב. (' + (err.message || err) + ')');
-      setStage('setup');
+      setSaving(false);
     }
   };
-  const next = () => { if (!canNext) return; if (step === 5) finish(); else setStep(step + 1); };
 
-  if (stage === 'welcome') {
-    return html`<main class="login onb">
-      <div class="brand-login"><img class="brand-mark" src="/wallet.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
-      <h1 class="display" style="font-size:34px;line-height:1.15;margin:0">לדעת בכל רגע כמה נשאר להוציא</h1>
-      <div class="stack" style="gap:10px">
-        ${[['plus', 'כל הוצאה במקום אחד', 'הקלדה מהירה או העלאת פירוט מחברת האשראי'], ['spark', 'יועץ שמכיר את המספרים', 'תשובות קצרות, מחושבות מהנתונים שלכם'], ['together', 'ביחד עם בן או בת הזוג', 'תקציב אחד, שני טלפונים']].map(([i, t, d]) => html`<div class="card onb-perk"><span aria-hidden="true"><${Icon} name=${i} size=${22} /></span><span><b>${t}</b><small>${d}</small></span></div>`)}
-      </div>
-      <button type="button" class="btn" onClick=${() => setStage('setup')}>מתחילים · 2 דקות</button>
-      <button type="button" class="btn-text" onClick=${session.signOut}>זה לא החשבון שלי, להתנתק</button>
-    </main>`;
-  }
-  if (stage === 'done') return html`<${DoneScreen} answers=${a} membership=${created} session=${session} />`;
-
-  const pic = firstPicture(a);
   return html`<main class="login onb">
-    <div class="onb-head">
-      <span class="muted" style="font-size:13px;font-weight:700">שלב ${step} מתוך 5</span>
-      <div class="onb-bars" aria-hidden="true">${[1, 2, 3, 4, 5].map((i) => html`<span class=${i <= step ? 'on' : ''}></span>`)}</div>
-      <h1 class="display" style="font-size:30px;margin:4px 0 0">${STEPS[step - 1]}</h1>
-    </div>
-    <div class="stack onb-body">
-      ${step === 1 && html`<${StepWho} a=${a} set=${set} />`}
-      ${step === 2 && html`<${StepLife} a=${a} set=${set} />`}
-      ${step === 3 && html`<${StepCards} a=${a} set=${set} />`}
-      ${step === 4 && html`<${StepMoney} a=${a} set=${set} pic=${pic} />`}
-      ${step === 5 && html`<${StepPrivacy} a=${a} set=${set} />`}
-    </div>
-    ${error && html`<p class="error" role="alert">${error}</p>`}
-    <div class="onb-nav">
-      <button type="button" class="btn btn-ghost" disabled=${stage === 'saving'} onClick=${() => (step === 1 ? setStage('welcome') : setStep(step - 1))}>חזרה</button>
-      ${step >= 2 && step <= 4 && html`<button type="button" class="btn-text" disabled=${stage === 'saving'} onClick=${() => setStep(step + 1)}>דילוג</button>`}
-      <button type="button" class="btn" disabled=${!canNext || stage === 'saving'} onClick=${next}>${stage === 'saving' ? 'מכינים…' : step === 5 ? 'סיום' : 'המשך'}</button>
-    </div>
+    <form class="stack onb-body" onSubmit=${start} style="flex:1">
+      <span class="muted" style="font-size:15px;font-weight:700">ברוכים הבאים ל"התקציב שלנו"</span>
+      <h1 class="display" style="font-size:32px;line-height:1.15;margin:0">רק שתי שאלות, ומתחילים</h1>
+      <label class="field"><span>איך לקרוא לכם?</span>
+        <input class="input" value=${name} onInput=${(e) => setName(e.target.value)} placeholder="השם הפרטי" autocomplete="given-name" /></label>
+      <span class="field-label">מנהלים את התקציב</span>
+      <div class="seg" role="group" aria-label="מנהלים את התקציב">
+        <button type="button" aria-pressed=${String(mode === 'solo')} onClick=${() => setMode('solo')}>לבד</button>
+        <button type="button" aria-pressed=${String(mode === 'together')} onClick=${() => setMode('together')}>ביחד</button>
+      </div>
+      ${mode === 'together' && html`<span class="muted rise" style="font-size:14px;line-height:1.55">נשלח לכם קישור הזמנה לבן או בת הזוג מתוך האפליקציה, מתי שנוח.</span>`}
+      <div class="card onb-perk" style="align-items:flex-start">
+        <span aria-hidden="true" style="color:var(--income)"><${Icon} name="shield" size=${20} /></span>
+        <span class="muted" style="font-size:14px;line-height:1.55">כל השאר (כרטיסים, הכנסה, הוצאות קבועות) אפשר להוסיף אחר כך. היועץ החכם פעיל, ואפשר לכבות אותו בפרופיל.</span>
+      </div>
+      ${error && html`<p class="error" role="alert">${error}</p>`}
+      <div class="stack" style="gap:8px;margin-top:auto">
+        <button type="submit" class="btn" disabled=${!name.trim() || saving}>${saving ? 'מכינים…' : 'יאללה, מתחילים'}</button>
+        <button type="button" class="btn-text" onClick=${session.signOut}>זה לא החשבון שלי, להתנתק</button>
+      </div>
+    </form>
   </main>`;
 }

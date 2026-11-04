@@ -81,6 +81,7 @@ export function SetupGuide({ data, userId, onImport, onAdd, onAsk }) {
                 <button type="submit" class="btn" style="width:auto" disabled=${busy || !(toNumber(income) > 0)}>${s.cta}</button></form>`
               : s.key === 'partner' ? html`<${InviteButton} hid=${data.hid} userId=${userId} variant="btn" />`
               : html`<button type="button" class="btn" onClick=${() => go(s)}>${s.cta}</button>`}
+            ${s.key === 'import' && html`<span style="font-size:14px;line-height:1.55;color:var(--income);font-weight:700">יש לכם כמה כרטיסים או כמה חשבונות בנק? מכניסים את כולם, והכל מסודר במקום אחד.</span>`}
             ${s.key === 'import' && html`<button type="button" class="btn-text" style="align-self:flex-start" onClick=${onAdd}>או להוסיף הוצאה ידנית / בקול</button>`}
             ${s.key !== 'import' && html`<button type="button" class="btn-text faint" style="align-self:flex-start;font-size:13px" onClick=${() => skip(s.key)}>${s.optional ? 'לא עכשיו' : 'לא רלוונטי לי'}</button>`}
           </div>`}
