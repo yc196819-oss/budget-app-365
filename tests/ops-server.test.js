@@ -311,3 +311,23 @@ test("today (Israel time): who came in, what they did, AI use and errors; yester
   const b = rows.find((r) => r.id === 'b');
   assert.deepEqual([b.newToday, b.errors], [true, 1]);
 });
+
+test("the owner's evening email: today's sentence, each person, requests waiting, a link to the dashboard", () => {
+  const { ownerDigestMail } = require('../server/ops');
+  const items = [
+    { name: 'דנה', newToday: true, opens: 1, imports: 0, importFails: 1, cost: 0, health: { level: 'stuck', label: 'לא העלה אף פירוט' } },
+    { name: '', who: '#a1b2c3', opens: 2, imports: 1, asked: 3, cost: 0.4, health: { level: 'good', label: 'משתמש פעיל' } }
+  ];
+  const m = ownerDigestMail({ day: '2026-11-04', summary: 'היום נכנסו 2 משתמשים.', items, waiting: 1, link: 'https://example.test/app/' });
+  assert.equal(m.subject, 'היום: 2 משתמשים נכנסו, אחד צריך עזרה, פנייה אחת מחכה');
+  assert.match(m.text, /04\.11\.2026/);
+  assert.match(m.text, /• דנה \(חדש היום\): כניסה אחת · פירוט אחד נכשל · לא העלה אף פירוט/);
+  assert.match(m.text, /• בלי שם #a1b2c3: 2 כניסות · פירוט אחד · 3 שאלות ליועץ · AI \$0\.40/);
+  assert.match(m.html, /פנייה אחת מחכה לתשובה/);
+  assert.match(m.html, /https:\/\/example\.test\/app\/\?go=profile\/admin#\/home/);
+  assert.doesNotMatch(m.html, /@/);
+  const quiet = ownerDigestMail({ day: '2026-11-04', summary: 'היום עוד אף אחד לא נכנס (חוץ ממך).', items: [], waiting: 0, link: 'https://example.test/app/' });
+  assert.equal(quiet.subject, 'היום: אף אחד לא נכנס');
+  // Names are escaped.
+  assert.match(ownerDigestMail({ day: '2026-11-04', summary: '', items: [{ name: '<b>x', opens: 1 }], link: 'https://example.test/app/' }).html, /&lt;b&gt;x/);
+});

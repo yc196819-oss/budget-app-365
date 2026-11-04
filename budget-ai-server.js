@@ -2072,10 +2072,8 @@ async function isAdmin(userId) {
 
 // Who opened the app today (Israel time), what they did, AI use and errors,
 // with each one's name and how they are doing. The owner's accounts are left out.
-app.get('/api/admin/today', requireAuth, async (req, res) => {
-  try {
-    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
-    const since = new Date(Date.now() - 30 * 3600 * 1000).toISOString();
+async function todayItems() {
+  const since = new Date(Date.now() - 30 * 3600 * 1000).toISOString();
     const [ev, calls, er, people] = await Promise.all([
       supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).limit(20000),
       supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', since).limit(20000),
@@ -2092,9 +2090,33 @@ app.get('/api/admin/today', requireAuth, async (req, res) => {
       const x = info.get(r.id) || {};
       return { ...r, id: undefined, who: x.label, name: x.name || '', health: ops.healthOf({ ...x, joined: seen.get(r.id).created_at, lastSeen: new Date().toISOString(), imports: r.imports, importFails: r.importFails, asked: r.asked }) };
     });
-    return res.json({ day: ops.israelDay(), items });
+    return { day: ops.israelDay(), items };
+}
+app.get('/api/admin/today', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    return res.json(await todayItems());
   } catch (err) {
     console.error('admin today failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+// The owner's evening summary email (pg_cron job "owner-daily-digest").
+let todaySummary = null;
+import(require('url').pathToFileURL(path.join(__dirname, 'public/app/src/domain/people-health.js')).href)
+  .then((m) => { todaySummary = m.todaySummary; })
+  .catch((err) => console.error('People summary not loaded:', err.message));
+app.post('/api/admin/daily/run', async (req, res) => {
+  try {
+    if (!(await checkCronSecret(req))) return res.status(401).json({ error: 'unauthorized' });
+    if (!FEEDBACK_TO || !mailStatus().ready || !todaySummary) return res.status(503).json({ error: 'not ready' });
+    const { day, items } = await todayItems();
+    const { count } = await supabaseAdmin.from('feedback').select('id', { count: 'exact', head: true }).eq('closed', false).eq('archived', false).eq('last_by', 'user');
+    const mail = ops.ownerDigestMail({ day, summary: todaySummary(items), items, waiting: count || 0, link: appLinkOf(req) });
+    await sendMailWithFallback({ to: FEEDBACK_TO, ...mail });
+    return res.json({ ok: true, people: items.length });
+  } catch (err) {
+    console.error('owner digest failed:', err.message);
     return res.status(500).json({ error: 'failed' });
   }
 });

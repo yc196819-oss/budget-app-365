@@ -433,3 +433,11 @@ update public.feedback set
   last_by = case when owner_note is not null then 'owner' else 'user' end,
   closed = status in ('done', 'wontfix'),
   owner_seen_at = coalesce(owner_seen_at, now());
+
+-- The owner's evening summary email, every day at 19:07 UTC (21:07 Israel
+-- in winter, 22:07 in summer). The secret is read from app_secrets.
+select cron.schedule('owner-daily-digest', '7 19 * * *', $$
+  select net.http_post(url := 'https://budget-web-u0iy.onrender.com/api/admin/daily/run',
+    headers := jsonb_build_object('Content-Type','application/json','x-cron-secret',(select value from public.app_secrets where key='cron_secret')),
+    body := '{}'::jsonb, timeout_milliseconds := 120000);
+$$);

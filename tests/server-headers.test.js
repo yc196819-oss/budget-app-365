@@ -236,3 +236,8 @@ test('the monthly email: owner routes need sign-in, and a bad unsubscribe link c
   const post = await fetch(BASE + '/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'u=x&t=y' });
   assert.equal(post.status, 400);
 });
+
+test("the owner's evening email runs only with the cron secret", async () => {
+  const res = await fetch(BASE + '/api/admin/daily/run', { method: 'POST', headers: { 'X-Cron-Secret': 'wrong' } });
+  assert.equal(res.status, 401);
+});

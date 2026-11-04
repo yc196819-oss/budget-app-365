@@ -581,4 +581,27 @@ function todayRows({ users = [], events = [], calls = [], errors = [], now = new
     .sort((a, b) => String(b.last || '').localeCompare(String(a.last || '')));
 }
 
-module.exports = { healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+// The owner's evening email: the same sentence as "who came in today?",
+// one line per person, and how many requests wait. Pure.
+function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
+  const origin = String(link).replace(/\/app\/?.*$/, '');
+  const dmy = String(day || '').split('-').reverse().join('.');
+  const k = (x, one, many) => (!x ? '' : x === 1 ? one : x + ' ' + many);
+  const did = (p) => [k(p.opens, 'כניסה אחת', 'כניסות'), k(p.imports, 'פירוט אחד', 'פירוטים'), k(p.importFails, 'פירוט אחד נכשל', 'פירוטים נכשלו'), k(p.added, 'הוספה אחת', 'הוספות'), k(p.asked, 'שאלה אחת ליועץ', 'שאלות ליועץ'), p.cost ? 'AI $' + Number(p.cost).toFixed(2) : '', k(p.errors, 'שגיאה אחת', 'שגיאות')].filter(Boolean).join(' · ') || 'רק נכנס';
+  const nameOf = (p) => p.name || ('בלי שם ' + (p.who || ''));
+  const needs = items.filter((p) => p.health && p.health.level !== 'good');
+  const rows = items.slice(0, 30).map((p) => '<tr><td style="padding:8px 0;border-top:1px solid #F0E6DA;font-size:15px;line-height:1.5;color:#2B2118"><b>' + escHtml(nameOf(p)) + '</b>' + (p.newToday ? ' <span style="color:#92490A">(חדש היום)</span>' : '')
+    + '<br><span style="color:#5B4B3D">' + escHtml(did(p)) + '</span>' + (p.health ? '<br><span style="color:#8A7B6E;font-size:13px">' + escHtml(p.health.label) + '</span>' : '') + '</td></tr>').join('');
+  const inner = '<p style="margin:0 0 12px;font-size:20px;font-weight:bold;color:#2B2118">היום באפליקציה · ' + escHtml(dmy) + '</p>'
+    + '<p style="margin:0 0 16px;font-size:16px;line-height:1.65;color:#2B2118">' + escHtml(summary) + '</p>'
+    + (waiting ? '<p style="margin:0 0 16px;padding:10px 14px;background:#FBF4EA;border-radius:12px;font-size:15px;color:#5B4B3D">' + (waiting === 1 ? 'פנייה אחת מחכה לתשובה.' : waiting + ' פניות מחכות לתשובה.') + '</p>' : '')
+    + (rows ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px">' + rows + '</table>' : '')
+    + mailButton(link + '?go=profile/admin#/home', 'ללוח הבעלים');
+  const subject = (items.length ? 'היום: ' + (items.length === 1 ? 'משתמש אחד נכנס' : items.length + ' משתמשים נכנסו') : 'היום: אף אחד לא נכנס')
+    + (needs.length ? ', ' + (needs.length === 1 ? 'אחד צריך עזרה' : needs.length + ' צריכים עזרה') : '') + (waiting ? ', ' + (waiting === 1 ? 'פנייה אחת מחכה' : waiting + ' פניות מחכות') : '');
+  const text = 'היום באפליקציה · ' + dmy + '\n\n' + summary + (waiting ? '\n' + waiting + ' פניות מחכות לתשובה.' : '') + '\n\n'
+    + items.slice(0, 30).map((p) => '• ' + nameOf(p) + (p.newToday ? ' (חדש היום)' : '') + ': ' + did(p) + (p.health ? ' · ' + p.health.label : '')).join('\n') + '\n\nללוח הבעלים: ' + link + '?go=profile/admin#/home';
+  return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
+}
+
+module.exports = { ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
