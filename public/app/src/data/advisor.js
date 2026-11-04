@@ -66,7 +66,8 @@ export async function streamReply(payload, onDelta, signal) {
   const res = await fetch(CONFIG.apiBase + '/api/ai/advice-chat-stream', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    // Where the person is, so "how do I…" is told for their screen.
+    body: JSON.stringify({ ...payload, device: matchMedia('(min-width: 1024px)').matches ? 'desktop' : 'mobile' }),
     signal
   });
   if (!res.ok || !res.body) {

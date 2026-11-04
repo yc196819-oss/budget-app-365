@@ -125,3 +125,14 @@ test('one sentence about today for the owner', () => {
   assert.match(s, /כדאי לעזור ל: נועה \(לא העלה אף פירוט\)/);
   assert.deepEqual(healthCounts([{ health: { level: 'good' } }, { health: { level: 'stuck' } }, { health: { level: 'stuck' } }]), { good: 1, watch: 0, stuck: 2, gone: 0 });
 });
+
+import { profileHint } from '../public/app/src/content/howto.js';
+test('where the profile is, on a phone and on a computer', () => {
+  assert.match(profileHint('פרופיל ← "המידע שלנו"', false), /בטלפון: הפרופיל בעיגול עם האותיות בפינה העליונה/);
+  assert.match(profileHint('פרופיל ← "המידע שלנו"', true), /במחשב: הפרופיל בכפתור עם השם בתחתית התפריט שבצד/);
+  assert.equal(profileHint('כסף ← "קטגוריות"', true), '');
+  const t = guideText();
+  assert.match(t, /בטלפון העיגול עם האותיות בפינה העליונה, במחשב הכפתור עם השם בתחתית התפריט שבצד/);
+  assert.match(t, /כתבו לנו/);
+  assert.match(t, /ספר לחבריך/);
+});

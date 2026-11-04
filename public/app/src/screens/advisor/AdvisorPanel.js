@@ -15,7 +15,7 @@ import { askLearnings, applyLearnings, undoLearning } from '../../data/learn.js'
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { snapshot as decisionsSnapshot } from '../../data/decisions.js';
 import { forAdvisor } from '../../domain/decisions.js';
-import { matchHowto } from '../../content/howto.js';
+import { matchHowto, profileHint } from '../../content/howto.js';
 import { go } from '../../lib/go.js';
 
 // How many messages of a conversation were already looked at for learning,
@@ -83,7 +83,8 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     if (hit) {
       setError(''); setSuggestions([]); setDraft(''); setOffer(false); setUpdated([]);
       const base = convRef.current || { id: null, user_id: me, is_private: false, messages: [] };
-      setConv({ ...base, messages: [...base.messages, { role: 'user', text: msg, author_id: me, local: true }, { role: 'ai', text: hit.a, author_id: me, local: true, howto: hit, question: msg }] });
+      const text = hit.a + profileHint(hit.a);
+      setConv({ ...base, messages: [...base.messages, { role: 'user', text: msg, author_id: me, local: true }, { role: 'ai', text, author_id: me, local: true, howto: hit, question: msg }] });
       track('howto');
       return hit.a;
     }
