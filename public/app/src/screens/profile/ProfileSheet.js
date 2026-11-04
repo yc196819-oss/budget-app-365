@@ -18,9 +18,9 @@ import { SecurityView } from './SecurityView.js';
 import { telemetryOn, setTelemetry } from '../../lib/telemetry.js';
 import { CONFIG } from '../../config.js';
 
-export function ProfileSheet({ profile, theme, onTheme, onSignOut, onClose, hid, userId }) {
+export function ProfileSheet({ start = 'main', profile, theme, onTheme, onSignOut, onClose, hid, userId }) {
   const aiOn = useAiSetting();
-  const [view, setView] = useState('main');
+  const [view, setView] = useState(() => ((hid && ['memories', 'data'].includes(start)) || ['feedback', 'security'].includes(start) ? start : 'main'));
   const [usage, setUsage] = useState(telemetryOn);
   const [learnAuto, setLearnAuto] = useState(autoLearn);
   const [monthly, setMonthly] = useState(null);

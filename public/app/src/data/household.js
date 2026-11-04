@@ -3,6 +3,7 @@ import { track } from '../lib/telemetry.js';
 import { showToast } from '../lib/toast.js';
 import { isoDate } from '../domain/money.js';
 import { readCache, writeCache } from '../lib/storage.js';
+import { forgetRules } from './rules.js';
 
 // Household data for the new app: transactions of the last ~2 years (enough
 // for 12 months plus expenses spread over a year), categories, monthly
@@ -244,6 +245,56 @@ export async function renameCategory(id, { name, icon }) {
   state.categories = state.categories.map((c) => (c.id === id ? data : c));
   emit();
   return data;
+}
+
+// How many transactions a category holds, in the whole history (not only
+// the months loaded on the device): a sub-category by its own column.
+export async function categoryTxCount(id) {
+  const cat = state.categories.find((c) => c.id === id);
+  const col = cat && cat.parent_id ? 'subcategory_id' : 'category_id';
+  const { count, error } = await sb.from('transactions').select('id', { count: 'exact', head: true }).eq('household_id', state.hid).eq(col, id);
+  if (error) throw error;
+  return count || 0;
+}
+
+// Deletes a category. A sub-category's transactions stay in its parent
+// (the database clears the sub-category). A top-level category first moves
+// everything that points at it to `targetId`: its transactions (sub-category
+// cleared), its rules, shared decisions and installments, and its monthly
+// budget (added to the target's). Then the category and its sub-categories go.
+export async function deleteCategory(id, targetId = null) {
+  const cat = state.categories.find((c) => c.id === id);
+  if (!cat) throw new Error('unknown category');
+  const subs = state.categories.filter((c) => c.parent_id === id).map((c) => c.id);
+  const gone = new Set([id, ...subs]);
+  if (!cat.parent_id && targetId) {
+    const target = state.categories.find((c) => c.id === targetId);
+    if (!target || target.parent_id || gone.has(targetId) || (target.kind || 'expense') !== (cat.kind || 'expense')) throw new Error('bad target');
+    const hid = state.hid;
+    const move = async (table, patch) => {
+      const { error } = await sb.from(table).update(patch).eq('household_id', hid).eq('category_id', id);
+      if (error) throw error;
+    };
+    await move('transactions', { category_id: targetId, subcategory_id: null });
+    await move('category_rules', { category_id: targetId, subcategory_id: null });
+    await move('shared_decisions', { category_id: targetId });
+    await move('installments', { category_id: targetId });
+    const mine = state.budgets.find((b) => b.category_id === id);
+    if (mine && Number(mine.monthly_amount) > 0) {
+      const theirs = state.budgets.find((b) => b.category_id === targetId);
+      await setBudget(targetId, (theirs ? Number(theirs.monthly_amount) || 0 : 0) + Number(mine.monthly_amount));
+    }
+    state.txs = state.txs.map((t) => (t.category_id === id ? { ...t, category_id: targetId, subcategory_id: null } : t));
+    state.installments = state.installments.map((r) => (r.category_id === id ? { ...r, category_id: targetId } : r));
+  }
+  const { error } = await sb.from('categories').delete().eq('id', id).eq('household_id', state.hid);
+  if (error) throw error;
+  state.categories = state.categories.filter((c) => !gone.has(c.id));
+  state.budgets = state.budgets.filter((b) => !gone.has(b.category_id));
+  state.txs = state.txs.map((t) => (gone.has(t.category_id) ? { ...t, category_id: null, subcategory_id: null } : gone.has(t.subcategory_id) ? { ...t, subcategory_id: null } : t));
+  forgetRules();
+  track('category_delete');
+  emit();
 }
 
 // The monthly net income the household expects (households.income_expectations,

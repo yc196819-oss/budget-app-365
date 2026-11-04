@@ -1252,6 +1252,15 @@ ${rows}
 const ADVISOR_STYLE = `מספרים: העתק כל סכום בדיוק כמו שהוא מופיע בנתונים (יתרה, תחזית, נשאר להוציא, סכום קנייה). אל תחשב בעצמך סכומים, הפרשים או ממוצעים שלא מופיעים בנתונים. אם חייבים הערכה, כתוב "בערך" ועגל למאות. אם מספר לא מופיע בנתונים, אמור שאין לך אותו.
 סגנון: תשובה רגילה עד 4 משפטים. קודם המספר שעונה על השאלה, אחר כך המלצה אחת ברורה. בלי פתיחות כמו "אני מבין ש...", "שאלה מצוינת" או "חשוב לך מאוד", ובלי לחזור על מה שנכתב לך.
 פנייה: אל תפנה בשם משתמש או בכתובת מייל. פנה בשם רק אם זה שם פרטי, ורק כשזה טבעי.`;
+// How the app works (screens, buttons, what can and cannot be done), from
+// the same guide the app uses for its instant answers.
+let APP_GUIDE = '';
+import(require('url').pathToFileURL(path.join(__dirname, 'public/app/src/content/howto.js')).href)
+  .then((m) => { APP_GUIDE = m.guideText(); })
+  .catch((err) => console.error('App guide not loaded:', err.message));
+function appGuidePart() {
+  return APP_GUIDE ? `\nהמדריך של האפליקציה (מה יש בכל מסך ואיך עושים כל פעולה):\n${APP_GUIDE}\nכשהשאלה היא איך עושים משהו באפליקציה, איפה משהו נמצא או מה אפשר לעשות בה: ענה לפי המדריך בלבד, בצעדים קצרים עם השמות המדויקים של הכפתורים והחצים (←). אל תמציא כפתור, מסך או אפשרות שלא כתובים במדריך. אם משהו לא קיים, אמור זאת בפשטות והצע דרך אחרת מהמדריך, או לכתוב לנו בפרופיל ← "תקלות ורעיונות לשיפור". כשמתאים, גם בתשובה על הכסף, הפנה למסך שבו רואים או עושים את זה.\n` : '';
+}
 function buildChatPrompt(summary, history, message, authorName, fixContext, authorGender) {
   // The last 12 messages; the 4 newest in full, older ones shortened (tokens).
   const recent = Array.isArray(history) ? history.slice(-12) : [];
@@ -1259,7 +1268,7 @@ function buildChatPrompt(summary, history, message, authorName, fixContext, auth
   return `אתה יועץ פיננסי חם, ענייני ומקצועי למשק בית בישראל. עונים בעברית פשוטה.
 בשיחה יכולים להשתתף שני בני הזוג; ההודעה הנוכחית נכתבה על ידי ${authorName || 'אחד מבני הבית'}.${authorGender === 'f' ? ' פנה אליה בלשון נקבה.' : authorGender === 'm' ? ' פנה אליו בלשון זכר.' : ' אם צריך לפנות אליו או אליה, נסח בלי מגדר (למשל "כדאי", "אפשר").'}
 הנתונים (JSON) כוללים categorySpendingHistory ברמת משק הבית, personalCategoryBreakdown של המשתמש, תקציבים, יעדים ומשימות. ענה על סמך המספרים בפועל, בלי markdown ובלי כותרות.
-${ADVISOR_STYLE}
+${ADVISOR_STYLE}${appGuidePart()}
 בהחלטות גדולות (משכנתא, השקעות) תן מידע, חישובים ושאלות לבדיקה, וציין שכדאי להתייעץ עם יועץ מורשה; אל תמליץ על נייר ערך או מוצר ספציפי.
 אם בנתונים יש memories (החלטות והעדפות שבני הזוג קבעו בעבר): התחשב בהן כעובדה, אל תציע משהו שסותר אותן אלא אם שואלים, ואם משהו השתנה — שאל.
 בנתונים יש גם את פירוט ההוצאה: topMerchants (בתי העסק שהכי הרבה כסף הלך אליהם ב-3 החודשים האחרונים), recurring (חיובים שחוזרים כל חודש בסכום דומה: מנויים וחשבונות קבועים), recentTransactions (התנועות האחרונות), וגם accounts, cards, loans, installments. כשהשאלה נוגעת להם, ענה לפי השורות האמיתיות ושמות בתי העסק (למשל איזה מנוי לבטל, לאן הלך הכסף באוכל), ולא בהכללות.

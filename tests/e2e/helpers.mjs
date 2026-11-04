@@ -127,6 +127,11 @@ export async function mockSupabase(page, db, calls = []) {
       if (lim) rows = rows.slice(off, off + Number(lim));
       return reply(rows);
     }
+    if (method === 'HEAD') {
+      // count only (select with head: true): the total in Content-Range
+      const n = applyFilters(table, url.searchParams).length;
+      return route.fulfill({ status: 200, headers: { 'content-range': (n ? '0-' + (n - 1) : '*') + '/' + n, 'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-range' }, body: '' });
+    }
     if (method === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
       const conflict = url.searchParams.get('on_conflict');
