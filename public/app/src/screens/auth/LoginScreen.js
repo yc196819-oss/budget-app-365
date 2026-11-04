@@ -101,6 +101,6 @@ export function LoginScreen() {
       </a>
       <${InstallCard} always=${true} />
       <a class="btn-text" href="/download" style="text-align:center">הורדת האפליקציה לטלפון</a>
-      <p class="faint legal-links" style="font-size:13px"><a href="/terms">תנאי שימוש</a> · <a href="/privacy">מדיניות פרטיות</a> · <a href="/accessibility">הצהרת נגישות</a> · <a href="/old/">לגרסה הקודמת</a></p>
+      <p class="faint legal-links" style="font-size:13px"><a href="/terms">תנאי שימוש</a> · <a href="/privacy">מדיניות פרטיות</a> · <a href="/accessibility">הצהרת נגישות</a></p>
     </main>`;
 }

@@ -85,7 +85,6 @@ export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTh
       <button type="button" class=${'btn btn-ghost' + (answers > 0 ? ' fb-has-answer' : '')} onClick=${() => setView('feedback')}><${Icon} name="wrench" /><span style="flex:1;text-align:start">תקלות ורעיונות לשיפור</span>${answers > 0 && html`<span class="fb-pill fb-pill-new">${answers === 1 ? 'תשובה חדשה' : answers + ' תשובות חדשות'}</span>`}</button>
       ${isAdmin && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('admin')}><${Icon} name="chart" />לוח בעלים</button>`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
-      <a class="btn btn-ghost" href="/old/" style="text-decoration:none">לגרסה הקודמת של האפליקציה</a>
       <button type="button" class="btn btn-ghost" style="color:var(--danger)" onClick=${onSignOut}><${Icon} name="logout" />יציאה</button>
       <p class="faint" style="font-size:12px;margin:0">ביציאה נמחקים מהמכשיר גם מפתחות ונתונים רגישים ששמורים בו.</p>
       <p class="faint" style="font-size:12px;margin:0"><a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a> · <a href="/privacy" target="_blank" rel="noopener">מדיניות פרטיות</a> · <a href="/accessibility" target="_blank" rel="noopener">הצהרת נגישות</a></p>
