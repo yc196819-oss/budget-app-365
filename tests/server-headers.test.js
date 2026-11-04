@@ -248,3 +248,9 @@ test('the stop-these-emails link: a wrong one changes nothing', async () => {
   const post = await fetch(BASE + '/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'u=x&t=y&k=news' });
   assert.equal(post.status, 400);
 });
+
+test('tell your friends: both endpoints need a signed-in person', async () => {
+  assert.ok([401, 503].includes((await fetch(BASE + '/api/share')).status));
+  const r = await fetch(BASE + '/api/share/joined', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"ref":"a1b2c3"}' });
+  assert.ok([401, 503].includes(r.status));
+});

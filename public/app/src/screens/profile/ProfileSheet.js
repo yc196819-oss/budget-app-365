@@ -10,6 +10,7 @@ import { showToast } from '../../lib/toast.js';
 import { MemoriesView } from './MemoriesView.js';
 import { PushToggle } from '../../components/PushToggle.js';
 import { InstallCard } from '../../components/InstallCard.js';
+import { ShareCard } from '../../components/ShareCard.js';
 import { DeleteAccount } from './DeleteAccount.js';
 import { DataView } from './DataView.js';
 import { AdminView } from './AdminView.js';
@@ -54,6 +55,7 @@ export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTh
           <span class="muted num" style="font-size:13px;text-align:right">${profile.email}</span>
         </span>
       </div>
+      <${ShareCard} />
       <label class="check toggle-row">
         <span style="flex:1;display:flex;flex-direction:column"><b>היועץ והצעות AI</b>
           <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, היועץ מקבל את המספרים שלכם, שמות בתי העסק והתנועות האחרונות, כדי לענות על המקרה שלכם (לא מספרי חשבון או כרטיס). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>

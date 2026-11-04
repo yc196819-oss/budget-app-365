@@ -31,6 +31,7 @@ import { ToastHost } from '../components/ToastHost.js';
 import { useHousehold } from '../data/useHousehold.js';
 import { useMedia } from '../lib/useMedia.js';
 import { AdvisorPanel } from '../screens/advisor/AdvisorPanel.js';
+import { claimRef } from '../data/share.js';
 import { parseGo, go } from '../lib/go.js';
 import { useFeedbackUnread } from '../data/feedback.js';
 import { GO_TARGETS } from '../content/howto.js';
@@ -99,6 +100,8 @@ export function Shell({ tab, session }) {
     const next = effectiveTheme === 'light' ? 'dark' : 'light';
     setTheme(next); writeLocal('theme', next); applyTheme(next);
   };
+  // Came from a friend's link: counted once, now that this person is signed in.
+  useEffect(() => { claimRef(); }, []);
   // Home-screen shortcuts (manifest): /app/?action=add|voice|ask|talk opens
   // that action at once; the parameter is taken off the address.
   useEffect(() => {

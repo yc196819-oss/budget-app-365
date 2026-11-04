@@ -448,3 +448,14 @@ $$);
 -- still marked, so it is not repeated by itself, and counted as failed.
 alter table public.mail_prefs add column if not exists news boolean not null default true;
 alter table public.mail_sent add column if not exists ok boolean not null default true;
+
+-- Applied 2026-11-04 (referrals): "tell your friends". Who joined from whose
+-- link (the link holds a short code, not an id). Server only.
+create table if not exists public.referrals (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  ref_code text not null check (ref_code ~ '^[0-9a-f]{6}$'),
+  created_at timestamptz not null default now()
+);
+create index if not exists referrals_ref_code on public.referrals (ref_code);
+alter table public.referrals enable row level security;
+revoke all on public.referrals from anon, authenticated;

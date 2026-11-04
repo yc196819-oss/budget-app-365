@@ -8,8 +8,11 @@ import { showToast } from './lib/toast.js';
 // Loaded at startup: the browser's install offer comes once, early.
 import './lib/install.js';
 import { startTelemetry } from './lib/telemetry.js';
+import { captureRef } from './data/share.js';
 
 startTelemetry();
+// Arrived from a friend's "tell your friends" link: remember who sent us.
+captureRef();
 applyTheme(readLocal('theme', ''));
 render(html`<${App} />`, document.getElementById('root'));
 registerWorker(() => showToast('גרסה חדשה של האפליקציה מוכנה', { undo: () => location.reload(), label: 'לרענן', ms: 15000 }));

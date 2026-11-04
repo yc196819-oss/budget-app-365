@@ -2122,6 +2122,28 @@ app.post('/api/admin/daily/run', async (req, res) => {
     return res.status(500).json({ error: 'failed' });
   }
 });
+// "Tell your friends": this person's link code and how many joined with it.
+app.get('/api/share', requireAuth, async (req, res) => {
+  try {
+    const code = ops.refCode(req.authUserId, ADMIN_SALT);
+    const { count } = await supabaseAdmin.from('referrals').select('user_id', { count: 'exact', head: true }).eq('ref_code', code);
+    return res.json({ code, joined: count || 0 });
+  } catch (err) { return res.status(500).json({ error: 'failed' }); }
+});
+// A new person who came from a friend's link. Counted once, only for an
+// account made in the last 14 days, and never for one's own link.
+app.post('/api/share/joined', requireAuth, async (req, res) => {
+  try {
+    const ref = String((req.body && req.body.ref) || '');
+    if (!/^[0-9a-f]{6}$/.test(ref)) return res.status(400).json({ error: 'bad request' });
+    if (ref === ops.refCode(req.authUserId, ADMIN_SALT)) return res.json({ ok: false });
+    const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
+    const made = data && data.user && new Date(data.user.created_at).getTime();
+    if (!made || Date.now() - made > 14 * 86400000) return res.json({ ok: false });
+    const { error } = await supabaseAdmin.from('referrals').insert({ user_id: req.authUserId, ref_code: ref });
+    return res.json({ ok: !error });
+  } catch (err) { return res.status(500).json({ error: 'failed' }); }
+});
 // One person's email, only when the owner asks for it (to write to them).
 app.get('/api/admin/email', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
