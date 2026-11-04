@@ -233,3 +233,45 @@ test('after a change: "always file it like this?" makes a rule, listed in catego
   assert.equal(db.tables.category_rules.length, 0);
   await page.close();
 });
+
+test('deleting a category: its transactions, budget and rules move to the chosen one; an empty sub-category goes at once', async () => {
+  const { page, db, errors } = await openMoney();
+  db.tables.category_rules = [{ id: 'r1', household_id: 'h1', type: 'expense', match: 'סונול', label: 'סונול', category_id: 'car', subcategory_id: null, created_by: 'u1', created_at: '2026-10-01' }];
+  const carTx = db.tables.transactions.filter((t) => t.category_id === 'car').map((t) => t.id);
+  await page.locator('[role=tab]:has-text("קטגוריות"), button:has-text("קטגוריות")').first().click();
+  await page.click('button.manage-cats');
+  await page.waitForSelector('.manage-categories');
+  await page.click('button[aria-label="למחוק: רכב"]');
+  const box = page.locator('.cat-delete');
+  await box.locator('select[aria-label="לאן להעביר"]').waitFor();
+  const text = await box.textContent();
+  assert.match(text, new RegExp(carTx.length + ' תנועות'));
+  assert.match(text, /תקציב חודשי/);
+  assert.match(text, /כלל סיווג אחד/);
+  // Nothing happens until a category is chosen.
+  assert.ok(await box.locator('button:has-text("להעביר ולמחוק")').isDisabled());
+  await box.locator('select[aria-label="לאן להעביר"]').selectOption({ label: 'בית ודיור' });
+  await box.locator('button:has-text("להעביר ולמחוק")').click();
+  await page.waitForFunction(() => !document.querySelector('button[aria-label="למחוק: רכב"]'));
+  const t = db.tables;
+  assert.ok(!t.categories.some((c) => c.id === 'car'));
+  assert.ok(carTx.every((id) => t.transactions.find((x) => x.id === id).category_id === 'home'));
+  assert.equal(t.category_rules[0].category_id, 'home');
+  // The car budget (900) is added to the target's.
+  assert.equal(t.category_budgets.find((b) => b.category_id === 'home').monthly_amount, 900);
+
+  // A sub-category: its lines stay in the parent.
+  await page.click('button[aria-label="למחוק: מסעדות ואוכל בחוץ"]');
+  await page.locator('.cat-delete:has-text("יישארו באוכל")').waitFor();
+  await page.click('.cat-delete button:has-text("כן, למחוק")');
+  await page.waitForFunction(() => !document.querySelector('button[aria-label="למחוק: מסעדות ואוכל בחוץ"]'));
+  assert.ok(!t.categories.some((c) => c.id === 'cafe'));
+  assert.ok(t.transactions.filter((x) => x.description === 'ארומה').every((x) => x.category_id === 'food'));
+  // Cancel leaves everything as it was.
+  await page.click('button[aria-label="למחוק: בית ודיור"]');
+  await page.click('.cat-delete button:has-text("ביטול")');
+  assert.equal(await page.locator('.cat-delete').count(), 0);
+  assert.ok(t.categories.some((c) => c.id === 'home'));
+  assert.deepEqual(errors, []);
+  await page.close();
+});

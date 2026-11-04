@@ -15,6 +15,8 @@ import { askLearnings, applyLearnings, undoLearning } from '../../data/learn.js'
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { snapshot as decisionsSnapshot } from '../../data/decisions.js';
 import { forAdvisor } from '../../domain/decisions.js';
+import { matchHowto } from '../../content/howto.js';
+import { go } from '../../lib/go.js';
 
 // How many messages of a conversation were already looked at for learning,
 // so the "save what I learned?" offer does not repeat for the same messages.
@@ -70,20 +72,33 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     try { setConv(await openConversation(id)); } catch (_err) { setError('לא הצלחנו לפתוח את השיחה. נסו שוב.'); }
   };
 
-  const send = async (text) => {
+  // A "how do I…" question about the app is answered from the guide at
+  // once, without the AI, with a button that goes there. "Ask the advisor
+  // instead" sends the same question to the AI (force). Kept on screen
+  // only: not saved, and not sent to the AI as part of the conversation.
+  const send = async (text, opts = {}) => {
     const msg = String(text || '').trim();
-    if (!msg || busy || !aiOn) return null;
+    if (!msg || busy) return null;
+    const hit = !opts.force && matchHowto(msg);
+    if (hit) {
+      setError(''); setSuggestions([]); setDraft(''); setOffer(false); setUpdated([]);
+      const base = convRef.current || { id: null, user_id: me, is_private: false, messages: [] };
+      setConv({ ...base, messages: [...base.messages, { role: 'user', text: msg, author_id: me, local: true }, { role: 'ai', text: hit.a, author_id: me, local: true, howto: hit, question: msg }] });
+      track('howto');
+      return hit.a;
+    }
+    if (!aiOn) return null;
     setBusy(true); setError(''); setSuggestions([]); setDraft(''); setOffer(false); setUpdated([]);
     let c = convRef.current;
     let answered = null;
     try {
       if (!c || !c.id) {
         const row = await createConversation({ hid, userId: me, title: newTitle(msg, screen) });
-        c = { ...row, is_private: !!row.is_private, messages: [] };
+        c = { ...row, is_private: !!row.is_private, messages: (c && c.messages) || [] };
       }
       const userMsg = { role: 'user', text: msg, author_id: me };
       const aiMsg = { role: 'ai', text: '', author_id: me, pending: true };
-      const history = historyFor(c.messages, memberName);
+      const history = historyFor(c.messages.filter((m) => !m.local), memberName);
       c = { ...c, messages: [...c.messages, userMsg, aiMsg] };
       setConv(c);
       await addMessage({ conversationId: c.id, hid, userId: me, role: 'user', text: msg });
@@ -109,7 +124,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       await addMessage({ conversationId: c.id, hid, userId: me, role: 'ai', text: raw || finalText });
       // When the person mentioned an amount or a decision: update the data
       // from the conversation (shown, with undo), or offer to, if they chose so.
-      if (worthLearning([...c.messages.slice(0, -1)], learnedFrom(c.id))) {
+      if (worthLearning(c.messages.slice(0, -1).filter((m) => !m.local), learnedFrom(c.id))) {
         if (autoLearn()) learnQuietly({ ...c, messages: c.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me } : m)) });
         else setOffer(true);
       }
@@ -170,7 +185,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     try {
       if (!memories.current) memories.current = await loadMemories(hid).catch(() => []);
       const ctx = { ...data, memories: memories.current };
-      const raw = await askLearnings({ messages: learnMessages(c.messages, memberName), context: learnContext(ctx) });
+      const raw = await askLearnings({ messages: learnMessages(c.messages.filter((m) => !m.local), memberName), context: learnContext(ctx) });
       const items = normalizeItems(raw, ctx).filter(isValid);
       markLearned(c.id, c.messages.length);
       if (!items.length) return;
@@ -190,7 +205,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     try {
       if (!memories.current) memories.current = await loadMemories(hid).catch(() => []);
       const ctx = { ...data, memories: memories.current };
-      const raw = await askLearnings({ messages: learnMessages(conv.messages, memberName), context: learnContext(ctx) });
+      const raw = await askLearnings({ messages: learnMessages(conv.messages.filter((m) => !m.local), memberName), context: learnContext(ctx) });
       setLearn({ status: 'review', items: normalizeItems(raw, ctx) });
     } catch (err) {
       setLearn({ status: 'error', error: err.message || 'משהו השתבש. נסו שוב.' });
@@ -250,7 +265,14 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
           ${m.pending && !m.text
             ? html`<span class="adv-thinking" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>היועץ חושב…</span>`
             : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
-          ${m.role === 'ai' && asOfLabel(m.created_at) && html`<small class="adv-asof">${asOfLabel(m.created_at)}</small>`}
+          ${m.howto && html`<div class="adv-howto">
+            <small class="faint">תשובה מהירה מהמדריך של האפליקציה</small>
+            <div class="adv-howto-actions">
+              ${m.howto.go && html`<button type="button" class="btn adv-go" onClick=${() => { track('howto_go'); go(m.howto.go); }}>${m.howto.cta}</button>`}
+              ${aiOn && html`<button type="button" class="btn-text" disabled=${busy} onClick=${() => send(m.question, { force: true })}>לא זה? לשאול את היועץ</button>`}
+            </div>
+          </div>`}
+          ${m.role === 'ai' && !m.local && asOfLabel(m.created_at) && html`<small class="adv-asof">${asOfLabel(m.created_at)}</small>`}
           ${m.role === 'ai' && !m.pending && m.text && canSpeak() && html`<button type="button" class="adv-speak" aria-label=${speaking === i ? 'להפסיק להקריא' : 'להקריא'} onClick=${() => toggleSpeak(i, m.text)}>${speaking === i ? '■' : html`<${Icon} name="speaker" size=${18} />`}</button>`}
         </div>`)}
       </div>

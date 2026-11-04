@@ -4,6 +4,9 @@ import { ruleKey } from '../domain/rules.js';
 // The household's category rules ("always file X as Y"), shared by both partners.
 let cache = { hid: null, rules: null };
 
+// After a category is deleted (its rules moved or gone), read them again.
+export function forgetRules() { cache = { hid: null, rules: null }; }
+
 export async function listRules(hid) {
   if (cache.hid === hid && cache.rules) return cache.rules;
   const { data, error } = await sb.from('category_rules').select('id,type,match,label,category_id,subcategory_id,created_by,created_at').eq('household_id', hid).order('created_at', { ascending: false });

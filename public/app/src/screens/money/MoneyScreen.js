@@ -18,9 +18,10 @@ export function MoneyScreen({ data, onAdd, onImport }) {
   const months = useMemo(() => monthsBack(new Date(), 12), []);
   const [period, setPeriod] = useState('month');
   const [index, setIndex] = useState(months.length - 1);
-  const [view, setView] = useState(() => (VIEWS.some((v) => v.key === routeView(location.hash)) ? routeView(location.hash) : 'list'));
-  // One sheet at a time: { kind: 'tx', id } | { kind: 'cat', id } | null
-  const [sheet, setSheet] = useState(null);
+  // #/money/manage opens the categories with "manage categories" on top.
+  const [view, setView] = useState(() => (routeView(location.hash) === 'manage' ? 'cats' : VIEWS.some((v) => v.key === routeView(location.hash)) ? routeView(location.hash) : 'list'));
+  // One sheet at a time: { kind: 'tx', id } | { kind: 'cat', id } | { kind: 'manage' } | null
+  const [sheet, setSheet] = useState(() => (routeView(location.hash) === 'manage' ? { kind: 'manage' } : null));
 
   if (data.status === 'loading' || data.status === 'idle') return html`<${Loading} label="טוען את התנועות…" />`;
   if (data.status === 'error') {

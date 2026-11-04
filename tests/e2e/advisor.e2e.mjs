@@ -204,3 +204,56 @@ test('desktop: the advisor opens in its own window, with only the conversation',
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('"how do I…" about the app: answered at once from the guide, no AI, and the button goes there', async () => {
+  const { page, db, asked, errors } = await open();
+  await page.click('.ask-fab');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'איך מוחקים קטגוריה?');
+  await page.keyboard.press('Enter');
+  const answer = page.locator('.adv-msg.ai', { has: page.locator('.adv-howto') });
+  await answer.waitFor();
+  assert.match(await answer.textContent(), /ניהול קטגוריות/);
+  assert.match(await answer.textContent(), /תשובה מהירה מהמדריך/);
+  // Nothing went to the AI, and nothing was saved.
+  assert.equal(asked.length, 0);
+  assert.equal(db.tables.advisor_conversations.length, 2);
+  // "Take me there": the advisor closes and "manage categories" is open.
+  await answer.locator('button:has-text("לניהול קטגוריות")').click();
+  await page.waitForSelector('.manage-categories');
+  assert.match(page.url(), /#\/money\/manage$/);
+  assert.equal(await page.locator('.sheet:has-text("שאלו כל דבר")').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('not the answer wanted: "ask the advisor" sends the same question to the AI, without the quick answer', async () => {
+  const { page, asked } = await open();
+  await page.click('.ask-fab');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'איך מוסיפים כרטיס אשראי?');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.adv-howto');
+  await page.click('.adv-howto button:has-text("לא זה? לשאול את היועץ")');
+  await page.waitForSelector('.adv-msg.ai:has-text("כדאי")');
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].message, 'איך מוסיפים כרטיס אשראי?');
+  // The quick answer is not part of what the AI is told.
+  assert.ok(!JSON.stringify(asked[0].history).includes('תשובה מהירה'));
+  assert.ok(!JSON.stringify(asked[0].history).includes('+ כרטיס'));
+  await page.close();
+});
+
+test('a question about the money still goes to the advisor, and a sheet target opens over the screen', async () => {
+  const { page, asked } = await open();
+  await page.click('.ask-fab');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'איך אפשר לחסוך באוכל?');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.adv-msg.ai:has-text("כדאי")');
+  assert.equal(asked.length, 1);
+  assert.equal(await page.locator('.adv-howto').count(), 0);
+  // A quick answer whose target is a sheet: "the data" in the profile.
+  await page.fill('[aria-label="שאלה ליועץ"]', 'איך מורידים את כל המידע?');
+  await page.keyboard.press('Enter');
+  await page.click('.adv-howto button:has-text("למידע שלנו")');
+  await page.waitForSelector('.sheet:has-text("ייצוא כל המידע")');
+  await page.close();
+});

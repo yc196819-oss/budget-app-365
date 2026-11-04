@@ -118,8 +118,8 @@ test('owner dashboard: only for the owner, with active people, return rate and f
     live: { users: 3, visitors: 1, screens: { home: 2, money: 1, login: 1 }, devices: { mobile: 3, desktop: 1 }, installed: 2 },
     funnel: { signups: 28, household: 15, tx: 7, import: 7, cameBack: 0, oldEnough: 0, byDay: { [new Date().toISOString().slice(0, 10)]: 2 } },
     daily: Array.from({ length: 14 }, (_, i) => ({ day: new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10), active: i, cost: 0.05 })),
-    users: [{ who: '#a1b2c3', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31 },
-      { who: '#ffee00', owner: true, joined: '2026-06-28', lastSeen: '2026-11-02', opens: 30, added: 5, imports: 1, importFails: 0, asked: 40, aiCalls: 45, tokens: 90000, cost: 0.9 }]
+    ownerCost30d: 0.9,
+    users: [{ who: '#a1b2c3', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31 }]
   }) }));
   await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
@@ -137,7 +137,10 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   const row = await s.locator('.per-user tbody tr').first().textContent();
   assert.match(row, /#a1b2c3/);
   assert.match(row, /51,000/);
-  assert.match(await s.locator('.per-user tr.owner-row').textContent(), /#ffee00 \(שלך\)/);
+  // The owner's own accounts are not in the list; their AI cost is given apart.
+  assert.equal(await s.locator('.per-user tbody tr').count(), 1);
+  assert.match(await s.textContent(), /החשבונות שלך לא נספרים/);
+  assert.match(await s.textContent(), /מתוכם \$0\.9 שלך/);
   assert.match(t, /\$1\.23/);
   assert.doesNotMatch(t, /@/);
   // Live: who is on now, by screen and device; refreshed every 15 seconds.

@@ -127,6 +127,35 @@ returns jsonb language sql security definer set search_path = public as $$
 $$;
 revoke execute on function public.ops_funnel(timestamptz) from public, anon, authenticated;
 
+-- ops_funnel_exclude: the owner's own accounts are left out of the funnel
+-- (the server passes their ids). Replaces the one-argument version; calls
+-- with the date alone still work through the default.
+drop function if exists public.ops_funnel(timestamptz);
+create or replace function public.ops_funnel(p_since timestamptz, p_exclude uuid[] default '{}')
+returns jsonb language sql security definer set search_path = public as $$
+  with u as (
+    select id, created_at from auth.users where created_at >= p_since and not (id = any(coalesce(p_exclude, '{}')))
+  ), m as (
+    select distinct on (user_id) user_id, household_id from public.memberships order by user_id, created_at
+  ), x as (
+    select u.id, u.created_at, m.household_id,
+      exists (select 1 from public.transactions t where t.household_id = m.household_id) as has_tx,
+      exists (select 1 from public.transactions t where t.household_id = m.household_id and t.source is distinct from 'manual') as has_import,
+      exists (select 1 from public.app_events e where e.user_id = u.id and e.at > u.created_at + interval '7 days') as came_back
+    from u left join m on m.user_id = u.id
+  )
+  select jsonb_build_object(
+    'signups', count(*),
+    'household', count(household_id),
+    'tx', count(*) filter (where has_tx),
+    'import', count(*) filter (where has_import),
+    'cameBack', count(*) filter (where came_back),
+    'oldEnough', count(*) filter (where created_at < now() - interval '7 days'),
+    'byDay', coalesce((select jsonb_object_agg(d, n) from (select to_char(created_at at time zone 'Asia/Jerusalem', 'YYYY-MM-DD') d, count(*) n from u group by 1) s), '{}'::jsonb)
+  ) from x;
+$$;
+revoke execute on function public.ops_funnel(timestamptz, uuid[]) from public, anon, authenticated;
+
 -- Applied 2026-11-02 (imports_and_feedback, imports_removed_at): each
 -- uploaded file, so a wrong one can be removed whole; requests to the owner.
 -- (Earlier statements were grouped into imports by household, source and
