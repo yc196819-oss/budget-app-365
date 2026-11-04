@@ -2110,6 +2110,8 @@ app.post('/api/admin/daily/run', async (req, res) => {
   try {
     if (!(await checkCronSecret(req))) return res.status(401).json({ error: 'unauthorized' });
     if (!FEEDBACK_TO || !mailStatus().ready || !todaySummary) return res.status(503).json({ error: 'not ready' });
+    // Two cron runs a day (20:45 and 21:45 UTC); only the one at 23:45 in Israel sends.
+    if (ops.israelClock().hour !== 23 && !(req.body && req.body.now)) return res.json({ ok: true, skipped: 'not 23:00 in Israel' });
     const { day, items } = await todayItems();
     const { count } = await supabaseAdmin.from('feedback').select('id', { count: 'exact', head: true }).eq('closed', false).eq('archived', false).eq('last_by', 'user');
     const mail = ops.ownerDigestMail({ day, summary: todaySummary(items), items, waiting: count || 0, link: appLinkOf(req) });

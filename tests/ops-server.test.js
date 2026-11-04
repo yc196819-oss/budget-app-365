@@ -294,7 +294,7 @@ test('how each person is doing: stuck, no statement, gone quiet, high AI use, li
 });
 
 test("today (Israel time): who came in, what they did, AI use and errors; yesterday's do not count", () => {
-  const now = new Date('2026-11-04T15:00:00Z'); // 17:00 in Israel
+  const now = new Date('2026-11-04T15:00:00Z'); // 17:00 in Israel (winter, UTC+2)
   const rows = todayRows({
     now,
     users: [{ id: 'a', created_at: '2026-10-01T10:00:00Z' }, { id: 'b', created_at: '2026-11-04T08:00:00Z' }],
@@ -307,7 +307,7 @@ test("today (Israel time): who came in, what they did, AI use and errors; yester
     errors: [{ user_id: 'b', at: '2026-11-04T08:02:00Z' }]
   });
   const a = rows.find((r) => r.id === 'a');
-  assert.deepEqual([a.first, a.last, a.opens, a.imports, a.asked, a.aiCalls, a.cost], ['13:34', '17:27', 1, 1, 1, 1, 0.2]);
+  assert.deepEqual([a.first, a.last, a.opens, a.imports, a.asked, a.aiCalls, a.cost], ['12:34', '16:27', 1, 1, 1, 1, 0.2]);
   const b = rows.find((r) => r.id === 'b');
   assert.deepEqual([b.newToday, b.errors], [true, 1]);
 });
@@ -330,4 +330,12 @@ test("the owner's evening email: today's sentence, each person, requests waiting
   assert.equal(quiet.subject, 'היום: אף אחד לא נכנס');
   // Names are escaped.
   assert.match(ownerDigestMail({ day: '2026-11-04', summary: '', items: [{ name: '<b>x', opens: 1 }], link: 'https://example.test/app/' }).html, /&lt;b&gt;x/);
+});
+
+test("Israel's clock in winter and summer: the evening email's 23:45 and today's day", () => {
+  const { israelClock } = require('../server/ops');
+  assert.deepEqual(israelClock(new Date('2026-11-04T21:45:00Z')), { day: '2026-11-04', hm: '23:45', hour: 23 });
+  assert.deepEqual(israelClock(new Date('2026-07-04T20:45:00Z')), { day: '2026-07-04', hm: '23:45', hour: 23 });
+  assert.equal(israelClock(new Date('2026-11-04T20:45:00Z')).hour, 22);
+  assert.equal(israelClock(new Date('2026-07-04T21:45:00Z')).day, '2026-07-05');
 });

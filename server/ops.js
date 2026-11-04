@@ -551,13 +551,17 @@ function healthOf({ joined = null, lastSeen = null, inHousehold = false, txCount
 
 // Today (Israel time), one row per person who opened the app or signed up:
 // when, what they did, AI use and failures.
-function israelDay(now = new Date()) {
-  return new Date(now.getTime() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+// Israel's clock, summer and winter alike.
+const IL_PARTS = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+function israelClock(now = new Date()) {
+  const p = Object.fromEntries(IL_PARTS.formatToParts(now).map((x) => [x.type, x.value]));
+  return { day: p.year + '-' + p.month + '-' + p.day, hm: p.hour + ':' + p.minute, hour: Number(p.hour) };
 }
+function israelDay(now = new Date()) { return israelClock(now).day; }
 function todayRows({ users = [], events = [], calls = [], errors = [], now = new Date() }) {
   const day = israelDay(now);
   const onDay = (iso) => israelDay(new Date(iso)) === day;
-  const hm = (iso) => new Date(new Date(iso).getTime() + 3 * 3600 * 1000).toISOString().slice(11, 16);
+  const hm = (iso) => israelClock(new Date(iso)).hm;
   const rows = new Map();
   const row = (id) => {
     if (!rows.has(id)) rows.set(id, { id, first: null, last: null, newToday: false, opens: 0, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, cost: 0, errors: 0 });
@@ -604,4 +608,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
