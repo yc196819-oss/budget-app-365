@@ -28,3 +28,15 @@ test('the numbers given to the advisor, and "as of" on an older answer', () => {
   assert.equal(asOfLabel('2026-11-03T11:50:00', now), '', 'a fresh answer needs no date');
   assert.equal(asOfLabel(undefined, now), '');
 });
+
+import { fixSums } from '../public/app/src/domain/numbers.js';
+test('a sum written out in an answer is checked; a wrong result is replaced, written the same way', () => {
+  assert.equal(fixSums('יצאו 40+40+15+10 = 95 ש"ח'), 'יצאו 40+40+15+10 = 105 ש"ח');
+  assert.equal(fixSums('20,000 פחות 15,500 פחות 3,000 = 2,000'), '20,000 פחות 15,500 פחות 3,000 = 1,500');
+  assert.equal(fixSums('-50 - 30 + 100 = 40'), '-50 - 30 + 100 = 20');
+  assert.equal(fixSums('500 + 900 + 300 + 5,000 = 6,600'), '500 + 900 + 300 + 5,000 = 6,700');
+  assert.equal(fixSums('100 − 250 = 150'), '100 − 250 = −150');
+  assert.equal(fixSums('₪1,000 + ₪500 = ₪1,600'), '₪1,000 + ₪500 = ₪1,500');
+  // Right sums, dates and plain text stay as they are.
+  for (const t of ['5,000 + 12,000 + 1,000 = 18,000', 'בין 10-12 בחודש', 'ב-10 בנובמבר', 'קנו 3 ועוד']) assert.equal(fixSums(t), t);
+});

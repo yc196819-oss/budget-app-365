@@ -30,6 +30,24 @@ export function expectedIncome(lines) {
   return (Array.isArray(lines) ? lines : []).reduce((s, l) => s + (num(l && l.amount) || 0), 0);
 }
 
+// The income line an update belongs to: the line whose label shares a
+// word with it ("משכורת דנה" ↔ "משכורת דנה – עבודה"), names first. -1 when
+// none does (a new line). One line with a generic label (no name) is the
+// household's total, so it is the one to change.
+const WORDS_SKIP = new Set(['משכורת', 'הכנסה', 'חודשית', 'נטו', 'הערכה', 'של', 'שכר', 'ברוטו', 'צפויה']);
+const wordsOf = (s) => norm(s).split(/[\s\-–—()·,]+/).filter((w) => w.length >= 2 && !WORDS_SKIP.has(w));
+export function incomeLineIndex(lines, label) {
+  const list = Array.isArray(lines) ? lines : [];
+  const want = wordsOf(label);
+  if (want.length) {
+    const i = list.findIndex((l) => wordsOf(l && l.label).some((w) => want.includes(w)));
+    if (i >= 0) return i;
+  }
+  if (!want.length && list.length === 1) return 0;
+  if (list.length === 1 && !wordsOf(list[0] && list[0].label).length) return 0;
+  return -1;
+}
+
 // What the AI is told about the household, so it can refer to real goals,
 // categories and accounts. Only names and amounts, never transactions.
 export function learnContext({ goals = [], categories = [], budgets = [], accounts = [], loans = [], income = [], memories = [] }) {
@@ -39,7 +57,7 @@ export function learnContext({ goals = [], categories = [], budgets = [], accoun
     categories: categories.filter((c) => !c.parent_id && c.kind !== 'income').map((c) => ({ name: c.name, budget: budgetOf.get(c.id) || 0 })),
     accounts: accounts.map((a) => ({ id: a.id, name: a.name, balance: a.balance ?? null })),
     loans: loans.filter((l) => !l.settled).map((l) => ({ counterparty: l.counterparty, direction: l.direction, amount: Number(l.amount) || 0 })),
-    income: expectedIncome(income) || null,
+    income: (Array.isArray(income) ? income : []).map((l) => ({ label: l.label || '', amount: Number(l.amount) || 0 })),
     memories: memories.map((m) => (typeof m === 'string' ? m : m.text)).filter(Boolean).slice(0, 40)
   };
 }
@@ -132,11 +150,15 @@ function normalizeOne(raw, data) {
       return { kind: 'installment', description, total_amount: total, payments_count: count, first_payment: normDate(raw.first_payment) || today };
     }
     case 'income': {
+      // One person's (or one source's) expected monthly income: it changes
+      // that line only, never the household's other incomes.
       const amount = money(raw.amount);
       if (!(amount > 0)) return null;
-      const before = expectedIncome(income);
-      if (amount === before) return null;
-      return { kind: 'income', amount, before: before || null };
+      const label = clean(raw.label, 40) || 'הכנסה חודשית נטו';
+      const i = incomeLineIndex(income, label);
+      const line = i >= 0 ? income[i] : null;
+      if (line && money(line.amount) === amount) return null;
+      return { kind: 'income', label: line ? line.label || label : label, amount, before: line ? money(line.amount) : null };
     }
     default:
       return null;
@@ -191,7 +213,12 @@ export const KIND_LABEL = {
 // messages): an amount, or words of a decision or plan. Cheap, no AI call;
 // used to offer "save what I learned?" after a reply.
 const LEARN_WORDS = /(החלטנו|סיכמנו|נחליט|מעכשיו|מתכננים|מתכננת|מתכנן|רוצים לחסוך|לחסוך ל|יעד|תקציב|משכורת|הכנסה|הלוואה|לקחנו|תשלומים|קנינו|נקנה|יתרה|בחשבון יש|חוסכים|נחסוך|לא נוגעים|חשוב לנו)/;
+// "Don't update" (or "just a question") in the last message: nothing is
+// learned from it.
+export const NO_LEARN = /(אל|לא|בלי|אין)\s+(ל|ת|צריך\s+ל)?עדכן|אל\s+תשמור|לא\s+לשמור|רק\s+שאלה/;
 export function worthLearning(messages, from = 0) {
+  const mine = (messages || []).filter((m) => m.role === 'user');
+  if (mine.length && NO_LEARN.test(mine[mine.length - 1].text || '')) return false;
   return (messages || []).slice(from).some((m) => m.role === 'user' && (LEARN_WORDS.test(m.text || '') || /\d{3,}|\d+[,.]\d{3}|\d+\s*(אלף|₪|ש"ח|שח)/.test(m.text || '')));
 }
 
@@ -213,7 +240,7 @@ export function describeItem(item) {
     case 'balance': return 'יתרה ב' + item.account + ': ' + ils(item.balance) + (item.before !== null && item.before !== undefined ? ' (היה ' + ils(item.before) + ')' : '');
     case 'loan': return (item.direction === 'tome' ? 'חייבים לכם: ' : 'אתם חייבים ל') + item.counterparty + ' ' + ils(item.amount);
     case 'installment': return 'עסקה בתשלומים: ' + item.description + ' · ' + item.payments_count + ' × ' + ils(item.total_amount / item.payments_count);
-    case 'income': return 'הכנסה חודשית: ' + ils(item.amount) + (item.before ? ' (היה ' + ils(item.before) + ')' : '');
+    case 'income': return 'הכנסה צפויה · ' + (item.label || 'משק הבית') + ': ' + ils(item.amount) + (item.before ? ' (היה ' + ils(item.before) + ')' : ' (חדש)');
     default: return '';
   }
 }

@@ -115,7 +115,7 @@ export function impact({ amount, wanted_by }, data, today) {
   const i = monthIndex(wanted_by, today);
   const start = (data.accounts || []).filter((a) => a.balance !== null && a.balance !== undefined && a.balance !== '');
   const startBalance = start.length ? start.reduce((s, a) => s + Number(a.balance), 0) : null;
-  const args = { txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], budgets: data.budgets || [], today, startBalance };
+  const args = { txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], budgets: data.budgets || [], income: data.income || [], today, startBalance };
   const before = forecast(args).months[i];
   const after = forecast({ ...args, scenarios: [{ kind: 'buy', amount: amt, month: i }] }).months[i];
   const plan = monthPlan({ txs: data.txs || [], budgets: data.budgets || [], today });

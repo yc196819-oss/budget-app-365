@@ -16,7 +16,7 @@ export function ComingMonths({ data, onSheet, onBudget }) {
   const [scenarios, setScenarios] = useState([]);
   const today = new Date();
   const cash = cashNow(data.accounts, data.cards, data.txs, today);
-  const args = { txs: data.txs, goals: data.goals, installments: data.installments, budgets: data.budgets, today, startBalance: cash.known ? cash.free : null };
+  const args = { txs: data.txs, goals: data.goals, installments: data.installments, budgets: data.budgets, income: data.income, today, startBalance: cash.known ? cash.free : null };
   const fc = forecast({ ...args, scenarios });
   const base = scenarios.length ? forecast(args) : null;
   const v = verdict(fc);

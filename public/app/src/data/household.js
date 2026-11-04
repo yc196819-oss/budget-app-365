@@ -300,6 +300,19 @@ export async function deleteCategory(id, targetId = null) {
 // The monthly net income the household expects (households.income_expectations,
 // the lines the previous app edits). The approved total becomes one line,
 // keeping its name when there was a single line.
+// One line of the expected income (by its label): set it, add it, or with
+// 0 remove it. The other lines (the partner's salary) stay as they are.
+export async function setIncomeLine(label, amount) {
+  const value = Math.max(0, Math.round(Number(amount) || 0));
+  const name = String(label || '').trim() || 'הכנסה חודשית נטו';
+  const rest = state.income.filter((l) => String(l && l.label || '').trim() !== name);
+  const next = value > 0 ? [...rest, { label: name, amount: value }] : rest;
+  const { error } = await sb.from('households').update({ income_expectations: next }).eq('id', state.hid);
+  if (error) throw error;
+  state.income = next;
+  emit();
+}
+
 export async function setIncome(amount) {
   const value = Math.max(0, Math.round(Number(amount) || 0));
   const label = state.income.length === 1 && state.income[0] && state.income[0].label ? state.income[0].label : 'הכנסה חודשית נטו';

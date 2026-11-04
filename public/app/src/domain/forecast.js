@@ -87,9 +87,15 @@ function scenarioLines(scenarios, i) {
   return out;
 }
 
-export function forecast({ txs, goals = [], installments = [], budgets = [], today, startBalance = null, scenarios = [], months = 6 }) {
+// income: the household's expected monthly income lines (what they told the
+// app or the advisor, one line per person). When set, it is the income of
+// every coming month; this month, what has not come in yet is still expected
+// (a salary not paid yet is not "no income").
+export function forecast({ txs, goals = [], installments = [], budgets = [], income = [], today, startBalance = null, scenarios = [], months = 6 }) {
   const base = baseline(txs, today);
   const plan = monthPlan({ txs, budgets, today });
+  const expected = sum(Array.isArray(income) ? income : [], (l) => Number(l && l.amount) || 0);
+  const monthlyIncome = expected > 0 ? expected : base.income;
   let balance = startBalance ?? 0;
   const out = [];
   for (let i = 0; i < months; i++) {
@@ -99,12 +105,12 @@ export function forecast({ txs, goals = [], installments = [], budgets = [], tod
     if (i === 0) {
       // Only what is still to come this month moves the balance.
       lines = [
-        { label: 'הכנסות שעוד יגיעו החודש', amount: plan.projectedIncome - plan.incomeSoFar, kind: 'income' },
+        { label: 'הכנסות שעוד יגיעו החודש', amount: Math.max(plan.projectedIncome, monthlyIncome) - plan.incomeSoFar, kind: 'income' },
         { label: 'הוצאות עד סוף החודש', amount: -(plan.projectedExpense - plan.spent), kind: 'expense' }
       ];
     } else {
       lines = [
-        { label: 'הכנסות (ממוצע 3 חודשים)', amount: base.income, kind: 'income' },
+        { label: expected > 0 ? 'הכנסה צפויה (כפי שעדכנתם)' : 'הכנסות (ממוצע 3 חודשים)', amount: monthlyIncome, kind: 'income' },
         { label: 'הוצאות קבועות', amount: -base.fixed, kind: 'fixed' },
         { label: 'הוצאות משתנות (ממוצע 3 חודשים)', amount: -base.variable, kind: 'variable' },
         ...yearly(txs, mo)
@@ -117,7 +123,7 @@ export function forecast({ txs, goals = [], installments = [], budgets = [], tod
     balance += net;
     out.push({ index: i, month: mo, name: MONTH_NAMES[mo.m] + ' ' + mo.y, short: MONTH_NAMES[mo.m], lines, net, end: balance });
   }
-  return { months: out, base, regularNet: base.income - base.fixed - base.variable, hasBalance: startBalance !== null && startBalance !== undefined };
+  return { months: out, base, expectedIncome: expected, regularNet: monthlyIncome - base.fixed - base.variable, hasBalance: startBalance !== null && startBalance !== undefined };
 }
 
 // One sentence on where the half year is heading.

@@ -123,7 +123,7 @@ test('the offer to save shows only after the person mentions an amount or a deci
 test('the context sent to the AI has names and amounts, never transactions', () => {
   const ctx = learnContext({ ...data, txs: [{ description: 'שופרסל' }] });
   assert.deepEqual(ctx.categories, [{ name: 'אוכל', budget: 3000 }, { name: 'רכב', budget: 0 }]);
-  assert.equal(ctx.income, 18000);
+  assert.deepEqual(ctx.income, [{ label: 'משכורות', amount: 18000 }]);
   assert.deepEqual(ctx.memories, ['לא לוקחים הלוואות לחופשות']);
   assert.equal(ctx.goals[0].id, 'g1');
   assert.doesNotMatch(JSON.stringify(ctx), /שופרסל/);
@@ -133,4 +133,26 @@ test('the context sent to the AI has names and amounts, never transactions', () 
 test('the conversation sent to the server: names on the person\'s messages, no pending ones', () => {
   const out = learnMessages([{ role: 'user', text: 'שלום', author_id: 'u1' }, { role: 'ai', text: '' , pending: true }, { role: 'ai', text: 'היי' }], () => 'יוסי');
   assert.deepEqual(out, [{ role: 'user', author: 'יוסי', text: 'שלום' }, { role: 'ai', author: undefined, text: 'היי' }]);
+});
+
+import { incomeLineIndex, NO_LEARN } from '../public/app/src/domain/learn.js';
+test("one person's income changes only their line, never the partner's", () => {
+  const lines = [{ label: 'משכורת דנה – עבודה (הערכה)', amount: 15000 }];
+  // The same person: their line.
+  const a = normalizeItems([{ kind: 'income', label: 'משכורת דנה', amount: 13000 }], { ...data, income: lines });
+  assert.deepEqual([a[0].label, a[0].amount, a[0].before], ['משכורת דנה – עבודה (הערכה)', 13000, 15000]);
+  // Another person: a line of their own, the first one stays.
+  const b = normalizeItems([{ kind: 'income', label: 'משכורת יוסי', amount: 6000 }], { ...data, income: lines });
+  assert.deepEqual([b[0].label, b[0].amount, b[0].before], ['משכורת יוסי', 6000, null]);
+  assert.equal(incomeLineIndex(lines, 'משכורת יוסי'), -1);
+  // A household total with no name is the one line to change.
+  assert.equal(incomeLineIndex([{ label: 'הכנסה חודשית נטו', amount: 18000 }], 'הכנסה חודשית נטו'), 0);
+});
+
+test('"don\'t update" in the last message: nothing is learned from it', () => {
+  for (const t of ['ירד חיוב של 1200, אל תעדכן', 'רק שאלה: כמה זה 3000 ועוד 400', 'לא לעדכן את זה, 5000']) {
+    assert.ok(NO_LEARN.test(t), t);
+    assert.equal(worthLearning([{ role: 'user', text: t }]), false, t);
+  }
+  assert.equal(worthLearning([{ role: 'user', text: 'ירד חיוב של 1200 מהחשבון' }]), true);
 });

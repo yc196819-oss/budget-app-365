@@ -4,7 +4,7 @@ import { track } from '../../lib/telemetry.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { buildSummary, parseReply, starters, newTitle, historyFor } from '../../domain/advisor.js';
-import { alignNumbers, truthsOf, asOfLabel } from '../../domain/numbers.js';
+import { alignNumbers, truthsOf, asOfLabel, fixSums } from '../../domain/numbers.js';
 import { listConversations, openConversation, createConversation, addMessage, setPrivate, loadMemories, streamReply } from '../../data/advisor.js';
 import { setAiEnabled, autoLearn } from '../../lib/settings.js';
 import { canListen, listen, canSpeak, speak, stopSpeaking } from '../../lib/speech.js';
@@ -114,7 +114,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       }, abort.current.signal);
       // The numbers in the answer are the screen's numbers, exactly.
       const truths = truthsOf(summary);
-      raw = alignNumbers(raw, truths);
+      raw = fixSums(alignNumbers(raw, truths));
       const reply = parseReply(raw);
       const finalText = reply.text || 'לא התקבלה תשובה. נסו לנסח אחרת.';
       answered = reply.text || null;

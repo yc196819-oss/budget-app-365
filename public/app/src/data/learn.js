@@ -1,6 +1,6 @@
 import { sb } from '../lib/supabase.js';
 import { CONFIG } from '../config.js';
-import { saveGoal, deleteGoal, setBudget, setBalance, saveRow, deleteRow, setIncome } from './household.js';
+import { saveGoal, deleteGoal, setBudget, setBalance, saveRow, deleteRow, setIncome, setIncomeLine } from './household.js';
 
 // What the advisor learned: ask the server, then save what the person
 // approved, each item into the place it belongs. Memories live in
@@ -39,7 +39,7 @@ function saveOne(item, { hid, userId, conversationId }) {
     case 'installment':
       return saveRow('installments', { description: item.description, total_amount: item.total_amount, payments_count: item.payments_count, first_payment: item.first_payment });
     case 'income':
-      return setIncome(item.amount);
+      return item.label ? setIncomeLine(item.label, item.amount) : setIncome(item.amount);
     default:
       return Promise.reject(new Error('unknown kind'));
   }
@@ -68,7 +68,7 @@ export function undoLearning(item, { hid }) {
     case 'balance': return item.before === null || item.before === undefined ? Promise.resolve() : setBalance(item.account_id, item.before);
     case 'loan': return id ? deleteRow('loans', id) : Promise.resolve();
     case 'installment': return id ? deleteRow('installments', id) : Promise.resolve();
-    case 'income': return setIncome(item.before || 0);
+    case 'income': return item.label ? setIncomeLine(item.label, item.before || 0) : setIncome(item.before || 0);
     default: return Promise.resolve();
   }
 }
