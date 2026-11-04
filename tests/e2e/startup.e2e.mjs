@@ -79,12 +79,14 @@ test('a new version reaches an app that stays open: the page loads it by itself,
   await page.waitForSelector('.hero');
   await page.waitForFunction(() => navigator.serviceWorker.controller);
   await page.evaluate(() => { window.__sameLoad = true; });
+  const before = await page.evaluate(async () => caches.keys());
   // A deploy: the worker file changes on the server (put back right after).
   const fs = await import('node:fs');
   const file = new URL('../../public/sw.js', import.meta.url);
   const original = fs.readFileSync(file, 'utf8');
   try {
-    fs.writeFileSync(file, original.replace(/budget-app-v\d+/, 'budget-app-vNEXT'));
+    // Any change to the app's files gives the worker a new version by itself.
+    fs.writeFileSync(file, original + '\n// a new deploy\n');
     // The person comes back to the app from the background.
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await page.waitForFunction(() => !window.__sameLoad, null, { timeout: 15000 });
@@ -92,6 +94,7 @@ test('a new version reaches an app that stays open: the page loads it by itself,
     fs.writeFileSync(file, original);
   }
   await page.waitForSelector('.hero');
-  assert.ok(await page.evaluate(async () => (await caches.keys()).includes('budget-app-vNEXT')), 'running on the new version');
+  const after = await page.evaluate(async () => caches.keys());
+  assert.ok(after.some((k) => /^budget-app-[0-9a-f]{12}$/.test(k) && !before.includes(k)), 'running on the new version: ' + after.join());
   await context.close();
 });

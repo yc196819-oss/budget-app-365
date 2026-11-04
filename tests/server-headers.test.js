@@ -253,3 +253,11 @@ test('tell your friends: both endpoints need a signed-in person', async () => {
   const r = await fetch(BASE + '/api/share/joined', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"ref":"a1b2c3"}' });
   assert.ok([401, 503].includes(r.status));
 });
+
+test('installed or not, everyone gets the same version: the service worker is versioned by the app\'s own files', async () => {
+  const res = await fetch(BASE + '/sw.js');
+  assert.equal(res.headers.get('cache-control'), 'no-cache');
+  const sw = await res.text();
+  assert.match(sw, /const CACHE = 'budget-app-[0-9a-f]{12}';/);
+  assert.doesNotMatch(sw, /budget-app-dev/);
+});

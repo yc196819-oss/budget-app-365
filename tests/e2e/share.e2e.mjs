@@ -62,3 +62,26 @@ test('arriving from a friend\'s link: the code is sent once after signing in', a
   assert.equal(calls.length, 1, 'once');
   await page.close();
 });
+
+test('writing to us is one tap from the home screen, and near the top of the profile', async () => {
+  const { page, errors } = await open();
+  await page.locator('.talk-to-us button:has-text("לכתוב לנו")').click();
+  await page.waitForSelector('.sheet[aria-label="פנייה אלינו"]');
+  await page.click('.sheet button[aria-label="סגירה"]');
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  // Right under "tell your friends", not at the bottom of the list.
+  const order = await page.evaluate(() => [...document.querySelectorAll('.sheet .share-card, .sheet button')].map((b) => b.className.includes('share-card') ? 'share' : b.textContent.trim()).filter((t) => t === 'share' || /תקלות ורעיונות|מצב כהה|מצב בהיר/.test(t)));
+  assert.deepEqual(order.slice(0, 2), ['share', 'תקלות ורעיונות לשיפור']);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('on a computer, the side menu has "write to us" too', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  await mockSupabase(page, makeFakeDb());
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/money');
+  await page.locator('.sidebar .side-talk').click();
+  await page.waitForSelector('.sheet[aria-label="פנייה אלינו"]');
+  await page.close();
+});

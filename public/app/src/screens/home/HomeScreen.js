@@ -13,6 +13,7 @@ import { LearnCard } from '../learn/LearnCard.js';
 import { PlanCards } from '../plans/PlanCards.js';
 import { PlanSheets, usePlanSheet } from '../plans/PlanSheets.js';
 import { InstallCard } from '../../components/InstallCard.js';
+import { TalkToUs } from '../../components/TalkToUs.js';
 import { TripFound } from '../trips/TripFound.js';
 import { useTrips } from '../../data/useTrips.js';
 import { SetupGuide } from './SetupGuide.js';
@@ -78,6 +79,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
       <${CashCard} cash=${cash} accounts=${data.accounts} />
       ${onLearn && html`<${LearnCard} userId=${userId} onOpen=${onLearn} />`}
       <${Upcoming} items=${soon} />
+      <${TalkToUs} />
     </div>
     <${PlanSheets} data=${data} sheet=${planSheet.value} onClose=${planSheet.close} />
     ${sheet && sheet.kind === 'sort' && html`<${SortSheet} data=${data} onClose=${() => setSheet(null)} />`}

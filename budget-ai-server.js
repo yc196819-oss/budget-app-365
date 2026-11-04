@@ -2865,6 +2865,29 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
 });
 // The previous version of the app is gone; its old address opens the app.
 app.get(['/old', '/old/'], (req, res) => res.redirect(301, '/app/'));
+// The service worker carries a version made from the app's own files, so
+// every deploy that changes the app changes it too. Phones (installed or
+// not) then pick up the whole new version at once, never half old, half new.
+function appVersion() {
+  const h = crypto.createHash('sha256');
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p); else h.update(e.name).update(fs.readFileSync(p));
+    }
+  };
+  walk(NEW_APP_DIR);
+  h.update(fs.readFileSync(path.join(PUBLIC_DIR, 'sw.js')));
+  return h.digest('hex').slice(0, 12);
+}
+let SW_BODY = null;
+app.get('/sw.js', (req, res) => {
+  if (!SW_BODY || process.env.NODE_ENV !== 'production') {
+    SW_BODY = fs.readFileSync(path.join(PUBLIC_DIR, 'sw.js'), 'utf8').replace(/const CACHE = '[^']*';/, "const CACHE = 'budget-app-" + appVersion() + "';");
+  }
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('application/javascript').send(SW_BODY);
+});
 app.use(express.static(PUBLIC_DIR, { index: false }));
 // The new app uses hash routes (/app/#/money), so every other GET under /app
 // gets its shell.
