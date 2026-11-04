@@ -102,10 +102,8 @@ app.use('/api/ai', (req, res, next) => {
 });
 
 // ═══ security headers ═══
-// Applied to every response. The strict Content-Security-Policy only covers
-// the new app under /app: the current app (public/index.html) relies on
-// inline scripts, inline handlers and several CDNs, so a strict CSP would
-// break it. It still gets the other headers.
+// Applied to every response. The app under /app and its pages get the
+// strict Content-Security-Policy.
 const NEW_APP_DIR = path.join(PUBLIC_DIR, 'app');
 function inlineScriptHash(file, type) {
   try {
@@ -2036,12 +2034,17 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     const per = ops.perUser({ users: signedUp, events, calls: calls.data || [], salt: ADMIN_SALT, owners });
     // Each person's name and how they are doing (by their label; no ids or emails leave).
     const info = await peopleInfo(all.filter((u) => others(u.id)));
+    // Shares and friends who joined, per person (by label) and in total.
+    const { data: refs } = await supabaseAdmin.from('referrals').select('ref_code').limit(100000);
+    const sh = ops.shareStats({ users: all, events: ev.data || [], referrals: refs || [], salt: ADMIN_SALT, owners });
+    const shareByLabel = new Map(all.filter((u) => others(u.id)).map((u) => [ops.alias(u.id, ADMIN_SALT), sh.byUser.get(u.id)]));
     const byLabel = new Map([...info.values()].map((x) => [x.label, x]));
     const costs = per.users.map((u) => u.cost).filter((c) => c > 0).sort((a, b) => a - b);
     const medianCost = costs.length ? costs[Math.floor(costs.length / 2)] : 0;
     per.users = per.users.map((u) => {
       const x = byLabel.get(u.who) || {};
-      return { ...u, name: x.name || '', health: ops.healthOf({ ...x, joined: u.joined, lastSeen: u.lastSeen, imports: u.imports, importFails: u.importFails, asked: u.asked, cost: u.cost, medianCost }) };
+      const z = shareByLabel.get(u.who) || { shares: 0, friends: 0 };
+      return { ...u, name: x.name || '', shares: z.shares, friends: z.friends, health: ops.healthOf({ ...x, joined: u.joined, lastSeen: u.lastSeen, imports: u.imports, importFails: u.importFails, asked: u.asked, cost: u.cost, medianCost }) };
     });
     let members = supabaseAdmin.from('memberships').select('user_id', { count: 'exact', head: true });
     if (owners.length) members = members.not('user_id', 'in', '(' + owners.join(',') + ')');
@@ -2053,7 +2056,7 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     const [{ count: memberCount }, { data: funnel }] = await Promise.all([members, funnelOf()]);
     return res.json({
       ...ops.stats({ events, errors: er.data || [] }), members: memberCount || 0, signedUp: signedUp.length, ...per,
-      live: presence.snapshot(Date.now(), owners), funnel: funnel || null, daily: ops.daily({ events, calls: calls.data || [] })
+      live: presence.snapshot(Date.now(), owners), funnel: funnel || null, sharing: sh.totals, daily: ops.daily({ events, calls: calls.data || [] })
     });
   } catch (err) {
     console.error('admin stats failed:', err.message);
@@ -2121,6 +2124,28 @@ app.post('/api/admin/daily/run', async (req, res) => {
     console.error('owner digest failed:', err.message);
     return res.status(500).json({ error: 'failed' });
   }
+});
+// "Tell your friends": this person's link code and how many joined with it.
+app.get('/api/share', requireAuth, async (req, res) => {
+  try {
+    const code = ops.refCode(req.authUserId, ADMIN_SALT);
+    const { count } = await supabaseAdmin.from('referrals').select('user_id', { count: 'exact', head: true }).eq('ref_code', code);
+    return res.json({ code, joined: count || 0 });
+  } catch (err) { return res.status(500).json({ error: 'failed' }); }
+});
+// A new person who came from a friend's link. Counted once, only for an
+// account made in the last 14 days, and never for one's own link.
+app.post('/api/share/joined', requireAuth, async (req, res) => {
+  try {
+    const ref = String((req.body && req.body.ref) || '');
+    if (!/^[0-9a-f]{6}$/.test(ref)) return res.status(400).json({ error: 'bad request' });
+    if (ref === ops.refCode(req.authUserId, ADMIN_SALT)) return res.json({ ok: false });
+    const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
+    const made = data && data.user && new Date(data.user.created_at).getTime();
+    if (!made || Date.now() - made > 14 * 86400000) return res.json({ ok: false });
+    const { error } = await supabaseAdmin.from('referrals').insert({ user_id: req.authUserId, ref_code: ref });
+    return res.json({ ok: !error });
+  } catch (err) { return res.status(500).json({ error: 'failed' }); }
 });
 // One person's email, only when the owner asks for it (to write to them).
 app.get('/api/admin/email', requireAuth, async (req, res) => {
@@ -2818,9 +2843,8 @@ function appShell() {
   return APP_SHELL;
 }
 
-// The main address opens the new app; the query string is kept, so invite
-// links (?invite=) and push links from the previous version still work. The
-// previous version stays available at /old/.
+// The main address opens the app; the query string is kept, so invite
+// links (?invite=) and older push links still work.
 app.get('/', (req, res) => {
   const q = req.originalUrl.indexOf('?');
   res.redirect(302, '/app/' + (q >= 0 ? req.originalUrl.slice(q) : ''));
@@ -2839,9 +2863,30 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
   if (!links) return res.status(404).json([]);
   return res.json(links);
 });
-app.get(['/old', '/old/'], (req, res) => {
-  if (req.path === '/old') return res.redirect(301, '/old/');
-  return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+// The previous version of the app is gone; its old address opens the app.
+app.get(['/old', '/old/'], (req, res) => res.redirect(301, '/app/'));
+// The service worker carries a version made from the app's own files, so
+// every deploy that changes the app changes it too. Phones (installed or
+// not) then pick up the whole new version at once, never half old, half new.
+function appVersion() {
+  const h = crypto.createHash('sha256');
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p); else h.update(e.name).update(fs.readFileSync(p));
+    }
+  };
+  walk(NEW_APP_DIR);
+  h.update(fs.readFileSync(path.join(PUBLIC_DIR, 'sw.js')));
+  return h.digest('hex').slice(0, 12);
+}
+let SW_BODY = null;
+app.get('/sw.js', (req, res) => {
+  if (!SW_BODY || process.env.NODE_ENV !== 'production') {
+    SW_BODY = fs.readFileSync(path.join(PUBLIC_DIR, 'sw.js'), 'utf8').replace(/const CACHE = '[^']*';/, "const CACHE = 'budget-app-" + appVersion() + "';");
+  }
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('application/javascript').send(SW_BODY);
 });
 app.use(express.static(PUBLIC_DIR, { index: false }));
 // The new app uses hash routes (/app/#/money), so every other GET under /app
@@ -2855,8 +2900,10 @@ app.get('/app-config.js', (req, res) => {
   res.type('application/javascript');
   res.send(`window.__APP_CONFIG = { API_BASE: '' };`);
 });
+// Anything else: a page opens the app, anything else is not found.
 app.use((req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  if (req.method === 'GET' && !req.path.startsWith('/api/')) return res.redirect(302, '/app/');
+  return res.status(404).json({ error: 'not found' });
 });
 
 // Any route that throws: the person gets a plain error, and the failure is kept.

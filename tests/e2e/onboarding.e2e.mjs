@@ -140,13 +140,13 @@ test('sign-up: name, email and password; the invite code travels with it', async
   await page.close();
 });
 
-test('the main address opens the new app; the previous version is linked at /old/', async () => {
+test('the main address opens the app, with no link to the old version', async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await mockSupabase(page, newUserDb());
   await page.goto(server.base + '/');
   await page.waitForSelector('.login');
   assert.equal(new URL(page.url()).pathname, '/app/');
-  assert.equal(await page.locator('a[href="/old/"]').count(), 1);
+  assert.equal(await page.locator('a[href="/old/"]').count(), 0);
   await page.close();
 });
 

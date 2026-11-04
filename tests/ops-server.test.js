@@ -363,3 +363,23 @@ test('getting-started emails: a one-click link to stop them, and whoever stopped
   ], ['x', 'y']);
   assert.deepEqual(st, { byCampaign: { start: { sent: 2, failed: 1, last: '2026-11-04T19:29:00Z' } }, stopped: 2 });
 });
+
+test("a person's share code: stable, 6 hex, and not their dashboard label", () => {
+  const { refCode, alias } = require('../server/ops');
+  const id = '3f1c2b4a-1111-2222-3333-444455556666';
+  assert.match(refCode(id, 's'), /^[0-9a-f]{6}$/);
+  assert.equal(refCode(id, 's'), refCode(id, 's'));
+  assert.notEqual('#' + refCode(id, 's'), alias(id, 's'));
+});
+
+test("the owner sees who shared and how many joined through each one; the owner's own apart", () => {
+  const { shareStats, refCode } = require('../server/ops');
+  const users = [{ id: 'a' }, { id: 'b' }, { id: 'me' }];
+  const events = [{ user_id: 'a', name: 'share' }, { user_id: 'a', name: 'share' }, { user_id: 'b', name: 'app_open' }, { user_id: 'me', name: 'share' }];
+  const referrals = [{ ref_code: refCode('a', 's') }, { ref_code: refCode('me', 's') }, { ref_code: refCode('me', 's') }, { ref_code: 'ffffff' }];
+  const r = shareStats({ users, events, referrals, salt: 's', owners: ['me'] });
+  assert.deepEqual(r.byUser.get('a'), { shares: 2, friends: 1 });
+  assert.deepEqual(r.byUser.get('b'), { shares: 0, friends: 0 });
+  assert.equal(r.byUser.has('me'), false);
+  assert.deepEqual(r.totals, { shares: 2, friends: 1, sharers: 1, mine: { shares: 1, friends: 2 } });
+});

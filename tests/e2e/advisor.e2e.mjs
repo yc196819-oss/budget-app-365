@@ -257,3 +257,19 @@ test('a question about the money still goes to the advisor, and a sheet target o
   await page.waitForSelector('.sheet:has-text("ייצוא כל המידע")');
   await page.close();
 });
+
+test('typing right away as the advisor opens: the box keeps the cursor, so Enter sends', async () => {
+  const { page } = await open();
+  // The sheet takes the cursor a moment after it opens; typing first must win.
+  await page.evaluate(() => {
+    document.querySelector('.ask-fab').click();
+    return new Promise((ok) => setTimeout(() => {
+      const box = document.querySelector('[aria-label="שאלה ליועץ"]');
+      if (box) box.focus();
+      ok();
+    }, 0));
+  });
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('aria-label')), 'שאלה ליועץ');
+  await page.close();
+});

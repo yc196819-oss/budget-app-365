@@ -2,7 +2,7 @@
 // owner looks at (who uses it, who comes back, what breaks). Pure.
 
 // The only events kept: what someone did, never what they wrote or how much.
-const EVENTS = ['app_open', 'tx_add', 'import_done', 'advisor_ask', 'advisor_talk', 'decision_open', 'decision_message', 'trip_plan', 'news_open', 'lesson_done', 'shortcut', 'export', 'restore', 'import_fail', 'guide_step', 'guide_skip', 'learn_auto', 'learn_undo', 'onboard_0', 'onboard_1', 'onboard_2', 'onboard_3', 'onboard_4', 'onboard_5', 'onboard_done'];
+const EVENTS = ['app_open', 'tx_add', 'import_done', 'advisor_ask', 'advisor_talk', 'decision_open', 'decision_message', 'trip_plan', 'news_open', 'lesson_done', 'shortcut', 'export', 'restore', 'import_fail', 'guide_step', 'guide_skip', 'learn_auto', 'learn_undo', 'onboard_0', 'onboard_1', 'onboard_2', 'onboard_3', 'onboard_4', 'onboard_5', 'onboard_done', 'share', 'share_joined', 'howto'];
 const text = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 // A failure report from the app -> a row, or null. Never more than 20 at once.
@@ -102,6 +102,26 @@ function aiCallRow({ userId = null, route = 'system', provider, model = null, in
 // how each one uses the app, not who they are or what they wrote.
 function alias(userId, salt = '') {
   return '#' + require('crypto').createHash('sha256').update(salt + ':' + userId).digest('hex').slice(0, 6);
+}
+
+// The code in a person's "tell your friends" link: stable, short, and not
+// the same as their label on the owner's dashboard.
+function refCode(userId, salt = '') { return alias(userId, 'ref:' + salt).slice(1); }
+// For the owner: how many times each person shared (events, 30 days) and
+// how many joined with their link (all time); and the owner's own, apart.
+function shareStats({ users = [], events = [], referrals = [], salt = '', owners = [] }) {
+  const joinedBy = new Map();
+  for (const r of referrals) joinedBy.set(r.ref_code, (joinedBy.get(r.ref_code) || 0) + 1);
+  const shares = new Map();
+  for (const e of events) if (e.name === 'share' && e.user_id) shares.set(e.user_id, (shares.get(e.user_id) || 0) + 1);
+  const byUser = new Map();
+  const mine = { shares: 0, friends: 0 };
+  for (const u of users) {
+    const x = { shares: shares.get(u.id) || 0, friends: joinedBy.get(refCode(u.id, salt)) || 0 };
+    if (owners.includes(u.id)) { mine.shares += x.shares; mine.friends += x.friends; } else byUser.set(u.id, x);
+  }
+  const others = [...byUser.values()];
+  return { byUser, totals: { shares: others.reduce((t, x) => t + x.shares, 0), friends: others.reduce((t, x) => t + x.friends, 0), sharers: others.filter((x) => x.shares > 0).length, mine } };
 }
 
 // One row per person, last 30 days: when they joined and were last seen,
@@ -624,4 +644,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

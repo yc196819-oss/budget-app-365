@@ -38,17 +38,18 @@ export function TodayCard() {
 }
 
 // Everyone, with how each one is doing; filter by state.
-export function PeopleCard({ users, aiCost, costNote }) {
+export function PeopleCard({ users, aiCost, costNote, sharing }) {
   const [filter, setFilter] = useState('all');
   const counts = healthCounts(users);
   const shown = users.filter((u) => filter === 'all' || u.health.level === filter);
   return html`<div class="card stack per-user people">
     <b>המשתמשים (30 יום)</b>
     <span class="muted" style="font-size:14px;line-height:1.55">שם כפי שנתנו באפליקציה, ומה הם עשו (בלי סכומים ובלי מה שכתבו). המייל מופיע רק בלחיצה. החשבונות שלך לא נספרים. עלות AI החודש, של כולם: <b class="num">$${aiCost}</b>${costNote}.</span>
+    ${sharing && html`<span class="people-sharing" style="font-size:14px;line-height:1.55">שיתוף עם חברים: <b class="num">${sharing.sharers}</b> שיתפו (<b class="num">${sharing.shares}</b> פעמים ב-30 יום) · הצטרפו דרכם <b class="num">${sharing.friends}</b>${sharing.mine && (sharing.mine.shares || sharing.mine.friends) ? html` <span class="muted">· דרכך: שיתפת ${sharing.mine.shares}, הצטרפו ${sharing.mine.friends}</span>` : ''}</span>`}
     <div class="chips" role="group" aria-label="סינון">${[['all', 'הכול', users.length], ...Object.entries(HEALTH).map(([k, h]) => [k, h.name, counts[k] || 0])].map(([k, l, n]) => html`<button type="button" class="chip" aria-pressed=${String(filter === k)} onClick=${() => setFilter(k)}>${l} · ${n}</button>`)}</div>
     <div class="people-list">${shown.map((u) => html`<div class="people-row" key=${u.who}>
       <span class="people-top"><b>${u.name || html`בלי שם · <bdi dir="ltr">${u.who}</bdi>`}</b><span class="muted">הצטרף ${dm(u.joined)} · נראה ${dm(u.lastSeen)}</span></span>
-      <span class="people-did">${[u.opens + ' כניסות', u.imports + ' פירוטים', u.importFails ? u.importFails + ' נכשלו' : '', u.added + ' הוספות', u.asked + ' שאלות', u.aiCalls ? u.tokens.toLocaleString('he-IL') + ' טוקנים · $' + u.cost.toFixed(2) : ''].filter(Boolean).join(' · ')}</span>
+      <span class="people-did">${[u.opens + ' כניסות', u.imports + ' פירוטים', u.importFails ? u.importFails + ' נכשלו' : '', u.added + ' הוספות', u.asked + ' שאלות', u.aiCalls ? u.tokens.toLocaleString('he-IL') + ' טוקנים · $' + u.cost.toFixed(2) : '', u.shares ? 'שיתף ' + u.shares : '', u.friends ? 'הצטרפו דרכו ' + u.friends : ''].filter(Boolean).join(' · ')}</span>
       ${u.health.reasons && u.health.reasons.length > 0 && html`<span class="people-why">${u.health.reasons.join(' · ')}</span>`}
       <span style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><${Chip} health=${u.health} /><${Reveal} who=${u.who} /></span>
     </div>`)}</div>

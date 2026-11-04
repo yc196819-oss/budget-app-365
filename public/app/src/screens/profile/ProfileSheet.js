@@ -10,6 +10,7 @@ import { showToast } from '../../lib/toast.js';
 import { MemoriesView } from './MemoriesView.js';
 import { PushToggle } from '../../components/PushToggle.js';
 import { InstallCard } from '../../components/InstallCard.js';
+import { ShareCard } from '../../components/ShareCard.js';
 import { DeleteAccount } from './DeleteAccount.js';
 import { DataView } from './DataView.js';
 import { AdminView } from './AdminView.js';
@@ -54,6 +55,8 @@ export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTh
           <span class="muted num" style="font-size:13px;text-align:right">${profile.email}</span>
         </span>
       </div>
+      <${ShareCard} />
+      <button type="button" class=${'btn btn-ghost' + (answers > 0 ? ' fb-has-answer' : '')} onClick=${() => setView('feedback')}><${Icon} name="wrench" /><span style="flex:1;text-align:start">תקלות ורעיונות לשיפור</span>${answers > 0 && html`<span class="fb-pill fb-pill-new">${answers === 1 ? 'תשובה חדשה' : answers + ' תשובות חדשות'}</span>`}</button>
       <label class="check toggle-row">
         <span style="flex:1;display:flex;flex-direction:column"><b>היועץ והצעות AI</b>
           <span class="muted" style="font-size:12px;line-height:1.5">${aiOn ? 'כשאתם שואלים, היועץ מקבל את המספרים שלכם, שמות בתי העסק והתנועות האחרונות, כדי לענות על המקרה שלכם (לא מספרי חשבון או כרטיס). כבוי: שום נתון לא נשלח.' : 'כבוי: שום נתון לא נשלח ל-AI מהמכשיר הזה.'}</span></span>
@@ -80,10 +83,8 @@ export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTh
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}><${Icon} name="book" />מה היועץ יודע עלינו</button>`}
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('data')}><${Icon} name="box" />המידע שלנו: קבצים, ייצוא ושחזור</button>`}
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
-      <button type="button" class=${'btn btn-ghost' + (answers > 0 ? ' fb-has-answer' : '')} onClick=${() => setView('feedback')}><${Icon} name="wrench" /><span style="flex:1;text-align:start">תקלות ורעיונות לשיפור</span>${answers > 0 && html`<span class="fb-pill fb-pill-new">${answers === 1 ? 'תשובה חדשה' : answers + ' תשובות חדשות'}</span>`}</button>
       ${isAdmin && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('admin')}><${Icon} name="chart" />לוח בעלים</button>`}
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
-      <a class="btn btn-ghost" href="/old/" style="text-decoration:none">לגרסה הקודמת של האפליקציה</a>
       <button type="button" class="btn btn-ghost" style="color:var(--danger)" onClick=${onSignOut}><${Icon} name="logout" />יציאה</button>
       <p class="faint" style="font-size:12px;margin:0">ביציאה נמחקים מהמכשיר גם מפתחות ונתונים רגישים ששמורים בו.</p>
       <p class="faint" style="font-size:12px;margin:0"><a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a> · <a href="/privacy" target="_blank" rel="noopener">מדיניות פרטיות</a> · <a href="/accessibility" target="_blank" rel="noopener">הצהרת נגישות</a></p>
