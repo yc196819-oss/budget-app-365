@@ -28,11 +28,13 @@ test('tell your friends: one tap opens the phone\'s share sheet with a ready mes
   const card = page.locator('.share-card');
   await card.waitFor();
   assert.match(await card.textContent(), /נהנית\? ספר לחבריך/);
+  assert.match(await card.locator('.share-netfree').textContent(), /פתוח למשתמשי נטפרי/);
   assert.match(await card.locator('.share-joined').textContent(), /2 חברים כבר הצטרפו בזכותך/);
   if (process.env.SHOT) { await page.waitForTimeout(500); await card.screenshot({ path: process.env.SHOT }); }
   await card.locator('button:has-text("לשתף עם חברים")').click();
   const [d] = await page.evaluate(() => window.__shared);
   assert.match(d.text, /התקציב שלנו/);
+  assert.match(d.text, /נטפרי/);
   assert.ok(d.text.trim().endsWith('/app/?ref=a1b2c3'));
   assert.deepEqual(errors, []);
   await page.close();

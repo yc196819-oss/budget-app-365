@@ -26,6 +26,7 @@ export function ShareCard() {
   return html`<div class="card stack share-card">
     <b style="font-size:16px">נהנית? ספר לחבריך</b>
     <span class="muted" style="font-size:14px;line-height:1.55">שולחים לחברים הודעה מוכנה עם קישור להרשמה, בוואטסאפ, במייל או בכל אפליקציה אחרת.</span>
+    <span class="share-netfree" style="font-size:14px;font-weight:700;color:var(--income)">✓ האתר פתוח למשתמשי נטפרי. כדאי לספר גם להם!</span>
     <button type="button" class="btn" onClick=${share}><${Icon} name="share" />לשתף עם חברים</button>
     ${more && html`<div class="share-more" style="display:flex;gap:8px;flex-wrap:wrap">
       <a class="btn btn-ghost" style="width:auto;flex:1;text-decoration:none" href=${t.whatsapp} target="_blank" rel="noopener" onClick=${() => track('share')}>וואטסאפ</a>

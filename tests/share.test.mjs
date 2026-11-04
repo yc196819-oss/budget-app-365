@@ -9,6 +9,7 @@ test('tell your friends: a link with the code, a ready message, WhatsApp and ema
   const t = shareText(link);
   assert.match(t, /התקציב שלנו/);
   assert.match(t, /בחינם/);
+  assert.match(t, /פתוח למשתמשי נטפרי/);
   assert.ok(t.trim().endsWith(link), 'the link is last, so it shows as a link');
   const g = shareTargets(link);
   assert.ok(g.whatsapp.startsWith('https://wa.me/?text='));
