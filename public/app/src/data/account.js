@@ -57,6 +57,15 @@ export function sendReengage(campaign = 'start', { test = false, limit } = {}) {
   return api('/api/admin/reengage', { method: 'POST', body: { campaign, test, ...(limit ? { limit } : {}) } });
 }
 
+// Who came in today, what they did, and how each one is doing.
+export async function adminToday() {
+  try { return await api('/api/admin/today'); } catch (_e) { return undefined; }
+}
+// One person's email, only when the owner asks (by their label).
+export async function adminEmail(who) {
+  try { return (await api('/api/admin/email?who=' + encodeURIComponent(who))).email || ''; } catch (_e) { return ''; }
+}
+
 export async function adminLive() {
   try { return await api('/api/admin/live'); } catch (_e) { return null; }
 }

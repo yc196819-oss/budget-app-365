@@ -176,7 +176,7 @@ test('one invitation back: signed up 2+ days ago, confirmed, no household, never
   const m = reengageMail('https://app.example/app/');
   assert.equal(m.subject, 'בוא נראה יחד לאן הכסף שלך הולך');
   assert.doesNotMatch(m.text, /2 דקות/);
-  assert.match(m.text, /פירוט אשראי של החודשים האחרונים/);
+  assert.match(m.text, /פירוט אשראי של 6 החודשים האחרונים, מכל הכרטיסים/);
   assert.match(m.text, /https:\/\/app\.example\/app\//);
   assert.match(m.html, /הסר/);
 });
@@ -277,4 +277,37 @@ test('a request as the owner sees it: first message, unread since last look, rea
   assert.equal(v.unread, 1);
   assert.equal(v.readByUser, true);
   assert.equal(threadView(f, [], { label: '#abc' }).who, '#abc');
+});
+
+const { healthOf, todayRows } = require('../server/ops');
+test('how each person is doing: stuck, no statement, gone quiet, high AI use, little data, fine', () => {
+  const now = new Date('2026-11-04T12:00:00Z');
+  const ago = (d) => new Date(now.getTime() - d * 86400000).toISOString();
+  assert.equal(healthOf({ joined: ago(5), inHousehold: false, now }).label, 'נרשם ולא סיים הרשמה');
+  assert.equal(healthOf({ joined: ago(5), inHousehold: true, txCount: 0, now }).label, 'לא העלה אף פירוט');
+  assert.equal(healthOf({ joined: ago(60), lastSeen: ago(20), inHousehold: true, txCount: 300, months: 6, now }).level, 'gone');
+  const ai = healthOf({ joined: ago(30), lastSeen: ago(1), inHousehold: true, txCount: 300, months: 6, cost: 3, medianCost: 0.2, now });
+  assert.equal(ai.level, 'watch');
+  assert.match(ai.reasons.join(), /צריכת AI גבוהה/);
+  assert.equal(healthOf({ joined: ago(10), lastSeen: ago(1), inHousehold: true, txCount: 40, months: 1, now }).level, 'watch');
+  assert.equal(healthOf({ joined: ago(30), lastSeen: ago(1), inHousehold: true, txCount: 400, months: 6, asked: 3, cost: 0.3, medianCost: 0.2, now }).label, 'משתמש פעיל, נעזר ביועץ');
+});
+
+test("today (Israel time): who came in, what they did, AI use and errors; yesterday's do not count", () => {
+  const now = new Date('2026-11-04T15:00:00Z'); // 17:00 in Israel
+  const rows = todayRows({
+    now,
+    users: [{ id: 'a', created_at: '2026-10-01T10:00:00Z' }, { id: 'b', created_at: '2026-11-04T08:00:00Z' }],
+    events: [
+      { user_id: 'a', name: 'app_open', at: '2026-11-04T10:34:00Z' }, { user_id: 'a', name: 'import_done', at: '2026-11-04T11:00:00Z' },
+      { user_id: 'a', name: 'advisor_ask', at: '2026-11-04T14:27:00Z' }, { user_id: 'a', name: 'app_open', at: '2026-11-03T10:00:00Z' },
+      { user_id: 'b', name: 'app_open', at: '2026-11-04T08:01:00Z' }
+    ],
+    calls: [{ user_id: 'a', model: 'claude-sonnet-5', input_tokens: 1e5, output_tokens: 0, at: '2026-11-04T14:27:10Z' }],
+    errors: [{ user_id: 'b', at: '2026-11-04T08:02:00Z' }]
+  });
+  const a = rows.find((r) => r.id === 'a');
+  assert.deepEqual([a.first, a.last, a.opens, a.imports, a.asked, a.aiCalls, a.cost], ['13:34', '17:27', 1, 1, 1, 1, 0.2]);
+  const b = rows.find((r) => r.id === 'b');
+  assert.deepEqual([b.newToday, b.errors], [true, 1]);
 });

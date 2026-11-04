@@ -119,7 +119,8 @@ test('owner dashboard: only for the owner, with active people, return rate and f
     funnel: { signups: 28, household: 15, tx: 7, import: 7, cameBack: 0, oldEnough: 0, byDay: { [new Date().toISOString().slice(0, 10)]: 2 } },
     daily: Array.from({ length: 14 }, (_, i) => ({ day: new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10), active: i, cost: 0.05 })),
     ownerCost30d: 0.9,
-    users: [{ who: '#a1b2c3', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31 }]
+    users: [{ who: '#a1b2c3', name: 'רון', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31, health: { level: 'good', label: 'משתמש פעיל, נעזר ביועץ', reasons: [] } },
+      { who: '#bb22cc', name: '', joined: '2026-10-20', lastSeen: null, opens: 0, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, tokens: 0, cost: 0, health: { level: 'stuck', label: 'נרשם ולא סיים הרשמה', reasons: ['נרשם לפני 15 ימים'] } }]
   }) }));
   await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
@@ -133,22 +134,43 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   assert.match(t, /60%/);
   assert.match(t, /הוספת תנועה/);
   assert.match(t, /boom/);
-  // Per person: a label and counts, never a name or an email.
-  const row = await s.locator('.per-user tbody tr').first().textContent();
-  assert.match(row, /#a1b2c3/);
-  assert.match(row, /51,000/);
+  // Per person: the name they gave, what they did and how they are doing; no email until asked.
+  const row = await s.locator('.per-user .people-row').first().textContent();
+  assert.match(row, /רון/);
+  assert.match(row, /51,000 טוקנים/);
+  assert.match(row, /משתמש פעיל/);
+  assert.match(await s.locator('.per-user .people-row').nth(1).textContent(), /#bb22cc.*נרשם ולא סיים הרשמה/s);
+  await s.locator('.per-user button.chip:has-text("תקועים")').click();
+  assert.equal(await s.locator('.per-user .people-row').count(), 1);
+  await s.locator('.per-user button.chip:has-text("הכול")').click();
   // The owner's own accounts are not in the list; their AI cost is given apart.
-  assert.equal(await s.locator('.per-user tbody tr').count(), 1);
+  assert.equal(await s.locator('.per-user .people-row').count(), 2);
   assert.match(await s.textContent(), /החשבונות שלך לא נספרים/);
   assert.match(await s.textContent(), /מתוכם \$0\.9 שלך/);
   assert.match(t, /\$1\.23/);
-  assert.doesNotMatch(t, /@/);
+  assert.doesNotMatch(t, /@/, 'no email before it is asked for');
   // Live: who is on now, by screen and device; refreshed every 15 seconds.
   assert.match(t, /מחוברים עכשיו: 3/);
   assert.match(t, /\+ 1 לא מחוברים/);
   assert.match(t, /בית 2 · כסף 1 · כניסה 1/);
   assert.match(await s.locator('.admin-funnel').textContent(), /הקימו משק בית15 54%/);
   assert.match(t, /2נרשמו היום/);
+  // An email only on request.
+  await page.route('**/api/admin/email?who=*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ email: new URL(r.request().url()).searchParams.get('who') === '#a1b2c3' ? 'ron@example.com' : '' }) }));
+  await s.locator('.per-user .people-row').first().locator('button:has-text("להציג מייל")').click();
+  await s.locator('.people-email:has-text("ron@example.com")').waitFor();
+  // "Who came in today?": one tap, a sentence, each person.
+  await page.route('**/api/admin/today', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ day: '2026-11-04', items: [
+    { who: '#a1b2c3', name: 'רון', first: '13:34', last: '17:27', newToday: false, opens: 4, added: 0, imports: 3, importFails: 0, asked: 12, aiCalls: 23, cost: 0.41, errors: 0, health: { level: 'good', label: 'משתמש פעיל, נעזר ביועץ', reasons: [] } },
+    { who: '#dd33ee', name: 'נועה', first: '18:02', last: '18:02', newToday: true, opens: 1, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, cost: 0, errors: 0, health: { level: 'stuck', label: 'לא העלה אף פירוט', reasons: [] } }] }) }));
+  await s.locator('.admin-today button:has-text("מי נכנס היום?")').click();
+  const today = s.locator('.admin-today');
+  await today.locator('.today-summary').waitFor();
+  const sum = await today.locator('.today-summary').textContent();
+  assert.match(sum, /היום נכנסו 2 משתמשים \(אחד חדש\)/);
+  assert.match(sum, /אחד העלה פירוט/);
+  assert.match(sum, /כדאי לעזור ל: נועה \(לא העלה אף פירוט\)/);
+  assert.match(await today.locator('.people-row').first().textContent(), /13:34–17:27.*3 פירוטים.*12 שאלות ליועץ/s);
   await page.clock.runFor(16000);
   await page.waitForSelector('text=מחוברים עכשיו: 5');
   assert.deepEqual(errors, []);

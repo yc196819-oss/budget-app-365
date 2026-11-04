@@ -671,3 +671,18 @@ body.chat-open { overflow: hidden; }
 .inbox-send { display: grid; grid-template-columns: 3fr 2fr; gap: 8px; }
 .inbox-ticks { color: var(--muted); }
 .inbox-ticks.read { color: #1F66B3; font-weight: 800; }
+
+/* The owner's people: today, and how each one is doing */
+.people-list { display: flex; flex-direction: column; }
+.people-row { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.people-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 15px; }
+.people-top .muted { font-size: 13px; flex: none; }
+.people-did { font-size: 14px; color: var(--muted); line-height: 1.5; }
+.people-why { font-size: 13px; color: var(--muted); }
+.people-new { font-size: 12px; font-weight: 800; color: #fff; background: var(--income); padding: 1px 6px; border-radius: 6px; }
+.people-chip { font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 8px; }
+.people-chip.lv-good { color: var(--income); background: color-mix(in srgb, var(--income) 12%, transparent); }
+.people-chip.lv-watch { color: #8A5A00; background: color-mix(in srgb, #E2B93B 22%, transparent); }
+.people-chip.lv-stuck { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.people-chip.lv-gone { color: var(--muted); background: var(--surface-2, rgba(0,0,0,.06)); }
+.people-reveal, .people-email { font-size: 14px; }

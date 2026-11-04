@@ -242,7 +242,7 @@ const MAILS = {
   start: {
     title: 'נרשמו ולא פתחו משק בית',
     subject: 'בוא נראה יחד לאן הכסף שלך הולך',
-    body: ['שמחתי לראות שנרשמת ל"התקציב שלנו".', 'האפליקציה מראה בכל רגע כמה נשאר להוציא החודש, לאן הכסף הולך ומה צפוי בחודשים הקרובים, ויש בה יועץ חכם שעונה על שאלות על הכסף שלך.', 'כדי להתחיל: פותחים משק בית ומעלים פירוט אשראי של החודשים האחרונים. ' + WHY, WHERE],
+    body: ['שמחתי לראות שנרשמת ל"התקציב שלנו".', 'האפליקציה מראה בכל רגע כמה נשאר להוציא החודש, לאן הכסף הולך ומה צפוי בחודשים הקרובים, ויש בה יועץ חכם שעונה על שאלות על הכסף שלך.', 'כדי להתחיל: נכנסים, עונים על שתי שאלות (לוקח 10 שניות), ומעלים פירוט אשראי של 6 החודשים האחרונים, מכל הכרטיסים. ' + WHY, WHERE],
     button: 'לפתוח את התקציב שלי'
   },
   first: {
@@ -528,4 +528,57 @@ function threadView(f, messages = [], { name = '', label = '' } = {}) {
   };
 }
 
-module.exports = { firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+// ── how each person is doing (the owner's dashboard) ──
+// One label per person, from what they did, never what they wrote:
+// stuck at sign-up, no statement yet, gone quiet, an import that failed,
+// high AI use, little data, or fine. reasons: short words for the owner.
+function healthOf({ joined = null, lastSeen = null, inHousehold = false, txCount = 0, months = 0, imports = 0, importFails = 0, asked = 0, cost = 0, medianCost = 0, now = new Date() }) {
+  const days = (iso) => (iso ? Math.floor((now.getTime() - new Date(iso).getTime()) / DAY) : null);
+  const quiet = days(lastSeen);
+  const age = days(joined);
+  const highAi = cost >= Math.max(1, medianCost * 3);
+  const reasons = [];
+  if (highAi) reasons.push('צריכת AI גבוהה ($' + (Math.round(cost * 100) / 100) + ' ב-30 יום)');
+  if (importFails > 0 && imports === 0) reasons.push('העלאת פירוט נכשלה');
+  if (!inHousehold) return { level: 'stuck', label: 'נרשם ולא סיים הרשמה', reasons: [age !== null ? 'נרשם לפני ' + age + ' ימים' : '', ...reasons].filter(Boolean) };
+  if (txCount === 0) return { level: 'stuck', label: 'לא העלה אף פירוט', reasons };
+  if (quiet !== null && quiet >= 14) return { level: 'gone', label: 'לא נכנס ' + quiet + ' ימים', reasons };
+  if (lastSeen === null && (age === null || age > 30)) return { level: 'gone', label: 'לא נכנס יותר מחודש', reasons };
+  if (highAi || (importFails > 0 && imports === 0)) return { level: 'watch', label: 'כדאי לבדוק', reasons };
+  if (months < 3) return { level: 'watch', label: 'מעט נתונים (' + months + ' חודשים)', reasons: ['כדאי להעלות עוד חודשים', ...reasons] };
+  return { level: 'good', label: asked > 0 ? 'משתמש פעיל, נעזר ביועץ' : 'משתמש פעיל', reasons };
+}
+
+// Today (Israel time), one row per person who opened the app or signed up:
+// when, what they did, AI use and failures.
+function israelDay(now = new Date()) {
+  return new Date(now.getTime() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function todayRows({ users = [], events = [], calls = [], errors = [], now = new Date() }) {
+  const day = israelDay(now);
+  const onDay = (iso) => israelDay(new Date(iso)) === day;
+  const hm = (iso) => new Date(new Date(iso).getTime() + 3 * 3600 * 1000).toISOString().slice(11, 16);
+  const rows = new Map();
+  const row = (id) => {
+    if (!rows.has(id)) rows.set(id, { id, first: null, last: null, newToday: false, opens: 0, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, cost: 0, errors: 0 });
+    return rows.get(id);
+  };
+  for (const u of users) if (u.created_at && onDay(u.created_at)) row(u.id).newToday = true;
+  for (const e of events) {
+    if (!e.user_id || !onDay(e.at)) continue;
+    const r = row(e.user_id);
+    if (!r.first || e.at < r.first) r.first = e.at;
+    if (!r.last || e.at > r.last) r.last = e.at;
+    if (e.name === 'app_open') r.opens++;
+    else if (e.name === 'tx_add') r.added++;
+    else if (e.name === 'import_done') r.imports++;
+    else if (e.name === 'import_fail') r.importFails++;
+    else if (e.name === 'advisor_ask' || e.name === 'advisor_talk') r.asked++;
+  }
+  for (const c of calls) { if (!c.user_id || !onDay(c.at) || !rows.has(c.user_id)) continue; const r = rows.get(c.user_id); r.aiCalls++; r.cost += costOf(c); }
+  for (const e of errors) { if (e.user_id && onDay(e.at) && rows.has(e.user_id)) rows.get(e.user_id).errors++; }
+  return [...rows.values()].map((r) => ({ ...r, first: r.first ? hm(r.first) : null, last: r.last ? hm(r.last) : null, cost: Math.round(r.cost * 1000) / 1000 }))
+    .sort((a, b) => String(b.last || '').localeCompare(String(a.last || '')));
+}
+
+module.exports = { healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
