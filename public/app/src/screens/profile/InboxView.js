@@ -34,7 +34,7 @@ export function InboxView() {
         <span class=${'inbox-avatar k-' + x.kind} aria-hidden="true">${x.who.replace('#', '').slice(0, 1)}</span>
         <span class="inbox-main">
           <span class="inbox-top"><b>${x.pinned ? 'מוצמד · ' : ''}${x.who}<span class="muted"> · ${FEEDBACK_KIND[x.kind].label}</span></b><span class="inbox-time">${hm(x.last_at)}</span></span>
-          <span class="inbox-bottom"><span class="inbox-last">${last.author === 'owner' ? (x.readByUser ? '✓✓ ' : '✓ ') : ''}${last.text.split('\n')[0]}</span>${x.unread > 0 && html`<span class="inbox-badge" aria-label=${x.unread + ' לא נקראו'}>${x.unread}</span>`}</span>
+          <span class="inbox-bottom"><span class="inbox-last">${last.author === 'owner' && html`<span class=${'inbox-ticks' + (x.readByUser ? ' read' : '')} aria-label=${x.readByUser ? 'נקרא' : 'נשלח'}>${x.readByUser ? '✓✓' : '✓'} </span>`}${last.text.split('\n')[0]}</span>${x.unread > 0 && html`<span class="inbox-badge" aria-label=${x.unread + ' לא נקראו'}>${x.unread}</span>`}</span>
           <span class=${'inbox-status s-' + x.status}>${FEEDBACK_STATUS[x.status]}</span>
         </span>
       </button>`;

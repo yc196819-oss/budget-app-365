@@ -109,6 +109,7 @@ export function AdminView({ onBack }) {
   const tile = (label, value) => html`<div class="card" style="flex:1;text-align:center;padding:12px"><b class="num" style="font-size:22px">${value}</b><div class="muted" style="font-size:12px">${label}</div></div>`;
   return html`<div class="stack admin-stats">
     <button type="button" class="btn-text" style="align-self:flex-start" onClick=${onBack}>→ חזרה</button>
+    <${InboxView} />
     ${s === undefined && html`<span class="muted">טוען…</span>`}
     ${s === null && html`<span class="muted">הנתונים לא זמינים כרגע.</span>`}
     ${live && html`<div class="card stack admin-live" role="status">
@@ -136,7 +137,6 @@ export function AdminView({ onBack }) {
       </div>`)}
     </div>`}
     ${back && html`<${MonthlyMailCard} />`}
-    <${InboxView} />
     ${s && html`
       <div style="display:flex;gap:8px">${tile('פעילים היום', s.active.day)}${tile('השבוע', s.active.week)}${tile('החודש', s.active.month)}</div>
       ${today && html`<div style="display:flex;gap:8px">${tile('נרשמו היום', (f && f.byDay && f.byDay[today.day]) || 0)}${tile('עלות AI היום', '$' + today.cost)}${tile('עלות AI ב-30 יום', '$' + (s.aiCost30d ?? 0))}</div>`}
