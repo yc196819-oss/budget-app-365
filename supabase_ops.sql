@@ -389,3 +389,47 @@ create policy category_rules_household on public.category_rules for all to authe
 create policy two_step_required on public.category_rules as restrictive for all to authenticated
   using ((select public.mfa_ok())) with check ((select public.mfa_ok()));
 create index if not exists category_rules_household on public.category_rules (household_id);
+
+-- Applied 2026-11-04 (feedback_threads).
+-- feedback_threads: a request becomes a short conversation. The owner
+-- answers and closes it (or asks and keeps it open); the person can say
+-- "it helped" or write once more to reopen it. Read marks both ways, pin
+-- and archive for the owner, notes only the owner sees. All writes go
+-- through the server (service role); people read their own, never notes.
+alter table public.feedback
+  add column if not exists pinned boolean not null default false,
+  add column if not exists archived boolean not null default false,
+  add column if not exists closed boolean not null default false,
+  add column if not exists helped boolean,
+  add column if not exists last_at timestamptz,
+  add column if not exists last_by text not null default 'user' check (last_by in ('user', 'owner')),
+  add column if not exists owner_seen_at timestamptz,
+  add column if not exists user_seen_at timestamptz;
+update public.feedback set last_at = coalesce(updated_at, created_at) where last_at is null;
+alter table public.feedback alter column last_at set default now();
+alter table public.feedback alter column last_at set not null;
+
+create table if not exists public.feedback_messages (
+  id uuid primary key default gen_random_uuid(),
+  feedback_id uuid not null references public.feedback(id) on delete cascade,
+  author text not null check (author in ('user', 'owner', 'note')),
+  text text not null check (char_length(text) between 1 and 2000),
+  created_at timestamptz not null default now()
+);
+create index if not exists feedback_messages_feedback on public.feedback_messages (feedback_id, created_at);
+alter table public.feedback_messages enable row level security;
+create policy feedback_messages_read_own on public.feedback_messages for select to authenticated
+  using (author <> 'note' and feedback_id in (select id from public.feedback where user_id = (select auth.uid())));
+create policy two_step_required on public.feedback_messages as restrictive for all to authenticated
+  using ((select public.mfa_ok())) with check ((select public.mfa_ok()));
+revoke insert, update, delete on public.feedback_messages from anon, authenticated;
+
+-- Answers given before: each becomes the owner's message; done or "won't
+-- fix" ones are closed, and the owner has seen everything so far.
+insert into public.feedback_messages (feedback_id, author, text, created_at)
+  select id, 'owner', owner_note, coalesce(updated_at, created_at) from public.feedback
+  where owner_note is not null and not exists (select 1 from public.feedback_messages m where m.feedback_id = feedback.id);
+update public.feedback set
+  last_by = case when owner_note is not null then 'owner' else 'user' end,
+  closed = status in ('done', 'wontfix'),
+  owner_seen_at = coalesce(owner_seen_at, now());

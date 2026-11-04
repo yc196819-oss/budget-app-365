@@ -468,4 +468,64 @@ function answerMail({ question, answer, link }) {
   };
 }
 
-module.exports = { unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+// ── request threads (a request, then messages both ways) ──
+// A name to show the owner: the first name the person gave in the app, or
+// their label when it looks like a username (the same rule as the app's).
+function firstName(name) {
+  const s = String(name || '').trim();
+  if (!s || /[@\d]/.test(s)) return '';
+  if (/^[a-z._-]+$/i.test(s) && s === s.toLowerCase()) return '';
+  return s.split(/\s+/)[0].slice(0, 30);
+}
+const THREAD_STATUS = ['new', 'working', 'done', 'wontfix'];
+// What the owner can do to a request. Returns { row, message, note } or null.
+//   message: an answer to the person; close: true closes it (default),
+//   false keeps it open for their reply ("ask them").
+function ownerAction(body, now = new Date()) {
+  const b = body || {};
+  const at = now.toISOString();
+  const row = {};
+  const msg = String(b.message ?? '').replace(/\r/g, '').trim().slice(0, 2000);
+  const note = String(b.note ?? '').replace(/\r/g, '').trim().slice(0, 1000);
+  if (msg) {
+    const close = b.close !== false;
+    Object.assign(row, { last_at: at, last_by: 'owner', closed: close, status: close ? 'done' : 'working', owner_note: msg, owner_seen_at: at, helped: null });
+  }
+  if (THREAD_STATUS.includes(b.status)) { row.status = b.status; row.closed = b.status === 'done' || b.status === 'wontfix'; }
+  if (typeof b.pinned === 'boolean') row.pinned = b.pinned;
+  if (typeof b.archived === 'boolean') row.archived = b.archived;
+  if (b.unread === true) row.owner_seen_at = null;
+  if (b.seen === true) row.owner_seen_at = at;
+  if (!msg && !note && !Object.keys(row).length) return null;
+  row.updated_at = at;
+  return { row, message: msg || null, note: note || null };
+}
+// The person's side: a reply (allowed while open, or once to reopen a
+// closed request: "still not working"), or "it helped".
+function userAction(body, thread, now = new Date()) {
+  const b = body || {};
+  const at = now.toISOString();
+  if (b.helped === true) return { row: { helped: true, user_seen_at: at, updated_at: at }, message: null };
+  if (b.seen === true) return { row: { user_seen_at: at }, message: null };
+  const msg = String(b.message ?? '').replace(/\r/g, '').trim().slice(0, 2000);
+  if (msg.replace(/\s/g, '').length < 2) return null;
+  const reopen = !!(thread && thread.closed);
+  return { row: { last_at: at, last_by: 'user', closed: false, status: reopen ? 'new' : (thread && thread.status) || 'new', user_seen_at: at, helped: reopen ? false : thread && thread.helped, updated_at: at }, message: msg, reopened: reopen };
+}
+// One request as the owner sees it: the person's first message, the
+// messages and notes in order, unread (they wrote after you last looked),
+// and whether they read your last answer.
+function threadView(f, messages = [], { name = '', label = '' } = {}) {
+  const list = [{ author: 'user', text: f.text, created_at: f.created_at }, ...messages.map((m) => ({ author: m.author, text: m.text, created_at: m.created_at }))];
+  const lastOwner = [...list].reverse().find((m) => m.author === 'owner');
+  const unread = list.filter((m) => m.author === 'user' && (!f.owner_seen_at || m.created_at > f.owner_seen_at)).length;
+  return {
+    id: f.id, kind: f.kind, status: f.status, screen: f.screen, device: f.device, created_at: f.created_at,
+    who: name || label, label, pinned: !!f.pinned, archived: !!f.archived, closed: !!f.closed, helped: f.helped ?? null,
+    last_at: f.last_at || f.created_at, last_by: f.last_by || 'user', unread,
+    readByUser: !!(lastOwner && f.user_seen_at && f.user_seen_at >= lastOwner.created_at),
+    messages: list
+  };
+}
+
+module.exports = { firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

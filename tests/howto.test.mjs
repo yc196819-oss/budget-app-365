@@ -93,3 +93,20 @@ test('go targets: a sheet with its inner view, or a tab with its view', () => {
   assert.deepEqual(parseGo('money/manage'), { hash: '#/money/manage' });
   assert.deepEqual(parseGo('plans'), { hash: '#/plans' });
 });
+
+import { sortInbox, filterInbox } from '../public/app/src/domain/inbox.js';
+test('the inbox: pinned, then unread, then newest; filters and search', () => {
+  const m = (t) => [{ author: 'user', text: t }];
+  const items = [
+    { id: 'a', who: 'רון', kind: 'bug', unread: 0, pinned: false, archived: false, closed: true, last_at: '2026-11-03', messages: m('ישן') },
+    { id: 'b', who: 'נועה', kind: 'idea', unread: 1, pinned: false, archived: false, closed: false, last_at: '2026-11-01', messages: m('רעיון') },
+    { id: 'c', who: 'דני', kind: 'bug', unread: 0, pinned: true, archived: false, closed: false, last_at: '2026-10-01', messages: m('נתקע') },
+    { id: 'd', who: 'אבי', kind: 'other', unread: 0, pinned: false, archived: true, closed: true, last_at: '2026-11-04', messages: m('תודה') }
+  ];
+  assert.deepEqual(sortInbox(filterInbox(items, 'all')).map((x) => x.id), ['c', 'b', 'a']);
+  assert.deepEqual(filterInbox(items, 'unread').map((x) => x.id), ['b']);
+  assert.deepEqual(filterInbox(items, 'open').map((x) => x.id), ['b', 'c']);
+  assert.deepEqual(filterInbox(items, 'archived').map((x) => x.id), ['d']);
+  assert.deepEqual(filterInbox(items, 'all', 'נתקע').map((x) => x.id), ['c']);
+  assert.deepEqual(filterInbox(items, 'all', 'נועה').map((x) => x.id), ['b']);
+});
