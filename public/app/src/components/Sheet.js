@@ -9,7 +9,9 @@ export function Sheet({ title, onClose, children, full = false }) {
   const ref = useRef(null);
   useEffect(() => {
     const prev = document.activeElement;
-    ref.current?.focus();
+    // Into the sheet, unless the person is already typing inside it (the
+    // effect runs a moment after it opens; a fast Enter would go nowhere).
+    if (ref.current && !ref.current.contains(document.activeElement)) ref.current.focus();
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => {
