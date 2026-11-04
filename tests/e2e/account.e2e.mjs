@@ -118,8 +118,8 @@ test('owner dashboard: only for the owner, with active people, return rate and f
     live: { users: 3, visitors: 1, screens: { home: 2, money: 1, login: 1 }, devices: { mobile: 3, desktop: 1 }, installed: 2 },
     funnel: { signups: 28, household: 15, tx: 7, import: 7, cameBack: 0, oldEnough: 0, byDay: { [new Date().toISOString().slice(0, 10)]: 2 } },
     daily: Array.from({ length: 14 }, (_, i) => ({ day: new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10), active: i, cost: 0.05 })),
-    ownerCost30d: 0.9,
-    users: [{ who: '#a1b2c3', name: 'רון', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31, health: { level: 'good', label: 'משתמש פעיל, נעזר ביועץ', reasons: [] } },
+    ownerCost30d: 0.9, sharing: { shares: 5, friends: 2, sharers: 1, mine: { shares: 3, friends: 4 } },
+    users: [{ who: '#a1b2c3', name: 'רון', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31, shares: 5, friends: 2, health: { level: 'good', label: 'משתמש פעיל, נעזר ביועץ', reasons: [] } },
       { who: '#bb22cc', name: '', joined: '2026-10-20', lastSeen: null, opens: 0, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, tokens: 0, cost: 0, health: { level: 'stuck', label: 'נרשם ולא סיים הרשמה', reasons: ['נרשם לפני 15 ימים'] } }]
   }) }));
   await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
@@ -138,6 +138,9 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   const row = await s.locator('.per-user .people-row').first().textContent();
   assert.match(row, /רון/);
   assert.match(row, /51,000 טוקנים/);
+  // Sharing: per person, and in total with the owner's own apart.
+  assert.match(row, /שיתף 5 · הצטרפו דרכו 2/);
+  assert.match(await s.locator('.people-sharing').textContent(), /1 שיתפו \(5 פעמים ב-30 יום\) · הצטרפו דרכם 2.*דרכך: שיתפת 3, הצטרפו 4/s);
   assert.match(row, /משתמש פעיל/);
   assert.match(await s.locator('.per-user .people-row').nth(1).textContent(), /#bb22cc.*נרשם ולא סיים הרשמה/s);
   await s.locator('.per-user button.chip:has-text("תקועים")').click();

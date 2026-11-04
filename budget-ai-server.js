@@ -2036,12 +2036,17 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     const per = ops.perUser({ users: signedUp, events, calls: calls.data || [], salt: ADMIN_SALT, owners });
     // Each person's name and how they are doing (by their label; no ids or emails leave).
     const info = await peopleInfo(all.filter((u) => others(u.id)));
+    // Shares and friends who joined, per person (by label) and in total.
+    const { data: refs } = await supabaseAdmin.from('referrals').select('ref_code').limit(100000);
+    const sh = ops.shareStats({ users: all, events: ev.data || [], referrals: refs || [], salt: ADMIN_SALT, owners });
+    const shareByLabel = new Map(all.filter((u) => others(u.id)).map((u) => [ops.alias(u.id, ADMIN_SALT), sh.byUser.get(u.id)]));
     const byLabel = new Map([...info.values()].map((x) => [x.label, x]));
     const costs = per.users.map((u) => u.cost).filter((c) => c > 0).sort((a, b) => a - b);
     const medianCost = costs.length ? costs[Math.floor(costs.length / 2)] : 0;
     per.users = per.users.map((u) => {
       const x = byLabel.get(u.who) || {};
-      return { ...u, name: x.name || '', health: ops.healthOf({ ...x, joined: u.joined, lastSeen: u.lastSeen, imports: u.imports, importFails: u.importFails, asked: u.asked, cost: u.cost, medianCost }) };
+      const z = shareByLabel.get(u.who) || { shares: 0, friends: 0 };
+      return { ...u, name: x.name || '', shares: z.shares, friends: z.friends, health: ops.healthOf({ ...x, joined: u.joined, lastSeen: u.lastSeen, imports: u.imports, importFails: u.importFails, asked: u.asked, cost: u.cost, medianCost }) };
     });
     let members = supabaseAdmin.from('memberships').select('user_id', { count: 'exact', head: true });
     if (owners.length) members = members.not('user_id', 'in', '(' + owners.join(',') + ')');
@@ -2053,7 +2058,7 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     const [{ count: memberCount }, { data: funnel }] = await Promise.all([members, funnelOf()]);
     return res.json({
       ...ops.stats({ events, errors: er.data || [] }), members: memberCount || 0, signedUp: signedUp.length, ...per,
-      live: presence.snapshot(Date.now(), owners), funnel: funnel || null, daily: ops.daily({ events, calls: calls.data || [] })
+      live: presence.snapshot(Date.now(), owners), funnel: funnel || null, sharing: sh.totals, daily: ops.daily({ events, calls: calls.data || [] })
     });
   } catch (err) {
     console.error('admin stats failed:', err.message);
