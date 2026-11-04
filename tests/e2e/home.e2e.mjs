@@ -97,7 +97,7 @@ test('a household with no transactions gets the setup guide, opened at the state
   const { page, errors } = await open(390, db);
   const guide = page.locator('.setup-guide');
   assert.match(await guide.textContent(), /בואו נסדר לכם את התמונה/);
-  assert.match(await guide.locator('.guide-step.open').textContent(), /מעלים פירוט של 3 חודשים/);
+  assert.match(await guide.locator('.guide-step.open').textContent(), /מעלים פירוטי אשראי של 6 חודשים/);
   await guide.locator('text=להעלות פירוט').click();
   assert.equal(await page.locator('.sheet h2').textContent(), 'העלאת פירוט כרטיס');
   assert.deepEqual(errors, []);

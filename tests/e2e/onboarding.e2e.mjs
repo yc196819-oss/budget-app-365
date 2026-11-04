@@ -27,73 +27,47 @@ async function rpc(page, db, handlers) {
   });
 }
 
-test('a new household in five steps: everything is created in the shared tables', async () => {
+test('a new household in one screen: a name and alone/together, then straight to the first step at home', async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const db = newUserDb();
   const errors = collectErrors(page);
   await mockSupabase(page, db);
   await signIn(page, server.base);
-  await page.waitForSelector('text=מתחילים · 2 דקות');
-  await page.click('text=מתחילים · 2 דקות');
-  // 1: who
-  assert.equal(await page.locator('.onb .btn:has-text("המשך")').isDisabled(), true);
+  await page.waitForSelector('text=רק שתי שאלות, ומתחילים');
+  // No name, no start.
+  const go = page.locator('.onb button:has-text("יאללה, מתחילים")');
+  assert.equal(await go.isDisabled(), true);
+  // "Together" is the default, and says the invite comes later.
+  assert.match(await page.locator('main').textContent(), /נשלח לכם קישור הזמנה/);
+  await page.click('.seg button:has-text("לבד")');
+  assert.doesNotMatch(await page.locator('main').textContent(), /נשלח לכם קישור הזמנה/);
+  await page.click('.seg button:has-text("ביחד")');
   await page.fill('input[autocomplete="given-name"]', 'יוסי');
-  await page.fill('input[placeholder="נשלח הזמנה בסוף"]', 'דני');
-  await page.click('text=המשך');
-  // 2: life
-  await page.click('.chip:has-text("ילדים")');
-  await page.click('text=המשך');
-  // 3: cards
-  await page.fill('input[aria-label="4 ספרות אחרונות"]', '4821');
-  await page.click('.chip:has-text("ה-15")');
-  await page.click('text=+ עוד כרטיס');
-  await page.locator('input[aria-label="שם הכרטיס"]').nth(1).fill('דיירקט');
-  await page.locator('.seg').nth(1).locator('button:has-text("חיוב מיידי")').click();
-  await page.click('text=המשך');
-  // 4: money
-  await page.fill('input[aria-label="הכנסה חודשית נטו"]', '15000');
-  await page.fill('input[aria-label="שכירות או משכנתא"]', '5000');
-  await page.fill('input[aria-label="גן או מסגרות"]', '1800');
-  await page.click('.chip:has-text("₪1,000")');
-  assert.match(await page.locator('.card:has-text("נשאר למחיה בחודש")').textContent(), /₪7,200/);
-  await page.click('text=המשך');
-  // 5: privacy
-  await page.locator('input[aria-label="יועץ AI"]').uncheck();
-  await page.click('text=סיום');
-  await page.waitForSelector('text=יוסי, הכול מוכן');
+  await go.click();
+
+  // Home opens at the first step: the statements of 6 months, from every card.
+  await page.waitForSelector('.setup-guide >> text=בואו נסדר לכם את התמונה');
+  const open = await page.locator('.setup-guide .guide-step.open').textContent();
+  assert.match(open, /מעלים פירוטי אשראי של 6 חודשים/);
+  assert.match(open, /מכל כרטיסי האשראי/);
+  assert.match(open, /כמה כרטיסים או כמה חשבונות בנק/);
 
   const t = db.tables;
   assert.equal(t.households.length, 1);
-  assert.equal(t.households[0].name, 'יוסי ודני');
-  assert.deepEqual(t.households[0].income_expectations, [{ label: 'הכנסה חודשית נטו', amount: 15000 }]);
+  assert.equal(t.households[0].name, 'משק הבית של יוסי');
   const hid = t.households[0].id;
   assert.deepEqual(t.memberships.map((m) => [m.user_id, m.household_id, m.role, m.display_name]), [['u1', hid, 'owner', 'יוסי']]);
+  // The full default categories, with car and subscriptions.
   const roots = t.categories.filter((c) => !c.parent_id);
-  assert.ok(roots.some((c) => c.name === 'ילדים') && roots.some((c) => c.name === 'רכב'));
+  for (const n of ['אוכל', 'בית ודיור', 'בריאות', 'פנאי ובידור', 'רכב', 'מנויים', 'משכורת']) assert.ok(roots.some((c) => c.name === n), n);
   assert.ok(t.categories.filter((c) => c.parent_id).every((c) => roots.some((r) => r.id === c.parent_id)));
   assert.ok(t.categories.every((c) => c.household_id === hid));
+  // One bank account; no made-up card, budget, income or goal: those are asked later.
   assert.equal(t.bank_accounts.length, 1);
-  // A direct-debit card sends no day: the database keeps its default (it refuses null).
-  assert.deepEqual(t.credit_cards.map((c) => [c.name, c.last4, c.billing_day]), [['ויזה', '4821', 15], ['דיירקט', null, undefined]]);
-  const budgetOf = (name) => t.category_budgets.find((b) => b.category_id === roots.find((r) => r.name === name).id)?.monthly_amount;
-  assert.equal(budgetOf('בית ודיור'), 5000);
-  assert.equal(budgetOf('ילדים'), 1800);
-  assert.equal(budgetOf('אוכל'), 4300);
-  assert.deepEqual(t.goals.map((g) => [g.name, g.target_amount]), [['קרן חירום', 42000]]);
-
-  // Invite the partner from the summary.
-  await page.click('text=הזמנת דני');
-  await page.waitForSelector('input[aria-label="קישור הזמנה"]');
-  const link = await page.inputValue('input[aria-label="קישור הזמנה"]');
-  assert.equal(t.invites.length, 1);
-  assert.equal(link, server.base + '/app/?invite=' + t.invites[0].code);
-  assert.equal(t.invites[0].household_id, hid);
-
-  await page.click('text=להיכנס לאפליקציה');
-  // A new household lands on the setup guide, at its first step.
-  await page.waitForSelector('.setup-guide >> text=בואו נסדר לכם את התמונה');
-  // The AI switch from step 5 is applied.
-  assert.equal(await page.evaluate(() => localStorage.getItem('ai:off')), '1');
+  assert.deepEqual([t.credit_cards.length, t.category_budgets.length, (t.goals || []).length], [0, 0, 0]);
+  assert.equal(t.households[0].income_expectations, undefined);
+  // The advisor is on.
+  assert.notEqual(await page.evaluate(() => localStorage.getItem('ai:off')), '1');
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -134,7 +108,7 @@ test('a used or invalid invite says why, and lets the person open their own hous
   await page.waitForSelector('text=לא ניתן להצטרף');
   assert.match(await page.locator('main').textContent(), /כבר נוצל/);
   await page.click('text=לפתוח משק בית משלי');
-  await page.waitForSelector('text=מתחילים · 2 דקות');
+  await page.waitForSelector('text=רק שתי שאלות, ומתחילים');
   await page.close();
 });
 

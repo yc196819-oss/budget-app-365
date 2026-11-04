@@ -28,6 +28,11 @@ export const LIFE = [
   { key: 'maaser', label: 'מעשרות ותרומות', cats: [{ name: 'תרומות', icon: '🤲', kind: 'expense', subs: [] }] }
 ];
 
+// What the one-screen signup creates: the default categories plus car and
+// subscriptions (most households have both), no cards, no income yet. The
+// rest is asked in the setup guide on the home screen.
+export const QUICK_START = { partner: '', life: { car: true, subs: true }, cards: [], income: '', fixed: {}, saving: 0 };
+
 export function categoriesFor(life) {
   const extra = LIFE.filter((l) => life[l.key]).flatMap((l) => l.cats);
   const all = [...DEFAULT_CATS, ...extra];
