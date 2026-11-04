@@ -1969,6 +1969,21 @@ process.on('unhandledRejection', (err) => { console.error('unhandledRejection:',
 // The owner's numbers (ADMIN_EMAILS): active people, who came back, what is
 // used, and the week's failures.
 const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || 'budgetapp2852@gmail.com,yc196819@gmail.com').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+// Requests from users are emailed to the app's own mailbox only, not to the
+// owner's personal one (FEEDBACK_TO can name another).
+const FEEDBACK_TO = String(process.env.FEEDBACK_TO || ADMIN_EMAILS.find((e) => e.startsWith('budgetapp')) || ADMIN_EMAILS[0] || '').toLowerCase().trim();
+// The owner's own accounts, by id (asked of the auth server, kept 10 minutes):
+// left out of every count on the dashboard.
+let ownerIdsCache = { at: 0, ids: [] };
+async function ownerIds(allUsers) {
+  if (allUsers) {
+    ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())).map((u) => u.id) };
+  } else if (Date.now() - ownerIdsCache.at > 10 * 60 * 1000 && supabaseAdmin) {
+    const { data } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    return ownerIds((data && data.users) || []);
+  }
+  return ownerIdsCache.ids;
+}
 // Salt for the per-person labels, so they cannot be matched to ids elsewhere.
 const ADMIN_SALT = process.env.ADMIN_SALT || VAPID_PRIVATE_KEY || 'budget';
 app.get('/api/admin/stats', requireAuth, async (req, res) => {
@@ -1978,23 +1993,33 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
     const since = new Date(Date.now() - 60 * 86400000).toISOString();
     const month = new Date(Date.now() - 30 * 86400000).toISOString();
-    const [ev, er, users, calls, people] = await Promise.all([
+    const [ev, er, calls, people] = await Promise.all([
       supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).order('at', { ascending: false }).limit(50000),
       supabaseAdmin.from('app_errors').select('message,path,at,source').gte('at', new Date(Date.now() - 7 * 86400000).toISOString()).order('at', { ascending: false }).limit(2000),
-      supabaseAdmin.from('memberships').select('user_id', { count: 'exact', head: true }),
       supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', month).limit(100000),
       // Ids and sign-up dates only: no emails or names reach the dashboard.
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     ]);
     const all = (people.data && people.data.users) || [];
-    const signedUp = all.map((u) => ({ id: u.id, created_at: u.created_at }));
-    // The owner's own accounts are marked (by id; the emails stay here).
-    const owners = all.filter((u) => ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())).map((u) => u.id);
-    const per = ops.perUser({ users: signedUp, events: ev.data || [], calls: calls.data || [], salt: ADMIN_SALT, owners });
-    const { data: funnel } = await supabaseAdmin.rpc('ops_funnel', { p_since: month });
+    // The owner's own accounts (by id; the emails stay here) are left out of
+    // every number: the dashboard is about the others. AI cost stays whole
+    // (it is what is paid), with the owner's part given apart.
+    const owners = await ownerIds(all);
+    const others = (id) => !owners.includes(id);
+    const signedUp = all.filter((u) => others(u.id)).map((u) => ({ id: u.id, created_at: u.created_at }));
+    const events = (ev.data || []).filter((e) => others(e.user_id));
+    const per = ops.perUser({ users: signedUp, events, calls: calls.data || [], salt: ADMIN_SALT, owners });
+    let members = supabaseAdmin.from('memberships').select('user_id', { count: 'exact', head: true });
+    if (owners.length) members = members.not('user_id', 'in', '(' + owners.join(',') + ')');
+    // Before the ops_funnel_exclude migration the function takes only the date.
+    const funnelOf = async () => {
+      const r = await supabaseAdmin.rpc('ops_funnel', { p_since: month, p_exclude: owners });
+      return r.error ? supabaseAdmin.rpc('ops_funnel', { p_since: month }) : r;
+    };
+    const [{ count: memberCount }, { data: funnel }] = await Promise.all([members, funnelOf()]);
     return res.json({
-      ...ops.stats({ events: ev.data || [], errors: er.data || [] }), members: users.count || 0, signedUp: signedUp.length, ...per,
-      live: presence.snapshot(), funnel: funnel || null, daily: ops.daily({ events: ev.data || [], calls: calls.data || [] })
+      ...ops.stats({ events, errors: er.data || [] }), members: memberCount || 0, signedUp: signedUp.length, ...per,
+      live: presence.snapshot(Date.now(), owners), funnel: funnel || null, daily: ops.daily({ events, calls: calls.data || [] })
     });
   } catch (err) {
     console.error('admin stats failed:', err.message);
@@ -2014,7 +2039,7 @@ async function isAdmin(userId) {
 // The live count alone, refreshed every few seconds on the dashboard.
 app.get('/api/admin/live', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
-  return res.json(presence.snapshot());
+  return res.json(presence.snapshot(Date.now(), await ownerIds().catch(() => [])));
 });
 
 // ═══ one-time emails from the dashboard (the owner reads, then sends) ═══
@@ -2178,7 +2203,7 @@ app.post('/api/feedback', requireAuth, feedbackLimiter, async (req, res) => {
     const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     // The email never holds the person's address: the answer goes through the app.
     sendMailWithFallback({
-      to: ADMIN_EMAILS.join(','), subject: `${label} חדשה מ-${who}`,
+      to: FEEDBACK_TO, subject: `${label} חדשה מ-${who}`,
       text: `${label} מ-${who} (מסך: ${row.screen || '-'}, ${row.device || '-'})\n\n${row.text}\n\nלענות ולסמן טיפול: לוח הבעלים באפליקציה.`,
       html: `<div dir="rtl" style="font-family:Arial,sans-serif"><b>${label}</b> מ-${who} <small>(מסך: ${esc(row.screen || '-')}, ${esc(row.device || '-')})</small><p style="white-space:pre-wrap">${esc(row.text)}</p><p style="color:#777">לענות ולסמן טיפול: לוח הבעלים באפליקציה.</p></div>`
     }).catch((err) => console.error('feedback mail failed:', err.message));

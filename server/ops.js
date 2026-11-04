@@ -107,7 +107,8 @@ function alias(userId, salt = '') {
 // One row per person, last 30 days: when they joined and were last seen,
 // how often they open the app, add, import, ask the advisor; AI calls,
 // tokens and estimated cost. Busiest first.
-// owners: ids of the owner's own accounts, marked so they are not taken for users.
+// owners: ids of the owner's own accounts. They are left out of the list (the
+// owner wants to see the others); what their AI use cost is given apart.
 function perUser({ users = [], events = [], calls = [], now = new Date(), salt = '', owners = [] }) {
   const since = now.getTime() - 30 * DAY;
   const rows = new Map();
@@ -135,11 +136,13 @@ function perUser({ users = [], events = [], calls = [], now = new Date(), salt =
     r.tokens += int(c.input_tokens) + int(c.output_tokens);
     r.cost += costOf(c);
   }
-  const list = [...rows.values()]
-    .map((r) => ({ ...r, id: undefined, who: alias(r.id, salt), owner: owners.includes(r.id), lastSeen: r.lastSeen ? String(r.lastSeen).slice(0, 10) : null, cost: Math.round(r.cost * 1000) / 1000 }))
+  const all = [...rows.values()];
+  const ownerCost = all.filter((r) => owners.includes(r.id)).reduce((s, r) => s + r.cost, 0);
+  const list = all.filter((r) => !owners.includes(r.id))
+    .map((r) => ({ ...r, id: undefined, who: alias(r.id, salt), lastSeen: r.lastSeen ? String(r.lastSeen).slice(0, 10) : null, cost: Math.round(r.cost * 1000) / 1000 }))
     .sort((a, b) => b.aiCalls - a.aiCalls || b.opens - a.opens);
-  const total = list.reduce((s, r) => s + r.cost, 0) + systemCost;
-  return { users: list, aiCost30d: Math.round(total * 100) / 100, systemCost30d: Math.round(systemCost * 100) / 100 };
+  const total = all.reduce((s, r) => s + r.cost, 0) + systemCost;
+  return { users: list, aiCost30d: Math.round(total * 100) / 100, systemCost30d: Math.round(systemCost * 100) / 100, ownerCost30d: Math.round(ownerCost * 100) / 100 };
 }
 
 // ── who is here right now ──
@@ -155,11 +158,13 @@ function presenceStore({ window = 2 * 60 * 1000, max = 20000 } = {}) {
       if (seen.size >= max && !seen.has(key)) seen.delete(seen.keys().next().value);
       seen.set(key, { at: now, userId, screen: SCREENS.includes(screen) ? screen : 'other', device: device === 'desktop' ? 'desktop' : 'mobile', installed: !!installed });
     },
-    snapshot(now = Date.now()) {
+    // exclude: ids not counted (the owner's own accounts).
+    snapshot(now = Date.now(), exclude = []) {
       const out = { users: 0, visitors: 0, screens: {}, devices: { mobile: 0, desktop: 0 }, installed: 0 };
       const people = new Set();
       for (const [k, v] of seen) {
         if (now - v.at > window) { seen.delete(k); continue; }
+        if (v.userId && exclude.includes(v.userId)) continue;
         if (v.userId) { if (people.has(v.userId)) continue; people.add(v.userId); out.users++; } else out.visitors++;
         out.screens[v.screen] = (out.screens[v.screen] || 0) + 1;
         out.devices[v.device]++;

@@ -93,7 +93,7 @@ test('activity per person: a label instead of who they are, counts and AI cost f
   assert.equal(a.who, alias('u1', 's'));
   assert.match(a.who, /^#[0-9a-f]{6}$/);
   assert.ok(!JSON.stringify(out).includes('u1'), 'no ids in the answer');
-  assert.deepEqual({ ...a, who: undefined }, { who: undefined, id: undefined, owner: false, joined: '2026-10-28', lastSeen: ago(0.5).slice(0, 10), opens: 1, added: 0, imports: 1, importFails: 1, asked: 1, aiCalls: 2, tokens: 41000, cost: 0.028 });
+  assert.deepEqual({ ...a, who: undefined }, { who: undefined, id: undefined, joined: '2026-10-28', lastSeen: ago(0.5).slice(0, 10), opens: 1, added: 0, imports: 1, importFails: 1, asked: 1, aiCalls: 2, tokens: 41000, cost: 0.028 });
   assert.equal(b.opens, 1);
   assert.equal(b.added, 0, 'older than 30 days');
   assert.equal(b.aiCalls, 0);
@@ -144,10 +144,22 @@ test('the owner changes a request: only a known status and an answer', () => {
   assert.equal(feedbackPatch({}), null);
 });
 
-test("the owner's own accounts are marked, so they are not taken for users", () => {
-  const out = perUser({ users: [{ id: 'me', created_at: '2026-10-01' }, { id: 'u2', created_at: '2026-10-02' }], owners: ['me'], salt: 's' });
-  assert.deepEqual(out.users.map((u) => u.owner).sort(), [false, true]);
+test("the owner's own accounts are left out of the list and the live count; their AI cost is given apart", () => {
+  const now = new Date('2026-11-04T12:00:00Z');
+  const calls = [{ user_id: 'me', provider: 'anthropic', model: 'claude-sonnet-5', input_tokens: 1e6, output_tokens: 0, at: '2026-11-03T10:00:00Z' },
+    { user_id: 'u2', provider: 'anthropic', model: 'claude-sonnet-5', input_tokens: 5e5, output_tokens: 0, at: '2026-11-03T10:00:00Z' }];
+  const out = perUser({ users: [{ id: 'me', created_at: '2026-10-01' }, { id: 'u2', created_at: '2026-10-02' }], events: [{ user_id: 'me', name: 'app_open', at: '2026-11-03T10:00:00Z' }], calls, owners: ['me'], salt: 's', now });
+  assert.equal(out.users.length, 1);
+  assert.equal(out.users[0].aiCalls, 1);
   assert.ok(!JSON.stringify(out).includes('"me"'));
+  // What is paid stays whole; the owner's part is shown apart.
+  assert.equal(out.aiCost30d, 3);
+  assert.equal(out.ownerCost30d, 2);
+  const p = presenceStore();
+  p.beat({ key: 'a', userId: 'me', screen: 'home' }, 0);
+  p.beat({ key: 'b', userId: 'u2', screen: 'money' }, 0);
+  assert.equal(p.snapshot(1000, ['me']).users, 1);
+  assert.equal(p.snapshot(1000).users, 2);
 });
 
 const { reengageList, reengageMail, campaignList, campaignMail, mailReady, mailErrorText } = require('../server/ops');
