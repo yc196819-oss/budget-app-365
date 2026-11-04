@@ -1264,6 +1264,12 @@ import(require('url').pathToFileURL(path.join(__dirname, 'public/app/src/content
 function appGuidePart() {
   return APP_GUIDE ? `\nהמדריך של האפליקציה (מה יש בכל מסך ואיך עושים כל פעולה):\n${APP_GUIDE}\nכשהשאלה היא איך עושים משהו באפליקציה, איפה משהו נמצא או מה אפשר לעשות בה: ענה לפי המדריך בלבד, בצעדים קצרים עם השמות המדויקים של הכפתורים והחצים (←). אל תמציא כפתור, מסך או אפשרות שלא כתובים במדריך. אם משהו לא קיים, אמור זאת בפשטות והצע דרך אחרת מהמדריך, או לכתוב לנו בפרופיל ← "תקלות ורעיונות לשיפור". כשמתאים, גם בתשובה על הכסף, הפנה למסך שבו רואים או עושים את זה.\n` : '';
 }
+// Where the person is using the app: the same screens, laid out differently.
+function devicePart(device) {
+  if (device === 'desktop') return '\nהמשתמש כותב ממחשב (מסך רחב): המסכים בתפריט בצד ימין, והפרופיל וההגדרות בכפתור עם השם בתחתית התפריט הזה. כשאתה מסביר איך מגיעים למשהו, תאר את זה כך.\n';
+  if (device === 'mobile') return '\nהמשתמש כותב מטלפון: המסכים בסרגל בתחתית, והפרופיל וההגדרות בכפתור העגול עם האותיות בפינה העליונה. כשאתה מסביר איך מגיעים למשהו, תאר את זה כך.\n';
+  return '';
+}
 function buildChatPrompt(summary, history, message, authorName, fixContext, authorGender) {
   // The last 12 messages; the 4 newest in full, older ones shortened (tokens).
   const recent = Array.isArray(history) ? history.slice(-12) : [];
@@ -1284,7 +1290,7 @@ ${historyText ? '\nהשיחה עד עכשיו:\n' + historyText + '\n' : ''}
 }
 
 app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (req, res) => {
-  const { summary, history, message, authorName, authorGender, candidates, categories } = req.body || {};
+  const { summary, history, message, authorName, authorGender, candidates, categories, device } = req.body || {};
   if (!message) return res.status(400).json({ error: 'message is required' });
   if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'No AI key configured' });
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -1292,7 +1298,7 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders && res.flushHeaders();
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender));
+  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender) + devicePart(device));
   // The household's numbers and lines (about 6-8k tokens at most).
   const text = JSON.stringify(summary || {}).slice(0, 24000);
   try {

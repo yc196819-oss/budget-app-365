@@ -1,5 +1,6 @@
 import { sb } from '../lib/supabase.js';
-import { track } from '../lib/telemetry.js';
+import { track, reportError } from '../lib/telemetry.js';
+import { addMissingCategories } from './onboarding.js';
 import { showToast } from '../lib/toast.js';
 import { isoDate } from '../domain/money.js';
 import { readCache, writeCache } from '../lib/storage.js';
@@ -102,6 +103,11 @@ export async function load(hid, userId, { force = false } = {}) {
     // Accounts, cards, goals, installments, loans and investments add to home,
     // plans and assets: if one of them fails, those screens still work without it.
     if (state.hid !== hid) return;
+    // No categories at all (an early version made the household without
+    // them): add the usual ones, or nothing can be sorted.
+    if (!(cats.data || []).length) {
+      try { const made = await addMissingCategories(hid); if (made) cats.data = made; } catch (err) { reportError(err, 'categories:missing'); }
+    }
     Object.assign(state, {
       status: 'ready',
       refreshing: false,

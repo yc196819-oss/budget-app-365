@@ -5,6 +5,31 @@ import { categoriesFor, initialBudgets, emergencyTarget, cleanCards, householdNa
 // Creates everything a new household needs, in the same tables and shapes as
 // the current app. If the user already has a membership (two tabs, or the
 // current app created one meanwhile), that one is used and nothing is created.
+// The categories a household starts with: roots, then their sub-categories,
+// two requests in all. Returns every row made.
+async function insertCategories(hid, life) {
+  const cats = categoriesFor(life);
+  const cols = 'id,name,icon,kind,parent_id';
+  const { data: roots, error: rootErr } = await sb.from('categories')
+    .insert(cats.map((c) => ({ household_id: hid, name: c.name, icon: c.icon, kind: c.kind })))
+    .select(cols);
+  if (rootErr) throw rootErr;
+  const idOf = new Map(roots.map((r) => [r.name, r.id]));
+  const subs = cats.flatMap((c) => c.subs.map((s) => ({ household_id: hid, name: s, parent_id: idOf.get(c.name), kind: c.kind })));
+  if (!subs.length) return roots;
+  const { data: made, error } = await sb.from('categories').insert(subs).select(cols);
+  if (error) throw error;
+  return [...roots, ...(made || [])];
+}
+
+// A household that has no categories at all (made by an early version of
+// the app) gets the usual ones, so a transaction's category can be chosen.
+export async function addMissingCategories(hid) {
+  const { count, error } = await sb.from('categories').select('id', { count: 'exact', head: true }).eq('household_id', hid);
+  if (error || count > 0) return null;
+  return insertCategories(hid, { car: true, subs: true });
+}
+
 export async function createHousehold(user, answers) {
   const existing = await myMembership(user.id);
   if (existing) return existing;
@@ -24,18 +49,8 @@ export async function createHousehold(user, answers) {
   }
   const hid = hh.id;
 
-  // Categories: roots, then their sub-categories, two requests in all.
-  const cats = categoriesFor(answers.life || {});
-  const { data: roots, error: rootErr } = await sb.from('categories')
-    .insert(cats.map((c) => ({ household_id: hid, name: c.name, icon: c.icon, kind: c.kind })))
-    .select('id,name');
-  if (rootErr) throw rootErr;
+  const roots = (await insertCategories(hid, answers.life || {})).filter((c) => !c.parent_id);
   const idOf = new Map(roots.map((r) => [r.name, r.id]));
-  const subs = cats.flatMap((c) => c.subs.map((s) => ({ household_id: hid, name: s, parent_id: idOf.get(c.name), kind: c.kind })));
-  if (subs.length) {
-    const { error } = await sb.from('categories').insert(subs);
-    if (error) throw error;
-  }
 
   // A main bank account and the cards (a direct-debit card keeps the default day).
   const { data: acct, error: acctErr } = await sb.from('bank_accounts').insert({ household_id: hid, created_by: user.id, name: 'חשבון ראשי' }).select().single();

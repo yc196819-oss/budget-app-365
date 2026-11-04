@@ -261,3 +261,10 @@ test('installed or not, everyone gets the same version: the service worker is ve
   assert.match(sw, /const CACHE = 'budget-app-[0-9a-f]{12}';/);
   assert.doesNotMatch(sw, /budget-app-dev/);
 });
+
+test('the advisor is told whether the person is on a phone or a computer', async () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'budget-ai-server.js'), 'utf8');
+  assert.match(src, /devicePart\(device\)/);
+  assert.match(src, /המשתמש כותב ממחשב/);
+  assert.match(src, /המשתמש כותב מטלפון/);
+});
