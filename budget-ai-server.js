@@ -102,10 +102,8 @@ app.use('/api/ai', (req, res, next) => {
 });
 
 // ═══ security headers ═══
-// Applied to every response. The strict Content-Security-Policy only covers
-// the new app under /app: the current app (public/index.html) relies on
-// inline scripts, inline handlers and several CDNs, so a strict CSP would
-// break it. It still gets the other headers.
+// Applied to every response. The app under /app and its pages get the
+// strict Content-Security-Policy.
 const NEW_APP_DIR = path.join(PUBLIC_DIR, 'app');
 function inlineScriptHash(file, type) {
   try {
@@ -2845,9 +2843,8 @@ function appShell() {
   return APP_SHELL;
 }
 
-// The main address opens the new app; the query string is kept, so invite
-// links (?invite=) and push links from the previous version still work. The
-// previous version stays available at /old/.
+// The main address opens the app; the query string is kept, so invite
+// links (?invite=) and older push links still work.
 app.get('/', (req, res) => {
   const q = req.originalUrl.indexOf('?');
   res.redirect(302, '/app/' + (q >= 0 ? req.originalUrl.slice(q) : ''));
@@ -2866,10 +2863,8 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
   if (!links) return res.status(404).json([]);
   return res.json(links);
 });
-app.get(['/old', '/old/'], (req, res) => {
-  if (req.path === '/old') return res.redirect(301, '/old/');
-  return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
-});
+// The previous version of the app is gone; its old address opens the app.
+app.get(['/old', '/old/'], (req, res) => res.redirect(301, '/app/'));
 app.use(express.static(PUBLIC_DIR, { index: false }));
 // The new app uses hash routes (/app/#/money), so every other GET under /app
 // gets its shell.
@@ -2882,8 +2877,10 @@ app.get('/app-config.js', (req, res) => {
   res.type('application/javascript');
   res.send(`window.__APP_CONFIG = { API_BASE: '' };`);
 });
+// Anything else: a page opens the app, anything else is not found.
 app.use((req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  if (req.method === 'GET' && !req.path.startsWith('/api/')) return res.redirect(302, '/app/');
+  return res.status(404).json({ error: 'not found' });
 });
 
 // Any route that throws: the person gets a plain error, and the failure is kept.

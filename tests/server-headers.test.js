@@ -31,25 +31,24 @@ test('the main address opens the new app, keeping the query string', async () =>
   assert.equal(inv.headers.get('location'), '/app/?invite=abc123');
 });
 
-test('the previous version stays available at /old/', async () => {
-  const res = await fetch(BASE + '/old/');
-  assert.equal(res.status, 200);
-  assert.doesNotMatch(await res.text(), /src\/main\.js/);
-  const bare = await fetch(BASE + '/old', { redirect: 'manual' });
-  assert.equal(bare.status, 301);
-  assert.equal(bare.headers.get('location'), '/old/');
+test('the previous version is gone: its address and any other page open the app', async () => {
+  for (const p of ['/old/', '/old']) {
+    const res = await fetch(BASE + p, { redirect: 'manual' });
+    assert.equal(res.status, 301, p);
+    assert.equal(res.headers.get('location'), '/app/', p);
+  }
+  const other = await fetch(BASE + '/some/page', { redirect: 'manual' });
+  assert.equal(other.status, 302);
+  assert.equal(other.headers.get('location'), '/app/');
+  assert.equal((await fetch(BASE + '/index.html', { redirect: 'manual' })).status, 302, 'the old app file is not served');
+  assert.equal((await fetch(BASE + '/api/nothing-here', { redirect: 'manual' })).status, 404);
 });
 
 test('every response gets the basic security headers', async () => {
-  const res = await fetch(BASE + '/old/');
+  const res = await fetch(BASE + '/privacy');
   assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(res.headers.get('x-frame-options'), 'DENY');
   assert.equal(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
-});
-
-test('the previous app is not given the strict CSP (it would break)', async () => {
-  const res = await fetch(BASE + '/old/');
-  assert.equal(res.headers.get('content-security-policy'), null);
 });
 
 test('the new app gets a strict CSP that allows exactly its import map', async () => {
