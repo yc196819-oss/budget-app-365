@@ -1991,6 +1991,26 @@ async function ownerIds(allUsers) {
 }
 // Salt for the per-person labels, so they cannot be matched to ids elsewhere.
 const ADMIN_SALT = process.env.ADMIN_SALT || VAPID_PRIVATE_KEY || 'budget';
+// Who each person is for the owner: the name they gave in the app (or at
+// sign-up), their household and how much data it has. Emails stay here.
+async function peopleInfo(all) {
+  const [{ data: members }, { data: spans }] = await Promise.all([
+    supabaseAdmin.from('memberships').select('user_id,household_id,display_name,created_at').order('created_at', { ascending: true }),
+    supabaseAdmin.rpc('ops_tx_span')
+  ]);
+  const first = new Map();
+  for (const m of members || []) if (!first.has(m.user_id)) first.set(m.user_id, m);
+  const span = new Map((spans || []).map((x) => [x.household_id, { n: Number(x.n) || 0, months: Number(x.months) || 0 }]));
+  const info = new Map();
+  for (const u of all) {
+    const m = first.get(u.id);
+    const meta = u.user_metadata || {};
+    const name = String((m && m.display_name) || meta.display_name || meta.full_name || meta.name || '').trim().slice(0, 40);
+    const sp = (m && span.get(m.household_id)) || { n: 0, months: 0 };
+    info.set(u.id, { name, inHousehold: !!m, txCount: sp.n, months: sp.months, label: ops.alias(u.id, ADMIN_SALT) });
+  }
+  return info;
+}
 app.get('/api/admin/stats', requireAuth, async (req, res) => {
   try {
     // Asked of the auth server each time (not the session memory): the
@@ -2002,7 +2022,7 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
       supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).order('at', { ascending: false }).limit(50000),
       supabaseAdmin.from('app_errors').select('message,path,at,source').gte('at', new Date(Date.now() - 7 * 86400000).toISOString()).order('at', { ascending: false }).limit(2000),
       supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', month).limit(100000),
-      // Ids and sign-up dates only: no emails or names reach the dashboard.
+      // Ids, sign-up dates and names reach the dashboard; an email only on request.
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     ]);
     const all = (people.data && people.data.users) || [];
@@ -2014,6 +2034,15 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     const signedUp = all.filter((u) => others(u.id)).map((u) => ({ id: u.id, created_at: u.created_at }));
     const events = (ev.data || []).filter((e) => others(e.user_id));
     const per = ops.perUser({ users: signedUp, events, calls: calls.data || [], salt: ADMIN_SALT, owners });
+    // Each person's name and how they are doing (by their label; no ids or emails leave).
+    const info = await peopleInfo(all.filter((u) => others(u.id)));
+    const byLabel = new Map([...info.values()].map((x) => [x.label, x]));
+    const costs = per.users.map((u) => u.cost).filter((c) => c > 0).sort((a, b) => a - b);
+    const medianCost = costs.length ? costs[Math.floor(costs.length / 2)] : 0;
+    per.users = per.users.map((u) => {
+      const x = byLabel.get(u.who) || {};
+      return { ...u, name: x.name || '', health: ops.healthOf({ ...x, joined: u.joined, lastSeen: u.lastSeen, imports: u.imports, importFails: u.importFails, asked: u.asked, cost: u.cost, medianCost }) };
+    });
     let members = supabaseAdmin.from('memberships').select('user_id', { count: 'exact', head: true });
     if (owners.length) members = members.not('user_id', 'in', '(' + owners.join(',') + ')');
     // Before the ops_funnel_exclude migration the function takes only the date.
@@ -2040,6 +2069,46 @@ async function isAdmin(userId) {
   const u = data && data.user;
   return !!(u && u.email_confirmed_at && ADMIN_EMAILS.includes(String(u.email || '').toLowerCase()));
 }
+
+// Who opened the app today (Israel time), what they did, AI use and errors,
+// with each one's name and how they are doing. The owner's accounts are left out.
+app.get('/api/admin/today', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const since = new Date(Date.now() - 30 * 3600 * 1000).toISOString();
+    const [ev, calls, er, people] = await Promise.all([
+      supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).limit(20000),
+      supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', since).limit(20000),
+      supabaseAdmin.from('app_errors').select('user_id,at').gte('at', since).limit(5000),
+      supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    ]);
+    const all = (people.data && people.data.users) || [];
+    const owners = await ownerIds(all);
+    const others = all.filter((u) => !owners.includes(u.id));
+    const rows = ops.todayRows({ users: others, events: (ev.data || []).filter((e) => !owners.includes(e.user_id)), calls: calls.data || [], errors: er.data || [] });
+    const info = await peopleInfo(others);
+    const seen = new Map(others.map((u) => [u.id, u]));
+    const items = rows.filter((r) => seen.has(r.id)).map((r) => {
+      const x = info.get(r.id) || {};
+      return { ...r, id: undefined, who: x.label, name: x.name || '', health: ops.healthOf({ ...x, joined: seen.get(r.id).created_at, lastSeen: new Date().toISOString(), imports: r.imports, importFails: r.importFails, asked: r.asked }) };
+    });
+    return res.json({ day: ops.israelDay(), items });
+  } catch (err) {
+    console.error('admin today failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+// One person's email, only when the owner asks for it (to write to them).
+app.get('/api/admin/email', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  const who = String(req.query.who || '').slice(0, 20);
+  if (!/^#[0-9a-f]{6}$/.test(who)) return res.status(400).json({ error: 'bad request' });
+  const { data } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const u = ((data && data.users) || []).find((x) => ops.alias(x.id, ADMIN_SALT) === who);
+  if (!u) return res.status(404).json({ error: 'not found' });
+  console.log('owner viewed an email:', who);
+  return res.json({ email: u.email || '' });
+});
 
 // The live count alone, refreshed every few seconds on the dashboard.
 app.get('/api/admin/live', requireAuth, async (req, res) => {

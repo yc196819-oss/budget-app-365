@@ -110,3 +110,18 @@ test('the inbox: pinned, then unread, then newest; filters and search', () => {
   assert.deepEqual(filterInbox(items, 'all', 'נתקע').map((x) => x.id), ['c']);
   assert.deepEqual(filterInbox(items, 'all', 'נועה').map((x) => x.id), ['b']);
 });
+
+import { todaySummary, healthCounts } from '../public/app/src/domain/people-health.js';
+test('one sentence about today for the owner', () => {
+  assert.equal(todaySummary([]), 'היום עוד אף אחד לא נכנס (חוץ ממך).');
+  const s = todaySummary([
+    { name: 'רון', imports: 2, asked: 3, cost: 0.4, health: { level: 'good', label: 'משתמש פעיל' } },
+    { name: 'נועה', newToday: true, importFails: 1, cost: 0, health: { level: 'stuck', label: 'לא העלה אף פירוט' } }
+  ]);
+  assert.match(s, /היום נכנסו 2 משתמשים \(אחד חדש\)\./);
+  assert.match(s, /אחד העלה פירוט/);
+  assert.match(s, /עלות AI היום \$0\.40/);
+  assert.match(s, /נתקלו בתקלה: נועה/);
+  assert.match(s, /כדאי לעזור ל: נועה \(לא העלה אף פירוט\)/);
+  assert.deepEqual(healthCounts([{ health: { level: 'good' } }, { health: { level: 'stuck' } }, { health: { level: 'stuck' } }]), { good: 1, watch: 0, stuck: 2, gone: 0 });
+});
