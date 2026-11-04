@@ -294,7 +294,7 @@ test('how each person is doing: stuck, no statement, gone quiet, high AI use, li
 });
 
 test("today (Israel time): who came in, what they did, AI use and errors; yesterday's do not count", () => {
-  const now = new Date('2026-11-04T15:00:00Z'); // 17:00 in Israel
+  const now = new Date('2026-11-04T15:00:00Z'); // 17:00 in Israel (winter, UTC+2)
   const rows = todayRows({
     now,
     users: [{ id: 'a', created_at: '2026-10-01T10:00:00Z' }, { id: 'b', created_at: '2026-11-04T08:00:00Z' }],
@@ -307,7 +307,59 @@ test("today (Israel time): who came in, what they did, AI use and errors; yester
     errors: [{ user_id: 'b', at: '2026-11-04T08:02:00Z' }]
   });
   const a = rows.find((r) => r.id === 'a');
-  assert.deepEqual([a.first, a.last, a.opens, a.imports, a.asked, a.aiCalls, a.cost], ['13:34', '17:27', 1, 1, 1, 1, 0.2]);
+  assert.deepEqual([a.first, a.last, a.opens, a.imports, a.asked, a.aiCalls, a.cost], ['12:34', '16:27', 1, 1, 1, 1, 0.2]);
   const b = rows.find((r) => r.id === 'b');
   assert.deepEqual([b.newToday, b.errors], [true, 1]);
+});
+
+test("the owner's evening email: today's sentence, each person, requests waiting, a link to the dashboard", () => {
+  const { ownerDigestMail } = require('../server/ops');
+  const items = [
+    { name: 'דנה', newToday: true, opens: 1, imports: 0, importFails: 1, cost: 0, health: { level: 'stuck', label: 'לא העלה אף פירוט' } },
+    { name: '', who: '#a1b2c3', opens: 2, imports: 1, asked: 3, cost: 0.4, health: { level: 'good', label: 'משתמש פעיל' } }
+  ];
+  const m = ownerDigestMail({ day: '2026-11-04', summary: 'היום נכנסו 2 משתמשים.', items, waiting: 1, link: 'https://example.test/app/' });
+  assert.equal(m.subject, 'היום: 2 משתמשים נכנסו, אחד צריך עזרה, פנייה אחת מחכה');
+  assert.match(m.text, /04\.11\.2026/);
+  assert.match(m.text, /• דנה \(חדש היום\): כניסה אחת · פירוט אחד נכשל · לא העלה אף פירוט/);
+  assert.match(m.text, /• בלי שם #a1b2c3: 2 כניסות · פירוט אחד · 3 שאלות ליועץ · AI \$0\.40/);
+  assert.match(m.html, /פנייה אחת מחכה לתשובה/);
+  assert.match(m.html, /https:\/\/example\.test\/app\/\?go=profile\/admin#\/home/);
+  assert.doesNotMatch(m.html, /@/);
+  const quiet = ownerDigestMail({ day: '2026-11-04', summary: 'היום עוד אף אחד לא נכנס (חוץ ממך).', items: [], waiting: 0, link: 'https://example.test/app/' });
+  assert.equal(quiet.subject, 'היום: אף אחד לא נכנס');
+  // Names are escaped.
+  assert.match(ownerDigestMail({ day: '2026-11-04', summary: '', items: [{ name: '<b>x', opens: 1 }], link: 'https://example.test/app/' }).html, /&lt;b&gt;x/);
+});
+
+test("Israel's clock in winter and summer: the evening email's 23:45 and today's day", () => {
+  const { israelClock } = require('../server/ops');
+  assert.deepEqual(israelClock(new Date('2026-11-04T21:45:00Z')), { day: '2026-11-04', hm: '23:45', hour: 23 });
+  assert.deepEqual(israelClock(new Date('2026-07-04T20:45:00Z')), { day: '2026-07-04', hm: '23:45', hour: 23 });
+  assert.equal(israelClock(new Date('2026-11-04T20:45:00Z')).hour, 22);
+  assert.equal(israelClock(new Date('2026-07-04T21:45:00Z')).day, '2026-07-05');
+});
+
+test('getting-started emails: a one-click link to stop them, and whoever stopped is skipped', () => {
+  const { campaignMail, campaignList, campaignStats, unsubToken, unsubOk } = require('../server/ops');
+  const m = campaignMail('first', 'https://app.example/app/', 'https://app.example/unsubscribe?u=a&t=b&k=news');
+  assert.match(m.html, /href="https:\/\/app\.example\/unsubscribe\?u=a&amp;t=b&amp;k=news"[^>]*>להפסיק לקבל מיילים כאלה/);
+  assert.match(m.text, /להפסיק לקבל מיילים כאלה: https:\/\/app\.example\/unsubscribe/);
+  assert.doesNotMatch(m.html, /תענה "הסר"/);
+  const old = new Date(Date.now() - 10 * 86400000).toISOString();
+  const users = [{ id: 'u1', email: 'a@example.test', email_confirmed_at: old, created_at: old }, { id: 'u2', email: 'b@example.test', email_confirmed_at: old, created_at: old }];
+  assert.deepEqual(campaignList('start', { users, stopped: ['u2'] }).map((u) => u.id), ['u1']);
+  // A link stops one kind for one person.
+  const id = '3f1c2b4a-1111-2222-3333-444455556666';
+  const t = unsubToken(id, 's', 'news');
+  assert.equal(unsubOk(id, t, 's', 'news'), true);
+  assert.equal(unsubOk(id, t, 's', 'monthly'), false);
+  assert.equal(unsubOk(id, t, 's', 'other'), false);
+  assert.equal(unsubToken(id, 's'), unsubToken(id, 's', 'monthly'), 'old monthly links keep working');
+  // What the dashboard shows.
+  const st = campaignStats([
+    { campaign: 'start', ok: true, sent_at: '2026-11-04T19:28:00Z' }, { campaign: 'start', sent_at: '2026-11-04T19:29:00Z' },
+    { campaign: 'start', ok: false, sent_at: '2026-11-03T10:00:00Z' }, { campaign: 'monthly-2026-10', ok: true }
+  ], ['x', 'y']);
+  assert.deepEqual(st, { byCampaign: { start: { sent: 2, failed: 1, last: '2026-11-04T19:29:00Z' } }, stopped: 2 });
 });

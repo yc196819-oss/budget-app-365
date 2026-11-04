@@ -433,3 +433,18 @@ update public.feedback set
   last_by = case when owner_note is not null then 'owner' else 'user' end,
   closed = status in ('done', 'wontfix'),
   owner_seen_at = coalesce(owner_seen_at, now());
+
+-- The owner's evening summary email at 23:45 Israel time. pg_cron runs in
+-- UTC, so it runs at 20:45 and 21:45 UTC and the server sends only on the run
+-- that is 23:45 in Israel (summer or winter). The secret is read from app_secrets.
+select cron.schedule('owner-daily-digest', '45 20,21 * * *', $$
+  select net.http_post(url := 'https://budget-web-u0iy.onrender.com/api/admin/daily/run',
+    headers := jsonb_build_object('Content-Type','application/json','x-cron-secret',(select value from public.app_secrets where key='cron_secret')),
+    body := '{}'::jsonb, timeout_milliseconds := 120000);
+$$);
+
+-- Applied 2026-11-04 (mail_news_unsub_and_failed): a one-click link in the
+-- getting-started emails stops them (news = false); a send that failed is
+-- still marked, so it is not repeated by itself, and counted as failed.
+alter table public.mail_prefs add column if not exists news boolean not null default true;
+alter table public.mail_sent add column if not exists ok boolean not null default true;

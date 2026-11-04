@@ -2072,10 +2072,8 @@ async function isAdmin(userId) {
 
 // Who opened the app today (Israel time), what they did, AI use and errors,
 // with each one's name and how they are doing. The owner's accounts are left out.
-app.get('/api/admin/today', requireAuth, async (req, res) => {
-  try {
-    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
-    const since = new Date(Date.now() - 30 * 3600 * 1000).toISOString();
+async function todayItems() {
+  const since = new Date(Date.now() - 30 * 3600 * 1000).toISOString();
     const [ev, calls, er, people] = await Promise.all([
       supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).limit(20000),
       supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', since).limit(20000),
@@ -2092,9 +2090,35 @@ app.get('/api/admin/today', requireAuth, async (req, res) => {
       const x = info.get(r.id) || {};
       return { ...r, id: undefined, who: x.label, name: x.name || '', health: ops.healthOf({ ...x, joined: seen.get(r.id).created_at, lastSeen: new Date().toISOString(), imports: r.imports, importFails: r.importFails, asked: r.asked }) };
     });
-    return res.json({ day: ops.israelDay(), items });
+    return { day: ops.israelDay(), items };
+}
+app.get('/api/admin/today', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    return res.json(await todayItems());
   } catch (err) {
     console.error('admin today failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+// The owner's evening summary email (pg_cron job "owner-daily-digest").
+let todaySummary = null;
+import(require('url').pathToFileURL(path.join(__dirname, 'public/app/src/domain/people-health.js')).href)
+  .then((m) => { todaySummary = m.todaySummary; })
+  .catch((err) => console.error('People summary not loaded:', err.message));
+app.post('/api/admin/daily/run', async (req, res) => {
+  try {
+    if (!(await checkCronSecret(req))) return res.status(401).json({ error: 'unauthorized' });
+    if (!FEEDBACK_TO || !mailStatus().ready || !todaySummary) return res.status(503).json({ error: 'not ready' });
+    // Two cron runs a day (20:45 and 21:45 UTC); only the one at 23:45 in Israel sends.
+    if (ops.israelClock().hour !== 23 && !(req.body && req.body.now)) return res.json({ ok: true, skipped: 'not 23:00 in Israel' });
+    const { day, items } = await todayItems();
+    const { count } = await supabaseAdmin.from('feedback').select('id', { count: 'exact', head: true }).eq('closed', false).eq('archived', false).eq('last_by', 'user');
+    const mail = ops.ownerDigestMail({ day, summary: todaySummary(items), items, waiting: count || 0, link: appLinkOf(req) });
+    await sendMailWithFallback({ to: FEEDBACK_TO, ...mail });
+    return res.json({ ok: true, people: items.length });
+  } catch (err) {
+    console.error('owner digest failed:', err.message);
     return res.status(500).json({ error: 'failed' });
   }
 });
@@ -2118,19 +2142,21 @@ app.get('/api/admin/live', requireAuth, async (req, res) => {
 
 // ═══ one-time emails from the dashboard (the owner reads, then sends) ═══
 async function campaignData() {
-  const [{ data: people }, { data: members }, { data: spans }, { data: sent }, { data: oldSent }] = await Promise.all([
+  const [{ data: people }, { data: members }, { data: spans }, { data: sent }, { data: oldSent }, { data: off }] = await Promise.all([
     supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     supabaseAdmin.from('memberships').select('user_id,household_id,created_at').order('created_at', { ascending: true }),
     supabaseAdmin.rpc('ops_tx_span'),
-    supabaseAdmin.from('mail_sent').select('user_id,campaign'),
-    supabaseAdmin.from('reengage_sent').select('user_id')
+    supabaseAdmin.from('mail_sent').select('user_id,campaign,sent_at,ok'),
+    supabaseAdmin.from('reengage_sent').select('user_id'),
+    supabaseAdmin.from('mail_prefs').select('user_id').eq('news', false)
   ]);
   // A person's first household, as the app opens it.
   const first = new Map();
   for (const m of members || []) if (!first.has(m.user_id)) first.set(m.user_id, m);
   return {
     users: (people && people.users) || [], members: [...first.values()], spans: spans || [],
-    sent: [...(sent || []), ...(oldSent || []).map((r) => ({ user_id: r.user_id, campaign: 'start' }))], owners: ADMIN_EMAILS
+    sent: [...(sent || []), ...(oldSent || []).map((r) => ({ user_id: r.user_id, campaign: 'start' }))], owners: ADMIN_EMAILS,
+    stopped: (off || []).map((r) => r.user_id)
   };
 }
 const appLinkOf = (req) => (process.env.PUBLIC_URL || (req.protocol + '://' + req.get('host'))).replace(/\/$/, '') + '/app/';
@@ -2138,7 +2164,7 @@ const mailStatus = () => ops.mailReady({ brevo: !!(BREVO_API_KEY && BREVO_FROM),
 // How an email looks, with its design, for the dashboard's preview (shown in
 // a frame there). The wording is not private: it is the same for everyone.
 app.get('/mail-preview/:campaign', (req, res) => {
-  const mail = ops.CAMPAIGNS.includes(req.params.campaign) ? ops.campaignMail(req.params.campaign, appLinkOf(req)) : null;
+  const mail = ops.CAMPAIGNS.includes(req.params.campaign) ? ops.campaignMail(req.params.campaign, appLinkOf(req), appLinkOf(req).replace(/\/app\/$/, '') + '/unsubscribe?k=news') : null;
   if (!mail) return res.status(404).end();
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'");
@@ -2150,8 +2176,9 @@ app.get('/api/admin/reengage', requireAuth, async (req, res) => {
   try {
     const d = await campaignData();
     const link = appLinkOf(req);
-    const campaigns = ops.CAMPAIGNS.map((id) => ({ id, title: ops.campaignTitle(id), count: ops.campaignList(id, d).length, preview: ops.campaignMail(id, link) }));
-    return res.json({ campaigns, mail: mailStatus() });
+    const st = ops.campaignStats(d.sent, d.stopped);
+    const campaigns = ops.CAMPAIGNS.map((id) => ({ id, title: ops.campaignTitle(id), count: ops.campaignList(id, d).length, preview: ops.campaignMail(id, link), done: st.byCampaign[id] || { sent: 0, failed: 0, last: null } }));
+    return res.json({ campaigns, stopped: st.stopped, mail: mailStatus() });
   } catch (err) { return res.status(500).json({ error: 'failed' }); }
 });
 app.post('/api/admin/reengage', requireAuth, async (req, res) => {
@@ -2164,7 +2191,8 @@ app.post('/api/admin/reengage', requireAuth, async (req, res) => {
       const { data } = await supabaseAdmin.auth.admin.getUserById(req.authUserId);
       const to = data && data.user && data.user.email;
       if (!to) return res.status(400).json({ error: 'no email' });
-      try { const r = await sendMailWithFallback({ to, ...mail, subject: '[ניסיון] ' + mail.subject }); return res.json({ test: true, to, provider: r && r.provider }); } catch (err) { console.error('test mail failed:', err.message); return res.status(502).json({ error: ops.mailErrorText(err) }); }
+      const own = unsubLinkFor(req.authUserId, publicOrigin(req), 'news');
+      try { const r = await sendMailWithFallback({ to, ...ops.campaignMail(campaign, appLinkOf(req), own), subject: '[ניסיון] ' + mail.subject, headers: unsubHeaders(own) }); return res.json({ test: true, to, provider: r && r.provider }); } catch (err) { console.error('test mail failed:', err.message); return res.status(502).json({ error: ops.mailErrorText(err) }); }
     }
     if (!mailStatus().ready) return res.status(503).json({ error: 'השרת עוד לא מוגדר לשלוח מיילים למשתמשים.' });
     const all = ops.campaignList(campaign, await campaignData());
@@ -2176,7 +2204,12 @@ app.post('/api/admin/reengage', requireAuth, async (req, res) => {
       // Marked first: a person never gets the same email twice, even if this is pressed again.
       const { error } = await supabaseAdmin.from('mail_sent').insert({ user_id: u.id, campaign });
       if (error) continue;
-      try { await sendMailWithFallback({ to: u.email, ...mail }); sent++; } catch (err) { failed++; lastError = ops.mailErrorText(err); }
+      const unsub = unsubLinkFor(u.id, publicOrigin(req), 'news');
+      try { await sendMailWithFallback({ to: u.email, ...ops.campaignMail(campaign, appLinkOf(req), unsub), headers: unsubHeaders(unsub) }); sent++; } catch (err) {
+        failed++; lastError = ops.mailErrorText(err);
+        // Still marked (not sent again by itself), but counted as failed on the dashboard.
+        await supabaseAdmin.from('mail_sent').update({ ok: false }).eq('user_id', u.id).eq('campaign', campaign);
+      }
       await delay(400);
     }
     return res.json({ sent, failed, left: all.length - list.length, error: lastError || undefined });
@@ -2376,7 +2409,8 @@ app.post('/api/feedback/:id', requireAuth, replyLimiter, async (req, res) => {
 // bottom turns it off without signing in (and mail apps show "unsubscribe").
 const UNSUB_SECRET = process.env.UNSUB_SECRET || VAPID_PRIVATE_KEY || ADMIN_SALT;
 const publicOrigin = (req) => (process.env.PUBLIC_URL || (req ? req.protocol + '://' + req.get('host') : 'https://budget-web-u0iy.onrender.com')).replace(/\/$/, '');
-const unsubLinkFor = (userId, origin) => origin + '/unsubscribe?u=' + encodeURIComponent(userId) + '&t=' + ops.unsubToken(userId, UNSUB_SECRET);
+const unsubLinkFor = (userId, origin, kind = 'monthly') => origin + '/unsubscribe?u=' + encodeURIComponent(userId) + '&t=' + ops.unsubToken(userId, UNSUB_SECRET, kind) + (kind === 'monthly' ? '' : '&k=' + kind);
+const unsubHeaders = (link) => ({ 'List-Unsubscribe': '<' + link + '>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' });
 async function mailMonthly(hid, data, { only = null, origin = publicOrigin(null), force = false } = {}) {
   if (!mailStatus().ready) return { sent: 0 };
   const ids = only ? [only] : await householdMembers(hid);
@@ -2444,24 +2478,30 @@ function unsubPage(title, body) {
   return '<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + title + ' · התקציב שלנו</title>'
     + '<link rel="icon" href="/wallet.svg" type="image/svg+xml"><link rel="stylesheet" href="/app/pages/pages.css"></head><body><main class="page"><section class="hero"><img src="/wallet-512.png" alt=""><h1>' + title + '</h1></section>' + body + '</main></body></html>';
 }
-const unsubForm = (u, t, on, label, ghost) => '<form method="post" action="/unsubscribe"><input type="hidden" name="u" value="' + ops.escHtml(u) + '"><input type="hidden" name="t" value="' + ops.escHtml(t) + '">'
+const unsubForm = (u, t, on, label, ghost, k = 'monthly') => '<form method="post" action="/unsubscribe"><input type="hidden" name="u" value="' + ops.escHtml(u) + '"><input type="hidden" name="t" value="' + ops.escHtml(t) + '">'
+  + (k === 'news' ? '<input type="hidden" name="k" value="news">' : '')
   + (on ? '<input type="hidden" name="on" value="1">' : '') + '<button class="btn' + (ghost ? ' btn-ghost' : '') + '" type="submit">' + label + '</button></form>';
+const UNSUB_TEXT = {
+  monthly: { title: 'הסיכום החודשי במייל', ask: 'להפסיק לקבל את הסיכום החודשי במייל?', off: 'הוסרתם מהסיכום החודשי', offText: 'לא נשלח לכם יותר את הסיכום החודשי.', on: 'הסיכום החודשי חזר', onText: 'נשלח לכם סיכום בתחילת כל חודש.' },
+  news: { title: 'מיילים מ"התקציב שלנו"', ask: 'להפסיק לקבל מאיתנו מיילים עם טיפים ותזכורות?', off: 'לא נשלח לכם יותר מיילים כאלה', offText: 'הסרנו אתכם מהמיילים עם הטיפים והתזכורות.', on: 'חזרתם לרשימה', onText: 'נשלח לכם מדי פעם טיפ או תזכורת.' }
+};
+const unsubKind = (req) => (String((req.body && req.body.k) || req.query.k || 'monthly') === 'news' ? 'news' : 'monthly');
 app.get('/unsubscribe', (req, res) => {
   res.setHeader('Content-Security-Policy', NEW_APP_CSP);
-  const u = String(req.query.u || ''), t = String(req.query.t || '');
-  if (!ops.unsubOk(u, t, UNSUB_SECRET)) return res.status(400).type('html').send(unsubPage('הקישור לא תקין', '<p class="lead">אפשר לכבות את הסיכום החודשי גם בפרופיל באפליקציה.</p><a class="btn" href="/app/">לאפליקציה</a>'));
-  return res.type('html').send(unsubPage('הסיכום החודשי במייל', '<p class="lead">להפסיק לקבל את הסיכום החודשי במייל?</p>' + unsubForm(u, t, false, 'כן, להפסיק') + '<a class="btn btn-ghost" href="/app/">לא, להשאיר</a>'));
+  const u = String(req.query.u || ''), t = String(req.query.t || ''), k = unsubKind(req), w = UNSUB_TEXT[k];
+  if (!ops.unsubOk(u, t, UNSUB_SECRET, k)) return res.status(400).type('html').send(unsubPage('הקישור לא תקין', '<p class="lead">אפשר לכבות את הסיכום החודשי גם בפרופיל באפליקציה.</p><a class="btn" href="/app/">לאפליקציה</a>'));
+  return res.type('html').send(unsubPage(w.title, '<p class="lead">' + w.ask + '</p>' + unsubForm(u, t, false, 'כן, להפסיק', false, k) + '<a class="btn btn-ghost" href="/app/">לא, להשאיר</a>'));
 });
 app.post('/unsubscribe', express.urlencoded({ extended: false, limit: '2kb' }), async (req, res) => {
   res.setHeader('Content-Security-Policy', NEW_APP_CSP);
   const b = req.body || {};
-  const u = String(b.u || req.query.u || ''), t = String(b.t || req.query.t || '');
-  if (!supabaseAdmin || !ops.unsubOk(u, t, UNSUB_SECRET)) return res.status(400).type('html').send(unsubPage('הקישור לא תקין', '<a class="btn" href="/app/">לאפליקציה</a>'));
+  const u = String(b.u || req.query.u || ''), t = String(b.t || req.query.t || ''), k = unsubKind(req), w = UNSUB_TEXT[k];
+  if (!supabaseAdmin || !ops.unsubOk(u, t, UNSUB_SECRET, k)) return res.status(400).type('html').send(unsubPage('הקישור לא תקין', '<a class="btn" href="/app/">לאפליקציה</a>'));
   const on = b.on === '1';
-  const { error } = await supabaseAdmin.from('mail_prefs').upsert({ user_id: u, monthly: on, updated_at: new Date().toISOString() });
+  const { error } = await supabaseAdmin.from('mail_prefs').upsert({ user_id: u, [k]: on, updated_at: new Date().toISOString() });
   if (error) return res.status(500).type('html').send(unsubPage('משהו נכשל', '<p class="lead">נסו שוב בעוד רגע, או כבו בפרופיל באפליקציה.</p>'));
-  if (on) return res.type('html').send(unsubPage('הסיכום החודשי חזר', '<p class="lead">נשלח לכם סיכום בתחילת כל חודש.</p><a class="btn" href="/app/">לאפליקציה</a>'));
-  return res.type('html').send(unsubPage('הוסרתם מהסיכום החודשי', '<p class="lead">לא נשלח לכם יותר את הסיכום החודשי. מיילים חשובים על החשבון, כמו קוד כניסה, ימשיכו להגיע.</p>' + unsubForm(u, t, true, 'טעיתי, להחזיר', true)));
+  if (on) return res.type('html').send(unsubPage(w.on, '<p class="lead">' + w.onText + '</p><a class="btn" href="/app/">לאפליקציה</a>'));
+  return res.type('html').send(unsubPage(w.off, '<p class="lead">' + w.offText + ' מיילים חשובים על החשבון, כמו קוד כניסה, ימשיכו להגיע.</p>' + unsubForm(u, t, true, 'טעיתי, להחזיר', true, k)));
 });
 
 // ═══ stage 4: monthly report (1st of the month, cron) ═══

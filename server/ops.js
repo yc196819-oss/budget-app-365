@@ -214,12 +214,13 @@ function feedbackPatch(body) {
 //   first: opened a household, never uploaded a statement
 //   more:  uploaded, but less than 6 months of statements
 const CAMPAIGNS = ['start', 'first', 'more'];
-function campaignList(campaign, { users = [], members = [], spans = [], sent = [], owners = [], now = new Date() }) {
+function campaignList(campaign, { users = [], members = [], spans = [], sent = [], owners = [], stopped = [], now = new Date() }) {
+  const off = new Set(stopped);
   const householdOf = new Map(members.map((m) => [m.user_id, m.household_id]));
   const span = new Map(spans.map((x) => [x.household_id, { n: Number(x.n) || 0, months: Number(x.months) || 0 }]));
   const done = new Set(sent.filter((r) => (r.campaign || 'start') === campaign).map((r) => r.user_id));
   return users.filter((u) => {
-    if (!u.email || !u.email_confirmed_at || done.has(u.id) || owners.includes(String(u.email).toLowerCase())) return false;
+    if (!u.email || !u.email_confirmed_at || done.has(u.id) || off.has(u.id) || owners.includes(String(u.email).toLowerCase())) return false;
     if (now.getTime() - new Date(u.created_at).getTime() < 2 * DAY) return false;
     const inHousehold = householdOf.has(u.id);
     const s = (inHousehold && span.get(householdOf.get(u.id))) || { n: 0, months: 0 };
@@ -228,6 +229,18 @@ function campaignList(campaign, { users = [], members = [], spans = [], sent = [
     if (campaign === 'more') return inHousehold && s.n > 0 && s.months < 6;
     return false;
   });
+}
+// For the dashboard: per email, how many it went to, how many failed, when
+// last; and how many asked to stop. Pure.
+function campaignStats(sent = [], stopped = []) {
+  const out = {};
+  for (const r of sent) {
+    if (!CAMPAIGNS.includes(r.campaign)) continue;
+    const c = out[r.campaign] || (out[r.campaign] = { sent: 0, failed: 0, last: null });
+    if (r.ok === false) c.failed++; else c.sent++;
+    if (r.sent_at && (!c.last || r.sent_at > c.last)) c.last = r.sent_at;
+  }
+  return { byCampaign: out, stopped: stopped.length };
 }
 // Kept for the first campaign's callers and tests.
 function reengageList(args) { return campaignList('start', args); }
@@ -258,11 +271,11 @@ const MAILS = {
     button: 'להוסיף עוד פירוט'
   }
 };
-function campaignMail(campaign, link) {
+function campaignMail(campaign, link, unsubLink) {
   const m = MAILS[campaign];
   if (!m) return null;
   const sign = 'אם משהו לא עבד או לא היה ברור, פשוט תענה למייל הזה. אני קורא כל תשובה.';
-  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + link + '\n\n' + sign + '\nקובי\n\nלא רוצה לקבל עוד מיילים? תענה "הסר".';
+  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + link + '\n\n' + sign + '\nקובי\n\n' + (unsubLink ? 'להפסיק לקבל מיילים כאלה: ' + unsubLink : 'לא רוצה לקבל עוד מיילים? תענה "הסר".');
   let body = '';
   let list = [];
   const P = 'margin:0 0 14px;font-size:16px;line-height:1.65;color:#2B2118';
@@ -291,7 +304,7 @@ function campaignMail(campaign, link) {
     + '<a href="' + link + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none">' + m.button + '</a></td></tr></table>'
     + '<p style="margin:0;font-size:15px;line-height:1.6;color:#5B4B3D">' + sign + '</p>'
     + '<p style="margin:10px 0 0;font-size:15px;font-weight:bold;color:#2B2118">קובי</p></td></tr>'
-    + '<tr><td style="padding:16px 8px 0;font-size:12px;line-height:1.6;color:#8A7B6E;text-align:center">קיבלת את המייל כי נרשמת ל"התקציב שלנו". לא רוצה לקבל עוד מיילים? תענה "הסר".</td></tr>'
+    + '<tr><td style="padding:16px 8px 0;font-size:12px;line-height:1.6;color:#8A7B6E;text-align:center">קיבלת את המייל כי נרשמת ל"התקציב שלנו". ' + (unsubLink ? '<a href="' + escHtml(unsubLink) + '" style="color:#8A7B6E">להפסיק לקבל מיילים כאלה</a>' : 'לא רוצה לקבל עוד מיילים? תענה "הסר".') + '</td></tr>'
     + '</table></td></tr></table></body></html>';
   return { subject: m.subject, text, html };
 }
@@ -377,10 +390,13 @@ const mailButton = (href, label) => '<table role="presentation" cellpadding="0" 
   + '<a href="' + escHtml(href) + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none">' + label + '</a></td></tr></table>';
 
 // One link per person that turns the monthly email off, without signing in.
-function unsubToken(userId, secret) { return crypto.createHmac('sha256', String(secret || 'x')).update('monthly:' + String(userId)).digest('hex').slice(0, 32); }
-function unsubOk(userId, token, secret) {
+// kind: 'monthly' (the monthly summary) or 'news' (the getting-started emails).
+const UNSUB_KINDS = ['monthly', 'news'];
+function unsubToken(userId, secret, kind = 'monthly') { return crypto.createHmac('sha256', String(secret || 'x')).update(kind + ':' + String(userId)).digest('hex').slice(0, 32); }
+function unsubOk(userId, token, secret, kind = 'monthly') {
+  if (!UNSUB_KINDS.includes(kind)) return false;
   if (!/^[0-9a-f-]{36}$/i.test(String(userId || '')) || !/^[0-9a-f]{32}$/.test(String(token || ''))) return false;
-  const a = Buffer.from(unsubToken(userId, secret)), b = Buffer.from(String(token));
+  const a = Buffer.from(unsubToken(userId, secret, kind)), b = Buffer.from(String(token));
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
@@ -551,13 +567,17 @@ function healthOf({ joined = null, lastSeen = null, inHousehold = false, txCount
 
 // Today (Israel time), one row per person who opened the app or signed up:
 // when, what they did, AI use and failures.
-function israelDay(now = new Date()) {
-  return new Date(now.getTime() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+// Israel's clock, summer and winter alike.
+const IL_PARTS = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+function israelClock(now = new Date()) {
+  const p = Object.fromEntries(IL_PARTS.formatToParts(now).map((x) => [x.type, x.value]));
+  return { day: p.year + '-' + p.month + '-' + p.day, hm: p.hour + ':' + p.minute, hour: Number(p.hour) };
 }
+function israelDay(now = new Date()) { return israelClock(now).day; }
 function todayRows({ users = [], events = [], calls = [], errors = [], now = new Date() }) {
   const day = israelDay(now);
   const onDay = (iso) => israelDay(new Date(iso)) === day;
-  const hm = (iso) => new Date(new Date(iso).getTime() + 3 * 3600 * 1000).toISOString().slice(11, 16);
+  const hm = (iso) => israelClock(new Date(iso)).hm;
   const rows = new Map();
   const row = (id) => {
     if (!rows.has(id)) rows.set(id, { id, first: null, last: null, newToday: false, opens: 0, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, cost: 0, errors: 0 });
@@ -581,4 +601,27 @@ function todayRows({ users = [], events = [], calls = [], errors = [], now = new
     .sort((a, b) => String(b.last || '').localeCompare(String(a.last || '')));
 }
 
-module.exports = { healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+// The owner's evening email: the same sentence as "who came in today?",
+// one line per person, and how many requests wait. Pure.
+function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
+  const origin = String(link).replace(/\/app\/?.*$/, '');
+  const dmy = String(day || '').split('-').reverse().join('.');
+  const k = (x, one, many) => (!x ? '' : x === 1 ? one : x + ' ' + many);
+  const did = (p) => [k(p.opens, 'כניסה אחת', 'כניסות'), k(p.imports, 'פירוט אחד', 'פירוטים'), k(p.importFails, 'פירוט אחד נכשל', 'פירוטים נכשלו'), k(p.added, 'הוספה אחת', 'הוספות'), k(p.asked, 'שאלה אחת ליועץ', 'שאלות ליועץ'), p.cost ? 'AI $' + Number(p.cost).toFixed(2) : '', k(p.errors, 'שגיאה אחת', 'שגיאות')].filter(Boolean).join(' · ') || 'רק נכנס';
+  const nameOf = (p) => p.name || ('בלי שם ' + (p.who || ''));
+  const needs = items.filter((p) => p.health && p.health.level !== 'good');
+  const rows = items.slice(0, 30).map((p) => '<tr><td style="padding:8px 0;border-top:1px solid #F0E6DA;font-size:15px;line-height:1.5;color:#2B2118"><b>' + escHtml(nameOf(p)) + '</b>' + (p.newToday ? ' <span style="color:#92490A">(חדש היום)</span>' : '')
+    + '<br><span style="color:#5B4B3D">' + escHtml(did(p)) + '</span>' + (p.health ? '<br><span style="color:#8A7B6E;font-size:13px">' + escHtml(p.health.label) + '</span>' : '') + '</td></tr>').join('');
+  const inner = '<p style="margin:0 0 12px;font-size:20px;font-weight:bold;color:#2B2118">היום באפליקציה · ' + escHtml(dmy) + '</p>'
+    + '<p style="margin:0 0 16px;font-size:16px;line-height:1.65;color:#2B2118">' + escHtml(summary) + '</p>'
+    + (waiting ? '<p style="margin:0 0 16px;padding:10px 14px;background:#FBF4EA;border-radius:12px;font-size:15px;color:#5B4B3D">' + (waiting === 1 ? 'פנייה אחת מחכה לתשובה.' : waiting + ' פניות מחכות לתשובה.') + '</p>' : '')
+    + (rows ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px">' + rows + '</table>' : '')
+    + mailButton(link + '?go=profile/admin#/home', 'ללוח הבעלים');
+  const subject = (items.length ? 'היום: ' + (items.length === 1 ? 'משתמש אחד נכנס' : items.length + ' משתמשים נכנסו') : 'היום: אף אחד לא נכנס')
+    + (needs.length ? ', ' + (needs.length === 1 ? 'אחד צריך עזרה' : needs.length + ' צריכים עזרה') : '') + (waiting ? ', ' + (waiting === 1 ? 'פנייה אחת מחכה' : waiting + ' פניות מחכות') : '');
+  const text = 'היום באפליקציה · ' + dmy + '\n\n' + summary + (waiting ? '\n' + waiting + ' פניות מחכות לתשובה.' : '') + '\n\n'
+    + items.slice(0, 30).map((p) => '• ' + nameOf(p) + (p.newToday ? ' (חדש היום)' : '') + ': ' + did(p) + (p.health ? ' · ' + p.health.label : '')).join('\n') + '\n\nללוח הבעלים: ' + link + '?go=profile/admin#/home';
+  return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
+}
+
+module.exports = { campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

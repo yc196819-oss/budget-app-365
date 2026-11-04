@@ -359,8 +359,8 @@ test('emails to users: one per step, read before sending, a test to yourself, an
       left -= 1;
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sent: 1, failed: 0, left }) });
     }
-    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: true }, campaigns: [
-      { id: 'start', title: 'נרשמו ולא פתחו משק בית', count: 14, preview: mail('נשארו לך 2 דקות להתחיל') },
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: true }, stopped: 2, campaigns: [
+      { id: 'start', title: 'נרשמו ולא פתחו משק בית', count: 14, preview: mail('נשארו לך 2 דקות להתחיל'), done: { sent: 13, failed: 1, last: '2026-11-04T19:28:00Z' } },
       { id: 'first', title: 'פתחו משק בית ולא העלו פירוט', count: 12, preview: mail('עוד צעד אחד, ורואים לאן הכסף הולך') },
       { id: 'more', title: 'העלו פירוט, פחות מ-6 חודשים', count: 7, preview: mail('טיפ קטן שיעשה את התקציב הרבה יותר מדויק') }
     ] }) });
@@ -370,6 +370,10 @@ test('emails to users: one per step, read before sending, a test to yourself, an
   const card = page.locator('.admin-reengage');
   await card.waitFor();
   assert.equal(await card.locator('.campaign').count(), 3);
+  // What already went out, and who asked to stop.
+  assert.match(await card.locator('.campaign-start .campaign-done').textContent(), /נשלח ל-13 · נכשל 1 · אחרון 04\.11/);
+  assert.equal(await card.locator('.campaign-more .campaign-done').count(), 0);
+  assert.match(await card.locator('.campaign-stopped').textContent(), /ביקשו להפסיק לקבל: 2/);
   const more = card.locator('.campaign-more');
   await more.locator('summary').click();
   assert.match(await more.textContent(), /טיפ קטן שיעשה את התקציב/);
