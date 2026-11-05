@@ -8,7 +8,7 @@
 // The server replaces this with a version made from the app's files.
 const CACHE = 'budget-app-dev';
 const PRECACHE = ['/app/', '/manifest.json', '/wallet.svg', '/wallet-192.png', '/wallet-512.png', '/badge-96.png'];
-const STATIC = /^\/(app\/(src|styles|vendor)\/|(icon|wallet|shortcut|badge)[\w-]*\.(svg|png)$|manifest\.json$)/;
+const STATIC = /^\/(app\/(src|styles|vendor|fonts)\/|(icon|wallet|shortcut|badge)[\w-]*\.(svg|png)$|manifest\.json$)/;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).catch(() => {}));

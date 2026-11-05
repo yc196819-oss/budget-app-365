@@ -268,3 +268,19 @@ test('the advisor is told whether the person is on a phone or a computer', async
   assert.match(src, /המשתמש כותב ממחשב/);
   assert.match(src, /המשתמש כותב מטלפון/);
 });
+
+test('faster loading: the app\'s files go out compressed, and the fonts come from this site', async () => {
+  const js = await fetch(BASE + '/app/src/screens/advisor/AdvisorPanel.js', { headers: { 'Accept-Encoding': 'gzip' } });
+  assert.equal(js.headers.get('content-encoding'), 'gzip');
+  const shell = await (await fetch(BASE + '/app/')).text();
+  assert.doesNotMatch(shell, /fonts\.googleapis/);
+  assert.match(shell, /styles\/fonts\.css/);
+  const font = await fetch(BASE + '/app/fonts/assistant-hebrew-400-normal.woff2');
+  assert.equal(font.status, 200);
+  assert.match(font.headers.get('cache-control'), /immutable/);
+  assert.equal((await fetch(BASE + '/app/fonts/..%2Fpackage.json')).status, 404);
+  const csp = (await fetch(BASE + '/app/')).headers.get('content-security-policy');
+  assert.match(csp, /font-src 'self'/);
+  assert.doesNotMatch(csp, /googleapis|gstatic/);
+  for (const p of ['/privacy', '/terms', '/accessibility', '/security', '/download', '/delete-account']) assert.doesNotMatch(await (await fetch(BASE + p)).text(), /fonts\.g/, p);
+});

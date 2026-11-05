@@ -24,6 +24,9 @@ const { AsyncLocalStorage } = require('node:async_hooks');
 
 const app = express();
 app.set('trust proxy', 1);
+// The app's files go out compressed (about a third of the size). The API is
+// left as is: the advisor's answer streams word by word.
+app.use(require('compression')({ filter: (req, res) => !req.path.startsWith('/api/') && require('compression').filter(req, res) }));
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -117,8 +120,8 @@ function inlineScriptHash(file, type) {
 const NEW_APP_CSP = [
   "default-src 'self'",
   ("script-src 'self' " + inlineScriptHash(path.join(NEW_APP_DIR, 'index.html'), 'importmap')).trim(),
-  "style-src 'self' https://fonts.googleapis.com",
-  "font-src https://fonts.gstatic.com",
+  "style-src 'self'",
+  "font-src 'self'",
   "img-src 'self' data:",
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
   "manifest-src 'self'",
@@ -2824,6 +2827,14 @@ const APP_VENDOR_FILES = {
   'pdf.js': 'node_modules/pdfjs-dist/build/pdf.min.mjs',
   'pdf.worker.js': 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs'
 };
+// The fonts, from this site (no request to Google on every visit).
+const FONT_FILE = /^(assistant|frank-ruhl-libre)-(hebrew|latin)-\d{3}-normal\.woff2$/;
+app.get('/app/fonts/:file', (req, res) => {
+  const m = FONT_FILE.exec(req.params.file);
+  if (!m) return res.status(404).end();
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  return res.sendFile(path.join(__dirname, 'node_modules/@fontsource', m[1], 'files', req.params.file));
+});
 app.get('/app/vendor/:file', (req, res) => {
   const rel = APP_VENDOR_FILES[req.params.file];
   if (!rel) return res.status(404).end();
