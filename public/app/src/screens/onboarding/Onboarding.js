@@ -31,6 +31,7 @@ export function Onboarding({ session }) {
       location.hash = '#/home';
       session.refresh();
     } catch (err) {
+      if (/two_step_required/.test(String(err && err.message))) { session.needTwoStep(); return; }
       setError('לא הצלחנו לשמור. בדקו את החיבור ונסו שוב. (' + (err.message || err) + ')');
       setSaving(false);
     }
