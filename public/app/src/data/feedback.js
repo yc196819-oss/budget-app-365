@@ -69,7 +69,7 @@ export function setFeedback(id, body) {
 // A draft answer from the AI: status is fixed | working | explain | idea | more;
 // hint is what the owner typed so far (the gist), if anything.
 export async function draftReply(id, status, hint = '') {
-  return (await api('/api/admin/feedback/' + encodeURIComponent(id) + '/draft', { method: 'POST', body: { status, hint } })).text;
+  return api('/api/admin/feedback/' + encodeURIComponent(id) + '/draft', { method: 'POST', body: { status, hint } });
 }
 
 export const FEEDBACK_KIND = { bug: { icon: 'wrench', label: 'תקלה' }, idea: { icon: 'bulb', label: 'רעיון' }, other: { icon: 'mail', label: 'אחר' } };

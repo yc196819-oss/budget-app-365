@@ -51,10 +51,11 @@ function InboxThread({ f, onBack, reload, patchLocal }) {
   const [noting, setNoting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drafting, setDrafting] = useState('');
+  const [check, setCheck] = useState(null);
   // What the owner typed so far is the gist; the AI writes it out. Nothing is sent.
   const aiDraft = async (status) => {
     setDrafting(status);
-    try { setDraft(await draftReply(f.id, status, draft)); } catch (err) { showToast(err.message || 'לא הצלחנו לנסח. נסו שוב.'); } finally { setDrafting(''); }
+    try { const d = await draftReply(f.id, status, draft); setDraft(d.text); setCheck(d); } catch (err) { showToast(err.message || 'לא הצלחנו לנסח. נסו שוב.'); } finally { setDrafting(''); }
   };
   const log = useRef(null);
   // Opening it marks it read for you.
@@ -104,6 +105,9 @@ function InboxThread({ f, onBack, reload, patchLocal }) {
     ${!noting && html`<div class="inbox-ai stack" style="gap:6px">
       <span class="muted" style="font-size:13px">תשובה בעזרת AI לפי המצב. אפשר לכתוב קודם כמה מילים, והיא תנוסח מהן. הטיוטה נכנסת לתיבה, ואתה עורך ושולח.</span>
       <div class="chips">${DRAFTS.map(([k, l]) => html`<button type="button" class="chip" disabled=${!!drafting || busy} onClick=${() => aiDraft(k)}>${drafting === k ? 'מנסח…' : '✦ ' + l}</button>`)}</div>
+    </div>`}
+    ${!noting && check && html`<div class=${'inbox-check ' + check.fixed} role="status" style=${'font-size:14px;line-height:1.55;padding:8px 12px;border-radius:12px;background:var(--surface-2);' + (check.fixed === 'no' ? 'border:1px solid var(--danger)' : '')}>
+      <b>${check.fixed === 'yes' ? '✓ נראה שזה תוקן' : check.fixed === 'no' ? '⚠ לא מצאתי שזה תוקן. כדאי לבדוק לפני ששולחים' : 'לא ברור אם זה תוקן'}</b>${check.why ? html`<br /><span class="muted">${check.why}</span>` : ''}
     </div>`}
     ${!noting && html`<div class="chips inbox-quick">${QUICK.map((t) => html`<button type="button" class="chip" onClick=${() => setDraft(t)}>${t}</button>`)}</div>`}
     ${noting && html`<span class="inbox-note-mode">כותבים הערה פנימית: המשתמש לא יראה אותה. <button type="button" class="btn-text" onClick=${() => setNoting(false)}>ביטול</button></span>`}

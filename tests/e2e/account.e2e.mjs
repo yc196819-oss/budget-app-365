@@ -242,7 +242,7 @@ test('owner inbox: like a messaging app; unread first, the name, answer and clos
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
   await page.route('**/api/admin/feedback/f1', (r) => { const b = JSON.parse(r.request().postData()); acts.push(b); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, mailed: !!b.mail }) }); });
   const drafts = [];
-  await page.route('**/api/admin/feedback/f1/draft', (r) => { const b = JSON.parse(r.request().postData()); drafts.push(b); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'היי רון, תיקנו את הייבוא. סגור ופתח את האפליקציה ונסה שוב.' }) }); });
+  await page.route('**/api/admin/feedback/f1/draft', (r) => { const b = JSON.parse(r.request().postData()); drafts.push(b); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'היי רון, תיקנו את הייבוא. סגור ופתח את האפליקציה ונסה שוב.', fixed: 'no', why: 'אין ברשימת השינויים תיקון לייבוא, ומאז שכתב הייבוא נכשל פעמיים' }) }); });
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
   const inbox = page.locator('.admin-inbox');
@@ -268,6 +268,8 @@ test('owner inbox: like a messaging app; unread first, the name, answer and clos
   await page.waitForFunction(() => document.querySelector('textarea[aria-label="תשובה לרון"]').value.startsWith('היי רון'));
   assert.deepEqual(drafts, [{ status: 'fixed', hint: 'תיקנתי את הייבוא' }]);
   assert.equal(acts.length, 1, 'only "seen"; the draft was not sent');
+  // It checked: no fix found, so the owner is warned before sending.
+  assert.match(await t.locator('.inbox-check').textContent(), /לא מצאתי שזה תוקן.*הייבוא נכשל פעמיים/s);
   await t.locator('.inbox-quick button:has-text("אפשר צילום מסך?")').click();
   await t.locator('button:has-text("לשאול אותו")').click();
   await page.waitForSelector('text=נשלח, הפנייה נשארת פתוחה');

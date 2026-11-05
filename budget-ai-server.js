@@ -2407,6 +2407,35 @@ app.post('/api/admin/feedback/:id', requireAuth, async (req, res) => {
   }
   return res.json({ ok: true, mailed });
 });
+const CHANGES = require('./server/changes');
+// What can be seen about the person now, to tell whether their problem is
+// gone: their household's setup and what happened since they wrote. No
+// amounts, no text they typed elsewhere.
+async function draftFacts(userId, since) {
+  const out = [];
+  try {
+    const { data: m } = await supabaseAdmin.from('memberships').select('household_id').eq('user_id', userId).order('created_at', { ascending: true }).limit(1).maybeSingle();
+    if (!m) out.push('אין לו עדיין משק בית (לא סיים הרשמה).');
+    else {
+      const [{ count: cats }, { count: txs }, { count: noCat }] = await Promise.all([
+        supabaseAdmin.from('categories').select('id', { count: 'exact', head: true }).eq('household_id', m.household_id),
+        supabaseAdmin.from('transactions').select('id', { count: 'exact', head: true }).eq('household_id', m.household_id),
+        supabaseAdmin.from('transactions').select('id', { count: 'exact', head: true }).eq('household_id', m.household_id).is('category_id', null)
+      ]);
+      out.push('קטגוריות במשק הבית: ' + (cats || 0) + '. תנועות: ' + (txs || 0) + ', מהן בלי קטגוריה: ' + (noCat || 0) + '.');
+    }
+    const [{ data: ev }, { data: er }] = await Promise.all([
+      supabaseAdmin.from('app_events').select('name,at').eq('user_id', userId).gte('at', since).order('at', { ascending: false }).limit(200),
+      supabaseAdmin.from('app_errors').select('message,at').eq('user_id', userId).gte('at', since).order('at', { ascending: false }).limit(20)
+    ]);
+    const opens = (ev || []).filter((e) => e.name === 'app_open');
+    out.push(opens.length ? 'נכנס לאפליקציה ' + opens.length + ' פעמים מאז שכתב, לאחרונה ב-' + String(opens[0].at).slice(0, 16).replace('T', ' ') + '.' : 'לא נכנס לאפליקציה מאז שכתב.');
+    const fails = (ev || []).filter((e) => e.name === 'import_fail').length;
+    if (fails) out.push('העלאת פירוט נכשלה ' + fails + ' פעמים מאז שכתב.');
+    out.push((er || []).length ? 'שגיאות מאז שכתב: ' + [...new Set(er.map((e) => String(e.message).slice(0, 80)))].slice(0, 3).join(' | ') : 'אין שגיאות מאז שכתב.');
+  } catch (_e) { /* the draft still works without them */ }
+  return out;
+}
 // A draft answer written by the AI from where things stand, for the owner to
 // read, change and send (never sent by itself).
 app.post('/api/admin/feedback/:id/draft', requireAuth, async (req, res) => {
@@ -2417,12 +2446,13 @@ app.post('/api/admin/feedback/:id/draft', requireAuth, async (req, res) => {
     if (!f) return res.status(404).json({ error: 'not found' });
     const { data: msgs } = await supabaseAdmin.from('feedback_messages').select('author,text,created_at').eq('feedback_id', id).order('created_at', { ascending: true });
     const name = (await feedbackNames([f.user_id]))[f.user_id] || '';
-    const prompt = ops.draftPrompt({ status: req.body && req.body.status, hint: req.body && req.body.hint, kind: f.kind, name, messages: [{ author: 'user', text: f.text }, ...(msgs || [])], guide: APP_GUIDE });
+    const facts = await draftFacts(f.user_id, f.created_at);
+    const prompt = ops.draftPrompt({ status: req.body && req.body.status, hint: req.body && req.body.hint, kind: f.kind, name, messages: [{ author: 'user', text: f.text }, ...(msgs || [])], guide: APP_GUIDE, changes: CHANGES.slice(0, 25), facts, askedAt: f.created_at });
     if (!prompt) return res.status(400).json({ error: 'bad request' });
-    const ai = await generateWithFallback({ prompt, text: '', maxTokens: 600, effort: 'low' });
-    const text = String(ai.output || '').trim().slice(0, 1500);
-    if (!text) return res.status(502).json({ error: 'לא הצלחנו לנסח. נסו שוב.' });
-    return res.json({ text });
+    const ai = await generateWithFallback({ prompt, text: '', maxTokens: 800, effort: 'low' });
+    const d = ops.readDraft(ai.output);
+    if (!d.text) return res.status(502).json({ error: 'לא הצלחנו לנסח. נסו שוב.' });
+    return res.json(d);
   } catch (err) {
     console.error('feedback draft failed:', err.message);
     return res.status(502).json({ error: 'לא הצלחנו לנסח. נסו שוב.' });

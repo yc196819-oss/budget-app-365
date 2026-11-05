@@ -397,3 +397,23 @@ test("the owner's AI draft: by where things stand, from his gist, the conversati
   assert.equal(draftPrompt({ status: 'whatever', messages: [] }), null);
   for (const s of ['working', 'explain', 'idea', 'more']) assert.ok(draftPrompt({ status: s, messages: [] }), s);
 });
+
+test('the draft checks the request against what changed and what the person\'s data shows', () => {
+  const { draftPrompt, readDraft } = require('../server/ops');
+  const p = draftPrompt({ status: 'fixed', kind: 'bug', messages: [{ author: 'user', text: 'אין קטגוריות' }], askedAt: '2026-11-04T23:09:00Z',
+    changes: [{ date: '2026-11-05', text: 'תיקון: קטגוריות למשק בית בלי קטגוריות' }], facts: ['קטגוריות במשק הבית: 14.'] });
+  assert.match(p, /2026-11-05: תיקון: קטגוריות/);
+  assert.match(p, /קטגוריות במשק הבית: 14/);
+  assert.match(p, /הפנייה נשלחה ב-2026-11-04/);
+  assert.match(p, /"fixed":"yes\|no\|unknown"/);
+  assert.deepEqual(readDraft('```json\n{"fixed":"yes","why":"תוקן ב-05.11","text":"היי, תיקנו"}\n```'), { text: 'היי, תיקנו', fixed: 'yes', why: 'תוקן ב-05.11' });
+  assert.deepEqual(readDraft('{"fixed":"maybe","text":"היי"}'), { text: 'היי', fixed: 'unknown', why: '' });
+  assert.deepEqual(readDraft('סתם טקסט'), { text: 'סתם טקסט', fixed: 'unknown', why: '' }, 'plain text still becomes a draft');
+});
+
+test('the list of changes: dated, newest first, in plain words', () => {
+  const changes = require('../server/changes');
+  assert.ok(changes.length > 5);
+  for (const c of changes) { assert.match(c.date, /^\d{4}-\d{2}-\d{2}$/); assert.ok(c.text.length > 10); }
+  for (let i = 1; i < changes.length; i++) assert.ok(changes[i - 1].date >= changes[i].date, 'newest first');
+});
