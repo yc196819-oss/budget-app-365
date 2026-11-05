@@ -1,10 +1,12 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { adminFeedback, setFeedback, FEEDBACK_KIND, FEEDBACK_STATUS } from '../../data/feedback.js';
+import { adminFeedback, setFeedback, draftReply, FEEDBACK_KIND, FEEDBACK_STATUS } from '../../data/feedback.js';
 import { showToast } from '../../lib/toast.js';
 import { sortInbox, filterInbox } from '../../domain/inbox.js';
 
 const QUICK = ['תודה, אנחנו בודקים', 'תוקן, נסו שוב', 'רעיון מצוין, נכנס לרשימה', 'אפשר צילום מסך?'];
+// Draft with AI, by where things stand. Writing by hand stays as it is.
+const DRAFTS = [['fixed', 'תוקן'], ['working', 'בטיפול'], ['explain', 'להסביר איך'], ['idea', 'תודה על הרעיון'], ['more', 'לבקש פרטים']];
 const FILTERS = [['all', 'הכול'], ['unread', 'לא נקראו'], ['open', 'פתוחות'], ['bug', 'תקלות'], ['idea', 'רעיונות'], ['archived', 'ארכיון']];
 const hm = (iso) => { const d = new Date(iso); return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : String(iso).slice(0, 10).split('-').reverse().slice(0, 2).join('.'); };
 
@@ -48,6 +50,13 @@ function InboxThread({ f, onBack, reload, patchLocal }) {
   const [menu, setMenu] = useState(false);
   const [noting, setNoting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [drafting, setDrafting] = useState('');
+  const [check, setCheck] = useState(null);
+  // What the owner typed so far is the gist; the AI writes it out. Nothing is sent.
+  const aiDraft = async (status) => {
+    setDrafting(status);
+    try { const d = await draftReply(f.id, status, draft); setDraft(d.text); setCheck(d); } catch (err) { showToast(err.message || 'לא הצלחנו לנסח. נסו שוב.'); } finally { setDrafting(''); }
+  };
   const log = useRef(null);
   // Opening it marks it read for you.
   useEffect(() => { if (f.unread) { patchLocal({ unread: 0 }); setFeedback(f.id, { seen: true }).catch(() => {}); } }, [f.id]);
@@ -93,6 +102,13 @@ function InboxThread({ f, onBack, reload, patchLocal }) {
         <small class=${'fb-meta' + (m === lastOwner && f.readByUser ? ' read' : '')}>${hm(m.created_at)}${m.author === 'owner' ? (m === lastOwner && f.readByUser ? ' ✓✓' : ' ✓') : ''}</small>
       </div>`)}
     </div>
+    ${!noting && html`<div class="inbox-ai stack" style="gap:6px">
+      <span class="muted" style="font-size:13px">תשובה בעזרת AI לפי המצב. אפשר לכתוב קודם כמה מילים, והיא תנוסח מהן. הטיוטה נכנסת לתיבה, ואתה עורך ושולח.</span>
+      <div class="chips">${DRAFTS.map(([k, l]) => html`<button type="button" class="chip" disabled=${!!drafting || busy} onClick=${() => aiDraft(k)}>${drafting === k ? 'מנסח…' : '✦ ' + l}</button>`)}</div>
+    </div>`}
+    ${!noting && check && html`<div class=${'inbox-check ' + check.fixed} role="status" style=${'font-size:14px;line-height:1.55;padding:8px 12px;border-radius:12px;background:var(--surface-2);' + (check.fixed === 'no' ? 'border:1px solid var(--danger)' : '')}>
+      <b>${check.fixed === 'yes' ? '✓ נראה שזה תוקן' : check.fixed === 'no' ? '⚠ לא מצאתי שזה תוקן. כדאי לבדוק לפני ששולחים' : 'לא ברור אם זה תוקן'}</b>${check.why ? html`<br /><span class="muted">${check.why}</span>` : ''}
+    </div>`}
     ${!noting && html`<div class="chips inbox-quick">${QUICK.map((t) => html`<button type="button" class="chip" onClick=${() => setDraft(t)}>${t}</button>`)}</div>`}
     ${noting && html`<span class="inbox-note-mode">כותבים הערה פנימית: המשתמש לא יראה אותה. <button type="button" class="btn-text" onClick=${() => setNoting(false)}>ביטול</button></span>`}
     <textarea class="input" rows="3" maxlength="2000" aria-label=${noting ? 'הערה פנימית' : 'תשובה ל' + f.who} placeholder=${noting ? 'הערה לעצמך' : 'תשובה'} value=${draft} onInput=${(e) => setDraft(e.target.value)}></textarea>

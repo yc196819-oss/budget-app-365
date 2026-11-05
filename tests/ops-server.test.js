@@ -383,3 +383,37 @@ test("the owner sees who shared and how many joined through each one; the owner'
   assert.equal(r.byUser.has('me'), false);
   assert.deepEqual(r.totals, { shares: 2, friends: 1, sharers: 1, mine: { shares: 1, friends: 2 } });
 });
+
+test("the owner's AI draft: by where things stand, from his gist, the conversation and the guide; notes stay out", () => {
+  const { draftPrompt } = require('../server/ops');
+  const p = draftPrompt({ status: 'fixed', hint: 'תיקנו את הקטגוריות', kind: 'bug', name: 'רון', guide: 'מדריך: פרופיל ← תקלות',
+    messages: [{ author: 'user', text: 'אין לי קטגוריות' }, { author: 'note', text: 'סוד פנימי' }, { author: 'owner', text: 'בודקים' }] });
+  assert.match(p, /התקלה תוקנה/);
+  assert.match(p, /תיקנו את הקטגוריות/);
+  assert.match(p, /רון: אין לי קטגוריות/);
+  assert.match(p, /אנחנו: בודקים/);
+  assert.match(p, /מדריך: פרופיל/);
+  assert.doesNotMatch(p, /סוד פנימי/, 'internal notes are not sent to the AI');
+  assert.equal(draftPrompt({ status: 'whatever', messages: [] }), null);
+  for (const s of ['working', 'explain', 'idea', 'more']) assert.ok(draftPrompt({ status: s, messages: [] }), s);
+});
+
+test('the draft checks the request against what changed and what the person\'s data shows', () => {
+  const { draftPrompt, readDraft } = require('../server/ops');
+  const p = draftPrompt({ status: 'fixed', kind: 'bug', messages: [{ author: 'user', text: 'אין קטגוריות' }], askedAt: '2026-11-04T23:09:00Z',
+    changes: [{ date: '2026-11-05', text: 'תיקון: קטגוריות למשק בית בלי קטגוריות' }], facts: ['קטגוריות במשק הבית: 14.'] });
+  assert.match(p, /2026-11-05: תיקון: קטגוריות/);
+  assert.match(p, /קטגוריות במשק הבית: 14/);
+  assert.match(p, /הפנייה נשלחה ב-2026-11-04/);
+  assert.match(p, /"fixed":"yes\|no\|unknown"/);
+  assert.deepEqual(readDraft('```json\n{"fixed":"yes","why":"תוקן ב-05.11","text":"היי, תיקנו"}\n```'), { text: 'היי, תיקנו', fixed: 'yes', why: 'תוקן ב-05.11' });
+  assert.deepEqual(readDraft('{"fixed":"maybe","text":"היי"}'), { text: 'היי', fixed: 'unknown', why: '' });
+  assert.deepEqual(readDraft('סתם טקסט'), { text: 'סתם טקסט', fixed: 'unknown', why: '' }, 'plain text still becomes a draft');
+});
+
+test('the list of changes: dated, newest first, in plain words', () => {
+  const changes = require('../server/changes');
+  assert.ok(changes.length > 5);
+  for (const c of changes) { assert.match(c.date, /^\d{4}-\d{2}-\d{2}$/); assert.ok(c.text.length > 10); }
+  for (let i = 1; i < changes.length; i++) assert.ok(changes[i - 1].date >= changes[i].date, 'newest first');
+});
