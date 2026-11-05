@@ -15,7 +15,7 @@ test('the advisor sees where the money went by business, what repeats monthly, a
   const d = spendingDetail({ txs, categories: cats, today: TODAY });
   assert.equal(d.topMerchants[0].merchant.startsWith('שופרסל'), true);
   assert.equal(d.topMerchants[0].total3Months, 1170);
-  assert.equal(d.topMerchants[0].times, 3);
+  assert.equal(d.topMerchants[0].charges, 3);
   assert.ok(!d.topMerchants.some((m) => m.merchant === 'ישן'), 'older than 3 months is left out');
   assert.deepEqual(d.recurring, [{ merchant: 'נטפליקס', category: 'מנויים', monthly: 57 }]);
   assert.equal(d.recentTransactions[0].what, 'משכורת');

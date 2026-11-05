@@ -58,6 +58,8 @@ export function learnContext({ goals = [], categories = [], budgets = [], accoun
     accounts: accounts.map((a) => ({ id: a.id, name: a.name, balance: a.balance ?? null })),
     loans: loans.filter((l) => !l.settled).map((l) => ({ counterparty: l.counterparty, direction: l.direction, amount: Number(l.amount) || 0 })),
     income: (Array.isArray(income) ? income : []).map((l) => ({ label: l.label || '', amount: Number(l.amount) || 0 })),
+    // No transactions here: a deletion the person asks for is matched on the
+    // device against the real lines (normalizeOne), from the words they used.
     memories: memories.map((m) => (typeof m === 'string' ? m : m.text)).filter(Boolean).slice(0, 40)
   };
 }
@@ -76,7 +78,15 @@ function findCategory(categories, name) {
 
 function isKnownMemory(memories, text) {
   const n = norm(text);
-  return memories.some((m) => { const o = norm(typeof m === 'string' ? m : m.text); return o === n || (o.length > 12 && (o.includes(n) || n.includes(o))); });
+  const nums = (s) => (String(s).match(/\d[\d,.]*/g) || []).map((x) => x.replace(/[,.]/g, '')).sort().join('|');
+  const words = (s) => new Set(String(s).split(/\s+/).filter((w) => w.length > 2));
+  return memories.some((m) => {
+    const o = norm(typeof m === 'string' ? m : m.text);
+    if (o === n || (o.length > 12 && (o.includes(n) || n.includes(o)))) return true;
+    // "החוג 1,380 ל-3 חודשים, ואז 1,150" said twice in other words.
+    if (nums(o) && nums(o) === nums(n)) { const a = words(o), b = words(n); const both = [...a].filter((w) => b.has(w)).length; return both / Math.max(1, Math.min(a.size, b.size)) >= 0.5; }
+    return false;
+  });
 }
 
 const GOAL_FIELDS = ['target_amount', 'saved_amount', 'target_date'];
@@ -149,6 +159,20 @@ function normalizeOne(raw, data) {
       if (!description || !(total > 0) || count < 2 || count > 120) return null;
       return { kind: 'installment', description, total_amount: total, payments_count: count, first_payment: normDate(raw.first_payment) || today };
     }
+    case 'tx_delete': {
+      // Only transactions that are really there, matched by name, amount and
+      // (if given) date. Never applied by itself: shown for approval.
+      const match = norm(raw.match || raw.description);
+      const amount = money(raw.amount);
+      const date = normDate(raw.date);
+      if (match.length < 2) return null;
+      const txs = (data.txs || []).filter((t) => norm(t.description).includes(match)
+        && (amount === null || Math.abs(Number(t.amount) - amount) < 0.5)
+        && (!date || String(t.tx_date).slice(0, 10) === date)).slice(0, 12);
+      if (!txs.length) return null;
+      return { kind: 'tx_delete', match: clean(raw.match || raw.description, 40), amount, date, reason: clean(raw.reason, 80),
+        txs: txs.map((t) => ({ id: t.id, tx_date: t.tx_date, description: t.description, amount: Number(t.amount), type: t.type })) };
+    }
     case 'income': {
       // One person's (or one source's) expected monthly income: it changes
       // that line only, never the household's other incomes.
@@ -174,10 +198,11 @@ export function normalizeItems(raw, data) {
   for (const r of Array.isArray(raw) ? raw : []) {
     const item = normalizeOne(r, data);
     if (!item) continue;
-    const id = item.kind + ':' + norm(item.text || item.name || item.category || item.account || item.counterparty || item.description || '');
+    const id = item.kind + ':' + norm(item.text || item.name || item.category || item.account || item.counterparty || item.description || item.match || '') + (item.kind === 'tx_delete' ? ':' + item.amount + ':' + (item.date || '') : '');
     if (seen.has(id)) continue;
     seen.add(id);
-    out.push({ ...item, key: id, on: true });
+    // A deletion is never pre-checked: the person ticks it.
+    out.push({ ...item, key: id, on: item.kind !== 'tx_delete' });
     if (out.length >= MAX_ITEMS) break;
   }
   return out;
@@ -194,6 +219,7 @@ export function isValid(item) {
     case 'loan': return !!clean(item.counterparty) && item.amount > 0;
     case 'installment': return !!clean(item.description) && item.total_amount > 0 && item.payments_count >= 2;
     case 'income': return item.amount > 0;
+    case 'tx_delete': return Array.isArray(item.txs) && item.txs.length > 0;
     default: return false;
   }
 }
@@ -206,7 +232,8 @@ export const KIND_LABEL = {
   balance: { icon: '🏦', label: 'יתרה בבנק' },
   loan: { icon: '🤝', label: 'הלוואה' },
   installment: { icon: '💳', label: 'תשלומים' },
-  income: { icon: '💼', label: 'הכנסה חודשית' }
+  income: { icon: '💼', label: 'הכנסה חודשית' },
+  tx_delete: { icon: '🗑', label: 'מחיקת תנועות' }
 };
 
 // The person said something worth saving since `from` (an index into the
@@ -240,6 +267,7 @@ export function describeItem(item) {
     case 'balance': return 'יתרה ב' + item.account + ': ' + ils(item.balance) + (item.before !== null && item.before !== undefined ? ' (היה ' + ils(item.before) + ')' : '');
     case 'loan': return (item.direction === 'tome' ? 'חייבים לכם: ' : 'אתם חייבים ל') + item.counterparty + ' ' + ils(item.amount);
     case 'installment': return 'עסקה בתשלומים: ' + item.description + ' · ' + item.payments_count + ' × ' + ils(item.total_amount / item.payments_count);
+    case 'tx_delete': return 'למחוק ' + (item.txs.length === 1 ? 'תנועה אחת' : item.txs.length + ' תנועות') + ': ' + item.txs.map((t) => t.description + ' ' + ils(t.amount) + ' (' + String(t.tx_date).slice(5, 10).split('-').reverse().join('.') + ')').join(', ');
     case 'income': return 'הכנסה צפויה · ' + (item.label || 'משק הבית') + ': ' + ils(item.amount) + (item.before ? ' (היה ' + ils(item.before) + ')' : ' (חדש)');
     default: return '';
   }

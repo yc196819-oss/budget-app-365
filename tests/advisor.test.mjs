@@ -71,3 +71,11 @@ test('server-sent events are parsed across chunk boundaries', () => {
   assert.deepEqual(out.events, [{ delta: 'ום' }, { done: true }]);
   assert.equal(out.rest, '');
 });
+
+test('a merchant charged twice in 3 months reads as 2 charges of 450, not 900 twice', async () => {
+  const { spendingDetail } = await import('../public/app/src/domain/advisor.js');
+  const today = new Date('2026-11-05T12:00:00');
+  const txs = [{ description: 'קופת הדר', amount: 450, tx_date: '2026-09-01', type: 'expense' }, { description: 'קופת הדר', amount: 450, tx_date: '2026-10-01', type: 'expense' }];
+  const g = spendingDetail({ txs, categories: [], today }).topMerchants[0];
+  assert.deepEqual([g.total3Months, g.charges, g.eachCharge], [900, 2, 450]);
+});

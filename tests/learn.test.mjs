@@ -156,3 +156,21 @@ test('"don\'t update" in the last message: nothing is learned from it', () => {
   }
   assert.equal(worthLearning([{ role: 'user', text: 'ירד חיוב של 1200 מהחשבון' }]), true);
 });
+
+test('deleting a transaction: only real ones, never pre-checked; the same memory in other words is not saved twice', async () => {
+  const { normalizeItems, isValid, describeItem } = await import('../public/app/src/domain/learn.js');
+  const txs = [
+    { id: 't1', description: 'קופת הדר', amount: 450, tx_date: '2026-10-01', type: 'expense' },
+    { id: 't2', description: 'קופת הדר', amount: 450, tx_date: '2026-09-01', type: 'expense' },
+    { id: 't3', description: 'סופר', amount: 120, tx_date: '2026-10-02', type: 'expense' }
+  ];
+  const items = normalizeItems([
+    { kind: 'tx_delete', match: 'קופת', amount: 450, date: '2026-10-01' },
+    { kind: 'tx_delete', match: 'קופת', amount: 900 },
+    { kind: 'memory', text: 'חוג שחייה: 1,380 ש"ח ל-3 חודשים, ואז חוזר ל-1,150' }
+  ], { txs, memories: [{ text: 'חוג שחייה יורד 1,380 ש״ח ל-3 חודשים ואז יחזור ל-1,150' }] }).filter(isValid);
+  assert.equal(items.length, 1, 'a 900 that is not there is dropped; the same memory again is dropped');
+  assert.deepEqual(items[0].txs.map((t) => t.id), ['t1']);
+  assert.equal(items[0].on, false, 'the person ticks it');
+  assert.match(describeItem(items[0]), /למחוק תנועה אחת: קופת הדר ₪450 \(01\.10\)/);
+});
