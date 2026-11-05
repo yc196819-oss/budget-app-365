@@ -2407,6 +2407,27 @@ app.post('/api/admin/feedback/:id', requireAuth, async (req, res) => {
   }
   return res.json({ ok: true, mailed });
 });
+// A draft answer written by the AI from where things stand, for the owner to
+// read, change and send (never sent by itself).
+app.post('/api/admin/feedback/:id/draft', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const id = String(req.params.id);
+    const { data: f } = await supabaseAdmin.from('feedback').select('id,user_id,kind,text,created_at').eq('id', id).maybeSingle();
+    if (!f) return res.status(404).json({ error: 'not found' });
+    const { data: msgs } = await supabaseAdmin.from('feedback_messages').select('author,text,created_at').eq('feedback_id', id).order('created_at', { ascending: true });
+    const name = (await feedbackNames([f.user_id]))[f.user_id] || '';
+    const prompt = ops.draftPrompt({ status: req.body && req.body.status, hint: req.body && req.body.hint, kind: f.kind, name, messages: [{ author: 'user', text: f.text }, ...(msgs || [])], guide: APP_GUIDE });
+    if (!prompt) return res.status(400).json({ error: 'bad request' });
+    const ai = await generateWithFallback({ prompt, text: '', maxTokens: 600, effort: 'low' });
+    const text = String(ai.output || '').trim().slice(0, 1500);
+    if (!text) return res.status(502).json({ error: 'לא הצלחנו לנסח. נסו שוב.' });
+    return res.json({ text });
+  } catch (err) {
+    console.error('feedback draft failed:', err.message);
+    return res.status(502).json({ error: 'לא הצלחנו לנסח. נסו שוב.' });
+  }
+});
 // The person's side of their own request: a reply (it reopens a closed
 // one: "still not working"), "it helped", or "I read the answer".
 const replyLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip, message: { error: 'שלחתם הרבה הודעות בשעה האחרונה. נסו שוב מאוחר יותר.' } });

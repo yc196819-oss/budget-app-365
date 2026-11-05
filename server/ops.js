@@ -504,6 +504,32 @@ function answerMail({ question, answer, link }) {
   };
 }
 
+// A draft answer to a request, for the owner to read, change and send. The
+// owner says where things stand (fixed, being worked on…) and may add a few
+// words; the draft is never sent by itself. Pure: builds the prompt.
+const DRAFT_STATUS = {
+  fixed: 'התקלה תוקנה. אמור שזה תוקן, מה בדיוק השתנה (לפי מה שכתב בעל האפליקציה, אם כתב), ושכדאי לסגור ולפתוח את האפליקציה מחדש כדי לקבל את הגרסה החדשה. בקש שיכתוב אם עדיין לא עובד.',
+  working: 'עוד לא תוקן, אבל זה בטיפול. אמור שהבנו מה הבעיה ושאנחנו עובדים על זה, בלי להבטיח תאריך. אם יש דרך לעקוף את הבעיה בינתיים לפי המדריך, הצע אותה.',
+  explain: 'זו לא תקלה: מסבירים איך עושים את מה שהוא מחפש. ענה לפי המדריך בלבד, בצעדים קצרים עם השמות המדויקים של הכפתורים, ואם צריך ציין איפה זה בטלפון ואיפה במחשב.',
+  idea: 'זו הצעה לשיפור. תודה חמה, אמור שהרעיון נכנס לרשימה ושנעדכן כשזה יהיה, בלי להבטיח.',
+  more: 'חסר מידע כדי לעזור. שאל שאלה אחת או שתיים קצרות שיעזרו להבין (למשל: באיזה מסך, מה ניסה לעשות, מה קרה, אפשר צילום מסך).'
+};
+function draftPrompt({ status, hint = '', kind = '', name = '', messages = [], guide = '' }) {
+  const how = DRAFT_STATUS[status];
+  if (!how) return null;
+  const thread = messages.map((m) => (m.author === 'owner' ? 'אנחנו' : m.author === 'note' ? null : (name || 'המשתמש')) + ': ' + String(m.text || '').slice(0, 1500))
+    .filter((l) => !l.startsWith('null')).join('\n');
+  return 'כתוב תשובה קצרה בעברית למשתמש באפליקציה "התקציב שלנו", בשם קובי, בעל האפליקציה. '
+    + 'חם, פשוט וענייני, 2–4 משפטים, בלי כותרות, בלי markdown ובלי חתימה (החתימה מתווספת לבד). '
+    + (name ? 'פנה אליו בשמו הפרטי (' + String(name).slice(0, 40) + ') רק אם הוא נשמע כמו שם אמיתי. ' : '')
+    + 'אל תמציא יכולות, מסכים או תאריכים שלא כתובים כאן. ענה רק על מה שנשאל בפנייה.\n'
+    + 'סוג הפנייה: ' + ({ bug: 'תקלה', idea: 'רעיון', other: 'אחר' }[kind] || 'פנייה') + '.\n'
+    + 'המצב: ' + how + '\n'
+    + (String(hint).trim() ? 'מה שבעל האפליקציה רוצה להגיד (העיקר, השתמש בזה): ' + String(hint).trim().slice(0, 600) + '\n' : '')
+    + (guide ? '\nהמדריך של האפליקציה (רק לפי זה מסבירים איך עושים דברים):\n' + guide + '\n' : '')
+    + '\nהשיחה עד עכשיו:\n' + thread + '\n\nכתוב רק את התשובה עצמה.';
+}
+
 // ── request threads (a request, then messages both ways) ──
 // A name to show the owner: the first name the person gave in the app, or
 // their label when it looks like a username (the same rule as the app's).
@@ -644,4 +670,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

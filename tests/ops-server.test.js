@@ -383,3 +383,17 @@ test("the owner sees who shared and how many joined through each one; the owner'
   assert.equal(r.byUser.has('me'), false);
   assert.deepEqual(r.totals, { shares: 2, friends: 1, sharers: 1, mine: { shares: 1, friends: 2 } });
 });
+
+test("the owner's AI draft: by where things stand, from his gist, the conversation and the guide; notes stay out", () => {
+  const { draftPrompt } = require('../server/ops');
+  const p = draftPrompt({ status: 'fixed', hint: 'תיקנו את הקטגוריות', kind: 'bug', name: 'רון', guide: 'מדריך: פרופיל ← תקלות',
+    messages: [{ author: 'user', text: 'אין לי קטגוריות' }, { author: 'note', text: 'סוד פנימי' }, { author: 'owner', text: 'בודקים' }] });
+  assert.match(p, /התקלה תוקנה/);
+  assert.match(p, /תיקנו את הקטגוריות/);
+  assert.match(p, /רון: אין לי קטגוריות/);
+  assert.match(p, /אנחנו: בודקים/);
+  assert.match(p, /מדריך: פרופיל/);
+  assert.doesNotMatch(p, /סוד פנימי/, 'internal notes are not sent to the AI');
+  assert.equal(draftPrompt({ status: 'whatever', messages: [] }), null);
+  for (const s of ['working', 'explain', 'idea', 'more']) assert.ok(draftPrompt({ status: s, messages: [] }), s);
+});
