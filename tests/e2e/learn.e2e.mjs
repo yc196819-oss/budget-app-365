@@ -178,3 +178,36 @@ test('"what the advisor knows about us": list, edit, delete and add memories', a
   assert.equal(db.tables.advisor_memories.length, 1);
   await page.close();
 });
+
+test('asked to delete a wrong transaction: the advisor shows exactly which ones, and nothing is deleted until the person says yes', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  const db = setup(makeFakeDb());
+  const sonol = db.tables.transactions.filter((t) => t.description === 'סונול').sort((a, b) => (a.tx_date < b.tx_date ? 1 : -1))[0];
+  const before = db.tables.transactions.length;
+  await mockSupabase(page, db);
+  await page.route('**/api/ai/learn-from-chat', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [
+    { kind: 'tx_delete', match: 'סונול', amount: 280, date: sonol.tx_date, reason: 'נרשם בטעות' },
+    { kind: 'tx_delete', match: 'בית עסק שלא קיים', amount: 999 }
+  ] }) }));
+  await page.route('**/api/ai/advice-chat-stream', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: {"delta":"אציג לך אותה למחיקה."}\n\ndata: {"done":true}\n\n' }));
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/home');
+  await page.waitForSelector('.hero');
+  await page.click('.ask-fab');
+  await page.locator('.adv .row', { hasText: 'תכנון לשנה הבאה' }).click();
+  await page.waitForSelector('.adv-msg');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'תמחק את הדלק של 280 מסונול, זה נרשם פעמיים');
+  await page.click('.adv-compose button[type="submit"]');
+  const card = page.locator('.learn-delete');
+  await card.waitFor();
+  assert.match(await card.textContent(), /למחוק את התנועות האלה\?/);
+  assert.match(await card.textContent(), /סונול/);
+  assert.equal(await card.locator('b.num').count(), 1, 'only the transaction that is really there, on that date');
+  assert.equal(db.tables.transactions.length, before, 'nothing deleted before the yes');
+  assert.equal(await page.locator('.learn-auto').count(), 0, 'not applied quietly');
+  await card.locator('button:has-text("למחוק")').click();
+  await card.locator('text=נמחק').first().waitFor();
+  assert.equal(db.tables.transactions.length, before - 1);
+  assert.ok(!db.tables.transactions.some((t) => t.id === sonol.id));
+  await page.close();
+});

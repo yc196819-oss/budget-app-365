@@ -106,7 +106,8 @@ export function spendingDetail({ txs, categories, today = new Date(), top = 20, 
   }
   const all = [...groups.values()];
   const topMerchants = all.sort((a, b) => b.total - a.total).slice(0, top)
-    .map((g) => ({ merchant: g.merchant, category: g.category, total3Months: round(g.total), times: g.count }));
+    // "2 charges of 450" (not "900 twice"): each charge is spelled out.
+    .map((g) => ({ merchant: g.merchant, category: g.category, total3Months: round(g.total), charges: g.count, eachCharge: g.count > 1 && Math.max(...g.amounts) - Math.min(...g.amounts) <= 1 ? round(g.amounts[0]) : null }));
   // Charged in 3 different months at about the same amount: a subscription or a fixed bill.
   const recurring = all.filter((g) => g.months.size >= 3 && Math.max(...g.amounts) - Math.min(...g.amounts) <= Math.max(5, Math.min(...g.amounts) * 0.15))
     .sort((a, b) => b.total - a.total).slice(0, 15)

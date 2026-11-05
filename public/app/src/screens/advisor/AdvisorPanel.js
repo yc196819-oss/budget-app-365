@@ -48,6 +48,8 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   const [offer, setOffer] = useState(false);
   // What the advisor updated by itself after the last reply: [{ ...item, undone }].
   const [updated, setUpdated] = useState([]);
+  // Transactions the person asked to delete, waiting for their yes.
+  const [toDelete, setToDelete] = useState(null);
   const memories = useRef(null);
   const logRef = useRef(null);
   const abort = useRef(null);
@@ -89,7 +91,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       return hit.a;
     }
     if (!aiOn) return null;
-    setBusy(true); setError(''); setSuggestions([]); setDraft(''); setOffer(false); setUpdated([]);
+    setBusy(true); setError(''); setSuggestions([]); setDraft(''); setOffer(false); setUpdated([]); setToDelete(null);
     let c = convRef.current;
     let answered = null;
     try {
@@ -115,6 +117,8 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       }, abort.current.signal);
       // The numbers in the answer are the screen's numbers, exactly.
       const truths = truthsOf(summary);
+      // And what the person wrote in this conversation ("1,380" stays 1,380).
+      for (const m of [...(c.messages || []), { role: 'user', text: msg }]) if (m.role === 'user') for (const x of String(m.text || '').match(/\d[\d,]*(?:\.\d+)?/g) || []) { const v = Math.round(Number(x.replace(/,/g, ''))); if (v >= 1000) truths.add(v); }
       raw = fixSums(alignNumbers(raw, truths));
       const reply = parseReply(raw);
       const finalText = reply.text || 'לא התקבלה תשובה. נסו לנסח אחרת.';
@@ -187,13 +191,22 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       if (!memories.current) memories.current = await loadMemories(hid).catch(() => []);
       const ctx = { ...data, memories: memories.current };
       const raw = await askLearnings({ messages: learnMessages(c.messages.filter((m) => !m.local), memberName), context: learnContext(ctx) });
-      const items = normalizeItems(raw, ctx).filter(isValid);
+      const all = normalizeItems(raw, ctx).filter(isValid);
       markLearned(c.id, c.messages.length);
+      // Deleting is never done by itself: the person confirms it below.
+      const dels = all.filter((it) => it.kind === 'tx_delete');
+      if (dels.length) setToDelete({ items: dels, status: 'ask' });
+      const items = all.filter((it) => it.kind !== 'tx_delete');
       if (!items.length) return;
       const { done } = await applyLearnings(items, { hid, userId: me, conversationId: c.id });
       memories.current = null;
       if (done.length) { setUpdated(done.map((it) => ({ ...it, undone: false }))); track('learn_auto'); }
     } catch (_err) { /* the conversation goes on; "what I learned" still works */ }
+  };
+  const confirmDelete = async () => {
+    setToDelete((d) => ({ ...d, status: 'saving' }));
+    const { done, failed } = await applyLearnings(toDelete.items, { hid, userId: me, conversationId: conv && conv.id });
+    setToDelete({ items: done, status: failed.length ? 'failed' : 'done' });
   };
   const undoOne = async (i) => {
     const it = updated[i];
@@ -283,6 +296,20 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
           <span style=${'flex:1;' + (it.undone ? 'text-decoration:line-through;opacity:.55' : '')}>${describeItem(it)}</span>
           ${it.undone ? html`<span class="faint" style="font-size:14px">בוטל</span>` : html`<button type="button" class="btn-text" style="font-size:14px" onClick=${() => undoOne(i)}>ביטול</button>`}
         </div>`)}
+      </div>`}
+      ${toDelete && html`<div class="card learn-delete stack" role="status" style="gap:8px;border:1px solid var(--danger)">
+        <b style="font-size:15px;display:flex;align-items:center;gap:6px">${toDelete.status === 'done' ? 'נמחק' : toDelete.status === 'failed' ? 'חלק לא נמחק. נסו שוב.' : 'למחוק את התנועות האלה?'}</b>
+        ${toDelete.items.flatMap((it) => it.txs).map((t) => html`<div style="display:flex;justify-content:space-between;gap:8px;font-size:14px">
+          <span style="flex:1;min-width:0">${t.description}<small class="muted" style="display:block">${String(t.tx_date).slice(0, 10).split('-').reverse().join('.')}</small></span>
+          <b class="num">${(t.type === 'income' ? '+' : '−') + '₪' + Math.round(t.amount).toLocaleString('he-IL')}</b>
+        </div>`)}
+        ${toDelete.status === 'done'
+          ? html`<span class="muted" style="font-size:13px">אפשר לשחזר תוך 30 יום: פרופיל ← "המידע שלנו". <button type="button" class="btn-text" onClick=${() => setToDelete(null)}>סגירה</button></span>`
+          : html`<span class="muted" style="font-size:13px">נמחק רק אם תאשרו. אפשר לשחזר תוך 30 יום.</span>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="btn" style="flex:1;background:var(--danger);color:#fff" disabled=${toDelete.status === 'saving'} onClick=${confirmDelete}>${toDelete.status === 'saving' ? 'מוחק…' : 'למחוק'}</button>
+              <button type="button" class="btn btn-ghost" style="flex:1" disabled=${toDelete.status === 'saving'} onClick=${() => setToDelete(null)}>לא</button>
+            </div>`}
       </div>`}
       ${suggestions.length > 0 && html`<div class="chips">${suggestions.map((s) => html`<button type="button" class="chip" disabled=${busy || !aiOn} onClick=${() => send(s)}>${s}</button>`)}</div>`}
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
