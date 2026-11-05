@@ -23,6 +23,7 @@ export function JoinInvite({ code, session }) {
       forget();
       session.refresh();
     } catch (err) {
+      if (/two_step_required/.test(String(err && err.message))) { session.needTwoStep(); return; }
       setBusy(false);
       setError(INVITE_ERRORS[err.reason] || 'ההצטרפות נכשלה. נסו שוב.');
     }

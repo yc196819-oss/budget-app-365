@@ -43,6 +43,9 @@ export function useSession() {
       if (!alive) return;
       // Two-step login is on and this sign-in has not passed it yet: the
       // database shows nothing until it does, so the code screen comes first.
+      // The check was too slow: someone known to need the code still gets the
+      // code screen, rather than screens the database will refuse.
+      if (mfa && mfa.timedOut && twoStep) { setState({ loading: false, user, household: null, mfa: { required: true, ok: false, email: true } }); return; }
       if (mfa && !mfa.timedOut) {
         writeLocal('twostep:' + user.id, mfa.required ? '1' : '0');
         if (mfa.required && !mfa.ok) { setState({ loading: false, user, household: null, mfa }); return; }
@@ -79,5 +82,13 @@ export function useSession() {
   // After creating or joining a household.
   const refresh = () => setTick((t) => t + 1);
 
-  return { ...state, signOut, refresh, recovery, doneRecovery: () => setRecovery(false) };
+  // The database refused a write because this sign-in has not passed the
+  // two-step code (the check at start was slow, or an older version of the
+  // app skipped it): show the code screen now instead of an error.
+  const needTwoStep = async () => {
+    const mfa = await mfaState().catch(() => null);
+    if (state.user) setState({ loading: false, user: state.user, household: null, mfa: mfa && mfa.required ? mfa : { required: true, ok: false, email: true } });
+  };
+
+  return { ...state, signOut, refresh, needTwoStep, recovery, doneRecovery: () => setRecovery(false) };
 }

@@ -197,3 +197,26 @@ test('coming back from Google to the main address keeps the sign-in in the URL o
   assert.match(page.url(), /\/app\/\?code=abc#state=1$/);
   await page.close();
 });
+
+test('the database asks for the two-step code while signing up: the code screen comes, not an error', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const db = newUserDb();
+  await mockSupabase(page, db);
+  // The check at start said nothing is needed (slow, or an older version)…
+  let state = { required: false, ok: true };
+  await page.route('**/rest/v1/rpc/my_mfa_state', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state) }));
+  // …but the database refuses the new household until the code is given.
+  await page.route('**/rest/v1/households*', (r) => {
+    if (r.request().method() !== 'POST') return r.fallback();
+    state = { totp: false, email: true, mandatory: true, required: true, ok: false };
+    return r.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ code: '42501', message: 'new row violates row-level security policy "two_step_required" for table "households"' }) });
+  });
+  await page.route('**/api/2fa/email/send', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"sent":true,"to":"yo***@example.com"}' }));
+  await signIn(page, server.base);
+  await page.waitForSelector('text=רק שתי שאלות, ומתחילים');
+  await page.locator('.onb input').first().fill('דנה');
+  await page.locator('.onb button:has-text("יאללה, מתחילים")').click();
+  await page.waitForSelector('text=עוד שלב אחד');
+  assert.equal(await page.locator('text=two_step_required').count(), 0, 'no database message on screen');
+  await page.close();
+});
