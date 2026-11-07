@@ -3,6 +3,7 @@ import { track, reportError } from '../lib/telemetry.js';
 import { addMissingCategories } from './onboarding.js';
 import { showToast } from '../lib/toast.js';
 import { isoDate } from '../domain/money.js';
+import { REPAIRED } from '../domain/repair.js';
 import { readCache, writeCache } from '../lib/storage.js';
 import { forgetRules } from './rules.js';
 
@@ -415,6 +416,43 @@ export async function removeMany(ids) {
   const gone = new Set(ids);
   state.txs = state.txs.filter((t) => !gone.has(t.id));
   emit();
+}
+
+// The advisor's fix for a mistake in an upload (see domain/repair.js): some
+// lines move to their real (estimated) date, duplicates go to the recycle
+// bin. Returns what undoRepair needs to put everything back.
+export async function applyRepair({ move = [], moveTo = null, drop = [] }) {
+  const before = state.txs.filter((t) => move.includes(t.id)).map((t) => ({ id: t.id, tx_date: t.tx_date, source: t.source || null }));
+  for (let i = 0; i < move.length; i += 200) {
+    // Marked, so the advisor never "finds" the moved lines again (they now share a day).
+    const { error } = await sb.from('transactions').update({ tx_date: moveTo, source: REPAIRED }).in('id', move.slice(i, i + 200)).eq('household_id', state.hid);
+    if (error) throw error;
+  }
+  const moved = new Set(move);
+  state.txs = state.txs.map((t) => (moved.has(t.id) ? { ...t, tx_date: moveTo, source: REPAIRED } : t));
+  if (drop.length) await removeMany(drop);
+  else emit();
+  return { before, drop };
+}
+
+export async function undoRepair({ before = [], drop = [] }) {
+  const byDate = new Map();
+  for (const b of before) { const k = b.tx_date + '|' + (b.source || ''); if (!byDate.has(k)) byDate.set(k, []); byDate.get(k).push(b.id); }
+  for (const [k, ids] of byDate) {
+    const [tx_date, source] = k.split('|');
+    const { error } = await sb.from('transactions').update({ tx_date, source: source || null }).in('id', ids).eq('household_id', state.hid);
+    if (error) throw error;
+  }
+  if (drop.length) {
+    // Back from the recycle bin, where removeMany put them.
+    const { data, error } = await sb.from('recycle_bin').select('id').eq('household_id', state.hid).eq('tbl', 'transactions').is('restored_at', null).in('row_id', drop);
+    if (error) throw error;
+    for (const row of data || []) {
+      const { error: e } = await sb.rpc('restore_from_bin', { p_id: row.id });
+      if (e) throw e;
+    }
+  }
+  await load(state.hid, state.userId, { force: true });
 }
 
 // Changes the category of several transactions at once and returns what is
