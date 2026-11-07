@@ -16,7 +16,8 @@ test('a household with no categories at all (made by an early version) gets the 
   await mockSupabase(page, db);
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/money');
-  await page.locator('.row').first().click();
+  // An expense (on some days the first line is an income, with income categories).
+  await page.locator('.row', { hasText: 'שופרסל' }).first().click();
   // The transaction's sheet offers categories to pick.
   await page.waitForSelector('.sheet .chip:has-text("אוכל")');
   assert.ok(db.tables.categories.some((c) => c.name === 'אוכל' && !c.parent_id));
