@@ -686,3 +686,11 @@ body.chat-open { overflow: hidden; }
 .people-chip.lv-stuck { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .people-chip.lv-gone { color: var(--muted); background: var(--surface-2, rgba(0,0,0,.06)); }
 .people-reveal, .people-email { font-size: 14px; }
+
+/* "The advisor found a mistake" on home */
+.repair-card { border-inline-start: 4px solid var(--accent); gap: 10px; }
+.repair-title { display: flex; align-items: center; gap: 8px; font-size: 17px; color: var(--accent); }
+.repair-text { font-size: 15px; line-height: 1.6; }
+.repair-list { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.55; }
+.repair-actions { display: flex; gap: 8px; }
+.repair-actions .btn { flex: 1; }

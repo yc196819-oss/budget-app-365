@@ -18,6 +18,7 @@ import { TripFound } from '../trips/TripFound.js';
 import { useTrips } from '../../data/useTrips.js';
 import { SetupGuide } from './SetupGuide.js';
 import { ImportNotice } from './ImportNotice.js';
+import { RepairCard } from './RepairCard.js';
 import { AnswerNotice } from './AnswerNotice.js';
 import { MonthlyAsk } from './MonthlyAsk.js';
 import { removeMany } from '../../data/household.js';
@@ -73,6 +74,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
   return html`<div class="stack home">
     <div class="home-main stack">
       <${AnswerNotice} userId=${userId} />
+      <${RepairCard} data=${data} />
       <${ImportNotice} data=${data} onImport=${onImport} />
       <${MonthlyAsk} userId=${userId} data=${data} />
       ${guide}
