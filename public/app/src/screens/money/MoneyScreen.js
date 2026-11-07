@@ -18,6 +18,8 @@ export function MoneyScreen({ data, onAdd, onImport }) {
   const months = useMemo(() => monthsBack(new Date(), 12), []);
   const [period, setPeriod] = useState('month');
   const [index, setIndex] = useState(months.length - 1);
+  // The search in "transactions" lives here, so a transaction can open "every purchase at this place".
+  const [query, setQuery] = useState('');
   // #/money/manage opens the categories with "manage categories" on top.
   const [view, setView] = useState(() => (routeView(location.hash) === 'manage' ? 'cats' : VIEWS.some((v) => v.key === routeView(location.hash)) ? routeView(location.hash) : 'list'));
   // One sheet at a time: { kind: 'tx', id } | { kind: 'cat', id } | { kind: 'manage' } | null
@@ -39,10 +41,11 @@ export function MoneyScreen({ data, onAdd, onImport }) {
   return html`<div class="stack">
     <${PeriodBar} months=${months} period=${period} index=${index} onPeriod=${setPeriod} onIndex=${pickIndex} txs=${data.txs} />
     <${Segmented} variant="tabs" label="תצוגה" value=${view} onChange=${setView} options=${VIEWS} />
-    ${view === 'list' && html`<${ListView} txs=${data.txs} months=${months} period=${period} index=${index} categoriesById=${categoriesById} onOpen=${openTx} onAdd=${onAdd} onImport=${onImport} />`}
+    ${view === 'list' && html`<${ListView} txs=${data.txs} months=${months} period=${period} index=${index} categoriesById=${categoriesById} onOpen=${openTx} onAdd=${onAdd} onImport=${onImport} query=${query} onQuery=${setQuery} />`}
     ${view === 'cats' && html`<${CategoriesView} ...${common} onOpenCategory=${(id) => setSheet({ kind: 'cat', id })} onManage=${() => setSheet({ kind: 'manage' })} />`}
     ${view === 'report' && html`<${ReportView} ...${common} />`}
-    ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
+    ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)}
+      onMerchant=${(q) => { setSheet(null); setView('list'); setPeriod('year'); setQuery(q); }} />`}
     ${sheet && sheet.kind === 'manage' && html`<${ManageCategories} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
     ${sheet && sheet.kind === 'cat' && html`<${CategorySheet} categoryId=${sheet.id} ...${common} months=${months} onOpenTx=${openTx} onClose=${() => setSheet(null)} />`}
   </div>`;

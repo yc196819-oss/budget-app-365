@@ -20,6 +20,8 @@ import { SetupGuide } from './SetupGuide.js';
 import { ImportNotice } from './ImportNotice.js';
 import { AnswerNotice } from './AnswerNotice.js';
 import { MonthlyAsk } from './MonthlyAsk.js';
+import { removeMany } from '../../data/household.js';
+import { showToast } from '../../lib/toast.js';
 import { SortSheet } from '../money/SortSheet.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
@@ -53,7 +55,13 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
     </div>`;
   }
 
-  const act = (a) => {
+  const act = async (a) => {
+    if (a.to === 'cardtwice') {
+      // Into the recycle bin: they come back from "המידע שלנו" within 30 days.
+      try { await removeMany(a.ids); showToast(a.ids.length === 1 ? 'החיוב הכפול הוסר. אפשר לשחזר תוך 30 יום.' : a.ids.length + ' חיובים כפולים הוסרו. אפשר לשחזר תוך 30 יום.'); }
+      catch (_e) { showToast('לא הצלחנו להסיר. נסו שוב.'); }
+      return;
+    }
     if (a.to === 'import') onImport();
     else if (a.to === 'sort') { planSheet.close(); setSheet({ kind: 'sort' }); }
     else if (a.to === 'tx') { planSheet.close(); setSheet({ kind: 'tx', id: a.id }); }

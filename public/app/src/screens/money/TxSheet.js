@@ -3,7 +3,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { NewCategory } from '../../components/NewCategory.js';
 import { Sheet } from '../../components/Sheet.js';
 import { CatIcon } from '../../components/CatIcon.js';
-import { dayLabel, sameMerchantIds } from '../../domain/money.js';
+import { dayLabel, sameMerchantIds, filterTxs, monthsBack, inMonth } from '../../domain/money.js';
+import { chainQuery } from '../../domain/spend.js';
 import { money } from '../../domain/format.js';
 import { setCategory, restoreCategories, deleteWithUndo, snapshot } from '../../data/household.js';
 import { listRules, saveRule } from '../../data/rules.js';
@@ -13,7 +14,7 @@ import { showToast } from '../../lib/toast.js';
 
 // Details of one transaction: change its category (optionally for all
 // transactions of the same merchant) or delete it. Both can be undone.
-export function TxSheet({ tx, txs, categories, members, onClose }) {
+export function TxSheet({ tx, txs, categories, members, onClose, onMerchant }) {
   const [applyAll, setApplyAll] = useState(true);
   const [busy, setBusy] = useState(false);
   // After a change: offer to keep it as a rule for this merchant.
@@ -66,6 +67,16 @@ export function TxSheet({ tx, txs, categories, members, onClose }) {
       <span style="flex:1;min-width:0;display:flex;flex-direction:column"><b style="font-size:19px">${tx.description}</b><span class="muted" style="font-size:13px">${dayLabel(tx.tx_date, new Date())}</span></span>
       <b class=${'num' + (income ? ' income' : '')} style=${'font-size:22px;' + (income ? 'color:var(--income)' : '')}>${(income ? '+' : '−') + money(tx.amount)}</b>
     </div>
+    ${onMerchant && !income && (() => {
+      // Every purchase at this place in the last 12 months, in one tap.
+      const q = chainQuery(tx.description);
+      if (!q) return null;
+      const months = monthsBack(new Date(), 12);
+      const all = filterTxs(txs.filter((t) => t.type !== 'income' && months.some((mo) => inMonth(t, mo))), { query: q });
+      if (all.length < 2) return null;
+      const total = all.reduce((s, t) => s + Number(t.amount), 0);
+      return html`<button type="button" class="btn btn-ghost tx-merchant" onClick=${() => onMerchant(q)}>כל הקניות ב${q}: ${money(total)} ב-12 חודשים ›</button>`;
+    })()}
     <div class="facts">
       ${tx.payment_method && html`<div><span>אמצעי תשלום</span><b>${tx.payment_method}</b></div>`}
       <div><span>נוסף על ידי</span><b>${members[tx.created_by] || '—'}</b></div>

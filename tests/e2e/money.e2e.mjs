@@ -51,8 +51,42 @@ test('search across the whole year shows a total', async () => {
   const { page } = await openMoney();
   await page.click('text=12 החודשים האחרונים');
   await page.fill('input[type="search"]', 'סונול');
-  const summary = await page.locator('text=/נמצאו \\d+ תנועות/').textContent();
-  assert.match(summary, /נמצאו 12 תנועות/);
+  // A summary card: the year's total, a month on average, how many times, the bars.
+  const card = page.locator('.search-summary');
+  await card.waitFor();
+  const t = await card.textContent();
+  assert.match(t, /"סונול" ב-12 החודשים האחרונים/);
+  assert.match(t, /סך הכול₪3,360/);
+  assert.match(t, /ממוצע לחודש₪280/);
+  assert.match(t, /קניות12/);
+  await page.close();
+});
+
+test('a sub-category alone (fuel within the car, the supermarket within food): the year, a month on average, the dearest month', async () => {
+  const { page, errors } = await openMoney();
+  await page.click('.tabs >> text=קטגוריות');
+  await page.locator('.list .row', { hasText: 'אוכל' }).click();
+  const sheet = page.locator('.sheet');
+  await sheet.locator('.cat-subs').waitFor();
+  const all = await sheet.locator('.spend-kpis').textContent();
+  await sheet.locator('.cat-subs button:has-text("סופר")').click();
+  const only = await sheet.locator('.spend-kpis').textContent();
+  assert.notEqual(all, only, 'the numbers change to the sub-category');
+  assert.match(only, /ב-12 חודשים₪[\d,]+ממוצע לחודש₪[\d,]+הכי יקר/);
+  const rows = await sheet.locator('.list .row').allTextContents();
+  assert.ok(rows.length > 0 && rows.every((r) => r.includes('שופרסל')), 'only supermarket lines');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('from a transaction: every purchase at the same place over 12 months, in one tap', async () => {
+  const { page } = await openMoney();
+  await page.click('text=12 החודשים האחרונים');
+  await page.locator('.list .row', { hasText: 'סונול' }).first().click();
+  await page.locator('.tx-merchant').click();
+  await page.locator('.search-summary').waitFor();
+  assert.equal(await page.inputValue('input[type="search"]'), 'סונול');
+  assert.match(await page.locator('.search-summary').textContent(), /קניות12/);
   await page.close();
 });
 

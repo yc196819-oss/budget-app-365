@@ -3,7 +3,7 @@
 // needs attention. No DOM, no network.
 
 import { isoDate, parseDate, monthShare, sameMerchant, merchantKey, categoryRows, totalsFor, monthsBack } from './money.js';
-import { bestDuplicate } from './statement.js';
+import { bestDuplicate, isCardCharge } from './statement.js';
 import { money } from './format.js';
 
 export function daysInMonth(y, m) {
@@ -188,8 +188,29 @@ const MONTH_WORDS = ['חודש אחד', 'חודשיים', '3 חודשים', '4 �
 
 // At most `limit` items, most important first. Each has an action:
 // { to: 'money-cats' | 'money' | 'plans' | 'import' | 'tx', id? }
+// A credit card's monthly charge from the bank statement, in a month whose
+// card purchases are also here: the same money counted twice. Pure.
+export function doubleCardCharges(txs) {
+  const cardMonths = new Map();
+  for (const t of txs) if (t.card_id && t.type !== 'income') { const k = String(t.tx_date).slice(0, 7); cardMonths.set(k, (cardMonths.get(k) || 0) + (Number(t.amount) || 0)); }
+  // The charge pays the previous month's purchases (or the same month's).
+  const prev = (k) => { const [y, m] = k.split('-').map(Number); const d = new Date(Date.UTC(y, m - 2, 1)); return d.toISOString().slice(0, 7); };
+  return txs.filter((t) => !t.card_id && isCardCharge(t)).filter((t) => {
+    const k = String(t.tx_date).slice(0, 7);
+    return (cardMonths.get(k) || 0) + (cardMonths.get(prev(k)) || 0) >= Number(t.amount) * 0.5;
+  });
+}
+
 export function attention({ txs, categories, budgets, cards, today, plan, limit = 3 }) {
   const items = [];
+  // Counted twice: it changes every number in the app, so it comes first.
+  const twice = doubleCardCharges(txs);
+  if (twice.length) {
+    const total = sum(twice, (t) => Number(t.amount) || 0);
+    items.push({ kind: 'cardtwice', tone: 'danger', title: (twice.length === 1 ? 'חיוב כרטיס אשראי אחד נספר פעמיים' : twice.length + ' חיובי כרטיס אשראי נספרים פעמיים'),
+      detail: 'החיוב החודשי של הכרטיס מהבנק (' + money(total) + ' בסך הכול), וגם כל הקניות שלו מהפירוט של הכרטיס. כדאי להשאיר רק את הקניות.',
+      action: { label: 'להוריד את הכפילות', to: 'cardtwice', ids: twice.map((t) => t.id) } });
+  }
   const mo = { y: today.getFullYear(), m: today.getMonth() };
 
   const streak = minusStreak(txs, today);
