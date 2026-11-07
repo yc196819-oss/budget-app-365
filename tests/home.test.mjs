@@ -179,3 +179,15 @@ test('expectedFixed matches lines without a description by category', () => {
   ];
   assert.deepEqual(expectedFixed(txs, TODAY).map((t) => t.category_id), ['home']);
 });
+
+import { doubleCardCharges } from '../public/app/src/domain/home.js';
+test("a card's charge from the bank, in a month whose card purchases are here too, is found as counted twice", () => {
+  const txs = [
+    { id: 'b1', type: 'expense', amount: 2400, description: 'מקס איט פיננסים', tx_date: '2026-10-10', card_id: null },
+    { id: 'c1', type: 'expense', amount: 1500, description: 'שופרסל', tx_date: '2026-09-14', card_id: 'k1' },
+    { id: 'c2', type: 'expense', amount: 900, description: 'פז', tx_date: '2026-09-20', card_id: 'k1' },
+    { id: 'b2', type: 'expense', amount: 1800, description: 'כאל', tx_date: '2026-03-10', card_id: null }, // no card purchases near it: kept
+    { id: 'b3', type: 'expense', amount: 5, description: 'מקס - דמי כרטיס', tx_date: '2026-10-10', card_id: null }
+  ];
+  assert.deepEqual(doubleCardCharges(txs).map((t) => t.id), ['b1']);
+});

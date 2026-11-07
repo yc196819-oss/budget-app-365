@@ -59,6 +59,7 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
   const fc = householdForecast({ txs, goals, installments, budgets, income, accounts, cards }, today);
   const v = verdict(fc);
   const detail = spendingDetail({ txs, categories, today });
+  const year = yearTotals({ txs, categories, today });
   return {
     userName: userName || '',
     currentMonth: label(cur),
@@ -82,6 +83,10 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
     // Where the money goes, by business: so "which subscriptions?" or "why
     // is food up?" can be answered from the real lines.
     ...detail,
+    // The last 12 months by sub-category and by business ("how much on fuel
+    // this year?", "how much at that supermarket?"): the same numbers as the
+    // category sheet and the search summary.
+    last12Months: year,
     accounts: accounts.map((a) => ({ name: a.name, balance: a.balance ?? null })),
     cards: cards.map((c) => ({ name: c.name, billingDay: c.billing_day || null, limit: c.credit_limit ?? null })),
     loans: loans.filter((l) => !l.settled).map((l) => ({ with: l.counterparty, amount: Number(l.amount) || 0, direction: l.direction === 'tome' ? 'owed_to_us' : 'we_owe' })),
@@ -92,6 +97,30 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
 
 // The businesses behind the spending (last 3 months), what repeats every
 // month (subscriptions, fixed bills), and the latest lines. Pure.
+// 12 months, by sub-category (and categories without one) and by business. Pure.
+export function yearTotals({ txs, categories, today = new Date() }) {
+  const months = monthsBack(today, 12);
+  const byId = new Map((categories || []).map((c) => [c.id, c]));
+  const exp = (txs || []).filter((t) => t.type !== 'income');
+  const share = (t) => months.reduce((s, mo) => s + monthShare(t, mo), 0);
+  const subs = new Map();
+  const shops = new Map();
+  for (const t of exp) {
+    const v = share(t);
+    if (!(v > 0)) continue;
+    const cat = byId.get(t.category_id);
+    const sub = byId.get(t.subcategory_id);
+    const k = (cat ? cat.name : 'ללא קטגוריה') + (sub ? ' ← ' + sub.name : '');
+    subs.set(k, (subs.get(k) || 0) + v);
+    const m = (merchantKey(t.description) || '').split(' ')[0];
+    if (m && m.length >= 3) { const g = shops.get(m) || { total: 0, charges: 0 }; g.total += v; g.charges++; shops.set(m, g); }
+  }
+  return {
+    byCategory: [...subs].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([what, total]) => ({ what, total: round(total), avgMonthly: round(total / 12) })),
+    byBusiness: [...shops].sort((a, b) => b[1].total - a[1].total).slice(0, 30).map(([business, g]) => ({ business, total: round(g.total), charges: g.charges }))
+  };
+}
+
 export function spendingDetail({ txs, categories, today = new Date(), top = 20, recent = 30 }) {
   const since = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate()).toISOString().slice(0, 10);
   const name = new Map((categories || []).map((c) => [c.id, c.name]));

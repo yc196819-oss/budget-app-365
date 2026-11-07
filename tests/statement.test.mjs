@@ -238,7 +238,7 @@ test('summary and rows to save', () => {
     { date: '2026-08-12', amount: 100, type: 'expense', description: 'a', category_id: 'food', subcategory_id: null }
   ], []);
   const s = summary(items);
-  assert.deepEqual({ ...s }, { found: 4, chosen: 4, auto: 2, byRule: 0, waiting: 2, likely: 0, maybe: 1, expense: 240, income: 20, from: '2026-08-12', to: '2026-08-15' });
+  assert.deepEqual({ ...s }, { found: 4, chosen: 4, auto: 2, byRule: 0, waiting: 2, likely: 0, maybe: 1, cardCharges: 0, expense: 240, income: 20, from: '2026-08-12', to: '2026-08-15' });
   const rows = toRows(items);
   assert.equal(rows.length, 4);
   assert.deepEqual(rows[0], { type: 'expense', amount: 100, description: 'a', tx_date: '2026-08-12', category_id: 'food', subcategory_id: null, nature: 'variable', spread: 'month', source: 'pdf' });
@@ -274,4 +274,18 @@ test('a known deal is not created again; a wrong first payment (the purchase dat
 test('the first payment keeps the day, clamped to the month (31st)', () => {
   const { create } = installmentDeals([{ type: 'expense', amount: 100, description: 'x (תשלום 2 מתוך 3)', tx_date: '2026-03-31' }]);
   assert.equal(create[0].first_payment, '2026-02-28');
+});
+
+import { isCardCharge, flagDuplicates as flagDup2, summary as summary2 } from '../public/app/src/domain/statement.js';
+test("a bank statement's credit-card charge is not counted again (the card's own statement has the purchases)", () => {
+  for (const d of ['מקס איט פיננסים', 'כאל - חיוב חודשי', 'ישראכרט', 'חיוב כרטיס אשראי', 'לאומי קארד', 'MAX IT', 'אמריקן אקספרס'])
+    assert.equal(isCardCharge({ type: 'expense', amount: 2400, description: d }), true, d);
+  for (const t of [{ type: 'expense', amount: 4.9, description: 'מקס - דמי כרטיס' }, { type: 'expense', amount: 300, description: 'דמי כרטיס ישראכרט' },
+    { type: 'expense', amount: 80, description: 'מקס' }, { type: 'income', amount: 500, description: 'החזר מקס' }, { type: 'expense', amount: 900, description: 'מקסימום ריהוט' }, { type: 'expense', amount: 500, description: 'שופרסל' }])
+    assert.equal(isCardCharge(t), false, t.description);
+  const items = flagDup2([{ key: 'a', type: 'expense', amount: 2400, description: 'מקס איט פיננסים', date: '2026-10-10' }, { key: 'b', type: 'expense', amount: 300, description: 'שופרסל', date: '2026-10-11' }], []);
+  assert.deepEqual(items.map((t) => [t.cardCharge || false, t.include]), [[true, false], [false, true]]);
+  assert.equal(summary2(items).cardCharges, 1);
+  // In a card's own statement nothing is left out.
+  assert.equal(flagDup2([{ key: 'a', type: 'expense', amount: 2400, description: 'מקס איט פיננסים', date: '2026-10-10' }], [], { fromCard: true })[0].include, true);
 });

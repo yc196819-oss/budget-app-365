@@ -29,3 +29,16 @@ test('the summary carries accounts, open loans and cards, never card numbers', (
   assert.deepEqual(s.loans, [{ with: 'אבא', amount: 2000, direction: 'we_owe' }]);
   assert.ok(!JSON.stringify(s).includes('4821'));
 });
+
+import { yearTotals } from '../public/app/src/domain/advisor.js';
+test('the advisor knows the last 12 months by sub-category and by business', () => {
+  const cats = [{ id: 'car', name: 'רכב' }, { id: 'fuel', name: 'דלק', parent_id: 'car' }];
+  const txs = [
+    { type: 'expense', amount: 300, description: 'סונול רמות', tx_date: '2026-10-05', category_id: 'car', subcategory_id: 'fuel' },
+    { type: 'expense', amount: 250, description: 'סונול גבעת שאול', tx_date: '2026-06-05', category_id: 'car', subcategory_id: 'fuel' },
+    { type: 'expense', amount: 999, description: 'ישן מאוד', tx_date: '2024-01-01', category_id: 'car', subcategory_id: 'fuel' }
+  ];
+  const y = yearTotals({ txs, categories: cats, today: new Date('2026-11-07T12:00:00') });
+  assert.deepEqual(y.byCategory[0], { what: 'רכב ← דלק', total: 550, avgMonthly: 46 });
+  assert.deepEqual(y.byBusiness[0], { business: 'סונול', total: 550, charges: 2 });
+});

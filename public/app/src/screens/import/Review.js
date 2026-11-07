@@ -13,7 +13,7 @@ export function Review({ items, categories, cards = [], cardId, onCard, onChange
   const [open, setOpen] = useState(null);
   const byId = new Map(categories.map((c) => [c.id, c]));
   const s = summary(items);
-  const visible = items.filter((t) => !t.saved && (filter === 'all' || (filter === 'waiting' ? t.include && !t.category_id : t.dupe)));
+  const visible = items.filter((t) => !t.saved && (filter === 'all' || (filter === 'waiting' ? t.include && !t.category_id : t.dupe || t.cardCharge)));
 
   const toggle = (key) => onChange(items.map((t) => (t.key === key ? { ...t, include: !t.include } : t)));
   const choose = (key, category_id, subcategory_id) => onChange(setItemCategory(items, key, category_id, subcategory_id));
@@ -39,7 +39,7 @@ export function Review({ items, categories, cards = [], cardId, onCard, onChange
     </div>`}
     <${Segmented} variant="tabs" label="סינון" value=${filter} onChange=${(f) => { setFilter(f); setOpen(null); }} options=${[
       { key: 'waiting', label: 'מחכות (' + s.waiting + ')' },
-      { key: 'dupes', label: 'כפולות (' + (s.likely + s.maybe) + ')' },
+      { key: 'dupes', label: 'כפולות (' + (s.likely + s.maybe + s.cardCharges) + ')' },
       { key: 'all', label: 'הכול (' + s.found + ')' }
     ]} />
     ${visible.length === 0 && html`<div class="empty">${filter === 'waiting' ? 'כל התנועות מסווגות.' : filter === 'dupes' ? 'לא נמצאו כפילויות.' : 'אין תנועות.'}</div>`}
@@ -60,7 +60,8 @@ function Line({ t, byId, categories, open, onToggle, onOpen, onChoose }) {
   const tops = categories.filter((c) => !c.parent_id && (c.kind || 'expense') === kind);
   const subs = t.category_id ? categories.filter((c) => c.parent_id === t.category_id) : [];
   let note;
-  if (t.dupe === 'likely') note = html`<span class="warn">כבר קיימת: ${shortDate(t.dupeOf.date)} ${t.dupeOf.description}</span>`;
+  if (t.cardCharge) note = html`<span class="warn">${t.include ? 'נספרת: ' : ''}חיוב של כרטיס אשראי מהבנק. הקניות עצמן נספרות מהפירוט של הכרטיס, אז היא לא מסומנת. אם לא תעלו את פירוט הכרטיס, סמנו אותה.</span>`;
+  else if (t.dupe === 'likely') note = html`<span class="warn">כבר קיימת: ${shortDate(t.dupeOf.date)} ${t.dupeOf.description}</span>`;
   else if (t.dupe === 'maybe') note = html`<span class="warn">אולי כפולה: ${shortDate(t.dupeOf.date)} ${t.dupeOf.description}</span>`;
   else if (!cat) note = html`<span class="warn">מחכה לקטגוריה</span>`;
   else note = html`<span>${(sub ? sub.name : cat.name) + (t.auto === 'rule' ? ' · לפי הכלל שלכם' : t.auto === 'history' ? ' · כמו בפעם הקודמת' : t.auto === 'ai' ? ' · הצעה' : '')}</span>`;

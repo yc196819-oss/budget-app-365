@@ -104,7 +104,10 @@ export async function readStatement(file, { categories, history, rules = [], tod
     });
   }
   onStep('dupes');
-  return { items: prepare(items, history), via };
+  // A card's own statement (most lines carry its last 4 digits) has no bank
+  // card-charge lines to leave out.
+  const fromCard = items.filter((t) => t.card4).length > items.length / 2;
+  return { items: prepare(items, history, { fromCard }), via };
 }
 
 // Suggestions for lines already saved without a category: one line per

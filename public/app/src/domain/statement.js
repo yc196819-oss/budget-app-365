@@ -321,12 +321,27 @@ export function bestDuplicate(item, pool) {
   return best;
 }
 
+// A bank statement's monthly charge of a credit card ("מקס", "כאל", "חיוב
+// כרטיס אשראי"): the purchases themselves come from the card's statement, so
+// counting this line too counts the same money twice. Card fees ("דמי
+// כרטיס") and small amounts are left alone.
+const CARD_CO = /(^|[^א-תa-z])(מקס|max|כאל|cal|ישראכרט|isracard|לאומי\s*קארד|אמריקן\s*אקספרס|אמקס|amex|דיינרס|diners|ויזה|visa|מסטרקארד|mastercard)([^א-תa-z]|$)/i;
+const CARD_WORDS = /חיוב\s*(ב)?כרטיס|כרטיס(י)?\s*אשראי|חיובי\s*אשראי|חיוב\s*אשראי/;
+export function isCardCharge(t) {
+  if (!t || t.type === 'income' || !(Number(t.amount) >= 150)) return false;
+  const d = String(t.description || '');
+  if (/דמי|עמלה|ריבית/.test(d)) return false;
+  return CARD_CO.test(d) || CARD_WORDS.test(d);
+}
+
 // Flags lines that already exist in the household (likely ones start
 // unchecked). The same line twice in one file is usually two real charges
 // (two train tickets), so it is only "maybe" and stays checked.
-export function flagDuplicates(items, existing) {
+export function flagDuplicates(items, existing, { fromCard = false } = {}) {
   const seen = [];
   return items.map((t) => {
+    // In a bank statement (not a card's), a card's monthly charge starts unchecked.
+    if (!fromCard && isCardCharge(t)) { seen.push(t); return { ...t, dupe: null, dupeOf: null, cardCharge: true, include: false }; }
     const old = bestDuplicate(t, existing);
     const twin = old ? null : bestDuplicate(t, seen);
     const hit = old || twin;
@@ -376,8 +391,8 @@ export function withKeys(items) {
   return items.map((t, i) => ({ ...t, key: 'i' + i }));
 }
 
-export function prepare(items, history) {
-  return flagDuplicates(withKeys(items), history);
+export function prepare(items, history, opts) {
+  return flagDuplicates(withKeys(items), history, opts);
 }
 
 export function summary(items) {
@@ -390,6 +405,7 @@ export function summary(items) {
     waiting: chosen.filter((t) => !t.category_id).length,
     likely: items.filter((t) => t.dupe === 'likely').length,
     maybe: items.filter((t) => t.dupe === 'maybe').length,
+    cardCharges: items.filter((t) => t.cardCharge).length,
     expense: chosen.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
     income: chosen.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0),
     from: chosen.reduce((m, t) => (!m || t.date < m ? t.date : m), null),

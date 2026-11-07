@@ -98,7 +98,10 @@ export function filterTxs(txs, { query = '', filter = 'all', categoriesById = ne
     if (!q) return true;
     const cat = categoriesById.get(tx.category_id);
     const sub = categoriesById.get(tx.subcategory_id);
-    return [tx.description, cat && cat.name, sub && sub.name].some((s) => String(s || '').toLowerCase().includes(q));
+    // Also with punctuation and digits as spaces, so "בי פי" finds "בי.פי".
+    const loose = (v) => String(v || '').toLowerCase().replace(/[0-9]+/g, ' ').replace(/[^\p{L}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+    const lq = loose(q);
+    return [tx.description, cat && cat.name, sub && sub.name].some((s) => String(s || '').toLowerCase().includes(q) || (lq && loose(s).includes(lq)));
   });
 }
 
