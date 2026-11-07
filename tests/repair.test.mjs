@@ -79,3 +79,14 @@ test('once fixed, the moved lines (now on one day) are never reported again', ()
   const after = txs.filter((t) => !gone.has(t.id)).map((t) => (r.move.includes(t.id) ? { ...t, tx_date: r.moveTo, source: 'repaired' } : t));
   assert.deepEqual(findRepairs(after), []);
 });
+
+test('a big shopping day in a real statement is not a mistake', () => {
+  n = 0;
+  const day = Array.from({ length: 10 }, (_, i) => tx({ import_id: 'imp-real', description: 'קניון ' + i, amount: 30 + i }));
+  const rest = Array.from({ length: 4 }, (_, i) => tx({ import_id: 'imp-real', tx_date: '2026-10-0' + (i + 1), description: 'מכולת ' + i }));
+  assert.deepEqual(findRepairs([...day, ...rest]), [], '10 of 14 lines on one day is 71%: not certain');
+  const spread = [...day, ...Array.from({ length: 2 }, (_, i) => tx({ import_id: 'imp-real', tx_date: '2026-10-0' + (i + 1) })), ...Array.from({ length: 2 }, (_, i) => tx({ import_id: 'imp-real', tx_date: '2026-10-2' + (i + 1) }))];
+  assert.deepEqual(findRepairs(spread), [], 'spread over 5 days: a real statement');
+  const nine = Array.from({ length: 9 }, () => tx({ import_id: 'imp-9' }));
+  assert.deepEqual(findRepairs(nine), [], 'fewer than 10 lines: never');
+});

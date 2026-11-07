@@ -7,7 +7,12 @@
 //     estimated date in the month they were really bought.
 //   junk: a file that was not a statement at all (dozens of ₪1 "purchases").
 
-const MIN_LINES = 8;
+// Strict on purpose: only a mistake that is certain is shown. In the real
+// cases 94%-96% of a file's lines (16 to 81 of them) shared the charge day.
+const MIN_LINES = 10;
+const SHARE = 0.85;
+const MAX_DAYS = 3;
+const JUNK_SHARE = 0.9;
 // The source of a line the advisor already moved: never looked at again.
 export const REPAIRED = 'repaired';
 const DAY = 86400000;
@@ -40,7 +45,9 @@ function chargeDateIssues(txs) {
     const byDay = new Map();
     for (const t of lines) byDay.set(t.tx_date, (byDay.get(t.tx_date) || 0) + 1);
     const [day, count] = [...byDay].sort((a, b) => b[1] - a[1])[0];
-    if (count < MIN_LINES || count / lines.length < 0.7) continue;
+    // A real statement spreads over the month: a big shopping day is a few
+    // lines, never 85% of the file in at most 3 days.
+    if (count < MIN_LINES || count / lines.length < SHARE || byDay.size > MAX_DAYS) continue;
     const onDay = lines.filter((t) => t.tx_date === day);
     const importId = lines[0].import_id;
     const card = lines[0].card_id || null;
@@ -84,7 +91,7 @@ function junkIssues(txs) {
   for (const [importId, lines] of groups) {
     if (lines.length < MIN_LINES) continue;
     const tiny = lines.filter((t) => Math.abs(Number(t.amount) || 0) <= 1);
-    if (tiny.length / lines.length < 0.8) continue;
+    if (tiny.length / lines.length < JUNK_SHARE) continue;
     out.push({ kind: 'junk', key: 'junk:' + importId, importId, count: lines.length, total: sumOf(lines), ids: lines.map((t) => t.id) });
   }
   return out;
