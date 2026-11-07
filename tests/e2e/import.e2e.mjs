@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startServer, launchBrowser, makeFakeDb, mockSupabase, signIn, collectErrors } from './helpers.mjs';
@@ -153,13 +154,24 @@ test('a PDF statement is read with pdf.js (under the strict CSP) and parsed by t
   await page.close();
 });
 
-test('old binary .xls and unknown files get a clear message, and another file can be picked', async () => {
+test('an old binary .xls statement is read on the device, like a new one', async () => {
+  const { page, errors } = await open();
+  await page.click('text=העלאת פירוט כרטיס');
+  const buffer = readFileSync(new URL('../fixtures/xls/statement.xls', import.meta.url));
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'statement.xls', mimeType: 'application/vnd.ms-excel', buffer });
+  await page.waitForSelector('.import-summary');
+  assert.match(await page.locator('.import-summary').textContent(), /250 תנועות נמצאו/);
+  assert.deepEqual(errors.filter((e) => !/Warning/.test(e)), []);
+  await page.close();
+});
+
+test('a broken .xls and unknown files get a clear message, and another file can be picked', async () => {
   const { page } = await open();
   await page.click('text=העלאת פירוט כרטיס');
   const ole = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0, 0, 0]);
   await page.setInputFiles('.sheet input[type="file"]', { name: 'isracard.xls', mimeType: 'application/vnd.ms-excel', buffer: ole });
   await page.waitForSelector('[role="alert"]');
-  assert.match(await page.locator('[role="alert"]').textContent(), /xlsx/);
+  assert.match(await page.locator('[role="alert"]').textContent(), /האקסל הישן/);
   await page.click('text=לבחור קובץ אחר');
   await page.setInputFiles('.sheet input[type="file"]', { name: 'notes.docx', mimeType: 'application/msword', buffer: Buffer.from('x') });
   assert.match(await page.locator('[role="alert"]').textContent(), /לא נתמך/);

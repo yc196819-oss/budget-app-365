@@ -1,6 +1,7 @@
 import { api } from '../lib/api.js';
 import { applyRules } from '../domain/rules.js';
 import { readXlsx } from '../lib/xlsx.js';
+import { readXls } from '../lib/xls.js';
 import { pdfText } from '../lib/pdf.js';
 import { fileKind, decodeText, isBinaryXls, htmlTables, base64 } from '../lib/files.js';
 import { aiEnabled } from '../lib/settings.js';
@@ -29,15 +30,24 @@ async function aiImport(body) {
 
 async function readTable(file, kind) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (kind === 'xlsx') {
+  // A file's own bytes tell its format better than its name: banks send
+  // .xls files that are really .xlsx, HTML or text.
+  const zip = bytes[0] === 0x50 && bytes[1] === 0x4b;
+  if (kind === 'xlsx' || (kind === 'xls' && zip)) {
     try {
       return (await readXlsx(bytes.buffer)).flatMap((s) => s.rows);
     } catch (_err) {
       throw new ImportError('לא הצלחנו לפתוח את קובץ האקסל. נסו להוריד אותו שוב, או להעלות PDF.');
     }
   }
-  if (kind === 'xls' && isBinaryXls(bytes)) {
-    throw new ImportError('זה קובץ אקסל בפורמט ישן (xls). פתחו אותו ושמרו בשם כ-xlsx, או העלו את ה-PDF של הפירוט.');
+  if (isBinaryXls(bytes)) {
+    try {
+      return readXls(bytes.buffer).flatMap((s) => s.rows);
+    } catch (err) {
+      if (err && err.code === 'password') throw new ImportError('קובץ האקסל נעול בסיסמה. פתחו אותו, הסירו את הסיסמה ושמרו, או העלו את ה-PDF של הפירוט.');
+      reportError(err, 'xls');
+      throw new ImportError('לא הצלחנו לפתוח את קובץ האקסל הישן. נסו להוריד אותו שוב, או להעלות PDF.');
+    }
   }
   const text = decodeText(bytes);
   return /^\s*</.test(text) ? htmlTables(text) : parseCsv(text);
