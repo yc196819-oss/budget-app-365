@@ -40,12 +40,12 @@ test('tell your friends: one tap opens the phone\'s share sheet with a ready mes
   await page.close();
 });
 
-test('on a computer without a share sheet: WhatsApp, email and copy', async () => {
+test('on a computer without a share sheet: email and copy first, WhatsApp last, shown at once', async () => {
   const { page } = await open({ share: false });
   await page.click('button[aria-label="פרופיל והגדרות"]');
-  await page.locator('.share-card button:has-text("לשתף עם חברים")').click();
   const more = page.locator('.share-more');
   await more.waitFor();
+  assert.deepEqual((await more.locator('a, button').allTextContents()).map((t) => t.trim()), ['במייל', 'להעתיק את ההודעה', 'וואטסאפ']);
   assert.match(await more.locator('a:has-text("וואטסאפ")').getAttribute('href'), /^https:\/\/wa\.me\/\?text=.*ref%3Da1b2c3/);
   assert.match(await more.locator('a:has-text("מייל")').getAttribute('href'), /^mailto:\?subject=/);
   assert.equal(await page.locator('.share-joined').count(), 0, 'nothing about friends until one joins');
