@@ -134,6 +134,54 @@ function PriceServiceCard() {
   </div>`;
 }
 
+// A number that counts up to its value when it first shows ("$4.24", "15%"
+// keep their sign). Still for whoever asked their device for less motion.
+function CountUp({ value }) {
+  const m = /^(\D*)(\d+(?:\.\d+)?)(\D*)$/.exec(String(value));
+  const [shown, setShown] = useState(() => (m ? m[1] + (0).toFixed((m[2].split('.')[1] || '').length) + m[3] : String(value)));
+  useEffect(() => {
+    if (!m) { setShown(String(value)); return undefined; }
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const to = Number(m[2]);
+    const dec = (m[2].split('.')[1] || '').length;
+    if (still || !to) { setShown(String(value)); return undefined; }
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / 900);
+      setShown(m[1] + (to * (1 - Math.pow(1 - p, 3))).toFixed(dec) + m[3]);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return html`<b class="num">${shown}</b>`;
+}
+
+// A small line of the last days under a number; draws itself.
+function Spark({ values }) {
+  if (!values || values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  // Right to left, like the daily chart: today at the left end.
+  const pts = values.map((v, i) => [Math.round(200 - (i / (values.length - 1)) * 200), Math.round(34 - (v / max) * 30)]);
+  const d = pts.map(([x, y], i) => (i ? 'L' : 'M') + x + ' ' + y).join(' ');
+  return html`<svg class="admin-spark-line" viewBox="0 0 200 36" preserveAspectRatio="none" aria-hidden="true">
+    <path class="area" d=${d + ' L0 36 L200 36Z'} /><path class="line" d=${d} pathLength="100" /></svg>`;
+}
+
+// Today the busiest day of the last two weeks: a small celebration.
+function Record({ daily }) {
+  if (!daily || daily.length < 7) return null;
+  const today = daily[daily.length - 1].active;
+  const before = Math.max(...daily.slice(0, -1).map((d) => d.active));
+  if (!(today > 0 && today > before)) return null;
+  return html`<div class="card admin-record" role="status">
+    <span class="admin-confetti" aria-hidden="true">${Array.from({ length: 18 }, (_, i) => html`<i key=${i} style=${'--i:' + i}></i>`)}</span>
+    <span class="admin-trophy" aria-hidden="true"><${Icon} name="spark" size=${18} /></span>
+    <span><b>שיא של שבועיים: ${today} פעילים היום</b><br /><span class="muted">יותר מכל יום ב-14 הימים האחרונים.</span></span>
+  </div>`;
+}
+
 // The four numbers at the top, and one plain sentence, from what the
 // dashboard already has. No AI: free and always the same for the same numbers.
 export function adminKpis(s) {
@@ -146,11 +194,11 @@ export function adminKpis(s) {
   const c = (s.cohorts || [])[0];
   const u = s.upload;
   const tiles = [
-    { label: 'פעילים היום', value: s.active.day, note: diff == null ? '' : diff === 0 ? 'כמו אתמול' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ' מאתמול', tone: diff > 0 ? 'up' : diff < 0 ? 'down' : '' },
+    { label: 'פעילים היום', value: s.active.day, series: daily.map((d) => d.active), note: diff == null ? '' : diff === 0 ? 'כמו אתמול' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ' מאתמול', tone: diff > 0 ? 'up' : diff < 0 ? 'down' : '' },
     // "This week" is since Sunday, the same as the sentence below and the weekly table.
     { label: 'נרשמו השבוע', value: c ? c.signups : week, note: s.sharing && s.sharing.friends ? s.sharing.friends + ' מחבר (סה"כ)' : '' },
     { label: 'חזרו אחרי שבוע', value: s.retention && s.retention.pct != null ? s.retention.pct + '%' : '–', note: s.retention && s.retention.started ? s.retention.cameBack + ' מתוך ' + s.retention.started : '' },
-    { label: 'עלות AI היום', value: '$' + (Number(today.cost) || 0).toFixed(2), note: '$' + (s.aiCost30d ?? 0) + ' ב-30 יום' }
+    { label: 'עלות AI היום', value: '$' + (Number(today.cost) || 0).toFixed(2), series: daily.map((d) => Number(d.cost) || 0), note: '$' + (s.aiCost30d ?? 0) + ' ב-30 יום' }
   ];
   const parts = [];
   if (c) parts.push('השבוע נרשמו ' + c.signups + (c.signups ? ', ' + c.withData + ' מהם כבר עם נתונים' : ''));
@@ -257,9 +305,9 @@ export function AdminView({ onBack }) {
       <div class="card admin-counts"><span>פעילים: היום <b class="num">${s.active.day}</b> · השבוע <b class="num">${s.active.week}</b> · החודש <b class="num">${s.active.month}</b></span>${today && html`<span>נרשמו היום <b class="num">${(f && f.byDay && f.byDay[today.day]) || 0}</b></span>`}</div>
       ${s.daily && html`<div class="card stack admin-daily"><b>14 הימים האחרונים</b>
         <div style="display:flex;align-items:flex-end;gap:4px;height:90px" aria-label="פעילים לפי יום">
-          ${s.daily.map((d) => { const top = Math.max(1, ...s.daily.map((x) => x.active)); return html`<div title=${d.day + ': ' + d.active + ' פעילים, $' + d.cost} style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;justify-content:flex-end;height:100%">
+          ${s.daily.map((d, i) => { const top = Math.max(1, ...s.daily.map((x) => x.active)); return html`<div title=${d.day + ': ' + d.active + ' פעילים, $' + d.cost} style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;justify-content:flex-end;height:100%">
             <span class="num faint" style="font-size:10px">${d.active || ''}</span>
-            <i style=${'display:block;width:100%;border-radius:3px 3px 0 0;background:var(--accent);height:' + Math.max(2, Math.round((d.active / top) * 70)) + 'px'}></i>
+            <i class="admin-bar" style=${'display:block;width:100%;border-radius:3px 3px 0 0;background:var(--accent);height:' + Math.max(2, Math.round((d.active / top) * 70)) + 'px;animation-delay:' + (i * 35) + 'ms'}></i>
             <span class="num faint" style="font-size:9px">${Number(d.day.slice(8))}</span></div>`; })}
         </div><span class="faint" style="font-size:11px">גובה = משתמשים פעילים ביום. מעבר עם העכבר מראה גם את עלות ה-AI.</span></div>`}
       <${CohortCard} rows=${s.cohorts} />
@@ -314,9 +362,10 @@ export function AdminView({ onBack }) {
     ${s === undefined && html`<span class="muted">טוען…</span>`}
     ${s === null && html`<span class="muted">הנתונים לא זמינים כרגע.</span>`}
     ${(!open || wide) && k && html`
+      <${Record} daily=${s.daily} />
       <div class="card admin-summary"><span class="admin-spark" aria-hidden="true"><${Icon} name="spark" size=${16} /></span><span>${k.summary}</span></div>
       <div class="admin-kpis">
-        ${k.tiles.map((t) => html`<div class="card admin-kpi" key=${t.label}><span class="muted">${t.label}</span><b class="num">${t.value}</b>${t.note && html`<span class=${'admin-chg ' + (t.tone || '')}>${t.note}</span>`}</div>`)}
+        ${k.tiles.map((t) => html`<div class="card admin-kpi" key=${t.label}><span class="muted">${t.label}</span><${CountUp} value=${t.value} />${t.note && html`<span class=${'admin-chg ' + (t.tone || '')}>${t.note}</span>`}<${Spark} values=${t.series} /></div>`)}
       </div>`}
     ${!wide && !open && html`<nav class="admin-hub" aria-label="חלקי לוח הבעלים">
       ${sections.map((x) => html`<button type="button" class="card admin-hub-btn" key=${x.key} onClick=${() => setSection(x.key)}>

@@ -537,6 +537,8 @@ test('owner on a phone: the main screen has the numbers and a button for each pa
   assert.deepEqual((await s.locator('.admin-hub-btn b').allTextContents()), ['פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
   // The numbers come a moment after the buttons (while they load, "טוען…").
   await s.locator('.admin-kpi').first().waitFor();
+  // The numbers count up to their value.
+  await page.waitForFunction(() => /\$0\.38/.test(document.querySelectorAll('.admin-kpi')[3]?.textContent || '') && /7/.test(document.querySelector('.admin-kpi b')?.textContent || ''));
   const kpis = await s.locator('.admin-kpi').allTextContents();
   assert.equal(kpis.length, 4);
   assert.match(kpis[0], /פעילים היום7▲ 2 מאתמול/);

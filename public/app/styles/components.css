@@ -821,3 +821,31 @@ body.chat-open { overflow: hidden; }
   .admin-sec-activity > .stack { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
   .admin-sec-activity > .stack > .per-user, .admin-sec-activity > .stack > .admin-daily { grid-column: 1 / -1; }
 }
+
+/* Owner dashboard: things arrive one after another, numbers count up, lines draw themselves */
+@keyframes admin-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes admin-pop { 0% { opacity: 0; transform: scale(.92); } 70% { opacity: 1; transform: scale(1.02); } 100% { transform: none; } }
+@keyframes admin-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes admin-draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes admin-fade { from { opacity: 0; } to { opacity: .45; } }
+@keyframes admin-fall { 0% { transform: translateY(-20px) rotate(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(90px) rotate(400deg); opacity: 0; } }
+.admin-summary, .admin-record { animation: admin-rise .5s var(--out, ease) both; }
+.admin-kpi { position: relative; overflow: hidden; animation: admin-pop .5s var(--spring, ease) both; }
+.admin-kpi:nth-child(2) { animation-delay: .06s; } .admin-kpi:nth-child(3) { animation-delay: .12s; } .admin-kpi:nth-child(4) { animation-delay: .18s; }
+.admin-hub-btn { animation: admin-rise .45s var(--out, ease) both; transition: transform .15s ease, box-shadow .2s ease; }
+.admin-hub-btn:nth-child(1) { animation-delay: .2s; } .admin-hub-btn:nth-child(2) { animation-delay: .26s; } .admin-hub-btn:nth-child(3) { animation-delay: .32s; } .admin-hub-btn:nth-child(4) { animation-delay: .38s; } .admin-hub-btn:nth-child(5) { animation-delay: .44s; }
+.admin-hub-btn:active { transform: scale(.98); }
+.admin-hub-btn:hover .admin-hub-ic { background: var(--accent); color: var(--accent-ink); }
+.admin-hub-ic { transition: background-color .2s ease, color .2s ease; }
+.admin-sec { animation: admin-rise .55s var(--out, ease) both .15s; }
+.admin-sec-title + .stack > * { animation: admin-rise .45s var(--out, ease) both; }
+.admin-bar { transform-origin: bottom center; animation: admin-grow .7s var(--spring, ease) both; }
+.admin-spark-line { display: block; width: 100%; height: 30px; margin-top: 6px; }
+.admin-spark-line .line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 100; animation: admin-draw 1.2s var(--out, ease) both .3s; vector-effect: non-scaling-stroke; }
+.admin-spark-line .area { fill: var(--accent-tint); opacity: .45; animation: admin-fade 1s ease both .8s; }
+.admin-record { position: relative; overflow: hidden; display: flex; gap: 12px; align-items: center; border: 1px solid var(--accent); background: linear-gradient(100deg, var(--accent-tint), var(--surface) 60%); }
+.admin-trophy { width: 36px; height: 36px; border-radius: 12px; flex: none; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); animation: admin-pop .6s var(--spring, ease) both .2s; }
+.admin-confetti { position: absolute; inset: 0; pointer-events: none; }
+.admin-confetti i { position: absolute; top: 0; left: calc(var(--i) * 5.5%); width: 7px; height: 11px; border-radius: 2px; background: var(--accent); opacity: 0; animation: admin-fall 2.4s linear calc(var(--i) * .13s) 2; }
+.admin-confetti i:nth-child(3n) { background: var(--income); } .admin-confetti i:nth-child(4n) { background: var(--danger); }
+.admin-kpi:hover { box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
