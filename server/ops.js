@@ -504,6 +504,25 @@ function answerMail({ question, answer, link }) {
   };
 }
 
+// "Someone joined thanks to you": to the person whose link a new account
+// came from. Never says who joined. Pure.
+function thanksMail({ joined = 1, link, unsubLink = '' }) {
+  const origin = String(link).replace(/\/app\/?.*$/, '');
+  const n = Math.max(1, Number(joined) || 1);
+  const more = n > 1 ? 'עד היום הצטרפו בזכותך ' + n + ' אנשים.' : '';
+  const body = ['מישהו שקיבל ממך את הקישור נרשם עכשיו ל"התקציב שלנו".', more, 'זה עוזר לנו מאוד, ומאפשר לנו להמשיך לשפר את האפליקציה בשבילכם.'].filter(Boolean);
+  const inner = '<p style="margin:0 0 14px;font-size:20px;font-weight:bold;color:#2B2118">תודה ששיתפת!</p>'
+    + body.map((t) => '<p style="margin:0 0 10px;font-size:16px;line-height:1.65;color:#2B2118">' + escHtml(t) + '</p>').join('')
+    + mailButton(link, 'לאפליקציה')
+    + '<p style="margin:14px 0 0;font-size:15px;font-weight:bold;color:#2B2118">צוות התקציב שלנו</p>';
+  const off = unsubLink ? '<br>לא רוצה לקבל עוד מיילים כאלה? <a href="' + escHtml(unsubLink) + '" style="color:#92490A;font-weight:bold;text-decoration:underline">להסרה לחץ כאן</a>' : '';
+  return {
+    subject: 'מישהו הצטרף בזכותך ל"התקציב שלנו"',
+    text: 'תודה ששיתפת!\n\n' + body.join('\n') + '\n\nלאפליקציה: ' + link + '\n\nצוות התקציב שלנו' + (unsubLink ? '\n\nלהסרה: ' + unsubLink : ''),
+    html: mailShell({ origin, inner, footer: 'קיבלת את המייל כי שיתפת קישור לאפליקציה.' + off })
+  };
+}
+
 // A draft answer to a request, for the owner to read, change and send. The
 // owner says where things stand (fixed, being worked on…) and may add a few
 // words; the draft is never sent by itself. Pure: builds the prompt.
@@ -705,4 +724,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

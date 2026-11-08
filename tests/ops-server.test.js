@@ -434,3 +434,17 @@ test('a picture with a request: only a real PNG, JPEG or WebP, under the size li
   assert.ok(!IMAGE_PATH.test('../secrets/x.jpg'));
   assert.ok(!IMAGE_PATH.test('11111111-1111-1111-1111-111111111111/a.svg'));
 });
+
+const ops = require('../server/ops');
+test('thanks to the person whose link it was: never says who joined, counts friends, can be turned off', () => {
+  const m = ops.thanksMail({ joined: 1, link: 'https://example.com/app/', unsubLink: 'https://example.com/unsubscribe?u=x&t=y&k=news' });
+  assert.match(m.subject, /הצטרף בזכותך/);
+  assert.match(m.text, /^תודה ששיתפת!/);
+  assert.doesNotMatch(m.text, /עד היום הצטרפו/);
+  assert.match(m.text, /צוות התקציב שלנו/);
+  assert.match(m.html, /להסרה לחץ כאן/);
+  assert.match(m.html, /k=news/);
+  const three = ops.thanksMail({ joined: 3, link: 'https://example.com/app/' });
+  assert.match(three.text, /עד היום הצטרפו בזכותך 3 אנשים/);
+  assert.doesNotMatch(three.html, /להסרה/);
+});
