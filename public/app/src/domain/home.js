@@ -190,14 +190,24 @@ const MONTH_WORDS = ['חודש אחד', 'חודשיים', '3 חודשים', '4 �
 // { to: 'money-cats' | 'money' | 'plans' | 'import' | 'tx', id? }
 // A credit card's monthly charge from the bank statement, in a month whose
 // card purchases are also here: the same money counted twice. Pure.
+// Card purchases are lines tied to a card, marked as paid by credit, or
+// imported from another file that is not itself a bank statement (a file
+// holding a card's monthly charge is one). Many people save a card's
+// statement without choosing the card, so the card alone is not enough.
 export function doubleCardCharges(txs) {
-  const cardMonths = new Map();
-  for (const t of txs) if (t.card_id && t.type !== 'income') { const k = String(t.tx_date).slice(0, 7); cardMonths.set(k, (cardMonths.get(k) || 0) + (Number(t.amount) || 0)); }
+  const bankFiles = new Set(txs.filter((t) => t.import_id && !t.card_id && isCardCharge(t)).map((t) => t.import_id));
+  const month = (t) => String(t.tx_date).slice(0, 7);
   // The charge pays the previous month's purchases (or the same month's).
   const prev = (k) => { const [y, m] = k.split('-').map(Number); const d = new Date(Date.UTC(y, m - 2, 1)); return d.toISOString().slice(0, 7); };
-  return txs.filter((t) => !t.card_id && isCardCharge(t)).filter((t) => {
-    const k = String(t.tx_date).slice(0, 7);
-    return (cardMonths.get(k) || 0) + (cardMonths.get(prev(k)) || 0) >= Number(t.amount) * 0.5;
+  const charges = txs.filter((t) => !t.card_id && isCardCharge(t));
+  const cardLike = (t, charge) => t.type !== 'income' && t !== charge && !isCardCharge(t)
+    && (t.card_id || t.payment_method === 'credit' || (t.import_id && t.import_id !== charge.import_id && !bankFiles.has(t.import_id)));
+  return charges.filter((c) => {
+    const k = month(c);
+    const p = prev(k);
+    let total = 0;
+    for (const t of txs) { const m = month(t); if ((m === k || m === p) && cardLike(t, c)) total += Number(t.amount) || 0; }
+    return total >= Number(c.amount) * 0.5;
   });
 }
 

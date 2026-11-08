@@ -8,7 +8,7 @@ import { summary, setItemCategory } from '../../domain/statement.js';
 // What was found in the file, before saving. Lines that probably exist
 // already start unchecked. Choosing a category fills the other lines of the
 // same merchant too.
-export function Review({ items, categories, cards = [], cardId, onCard, onChange, onSave, saving, onAnother }) {
+export function Review({ items, categories, cards = [], cardId, onCard, onChange, onSave, saving, onAnother, covered = [], dropCharges = true, onDropCharges = () => {} }) {
   const [filter, setFilter] = useState(() => (items.some((t) => !t.category_id) ? 'waiting' : 'all'));
   const [open, setOpen] = useState(null);
   const byId = new Map(categories.map((c) => [c.id, c]));
@@ -33,6 +33,11 @@ export function Review({ items, categories, cards = [], cardId, onCard, onChange
     ${s.chargeDay && html`<div class="card import-fixed" role="status">
       <b>תיקנו את התאריכים בקובץ הזה</b>
       <span>${s.moved} קניות הופיעו בקובץ כאילו כולן נעשו ב-${shortDate(s.chargeDay)}, יום החיוב של הכרטיס. רשמנו אותן ב-${shortDate(s.movedTo)}, החודש שבו כנראה קניתם, כדי שהחודשים יהיו נכונים.${s.likely ? ' קניות שכבר נמצאות אצלכם עם התאריך הנכון לא מסומנות.' : ''} אפשר לשנות כל שורה לפני השמירה.</span>
+    </div>`}
+    ${covered.length > 0 && html`<div class="card import-twice" role="status">
+      <b>${covered.length === 1 ? 'החיוב של הכרטיס כבר שמור מפירוט הבנק' : covered.length + ' חיובים של הכרטיס כבר שמורים מפירוט הבנק'}</b>
+      <span>${covered.map((t) => t.description + ' ' + money(Number(t.amount)) + ' (' + shortDate(t.tx_date) + ')').join(', ')}. אלה אותן קניות שבקובץ הזה, ולכן כדי שהכסף לא ייספר פעמיים נשאיר רק את הקניות עצמן.</span>
+      <label class="import-twice-check"><input type="checkbox" checked=${dropCharges} onChange=${(e) => onDropCharges(e.target.checked)} /> להוריד את החיוב מהבנק כשאשמור (אפשר לבטל אחר כך)</label>
     </div>`}
     ${cards.length > 0 && html`<div class="stack" style="gap:6px">
       <b style="font-size:13px;color:var(--muted)">מאיזה כרטיס הפירוט?</b>

@@ -336,6 +336,21 @@ export function isCardCharge(t) {
   return CARD_CO.test(d) || CARD_WORDS.test(d);
 }
 
+// A card's statement being saved, and the bank's monthly charge for those
+// same purchases already saved: the money would count twice. Returns the
+// saved bank charges these purchases cover (same month or the month before
+// the charge, at least half its amount), to take out when saving. Pure.
+export function coveredCharges(items, history) {
+  const month = (d) => String(d).slice(0, 7);
+  const prev = (k) => { const [y, m] = k.split('-').map(Number); return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7); };
+  const byMonth = new Map();
+  for (const t of items) if (t.include !== false && t.type !== 'income' && !isCardCharge(t)) byMonth.set(month(t.date), (byMonth.get(month(t.date)) || 0) + (Number(t.amount) || 0));
+  return (history || []).filter((h) => !h.card_id && isCardCharge(h)).filter((h) => {
+    const k = month(h.tx_date);
+    return (byMonth.get(k) || 0) + (byMonth.get(prev(k)) || 0) >= Number(h.amount) * 0.5;
+  });
+}
+
 // Flags lines that already exist in the household (likely ones start
 // unchecked). The same line twice in one file is usually two real charges
 // (two train tickets), so it is only "maybe" and stays checked.
@@ -427,7 +442,7 @@ export function summary(items) {
 // The rows to insert into `transactions`. A line goes on the card whose last
 // 4 digits the statement showed for it; otherwise on the card chosen for the
 // whole file, so the card's charge can be estimated.
-export function toRows(items, { cardId = null, cards = [] } = {}) {
+export function toRows(items, { cardId = null, cards = [], fromCard = false } = {}) {
   const byLast4 = new Map(cards.filter((c) => c.last4).map((c) => [String(c.last4), c.id]));
   return items.filter((t) => t.include).map((t) => {
     const card = (t.card4 && byLast4.get(t.card4)) || cardId;
@@ -441,7 +456,9 @@ export function toRows(items, { cardId = null, cards = [] } = {}) {
       nature: 'variable',
       spread: 'month',
       source: 'pdf',
-      ...(card ? { card_id: card, payment_method: 'credit' } : {})
+      // A card's purchases are marked as such even when no card was chosen,
+      // so the bank's monthly charge for them is never counted as well.
+      ...(card ? { card_id: card, payment_method: 'credit' } : fromCard && !isCardCharge(t) ? { payment_method: 'credit' } : {})
     };
   });
 }
