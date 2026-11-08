@@ -8,8 +8,8 @@ let browser;
 before(async () => { server = await startServer(); browser = await launchBrowser(); });
 after(async () => { await browser?.close(); server?.stop(); });
 
-async function open({ email, setup } = {}) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, acceptDownloads: true });
+async function open({ email, setup, width = 390 } = {}) {
+  const page = await browser.newPage({ viewport: { width, height: 900 }, acceptDownloads: true });
   const errors = collectErrors(page);
   const db = makeFakeDb();
   const sent = [];
@@ -110,7 +110,7 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   assert.equal(await other.locator('text=לוח בעלים').count(), 0);
   await other.close();
 
-  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com', width: 1280 });
   await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
     active: { day: 3, week: 11, month: 25 }, retention: { started: 10, cameBack: 6, pct: 60 }, members: 31,
     use: [{ name: 'tx_add', count: 120 }], errors: { week: 2, top: [{ message: 'boom', count: 2, path: '#/home' }] },
@@ -128,7 +128,7 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
   await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ users: 5, visitors: 0, screens: { home: 5 }, devices: { mobile: 5, desktop: 0 }, installed: 1 }) }));
   await page.clock.install();
-  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('.side-profile');
   await page.click('text=לוח בעלים');
   const s = page.locator('.admin-stats');
   await s.locator('.per-user').waitFor();
@@ -168,7 +168,8 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   assert.match(up, /פתחו העלאה 7 · בחרו קובץ 5 · שמרו 3/);
   assert.match(up, /PDF סרוק בלי טקסט2/);
   assert.match(up, /במסך הבדיקה, לפני שמירה1/);
-  assert.match(t, /2נרשמו היום/);
+  assert.match(t, /נרשמו היום 2/);
+  assert.match(t, /פעילים: היום 3 · השבוע 11 · החודש 25/);
   // An email only on request.
   await page.route('**/api/admin/email?who=*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ email: new URL(r.request().url()).searchParams.get('who') === '#a1b2c3' ? 'ron@example.com' : '' }) }));
   await s.locator('.per-user .people-row').first().locator('button:has-text("להציג מייל")').click();
@@ -288,6 +289,7 @@ test('owner inbox: like a messaging app; unread first, the name, answer and clos
   await page.route('**/api/admin/feedback/f1/draft', (r) => { const b = JSON.parse(r.request().postData()); drafts.push(b); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'היי רון, תיקנו את הייבוא. סגור ופתח את האפליקציה ונסה שוב.', fixed: 'no', why: 'אין ברשימת השינויים תיקון לייבוא, ומאז שכתב הייבוא נכשל פעמיים' }) }); });
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
+  await page.click('.admin-hub-btn:has-text("פניות")');
   const inbox = page.locator('.admin-inbox');
   await inbox.waitFor();
   assert.equal(await inbox.locator('.inbox-unread-count').textContent(), '1');
@@ -423,6 +425,7 @@ test('emails to users: one per step, read before sending, a test to yourself, an
   });
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
+  await page.click('.admin-hub-btn:has-text("מיילים")');
   const card = page.locator('.admin-reengage');
   await card.waitFor();
   assert.equal(await card.locator('.campaign').count(), 3);
@@ -473,6 +476,7 @@ test('emails to users: when the server cannot email people yet, the dashboard sa
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: false, resendTestOnly: true }, campaigns: [{ id: 'more', title: 'העלו פירוט, פחות מ-6 חודשים', count: 7, preview: { subject: 'טיפ', text: 'היי' } }] }) }));
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
+  await page.click('.admin-hub-btn:has-text("מיילים")');
   const card = page.locator('.admin-reengage');
   await card.waitFor();
   assert.match(await card.locator('.mail-not-ready').textContent(), /עוד לא מוגדר לשלוח מיילים/);
@@ -496,6 +500,7 @@ test('owner: the outside price service, what it takes and costs, then one small 
   await page.clock.install();
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
+  await page.click('.admin-hub-btn:has-text("מחירי סופר")');
   const card = page.locator('.admin-price-service');
   await card.waitFor();
   await card.locator('button:has-text("1. מה השירות")').click();
@@ -512,6 +517,41 @@ test('owner: the outside price service, what it takes and costs, then one small 
   assert.match(await card.textContent(), /2 תוצאות ב-12 שניות · עלה \$0\.012 · חיפוש: חלב 3%/);
   assert.equal(await card.locator('tbody tr').count(), 2);
   assert.match(await card.locator('tbody').textContent(), /רמי לוי.*6\.5/s);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+
+test('owner on a phone: the main screen has the numbers and a button for each part; each opens its own page', async () => {
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 7, week: 20, month: 40 }, retention: { started: 10, cameBack: 3, pct: 30 }, members: 1, use: [], errors: { week: 2, top: [] }, aiCost30d: 4.2,
+    daily: [{ day: '2026-11-07', active: 5, cost: 0.1 }, { day: '2026-11-08', active: 7, cost: 0.38 }], funnel: { signups: 9, household: 7, tx: 2, import: 2, cameBack: 0, oldEnough: 0, byDay: { '2026-11-08': 3, '2026-11-07': 2 } },
+    cohorts: [{ week: '2026-11-08', signups: 5, household: 4, withData: 1, imported: 1, oldEnough: 0, cameBack: 0 }] }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":3,"visitors":0,"screens":{},"devices":{"mobile":3,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  const s = page.locator('.admin-stats');
+  await s.locator('.admin-hub').waitFor();
+  assert.deepEqual((await s.locator('.admin-hub-btn b').allTextContents()), ['פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
+  // The numbers come a moment after the buttons (while they load, "טוען…").
+  await s.locator('.admin-kpi').first().waitFor();
+  // The numbers count up to their value.
+  await page.waitForFunction(() => /\$0\.38/.test(document.querySelectorAll('.admin-kpi')[3]?.textContent || '') && /7/.test(document.querySelector('.admin-kpi b')?.textContent || ''));
+  const kpis = await s.locator('.admin-kpi').allTextContents();
+  assert.equal(kpis.length, 4);
+  assert.match(kpis[0], /פעילים היום7▲ 2 מאתמול/);
+  assert.match(kpis[1], /נרשמו השבוע5/);
+  assert.match(kpis[3], /\$0\.38/);
+  assert.match(await s.locator('.admin-summary').textContent(), /השבוע נרשמו 5, 1 מהם כבר עם נתונים/);
+  // Nothing long on the main screen: the parts open on their own page.
+  assert.equal(await s.locator('.admin-funnel').count(), 0);
+  await s.locator('.admin-hub-btn:has-text("פעילות ומשתמשים")').click();
+  await s.locator('.admin-funnel').waitFor();
+  assert.equal(await s.locator('.admin-hub').count(), 0);
+  await s.locator('button:has-text("לוח הבעלים")').click();
+  await s.locator('.admin-hub').waitFor();
   assert.deepEqual(errors, []);
   await page.close();
 });
