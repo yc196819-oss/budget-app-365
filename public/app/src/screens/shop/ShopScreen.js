@@ -25,7 +25,7 @@ function foodBudget(data, today) {
 
 // "Shopping": one list for the whole household, live, sorted by department,
 // remembered from one shopping to the next. Built for a computer first (type
-// several items and press Enter; print it or email it), and works on a phone.
+// several items and press Enter; email, copy or print it; WhatsApp last), and works on a phone.
 export function ShopScreen({ data }) {
   const shop = useShopping(data.hid);
   const [text, setText] = useState('');
@@ -87,6 +87,7 @@ export function ShopScreen({ data }) {
     try { await setArea(data.hid, area); showToast(area.trim() ? 'נשמר: קונים ב' + area.trim() : 'האזור נמחק'); } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
   };
   const mailHref = 'mailto:?subject=' + encodeURIComponent('רשימת קניות') + '&body=' + encodeURIComponent(listText(items) + '\n\nמ"התקציב שלנו"');
+  const waHref = 'https://wa.me/?text=' + encodeURIComponent('רשימת קניות\n\n' + listText(items));
   const copy = async () => { try { await navigator.clipboard.writeText(listText(items)); showToast('הרשימה הועתקה. אפשר להדביק בכל מקום.'); } catch (_e) { showToast('לא הצלחנו להעתיק.'); } };
 
   return html`<div class="shop">
@@ -97,6 +98,7 @@ export function ShopScreen({ data }) {
           <a class="btn btn-ghost" href=${mailHref} aria-disabled=${String(!open.some((i) => !i.done))}><${Icon} name="mail" size=${17} />לשלוח במייל</a>
           <button type="button" class="btn btn-ghost" onClick=${copy} disabled=${!open.some((i) => !i.done)}>להעתיק</button>
           <button type="button" class="btn btn-ghost" onClick=${() => window.print()} disabled=${!open.some((i) => !i.done)}>להדפיס</button>
+          <a class="btn btn-ghost" href=${waHref} target="_blank" rel="noopener" aria-disabled=${String(!open.some((i) => !i.done))}>וואטסאפ</a>
         </span>
       </div>
       <form class="shop-add" onSubmit=${submit}>

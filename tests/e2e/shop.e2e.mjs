@@ -91,7 +91,7 @@ test('finishing a shopping remembers it: the previous list and what you usually 
   await page.close();
 });
 
-test('the food budget beside the list, the area is saved, and sharing works without WhatsApp', async () => {
+test('the food budget beside the list, the area is saved, and sharing by email first, WhatsApp last', async () => {
   const { page, db, errors } = await open(1280, (d) => {
     d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב', qty: '×2', aisle: 'dairy', done: false, created_at: '2026-11-07T10:00:00Z' }];
   });
@@ -101,9 +101,12 @@ test('the food budget beside the list, the area is saved, and sharing works with
   await page.locator('.shop-area button').click();
   await page.waitForSelector('.toast');
   assert.equal(db.tables.households[0].shop_area, 'בית שמש');
-  const mail = await page.locator('.shop-tools a').getAttribute('href');
+  const mail = await page.locator('.shop-tools a').first().getAttribute('href');
   assert.match(decodeURIComponent(mail), /^mailto:\?subject=רשימת קניות&body=מוצרי חלב:\n☐ חלב \(×2\)/);
-  assert.equal(await page.locator('.shop-tools', { hasText: 'וואטסאפ' }).count(), 0);
+  // WhatsApp too, but last: most people here share by email or print.
+  const tools = await page.locator('.shop-tools > *').allTextContents();
+  assert.deepEqual(tools.map((t) => t.trim()), ['לשלוח במייל', 'להעתיק', 'להדפיס', 'וואטסאפ']);
+  assert.match(decodeURIComponent(await page.locator('.shop-tools a', { hasText: 'וואטסאפ' }).getAttribute('href')), /^https:\/\/wa\.me\/\?text=רשימת קניות\n\nמוצרי חלב:\n☐ חלב \(×2\)/);
   // The printed page holds the list.
   await page.emulateMedia({ media: 'print' });
   assert.equal(await page.locator('.shop-print').isVisible(), true);
