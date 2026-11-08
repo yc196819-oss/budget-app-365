@@ -7,9 +7,10 @@ test('desktop shortcuts by physical key, whatever the keyboard layout', () => {
   assert.equal(shortcut({ code: 'KeyU' }), 'import');
   assert.equal(shortcut({ code: 'Slash' }), 'advisor');
   assert.equal(shortcut({ code: 'Digit1' }), 'tab:home');
-  assert.equal(shortcut({ code: 'Digit3' }), 'tab:plans');
-  assert.equal(shortcut({ code: 'Digit4' }), 'tab:assets');
-  assert.equal(shortcut({ code: 'Digit5' }), null);
+  assert.equal(shortcut({ code: 'Digit3' }), 'tab:shop');
+  assert.equal(shortcut({ code: 'Digit4' }), 'tab:plans');
+  assert.equal(shortcut({ code: 'Digit5' }), 'tab:assets');
+  assert.equal(shortcut({ code: 'Digit6' }), null);
   assert.equal(shortcut({ code: 'Digit9' }), null);
   assert.equal(shortcut({ code: 'KeyQ' }), null);
 });

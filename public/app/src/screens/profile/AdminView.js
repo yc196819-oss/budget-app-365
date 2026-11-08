@@ -1,12 +1,12 @@
 import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail } from '../../data/account.js';
+import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach } from '../../data/account.js';
 import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
 
-const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
+const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', shop: 'קניות', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
 const NAMES = { app_open: 'פתיחות', tx_add: 'הוספת תנועה', import_done: 'ייבוא', advisor_ask: 'שאלות ליועץ', advisor_talk: 'שיחה קולית', decision_open: 'החלטה חדשה', decision_message: 'הודעות ביחד', trip_plan: 'תכנון טיול', news_open: 'חדשות', lesson_done: 'שיעור', shortcut: 'קיצור דרך', export: 'ייצוא', restore: 'שחזור', import_fail: 'ייבוא שנכשל', guide_step: 'צעד במסלול התחלה', guide_skip: 'דילוג במסלול', learn_auto: 'עדכון אוטומטי מהיועץ', learn_undo: 'ביטול עדכון של היועץ', onboard_0: 'הרשמה: מסך פתיחה', onboard_1: 'הרשמה: מי אתם', onboard_2: 'הרשמה: מה רלוונטי', onboard_3: 'הרשמה: כרטיסים', onboard_4: 'הרשמה: הכנסה', onboard_5: 'הרשמה: פרטיות', onboard_done: 'הרשמה הושלמה' };
 
 // "(of which $x yours, $y system tasks)" under the AI cost.
@@ -33,6 +33,24 @@ function MonthlyMailCard() {
       <button type="button" class=${'btn' + (sure ? '' : ' btn-ghost')} style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => (sure ? run('s', sendMonthlyMail, (r) => 'נשלחו ' + r.sent + ' מיילים (' + (r.month || '') + ').') : setSure(true))}>${busy === 's' ? 'שולח…' : sure ? 'בטוח? לשלוח לכולם' : 'לשלוח עכשיו את החודש האחרון'}</button>
     </div>
     ${note && html`<span role="status" style="font-size:13px">${note}</span>`}
+  </div>`;
+}
+
+// Supermarket prices: which chains' price sites answer our server. Some
+// block visitors from abroad, and our server is abroad.
+function PriceReachCard() {
+  const [busy, setBusy] = useState(false);
+  const [r, setR] = useState(null);
+  const run = async () => { setBusy(true); try { setR(await priceReach()); } catch (e) { setR({ error: e.message || 'הבדיקה נכשלה' }); } setBusy(false); };
+  const why = (x) => (x.ok ? 'עונה' : x.status === 403 ? 'חוסם (כנראה כי השרת בחו"ל)' : x.error === 'timeout' ? 'לא ענה בזמן' : x.status ? 'שגיאה ' + x.status : 'לא נגיש');
+  return html`<div class="card stack admin-prices"><b>מחירי סופר: אילו רשתות נגישות מהשרת</b>
+    <span class="muted" style="font-size:13px;line-height:1.55">בודק עכשיו, מהשרת שלנו, אם האתרים שבהם הרשתות מפרסמות מחירים עונים. לא נשמר כלום.</span>
+    <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${busy} onClick=${run}>${busy ? 'בודק…' : 'לבדוק עכשיו'}</button>
+    ${r && r.error && html`<span role="status" style="font-size:13px">${r.error}</span>`}
+    ${r && r.sites && html`<div role="status" class="stack" style="gap:4px;font-size:13px">
+      <span>${r.sites.filter((x) => x.ok).length} מתוך ${r.sites.length} עונים</span>
+      ${r.sites.map((x) => html`<span key=${x.key}><b style=${'color:' + (x.ok ? 'var(--accent)' : 'var(--danger)')}>${x.ok ? '✓' : '✕'}</b> ${x.name}: ${why(x)}</span>`)}
+    </div>`}
   </div>`;
 }
 
@@ -142,6 +160,7 @@ export function AdminView({ onBack }) {
       </div>`)}
     </div>`}
     ${back && html`<${MonthlyMailCard} />`}
+    ${back && html`<${PriceReachCard} />`}
     ${s && html`
       <div style="display:flex;gap:8px">${tile('פעילים היום', s.active.day)}${tile('השבוע', s.active.week)}${tile('החודש', s.active.month)}</div>
       ${today && html`<div style="display:flex;gap:8px">${tile('נרשמו היום', (f && f.byDay && f.byDay[today.day]) || 0)}${tile('עלות AI היום', '$' + today.cost)}${tile('עלות AI ב-30 יום', '$' + (s.aiCost30d ?? 0))}</div>`}

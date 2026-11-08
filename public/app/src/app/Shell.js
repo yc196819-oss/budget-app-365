@@ -15,6 +15,7 @@ import { SoonCard } from '../components/SoonCard.js';
 import { HomeScreen } from '../screens/home/HomeScreen.js';
 import { MoneyScreen } from '../screens/money/MoneyScreen.js';
 import { PlansScreen } from '../screens/plans/PlansScreen.js';
+import { ShopScreen } from '../screens/shop/ShopScreen.js';
 import { AssetsScreen } from '../screens/assets/AssetsScreen.js';
 import { TogetherScreen } from '../screens/together/TogetherScreen.js';
 import { useDecisions } from '../data/useDecisions.js';
@@ -36,7 +37,7 @@ import { parseGo, go } from '../lib/go.js';
 import { useFeedbackUnread } from '../data/feedback.js';
 import { GO_TARGETS } from '../content/howto.js';
 
-const SCREENS = { home: HomeScreen, money: MoneyScreen, together: TogetherScreen, plans: PlansScreen, assets: AssetsScreen };
+const SCREENS = { home: HomeScreen, money: MoneyScreen, together: TogetherScreen, shop: ShopScreen, plans: PlansScreen, assets: AssetsScreen };
 
 export function applyTheme(theme) {
   if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;

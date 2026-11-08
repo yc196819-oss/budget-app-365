@@ -90,5 +90,6 @@ export async function setMonthlyMail(userId, on) {
   if (error) throw error;
 }
 // The owner: the monthly email to themselves, or to everyone who has not had it.
+export const priceReach = () => api('/api/admin/prices/reach');
 export const testMonthlyMail = () => api('/api/admin/monthly-mail/test', { method: 'POST' });
 export const sendMonthlyMail = () => api('/api/admin/monthly-mail/send', { method: 'POST' });

@@ -483,3 +483,14 @@ create policy dupe_ok_household_all on public.dupe_ok for all to authenticated
   with check (household_id in (select memberships.household_id from public.memberships where memberships.user_id = (select auth.uid())));
 create policy two_step_required on public.dupe_ok as restrictive for all to authenticated
   using ((select public.mfa_ok())) with check ((select public.mfa_ok()));
+
+-- Applied 2026-11-08 (mail_sent_thanks): the thank-you to a sharer is kept
+-- once per friend who joined, and every email we send counts toward "at most
+-- one email a week" (the monthly summary a person turned on does not).
+alter table public.mail_sent drop constraint if exists mail_sent_campaign_check;
+alter table public.mail_sent add constraint mail_sent_campaign_check check (
+  campaign = any (array['start','first','more'])
+  or campaign ~ '^monthly-[0-9]{4}-[0-9]{2}$'
+  or campaign ~ '^thanks-[0-9a-f-]{36}$'
+);
+create index if not exists mail_sent_user_sent on public.mail_sent (user_id, sent_at desc);

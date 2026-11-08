@@ -21,7 +21,7 @@ async function audit(page) {
   return res.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.slice(0, 4).map((n) => n.target.join(' ') + ' :: ' + (n.failureSummary || '').split('\n').slice(1, 2).join('')) }));
 }
 
-const SCREENS = ['#/home', '#/money', '#/together', '#/plans', '#/plans/budget', '#/plans/months', '#/plans/trips', '#/assets'];
+const SCREENS = ['#/home', '#/money', '#/together', '#/shop', '#/plans', '#/plans/budget', '#/plans/months', '#/plans/trips', '#/assets'];
 
 // On a phone and on a computer (most of our people use a computer), in light and dark.
 for (const [scheme, width] of [['light', 390], ['dark', 390], ['light', 1280], ['dark', 1536]]) {

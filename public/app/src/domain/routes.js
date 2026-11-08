@@ -4,6 +4,7 @@
 export const TABS = [
   { key: 'home', label: 'בית', icon: 'home' },
   { key: 'money', label: 'כסף', icon: 'money' },
+  { key: 'shop', label: 'קניות', icon: 'cart', tag: 'חדש' },
   { key: 'plans', label: 'יעדים', icon: 'plans' },
   { key: 'assets', label: 'נכסים', icon: 'assets' }
 ];

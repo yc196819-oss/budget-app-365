@@ -2115,6 +2115,18 @@ app.get('/api/admin/today', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'failed' });
   }
 });
+// Which supermarket price sites answer this server (some block visitors
+// from abroad). Owner only; a few public pages, nothing is stored.
+const prices = require('./server/prices');
+app.get('/api/admin/prices/reach', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    return res.json({ at: new Date().toISOString(), sites: await prices.probeAll(fetch) });
+  } catch (err) {
+    console.error('price reach failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
 // The owner's evening summary email (pg_cron job "owner-daily-digest").
 let todaySummary = null;
 import(require('url').pathToFileURL(path.join(__dirname, 'public/app/src/domain/people-health.js')).href)
@@ -2144,6 +2156,37 @@ app.get('/api/share', requireAuth, async (req, res) => {
     return res.json({ code, joined: count || 0 });
   } catch (err) { return res.status(500).json({ error: 'failed' }); }
 });
+// A thank-you to the person whose link it was: once per friend who joins
+// (the referral row is unique per new account), never to the owner, and
+// not to someone who turned off emails from us.
+async function thankSharer(ref, req) {
+  if (!mailStatus().ready) return;
+  const { data } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const u = ((data && data.users) || []).find((x) => ops.refCode(x.id, ADMIN_SALT) === ref);
+  if (!u || !u.email || ADMIN_EMAILS.includes(String(u.email).toLowerCase())) return;
+  const { data: pref } = await supabaseAdmin.from('mail_prefs').select('news').eq('user_id', u.id).maybeSingle();
+  if (pref && pref.news === false) return;
+  if (await mailedThisWeek(u.id)) return;
+  // Marked first, once per friend who joined: never sent twice.
+  const campaign = 'thanks-' + req.authUserId;
+  const { error } = await supabaseAdmin.from('mail_sent').insert({ user_id: u.id, campaign });
+  if (error) return;
+  const { count } = await supabaseAdmin.from('referrals').select('user_id', { count: 'exact', head: true }).eq('ref_code', ref);
+  const unsub = unsubLinkFor(u.id, publicOrigin(req), 'news');
+  try {
+    await sendMailWithFallback({ to: u.email, ...ops.thanksMail({ joined: count || 1, link: appLinkOf(req), unsubLink: unsub }), headers: unsubHeaders(unsub) });
+  } catch (err) {
+    await supabaseAdmin.from('mail_sent').update({ ok: false }).eq('user_id', u.id).eq('campaign', campaign);
+    throw err;
+  }
+}
+// Did we already email this person this week (anything they did not ask for)?
+async function mailedThisWeek(userId) {
+  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  const { data, error } = await supabaseAdmin.from('mail_sent').select('campaign,sent_at,ok').eq('user_id', userId).gte('sent_at', since);
+  if (error) return true; // not sure: better no email than a second one
+  return ops.mailedThisWeek(data || []);
+}
 // A new person who came from a friend's link. Counted once, only for an
 // account made in the last 14 days, and never for one's own link.
 app.post('/api/share/joined', requireAuth, async (req, res) => {
@@ -2155,6 +2198,7 @@ app.post('/api/share/joined', requireAuth, async (req, res) => {
     const made = data && data.user && new Date(data.user.created_at).getTime();
     if (!made || Date.now() - made > 14 * 86400000) return res.json({ ok: false });
     const { error } = await supabaseAdmin.from('referrals').insert({ user_id: req.authUserId, ref_code: ref });
+    if (!error) thankSharer(ref, req).catch((err) => console.error('thanks mail failed:', err.message));
     return res.json({ ok: !error });
   } catch (err) { return res.status(500).json({ error: 'failed' }); }
 });
@@ -2237,6 +2281,8 @@ app.post('/api/admin/reengage', requireAuth, async (req, res) => {
     const list = all.slice(0, limit);
     let sent = 0, failed = 0, lastError = '';
     for (const u of list) {
+      // Checked again right before: something else may have gone out since the list was made.
+      if (await mailedThisWeek(u.id)) continue;
       // Marked first: a person never gets the same email twice, even if this is pressed again.
       const { error } = await supabaseAdmin.from('mail_sent').insert({ user_id: u.id, campaign });
       if (error) continue;

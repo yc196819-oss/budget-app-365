@@ -62,6 +62,8 @@ test('"not now" needs a reason; the answer is saved and the partner is notified'
   await page.waitForFunction(() => !document.querySelector('.sheet'));
   assert.deepEqual(db.tables.decision_votes.map((v) => [v.decision_id, v.user_id, v.vote, v.note]), [['d1', 'u1', 'not_now', 'בואו נחכה לבונוס בדצמבר']]);
   assert.equal(db.tables.shared_decisions[0].status, 'not_now');
+  // The partner is notified in the background, after the answer is saved.
+  for (let i = 0; i < 60 && !notified.length; i++) await page.waitForTimeout(50);
   assert.deepEqual(notified, [{ decisionId: 'd1', event: 'answered' }]);
   // It stays in the conversation until we decide together, and the badge is gone.
   await page.waitForSelector('section:has-text("בשיחה, עוד לא החלטנו") .decision');
@@ -169,27 +171,27 @@ test('the profile has a notifications switch for this device', async () => {
   await page.close();
 });
 
-test('mobile bar: the "+" stays in the exact middle, all four tabs on one row', async () => {
+test('mobile bar: the "+" stays in the exact middle, all five tabs on one row', async () => {
   const { page } = await open({ hash: '#/home' });
   await page.waitForSelector('.hero');
   const add = await page.locator('.nav-add').boundingBox();
   const vw = page.viewportSize().width;
   assert.ok(Math.abs(add.x + add.width / 2 - vw / 2) <= 2, 'plus centered: ' + (add.x + add.width / 2));
   const items = await page.locator('.bottom-nav .nav-item').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { y: Math.round(r.top), w: r.width, href: e.getAttribute('href') }; }));
-  assert.equal(items.length, 4);
+  assert.equal(items.length, 5);
   assert.equal(new Set(items.map((i) => i.y)).size, 1, 'one row');
   assert.ok(items.every((i) => i.w >= 44), 'each tab is tappable');
-  // RTL: home and money on the right of the plus, goals and assets on the left.
+  // RTL: home and money on the right of the plus; shopping, goals and assets on the left.
   const xs = await page.locator('.bottom-nav .nav-item').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().x));
-  assert.ok(xs[0] > add.x && xs[1] > add.x && xs[2] < add.x && xs[3] < add.x);
-  assert.deepEqual(items.map((i) => i.href), ['#/home', '#/money', '#/plans', '#/assets']);
+  assert.ok(xs[0] > add.x && xs[1] > add.x && xs[2] < add.x && xs[3] < add.x && xs[4] < add.x);
+  assert.deepEqual(items.map((i) => i.href), ['#/home', '#/money', '#/shop', '#/plans', '#/assets']);
   await page.close();
 });
 
-test('desktop keyboard shortcuts: N adds, 1-4 switch tabs, / asks the advisor; not while typing', async () => {
+test('desktop keyboard shortcuts: N adds, 1-5 switch tabs, / asks the advisor; not while typing', async () => {
   const { page } = await open({ hash: '#/home', width: 1536 });
   await page.waitForSelector('.hero');
-  await page.keyboard.press('Digit3');
+  await page.keyboard.press('Digit4');
   await page.waitForSelector('.tabs');
   assert.match(page.url(), /#\/plans$/);
   await page.keyboard.press('Slash');
