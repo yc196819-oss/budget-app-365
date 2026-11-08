@@ -38,7 +38,9 @@ export function LoginScreen() {
       const { data, error: err } = await sb.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { display_name: name.trim() || email.trim().split('@')[0], invite_code: invite || undefined, ...consentData() }, emailRedirectTo: location.origin + '/app/' }
+        // The friend's code goes with the account: the confirmation link often
+        // opens in another browser (the mail app's), where it is not saved.
+        options: { data: { display_name: name.trim() || email.trim().split('@')[0], invite_code: invite || undefined, ref: readLocal('ref', '') || undefined, ...consentData() }, emailRedirectTo: location.origin + '/app/' }
       });
       setBusy(false);
       if (err) { setError(MESSAGES[err.message] || 'ההרשמה נכשלה. נסו שוב.'); return; }

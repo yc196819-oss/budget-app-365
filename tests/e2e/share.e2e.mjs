@@ -85,3 +85,19 @@ test('on a computer, the side menu has "write to us" too', async () => {
   await page.waitForSelector('.sheet[aria-label="פנייה אלינו"]');
   await page.close();
 });
+
+test('the confirmation link opened in another browser: the code saved with the account is sent instead', async () => {
+  const { page, calls } = await open();
+  assert.deepEqual(calls, []);
+  await page.evaluate(() => {
+    const k = 'sb-bwwupwbakefjhwropdin-auth-token';
+    const s = JSON.parse(localStorage.getItem(k));
+    s.user.user_metadata = { ...s.user.user_metadata, ref: 'd4e5f6' };
+    localStorage.setItem(k, JSON.stringify(s));
+  });
+  await page.reload();
+  await page.waitForSelector('.hero');
+  await page.waitForTimeout(500);
+  assert.deepEqual(calls, [{ ref: 'd4e5f6' }]);
+  await page.close();
+});

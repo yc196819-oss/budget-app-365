@@ -117,7 +117,7 @@ export function Shell({ tab, session }) {
     setTheme(next); writeLocal('theme', next); applyTheme(next);
   };
   // Came from a friend's link: counted once, now that this person is signed in.
-  useEffect(() => { claimRef(); }, []);
+  useEffect(() => { claimRef(session.user && session.user.user_metadata && session.user.user_metadata.ref); }, []);
   // Home-screen shortcuts (manifest): /app/?action=add|voice|ask|talk opens
   // that action at once; the parameter is taken off the address.
   useEffect(() => {
