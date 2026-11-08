@@ -17,8 +17,10 @@ export function captureRef(search = location.search) {
 
 // Once, after signing in: tell the server who sent this person. The server
 // counts it only for a new account, and never for oneself.
-export async function claimRef() {
-  const r = readLocal(KEY, '');
+// `fromAccount` is the code saved with the account at signup, for when the
+// confirmation link opened in another browser.
+export async function claimRef(fromAccount = '') {
+  const r = readLocal(KEY, '') || refFrom('?ref=' + String(fromAccount || ''));
   if (!r) return;
   try { await api('/api/share/joined', { method: 'POST', body: { ref: r } }); } catch (_e) { return; }
   try { localStorage.removeItem(KEY); } catch (_e) { /* ignore */ }
