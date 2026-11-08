@@ -134,6 +134,30 @@ function PriceServiceCard() {
   </div>`;
 }
 
+// The four numbers at the top, and one plain sentence, from what the
+// dashboard already has. No AI: free and always the same for the same numbers.
+export function adminKpis(s) {
+  const daily = s.daily || [];
+  const today = daily[daily.length - 1] || { active: 0, cost: 0 };
+  const yesterday = daily[daily.length - 2];
+  const diff = yesterday ? today.active - yesterday.active : null;
+  const byDay = (s.funnel && s.funnel.byDay) || {};
+  const week = daily.slice(-7).reduce((n, d) => n + (Number(byDay[d.day]) || 0), 0);
+  const c = (s.cohorts || [])[0];
+  const u = s.upload;
+  const tiles = [
+    { label: 'פעילים היום', value: s.active.day, note: diff == null ? '' : diff === 0 ? 'כמו אתמול' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ' מאתמול', tone: diff > 0 ? 'up' : diff < 0 ? 'down' : '' },
+    { label: 'נרשמו השבוע', value: week, note: s.sharing && s.sharing.friends ? s.sharing.friends + ' מחבר (סה"כ)' : '' },
+    { label: 'חזרו אחרי שבוע', value: s.retention && s.retention.pct != null ? s.retention.pct + '%' : '–', note: s.retention && s.retention.started ? s.retention.cameBack + ' מתוך ' + s.retention.started : '' },
+    { label: 'עלות AI היום', value: '$' + (Number(today.cost) || 0).toFixed(2), note: '$' + (s.aiCost30d ?? 0) + ' ב-30 יום' }
+  ];
+  const parts = [];
+  if (c) parts.push('השבוע נרשמו ' + c.signups + (c.signups ? ', ' + c.withData + ' מהם כבר עם נתונים' : ''));
+  if (u && u.failedPeople) parts.push(u.failedPeople + ' נכשלו בהעלאה ב-30 יום');
+  parts.push(s.active.day + ' פעילים היום');
+  return { tiles, summary: parts.join('. ') + '.' };
+}
+
 export function AdminView({ onBack }) {
   const [s, setS] = useState(undefined);
   const [live, setLive] = useState(null);
@@ -205,13 +229,21 @@ export function AdminView({ onBack }) {
   const today = s && s.daily ? s.daily[s.daily.length - 1] : null;
   const f = s && s.funnel;
   const pct = (n) => (f && f.signups ? Math.round((n / f.signups) * 100) + '%' : '');
-  const tile = (label, value) => html`<div class="card" style="flex:1;text-align:center;padding:12px"><b class="num" style="font-size:22px">${value}</b><div class="muted" style="font-size:12px">${label}</div></div>`;
-  return html`<div class="stack admin-stats">
-    <button type="button" class="btn-text" style="align-self:flex-start" onClick=${onBack}>→ חזרה</button>
-    <${TodayCard} />
-    <${InboxView} />
-    ${s === undefined && html`<span class="muted">טוען…</span>`}
-    ${s === null && html`<span class="muted">הנתונים לא זמינים כרגע.</span>`}
+  // On a computer everything is spread on one page; on a phone, a main screen
+  // with buttons, each opening its own page.
+  const [wide, setWide] = useState(() => typeof matchMedia === 'function' && matchMedia('(min-width: 1024px)').matches);
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return undefined;
+    const m = matchMedia('(min-width: 1024px)');
+    const on = () => setWide(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  const [section, setSection] = useState(null);
+  const k = s ? adminKpis(s) : null;
+  const sections = [
+    { key: 'inbox', icon: 'chat', title: 'פניות', sub: 'פניות ותשובות, ומה קרה היום', body: () => html`<${TodayCard} /><${InboxView} />` },
+    { key: 'activity', icon: 'chart', title: 'פעילות ומשתמשים', sub: 'גרף, לפי שבוע הרשמה, איפה נעצרים, מי משתמש', body: () => html`
     ${live && html`<div class="card stack admin-live" role="status">
       <span style="display:flex;align-items:baseline;gap:10px"><span aria-hidden="true" style="width:10px;height:10px;border-radius:5px;background:var(--income);display:inline-block"></span>
         <b style="font-size:17px">מחוברים עכשיו: <span class="num">${live.users}</span></b>
@@ -220,31 +252,8 @@ export function AdminView({ onBack }) {
         <span class="faint" style="font-size:12px">טלפון ${live.devices.mobile} · מחשב ${live.devices.desktop} · מותקנת ${live.installed}</span>`}
       <span class="faint" style="font-size:11px">מתעדכן כל 15 שניות. נספר מי שהאפליקציה פתוחה אצלו ב-2 הדקות האחרונות.</span>
     </div>`}
-    ${back && back.campaigns && html`<div class="card stack admin-reengage"><b>מיילים למשתמשים</b>
-      <span class="muted" style="font-size:13px;line-height:1.55">כל מייל נשלח לכל אדם פעם אחת בלבד, ורק כשלוחצים כאן פעמיים. קודם כדאי לשלוח ניסיון לעצמכם. בתחתית כל מייל יש "להסרה לחץ כאן", ומי שלחץ עליו לא יקבל יותר אף אחד מהם.</span>
-      <span class="campaign-stopped" style="font-size:13px">ביקשו להפסיק לקבל: <b class="num">${back.stopped || 0}</b></span>
-      <span class="faint" style="font-size:12px;line-height:1.5">"נשלח" אומר שהשרת מסר את המייל ל-Brevo. אם הוא הגיע ונפתח רואים ב-Brevo: Transactional ← Logs.</span>
-      ${back.mail && !back.mail.ready && html`<span class="card mail-not-ready" role="status" style="font-size:13px;line-height:1.55;border:1px solid var(--danger)">השרת עוד לא מוגדר לשלוח מיילים למשתמשים${back.mail.resendTestOnly ? ' (Resend מוגדר רק בכתובת הניסיון שלו, שמגיעה רק אליכם)' : ''}. צריך לחבר את Brevo (חינם): BREVO_API_KEY ו-BREVO_FROM בהגדרות השרת ב-Render.</span>`}
-      ${back.campaigns.map((c) => html`<div class=${'campaign campaign-' + c.id} key=${c.id} style="display:flex;flex-direction:column;gap:6px;padding:8px 0;border-top:1px solid var(--line)">
-        <span style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14px">${c.title}</b><b class="num">${c.count}</b></span>
-        ${c.done && (c.done.sent > 0 || c.done.failed > 0) && html`<span class="campaign-done muted" style="font-size:13px">נשלח ל-${c.done.sent}${c.done.failed ? html` · <span style="color:var(--danger)">נכשל ${c.done.failed}</span>` : ' · לא נכשל אף אחד'}${c.done.last ? ' · אחרון ' + String(c.done.last).slice(5, 10).split('-').reverse().join('.') : ''}</span>`}
-        <details><summary style="cursor:pointer;font-size:13px">איך המייל נראה</summary>
-          <span style="display:block;font-size:13px;margin:6px 0"><span class="faint">נושא:</span> <b>${c.preview.subject}</b></span>
-          <iframe class="mail-preview" src=${'/mail-preview/' + c.id} title=${'המייל: ' + c.preview.subject} sandbox="" loading="lazy" style="width:100%;height:560px;border:0;border-radius:12px;background:#F3EDE6;display:block"></iframe></details>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => testBack(c)}>${backBusy === 't' + c.id ? 'שולח…' : 'ניסיון אליי'}</button>
-          ${c.count > 0 && (!back.mail || back.mail.ready) && html`<button type="button" class=${'btn' + (backSure === c.id ? '' : ' btn-ghost')} style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => sendBack(c)}>${backBusy === c.id ? 'שולח…' : backSure === c.id ? 'בטוח? לשלוח עכשיו ל-' + c.count : 'לשלוח ל-' + c.count}</button>`}
-          ${c.count === 0 && html`<span class="faint" style="font-size:12px;align-self:center">אין כרגע למי לשלוח</span>`}
-        </div>
-        ${jobView(c)}
-      </div>`)}
-    </div>`}
-    ${back && html`<${MonthlyMailCard} />`}
-    ${back && html`<${PriceReachCard} />`}
-    ${back && html`<${PriceServiceCard} />`}
     ${s && html`
-      <div style="display:flex;gap:8px">${tile('פעילים היום', s.active.day)}${tile('השבוע', s.active.week)}${tile('החודש', s.active.month)}</div>
-      ${today && html`<div style="display:flex;gap:8px">${tile('נרשמו היום', (f && f.byDay && f.byDay[today.day]) || 0)}${tile('עלות AI היום', '$' + today.cost)}${tile('עלות AI ב-30 יום', '$' + (s.aiCost30d ?? 0))}</div>`}
+      <div class="card admin-counts"><span>פעילים: היום <b class="num">${s.active.day}</b> · השבוע <b class="num">${s.active.week}</b> · החודש <b class="num">${s.active.month}</b></span>${today && html`<span>נרשמו היום <b class="num">${(f && f.byDay && f.byDay[today.day]) || 0}</b></span>`}</div>
       ${s.daily && html`<div class="card stack admin-daily"><b>14 הימים האחרונים</b>
         <div style="display:flex;align-items:flex-end;gap:4px;height:90px" aria-label="פעילים לפי יום">
           ${s.daily.map((d) => { const top = Math.max(1, ...s.daily.map((x) => x.active)); return html`<div title=${d.day + ': ' + d.active + ' פעילים, $' + d.cost} style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;justify-content:flex-end;height:100%">
@@ -267,7 +276,53 @@ export function AdminView({ onBack }) {
       <div class="card stack"><b>מה משתמשים (30 יום)</b>
         ${s.use.length === 0 ? html`<span class="muted">עוד אין.</span>` : s.use.map((u) => html`<div style="display:flex;justify-content:space-between"><span>${NAMES[u.name] || u.name}</span><b class="num">${u.count}</b></div>`)}</div>
       ${s.users && html`<${PeopleCard} users=${s.users} aiCost=${s.aiCost30d} costNote=${costParts(s)} sharing=${s.sharing} />`}
+`}` },
+    { key: 'mail', icon: 'mail', title: 'מיילים', sub: 'מיילי עזרה וסיכום חודשי', body: () => html`
+    ${back && back.campaigns && html`<div class="card stack admin-reengage"><b>מיילים למשתמשים</b>
+      <span class="muted" style="font-size:13px;line-height:1.55">כל מייל נשלח לכל אדם פעם אחת בלבד, ורק כשלוחצים כאן פעמיים. קודם כדאי לשלוח ניסיון לעצמכם. בתחתית כל מייל יש "להסרה לחץ כאן", ומי שלחץ עליו לא יקבל יותר אף אחד מהם.</span>
+      <span class="campaign-stopped" style="font-size:13px">ביקשו להפסיק לקבל: <b class="num">${back.stopped || 0}</b></span>
+      <span class="faint" style="font-size:12px;line-height:1.5">"נשלח" אומר שהשרת מסר את המייל ל-Brevo. אם הוא הגיע ונפתח רואים ב-Brevo: Transactional ← Logs.</span>
+      ${back.mail && !back.mail.ready && html`<span class="card mail-not-ready" role="status" style="font-size:13px;line-height:1.55;border:1px solid var(--danger)">השרת עוד לא מוגדר לשלוח מיילים למשתמשים${back.mail.resendTestOnly ? ' (Resend מוגדר רק בכתובת הניסיון שלו, שמגיעה רק אליכם)' : ''}. צריך לחבר את Brevo (חינם): BREVO_API_KEY ו-BREVO_FROM בהגדרות השרת ב-Render.</span>`}
+      ${back.campaigns.map((c) => html`<div class=${'campaign campaign-' + c.id} key=${c.id} style="display:flex;flex-direction:column;gap:6px;padding:8px 0;border-top:1px solid var(--line)">
+        <span style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14px">${c.title}</b><b class="num">${c.count}</b></span>
+        ${c.done && (c.done.sent > 0 || c.done.failed > 0) && html`<span class="campaign-done muted" style="font-size:13px">נשלח ל-${c.done.sent}${c.done.failed ? html` · <span style="color:var(--danger)">נכשל ${c.done.failed}</span>` : ' · לא נכשל אף אחד'}${c.done.last ? ' · אחרון ' + String(c.done.last).slice(5, 10).split('-').reverse().join('.') : ''}</span>`}
+        <details><summary style="cursor:pointer;font-size:13px">איך המייל נראה</summary>
+          <span style="display:block;font-size:13px;margin:6px 0"><span class="faint">נושא:</span> <b>${c.preview.subject}</b></span>
+          <iframe class="mail-preview" src=${'/mail-preview/' + c.id} title=${'המייל: ' + c.preview.subject} sandbox="" loading="lazy" style="width:100%;height:560px;border:0;border-radius:12px;background:#F3EDE6;display:block"></iframe></details>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => testBack(c)}>${backBusy === 't' + c.id ? 'שולח…' : 'ניסיון אליי'}</button>
+          ${c.count > 0 && (!back.mail || back.mail.ready) && html`<button type="button" class=${'btn' + (backSure === c.id ? '' : ' btn-ghost')} style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => sendBack(c)}>${backBusy === c.id ? 'שולח…' : backSure === c.id ? 'בטוח? לשלוח עכשיו ל-' + c.count : 'לשלוח ל-' + c.count}</button>`}
+          ${c.count === 0 && html`<span class="faint" style="font-size:12px;align-self:center">אין כרגע למי לשלוח</span>`}
+        </div>
+        ${jobView(c)}
+      </div>`)}
+    </div>`}
+    ${back && html`<${MonthlyMailCard} />`}` },
+    { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'אילו רשתות עונות, והשירות החיצוני', body: () => html`${back && html`<${PriceReachCard} />`}${back && html`<${PriceServiceCard} />`}` },
+    { key: 'system', icon: 'wrench', title: 'מצב המערכת', sub: s ? 'תקלות השבוע: ' + s.errors.week : 'תקלות ומה שבור', body: () => html`${s && html`
       <div class="card stack"><b>תקלות השבוע: <span class="num">${s.errors.week}</span></b>
-        ${s.errors.top.map((e) => html`<div style="font-size:13px"><b class="num">${e.count}×</b> ${e.message}<div class="faint" style="font-size:11px">${e.path || ''}</div></div>`)}</div>`}
+        ${s.errors.top.map((e) => html`<div style="font-size:13px"><b class="num">${e.count}×</b> ${e.message}<div class="faint" style="font-size:11px">${e.path || ''}</div></div>`)}</div>`}` }
+  ];
+  const open = sections.find((x) => x.key === section);
+  return html`<div class=${'stack admin-stats' + (wide ? ' admin-wide' : '')}>
+    <div class="admin-top">
+      ${open && !wide ? html`<button type="button" class="btn-text" onClick=${() => setSection(null)}>→ לוח הבעלים</button>`
+        : html`<button type="button" class="btn-text" onClick=${onBack}>→ חזרה</button>`}
+      ${live && html`<span class="admin-pill" role="status"><span class="admin-dot" aria-hidden="true"></span><b class="num">${live.users}</b> עכשיו</span>`}
+    </div>
+    ${s === undefined && html`<span class="muted">טוען…</span>`}
+    ${s === null && html`<span class="muted">הנתונים לא זמינים כרגע.</span>`}
+    ${(!open || wide) && k && html`
+      <div class="card admin-summary"><span class="admin-spark" aria-hidden="true"><${Icon} name="spark" size=${16} /></span><span>${k.summary}</span></div>
+      <div class="admin-kpis">
+        ${k.tiles.map((t) => html`<div class="card admin-kpi" key=${t.label}><span class="muted">${t.label}</span><b class="num">${t.value}</b>${t.note && html`<span class=${'admin-chg ' + (t.tone || '')}>${t.note}</span>`}</div>`)}
+      </div>`}
+    ${!wide && !open && html`<nav class="admin-hub" aria-label="חלקי לוח הבעלים">
+      ${sections.map((x) => html`<button type="button" class="card admin-hub-btn" key=${x.key} onClick=${() => setSection(x.key)}>
+        <span class="admin-hub-ic"><${Icon} name=${x.icon} size=${18} /></span><span class="admin-hub-t"><b>${x.title}</b><small>${x.sub}</small></span><span aria-hidden="true">‹</span></button>`)}
+    </nav>`}
+    ${!wide && open && html`<h3 class="admin-sec-title">${open.title}</h3><div class="stack">${open.body()}</div>`}
+    ${wide && html`<div class="admin-grid">${sections.map((x) => html`<section class=${'admin-sec admin-sec-' + x.key} key=${x.key} aria-labelledby=${'adm-' + x.key}>
+      <h3 class="admin-sec-title" id=${'adm-' + x.key}>${x.title}</h3><div class="stack">${x.body()}</div></section>`)}</div>`}
   </div>`;
 }

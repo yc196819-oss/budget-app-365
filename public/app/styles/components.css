@@ -790,3 +790,34 @@ body.chat-open { overflow: hidden; }
 .import-twice { display: grid; gap: 6px; border: 1px solid var(--danger); background: var(--danger-tint); font-size: 14px; line-height: 1.5; }
 .import-twice-check { display: flex; gap: 8px; align-items: center; font-weight: 700; cursor: pointer; }
 .import-twice-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* ── Owner dashboard: a main screen with buttons on a phone, everything spread on a computer ── */
+.admin-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-pill { display: inline-flex; align-items: center; gap: 7px; background: var(--surface-2); border-radius: 999px; padding: 5px 12px; font-size: 14px; }
+.admin-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--income); box-shadow: 0 0 0 4px var(--income-tint); animation: admin-ping 1.8s ease-out infinite; }
+@keyframes admin-ping { 0% { box-shadow: 0 0 0 0 var(--income-tint); } 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.admin-summary { display: flex; gap: 10px; align-items: flex-start; line-height: 1.55; font-size: 15px; border: 1px solid var(--accent-tint); }
+.admin-spark { width: 30px; height: 30px; border-radius: 10px; flex: none; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); }
+.admin-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.admin-kpi { display: grid; gap: 2px; padding: 12px 14px; }
+.admin-kpi .muted { font-size: 12px; font-weight: 700; }
+.admin-kpi b { font-size: 26px; line-height: 1.15; }
+.admin-chg { font-size: 12px; font-weight: 800; color: var(--muted); }
+.admin-chg.up { color: var(--income); }
+.admin-chg.down { color: var(--danger); }
+.admin-hub { display: grid; gap: 8px; }
+.admin-hub-btn { display: flex; align-items: center; gap: 12px; text-align: start; border: 0; width: 100%; padding: 12px 14px; cursor: pointer; color: var(--text); font: inherit; }
+.admin-hub-ic { width: 36px; height: 36px; border-radius: 11px; flex: none; display: grid; place-items: center; background: var(--surface-2); color: var(--accent); }
+.admin-hub-t { flex: 1; display: grid; gap: 1px; }
+.admin-hub-t small { color: var(--muted); font-size: 12.5px; }
+.admin-sec-title { margin: 6px 2px 0; font-size: 17px; }
+.admin-counts { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: var(--muted); }
+.admin-counts b { color: var(--text); }
+@media (min-width: 1024px) {
+  .sheet:has(.admin-wide) { width: min(1240px, 94vw); max-width: none; max-height: 90vh; }
+  .admin-kpis { grid-template-columns: repeat(4, 1fr); }
+  .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .admin-sec-activity { grid-column: 1 / -1; order: -1; }
+  .admin-sec-activity > .stack { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .admin-sec-activity > .stack > .per-user, .admin-sec-activity > .stack > .admin-daily { grid-column: 1 / -1; }
+}
