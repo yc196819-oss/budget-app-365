@@ -205,3 +205,30 @@ test("a card's charge from the bank, in a month whose card purchases are here to
   ];
   assert.deepEqual(doubleCardCharges(txs).map((t) => t.id), ['b1']);
 });
+
+test('counted twice even when the card statement was saved without choosing the card', () => {
+  const txs = [
+    // The bank's file: salary, rent and the card's monthly charge.
+    { id: 'b1', type: 'expense', amount: 3200, description: 'מקס איט פיננסים', tx_date: '2026-10-10', card_id: null, import_id: 'bank' },
+    { id: 'b2', type: 'expense', amount: 4500, description: 'משכנתא', tx_date: '2026-10-01', card_id: null, import_id: 'bank' },
+    { id: 'b3', type: 'income', amount: 18000, description: 'משכורת', tx_date: '2026-10-09', card_id: null, import_id: 'bank' },
+    // The card's file, saved with "לא מכרטיס": September's purchases.
+    { id: 'c1', type: 'expense', amount: 2100, description: 'שופרסל', tx_date: '2026-09-12', card_id: null, import_id: 'card' },
+    { id: 'c2', type: 'expense', amount: 1100, description: 'פז', tx_date: '2026-09-20', card_id: null, import_id: 'card' }
+  ];
+  assert.deepEqual(doubleCardCharges(txs).map((t) => t.id), ['b1']);
+});
+
+test('not counted twice: another bank file, manual lines, or too little card spending', () => {
+  const charge = { id: 'b1', type: 'expense', amount: 3200, description: 'כאל', tx_date: '2026-10-10', card_id: null, import_id: 'bank-oct' };
+  // A second bank file (it holds a card charge too) is not card purchases.
+  const otherBank = [{ id: 'x1', type: 'expense', amount: 4000, description: 'משכנתא', tx_date: '2026-09-01', import_id: 'bank-sep' },
+    { id: 'x2', type: 'expense', amount: 2900, description: 'כאל', tx_date: '2026-09-10', import_id: 'bank-sep' }];
+  assert.deepEqual(doubleCardCharges([charge, ...otherBank]).map((t) => t.id), []);
+  // Lines typed by hand are not a card statement.
+  assert.deepEqual(doubleCardCharges([charge, { id: 'm1', type: 'expense', amount: 3000, description: 'סופר', tx_date: '2026-10-02', source: 'manual' }]).map((t) => t.id), []);
+  // A card file with far less than the charge: not the same money.
+  assert.deepEqual(doubleCardCharges([charge, { id: 'c1', type: 'expense', amount: 400, description: 'קפה', tx_date: '2026-09-02', import_id: 'card' }]).map((t) => t.id), []);
+  // Lines marked as paid by credit count, with or without a file.
+  assert.deepEqual(doubleCardCharges([charge, { id: 'c2', type: 'expense', amount: 3000, description: 'סופר', tx_date: '2026-09-02', payment_method: 'credit' }]).map((t) => t.id), ['b1']);
+});

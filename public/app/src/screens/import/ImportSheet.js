@@ -4,8 +4,8 @@ import { track, reportError } from '../../lib/telemetry.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { readStatement, ImportError } from '../../data/importer.js';
-import { addImported, removeMany, removeImport, saveRow } from '../../data/household.js';
-import { toRows, installmentDeals } from '../../domain/statement.js';
+import { addImported, removeMany, removeImport, saveRow, undoRepair } from '../../data/household.js';
+import { toRows, installmentDeals, coveredCharges } from '../../domain/statement.js';
 import { showToast } from '../../lib/toast.js';
 import { PickFile } from './PickFile.js';
 import { Steps } from './Steps.js';
@@ -38,6 +38,9 @@ export function ImportSheet({ data, onClose }) {
     track('import_open');
     return () => { if (!saved.current) track('import_abandon_' + stage.current); };
   }, []);
+  // A card's own statement (found in the file, or a card chosen for it).
+  const [fromCard, setFromCard] = useState(false);
+  const [dropCharges, setDropCharges] = useState(true);
 
   const start = async (file) => {
     const id = ++run.current;
@@ -54,6 +57,8 @@ export function ImportSheet({ data, onClose }) {
       });
       if (run.current !== id) return;
       setItems(out.items);
+      setFromCard(!!out.fromCard);
+      setDropCharges(true);
       setPhase('review');
     } catch (err) {
       if (run.current !== id) return;
@@ -69,7 +74,11 @@ export function ImportSheet({ data, onClose }) {
   const reset = () => { run.current++; setItems([]); setError(''); setPhase('pick'); };
 
   const save = async () => {
-    const rows = toRows(items, { cardId, cards: data.cards });
+    const isCard = fromCard || !!cardId;
+    const rows = toRows(items, { cardId, cards: data.cards, fromCard: isCard });
+    // The bank's monthly charge for these same purchases, already saved: out,
+    // so the money is not counted twice (back with "בטל", or from the bin).
+    const covered = isCard && dropCharges ? coveredCharges(items, data.txs).map((t) => t.id) : [];
     if (!rows.length || saving) return;
     setSaving(true);
     try {
@@ -80,13 +89,16 @@ export function ImportSheet({ data, onClose }) {
       for (const d of deals.create) await saveRow('installments', d).catch(() => {});
       for (const u of deals.update) await saveRow('installments', u).catch(() => {});
       saved.current = true;
+      if (covered.length) await removeMany(covered);
       onClose();
       const ids = added.map((r) => r.id);
       const importId = added[0] && added[0].import_id;
       track('import_done');
-      showToast('נשמרו ' + added.length + ' תנועות מהפירוט', {
+      showToast('נשמרו ' + added.length + ' תנועות מהפירוט' + (covered.length ? ', והחיוב הכפול מהבנק הוסר' : ''), {
         ms: 8000,
-        undo: () => (importId ? removeImport(importId) : removeMany(ids)).then(() => showToast('הייבוא בוטל')).catch(() => showToast('הביטול נכשל. אפשר למחוק את הקובץ מ"קבצים שהועלו" בפרופיל.'))
+        undo: () => (importId ? removeImport(importId) : removeMany(ids))
+          .then(() => (covered.length ? undoRepair({ drop: covered }) : null))
+          .then(() => showToast('הייבוא בוטל')).catch(() => showToast('הביטול נכשל. אפשר למחוק את הקובץ מ"קבצים שהועלו" בפרופיל.'))
       });
     } catch (err) {
       setSaving(false);
@@ -108,6 +120,7 @@ export function ImportSheet({ data, onClose }) {
         <span class="muted" style="line-height:1.5">${error}</span>
       </div>
       <button type="button" class="btn" onClick=${reset}>לבחור קובץ אחר</button>`}
-    ${phase === 'review' && html`<${Review} items=${items} categories=${data.categories} cards=${data.cards} cardId=${cardId} onCard=${setCardId} onChange=${setItems} onSave=${save} saving=${saving} onAnother=${reset} />`}
+    ${phase === 'review' && html`<${Review} items=${items} categories=${data.categories} cards=${data.cards} cardId=${cardId} onCard=${setCardId} onChange=${setItems} onSave=${save} saving=${saving} onAnother=${reset}
+      covered=${fromCard || cardId ? coveredCharges(items, data.txs) : []} dropCharges=${dropCharges} onDropCharges=${setDropCharges} />`}
   <//>`;
 }

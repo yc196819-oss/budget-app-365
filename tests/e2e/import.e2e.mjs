@@ -274,3 +274,45 @@ test('the owner learns where uploads stop: fixed words only (opened, kind of fil
   assert.ok(!names.includes('LEAK'));
   await page.close();
 });
+
+test('a card statement whose bank charge is already saved: said plainly, and the charge comes out on save', async () => {
+  const { page, db, errors } = await open();
+  const iso = (d) => d.toISOString().slice(0, 10);
+  // The bank's statement was uploaded first: it holds the card's monthly charge.
+  const charge = { id: 'bankcharge', household_id: db.hid, type: 'expense', amount: 1600, description: 'מקס איט פיננסים', tx_date: iso(new Date(today.getFullYear(), today.getMonth(), 2)), card_id: null, import_id: 'bankfile', source: 'pdf', created_at: new Date().toISOString() };
+  db.tables.transactions.push(charge);
+  await page.reload();
+  await page.waitForSelector('.month-nav');
+  await page.click('text=העלאת פירוט כרטיס');
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: statementXlsx() });
+  await page.waitForSelector('.import-twice');
+  const box = await page.locator('.import-twice').textContent();
+  assert.match(box, /החיוב של הכרטיס כבר שמור מפירוט הבנק/);
+  assert.match(box, /מקס איט פיננסים ₪1,600/);
+  assert.equal(await page.locator('.import-twice input[type=checkbox]').isChecked(), true);
+  await page.click('.import-actions .btn:not(.btn-ghost)');
+  await page.waitForSelector('.toast');
+  assert.match(await page.locator('.toast').textContent(), /והחיוב הכפול מהבנק הוסר/);
+  assert.equal(db.tables.transactions.some((t) => t.id === 'bankcharge'), false, 'the bank charge is out');
+  // The new lines are marked as card purchases.
+  assert.ok(db.tables.transactions.filter((t) => t.import_id && t.import_id !== 'bankfile').every((t) => t.card_id || t.payment_method === 'credit'));
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('choosing to keep the bank charge keeps it', async () => {
+  const { page, db } = await open();
+  const iso = (d) => d.toISOString().slice(0, 10);
+  db.tables.transactions.push({ id: 'bankcharge', household_id: db.hid, type: 'expense', amount: 1600, description: 'כאל', tx_date: iso(new Date(today.getFullYear(), today.getMonth(), 2)), card_id: null, import_id: 'bankfile', source: 'pdf', created_at: new Date().toISOString() });
+  await page.reload();
+  await page.waitForSelector('.month-nav');
+  await page.click('text=העלאת פירוט כרטיס');
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: statementXlsx() });
+  await page.waitForSelector('.import-summary');
+  await page.waitForSelector('.import-twice');
+  await page.locator('.import-twice input[type=checkbox]').uncheck();
+  await page.click('.import-actions .btn:not(.btn-ghost)');
+  await page.waitForSelector('.toast');
+  assert.equal(db.tables.transactions.some((t) => t.id === 'bankcharge'), true);
+  await page.close();
+});

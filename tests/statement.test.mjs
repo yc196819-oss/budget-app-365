@@ -289,3 +289,29 @@ test("a bank statement's credit-card charge is not counted again (the card's own
   // In a card's own statement nothing is left out.
   assert.equal(flagDup2([{ key: 'a', type: 'expense', amount: 2400, description: 'מקס איט פיננסים', date: '2026-10-10' }], [], { fromCard: true })[0].include, true);
 });
+
+import { coveredCharges as covered, toRows as rowsOf } from '../public/app/src/domain/statement.js';
+
+test('saving a card statement finds the bank charge already saved for the same purchases', () => {
+  const history = [
+    { id: 'h1', type: 'expense', amount: 3200, description: 'מקס איט פיננסים', tx_date: '2026-10-10', card_id: null },
+    { id: 'h2', type: 'expense', amount: 3200, description: 'מקס איט פיננסים', tx_date: '2026-06-10', card_id: null },
+    { id: 'h3', type: 'expense', amount: 45, description: 'דמי כרטיס מקס', tx_date: '2026-10-10', card_id: null },
+    { id: 'h4', type: 'expense', amount: 3000, description: 'כאל', tx_date: '2026-10-10', card_id: 'c9' }
+  ];
+  const items = [
+    { date: '2026-09-12', type: 'expense', amount: 2100, description: 'שופרסל', include: true },
+    { date: '2026-09-20', type: 'expense', amount: 1100, description: 'פז', include: true },
+    { date: '2026-09-21', type: 'expense', amount: 900, description: 'לא נשמר', include: false }
+  ];
+  // October's charge pays September; June's is another month; a card fee and a line already tied to a card stay.
+  assert.deepEqual(covered(items, history).map((t) => t.id), ['h1']);
+  assert.deepEqual(covered([], history), []);
+});
+
+test('a card\'s purchases are saved as paid by credit, even without choosing the card', () => {
+  const items = [{ date: '2026-09-12', type: 'expense', amount: 2100, description: 'שופרסל', include: true }];
+  assert.equal(rowsOf(items, { fromCard: true })[0].payment_method, 'credit');
+  assert.equal(rowsOf(items, {})[0].payment_method, undefined);
+  assert.equal(rowsOf(items, { cardId: 'c1' })[0].card_id, 'c1');
+});

@@ -785,3 +785,8 @@ body.chat-open { overflow: hidden; }
 .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .admin-table th { text-align: start; color: var(--muted); font-weight: 700; padding: 4px 6px; white-space: nowrap; }
 .admin-table td { padding: 6px; border-top: 1px solid var(--line); white-space: nowrap; }
+
+/* Upload: the bank's card charge for these same purchases is already saved */
+.import-twice { display: grid; gap: 6px; border: 1px solid var(--danger); background: var(--danger-tint); font-size: 14px; line-height: 1.5; }
+.import-twice-check { display: flex; gap: 8px; align-items: center; font-weight: 700; cursor: pointer; }
+.import-twice-check input { width: 20px; height: 20px; accent-color: var(--accent); }
