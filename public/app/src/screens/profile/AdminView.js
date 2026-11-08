@@ -147,7 +147,8 @@ export function adminKpis(s) {
   const u = s.upload;
   const tiles = [
     { label: 'פעילים היום', value: s.active.day, note: diff == null ? '' : diff === 0 ? 'כמו אתמול' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ' מאתמול', tone: diff > 0 ? 'up' : diff < 0 ? 'down' : '' },
-    { label: 'נרשמו השבוע', value: week, note: s.sharing && s.sharing.friends ? s.sharing.friends + ' מחבר (סה"כ)' : '' },
+    // "This week" is since Sunday, the same as the sentence below and the weekly table.
+    { label: 'נרשמו השבוע', value: c ? c.signups : week, note: s.sharing && s.sharing.friends ? s.sharing.friends + ' מחבר (סה"כ)' : '' },
     { label: 'חזרו אחרי שבוע', value: s.retention && s.retention.pct != null ? s.retention.pct + '%' : '–', note: s.retention && s.retention.started ? s.retention.cameBack + ' מתוך ' + s.retention.started : '' },
     { label: 'עלות AI היום', value: '$' + (Number(today.cost) || 0).toFixed(2), note: '$' + (s.aiCost30d ?? 0) + ' ב-30 יום' }
   ];
