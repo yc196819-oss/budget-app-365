@@ -1,7 +1,8 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { sendFeedback, myFeedback, replyFeedback, FEEDBACK_KIND } from '../../data/feedback.js';
+import { sendFeedback, myFeedback, replyFeedback, attachImage, FEEDBACK_KIND } from '../../data/feedback.js';
+import { FbImage, ImagePick } from '../../components/FbImage.js';
 import { showToast } from '../../lib/toast.js';
 
 const dm = (iso) => String(iso || '').slice(0, 10).split('-').reverse().slice(0, 2).join('.');
@@ -48,13 +49,17 @@ export function FeedbackView({ userId, onBack }) {
 function NewRequest({ onBack, onSent }) {
   const [kind, setKind] = useState('bug');
   const [text, setText] = useState('');
+  const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const send = async (e) => {
     e.preventDefault();
     if (busy || text.trim().length < 3) return;
     setBusy(true);
     try {
-      await sendFeedback({ kind, text: text.trim(), screen: String(location.hash || '').replace(/^#\//, '').split('/')[0] || 'home' });
+      const r = await sendFeedback({ kind, text: text.trim(), screen: String(location.hash || '').replace(/^#\//, '').split('/')[0] || 'home' });
+      if (file && r && r.id) {
+        try { await attachImage(r.id, file); } catch (err) { showToast('הפנייה נשלחה, אבל התמונה לא: ' + (err.message || 'נסו לצרף אותה שוב בפנייה.')); onSent(); return; }
+      }
       showToast('נשלח. תודה! התשובה תופיע כאן.');
       onSent();
     } catch (err) { showToast(err.message || 'לא נשלח. נסו שוב.'); setBusy(false); }
@@ -65,13 +70,15 @@ function NewRequest({ onBack, onSent }) {
     <div class="chips" role="radiogroup" aria-label="סוג הפנייה">${Object.entries(FEEDBACK_KIND).map(([k, v]) => html`<button type="button" role="radio" class="chip" aria-checked=${String(kind === k)} aria-pressed=${String(kind === k)} onClick=${() => setKind(k)}><${Icon} name=${v.icon} size=${16} />${v.label}</button>`)}</div>
     <textarea class="input" rows="5" maxlength="2000" aria-label="הפנייה" value=${text} onInput=${(e) => setText(e.target.value)}
       placeholder=${kind === 'bug' ? 'מה ניסיתם לעשות, ומה קרה במקום?' : kind === 'idea' ? 'מה היה עוזר לכם?' : 'כתבו כאן'}></textarea>
-    <span class="muted" style="font-size:14px">לא צריך לכתוב פרטים אישיים או מספרי חשבון.</span>
+    <${ImagePick} file=${file} onFile=${setFile} />
+    <span class="muted" style="font-size:14px">לא צריך לכתוב פרטים אישיים או מספרי חשבון. בצילום מסך אפשר להסתיר סכומים, אבל לא חובה: רק אנחנו רואים אותו.</span>
     <button type="submit" class="btn" disabled=${busy || text.trim().length < 3}>${busy ? 'שולח…' : 'לשלוח'}</button>
   </form>`;
 }
 
 function Thread({ f, onBack, reload }) {
   const [draft, setDraft] = useState('');
+  const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [reopening, setReopening] = useState(false);
   const log = useRef(null);
@@ -80,12 +87,14 @@ function Thread({ f, onBack, reload }) {
   useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [f.messages.length]);
   const send = async (e) => {
     if (e) e.preventDefault();
-    if (busy || draft.trim().length < 2) return;
+    if (busy || (draft.trim().length < 2 && !file)) return;
     setBusy(true);
     try {
-      const r = await replyFeedback(f.id, { message: draft.trim() });
-      setDraft(''); setReopening(false);
-      showToast(r.reopened ? 'נשלח. הפנייה נפתחה מחדש, ונענה כאן.' : 'נשלח.');
+      let reopened = false;
+      if (draft.trim().length >= 2) { const r = await replyFeedback(f.id, { message: draft.trim() }); reopened = r.reopened; }
+      if (file) await attachImage(f.id, file);
+      setDraft(''); setFile(null); setReopening(false);
+      showToast(reopened ? 'נשלח. הפנייה נפתחה מחדש, ונענה כאן.' : 'נשלח.');
       await reload();
     } catch (err) { showToast(err.message || 'לא נשלח. נסו שוב.'); }
     setBusy(false);
@@ -100,7 +109,7 @@ function Thread({ f, onBack, reload }) {
     <div class="wa-log fb-log" ref=${log} aria-live="polite">
       ${f.messages.map((m, i) => html`<div key=${i} class=${'fb-msg ' + (m.author === 'owner' ? 'them' : 'me')}>
         ${m.author === 'owner' && html`<small class="fb-from">"התקציב שלנו"</small>`}
-        <span>${m.text}</span>
+        ${m.image ? html`<${FbImage} path=${m.image} />` : html`<span>${m.text}</span>`}
         <small class="fb-meta">${hm(m.created_at)}</small>
       </div>`)}
     </div>
@@ -117,8 +126,9 @@ function Thread({ f, onBack, reload }) {
       ${reopening && html`<b style="font-size:15px">מה עדיין לא עובד? ההודעה תפתח את הפנייה מחדש.</b>`}
       <div style="display:flex;gap:8px;align-items:flex-end">
         <textarea class="input" rows="2" maxlength="2000" aria-label=${reopening ? 'מה עדיין לא עובד' : 'הודעה'} placeholder=${reopening ? 'כתבו מה קורה' : 'כתבו כאן'} value=${draft} onInput=${(e) => setDraft(e.target.value)} style="flex:1;min-width:0"></textarea>
-        <button type="submit" class="btn" style="width:auto" disabled=${busy || draft.trim().length < 2}>${busy ? 'שולח…' : 'לשלוח'}</button>
+        <button type="submit" class="btn" style="width:auto" disabled=${busy || (draft.trim().length < 2 && !file)}>${busy ? 'שולח…' : 'לשלוח'}</button>
       </div>
+      <${ImagePick} file=${file} onFile=${setFile} />
     </form>`}
   </div>`;
 }

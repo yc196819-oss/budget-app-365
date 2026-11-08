@@ -593,8 +593,27 @@ function userAction(body, thread, now = new Date()) {
 // One request as the owner sees it: the person's first message, the
 // messages and notes in order, unread (they wrote after you last looked),
 // and whether they read your last answer.
+// A picture attached to a request: a data URL of a real PNG, JPEG or WebP
+// (checked by its first bytes, not by what it claims), at most 1.5MB.
+// -> { buf, type, ext } or null. Pure.
+const IMAGE_MAX = 1.5 * 1024 * 1024;
+function feedbackImage(dataUrl) {
+  const m = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+  if (!m) return null;
+  const buf = Buffer.from(m[2], 'base64');
+  if (!buf.length || buf.length > IMAGE_MAX) return null;
+  const png = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  const jpg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  const webp = buf.slice(0, 4).toString('latin1') === 'RIFF' && buf.slice(8, 12).toString('latin1') === 'WEBP';
+  const type = png ? 'image/png' : jpg ? 'image/jpeg' : webp ? 'image/webp' : null;
+  if (!type || type !== m[1]) return null;
+  return { buf, type, ext: { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[type] };
+}
+// A stored picture's path: <request id>/<random>.<ext>, nothing else.
+const IMAGE_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/;
+
 function threadView(f, messages = [], { name = '', label = '' } = {}) {
-  const list = [{ author: 'user', text: f.text, created_at: f.created_at }, ...messages.map((m) => ({ author: m.author, text: m.text, created_at: m.created_at }))];
+  const list = [{ author: 'user', text: f.text, created_at: f.created_at }, ...messages.map((m) => ({ author: m.author, text: m.text, created_at: m.created_at, image: m.image || null }))];
   const lastOwner = [...list].reverse().find((m) => m.author === 'owner');
   const unread = list.filter((m) => m.author === 'user' && (!f.owner_seen_at || m.created_at > f.owner_seen_at)).length;
   return {
@@ -686,4 +705,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

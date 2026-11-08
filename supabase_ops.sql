@@ -459,3 +459,11 @@ create table if not exists public.referrals (
 create index if not exists referrals_ref_code on public.referrals (ref_code);
 alter table public.referrals enable row level security;
 revoke all on public.referrals from anon, authenticated;
+
+-- Applied 2026-11-08 (feedback_images): a picture with a request. Kept in a
+-- private bucket; only the server reads it (for the writer and the owner),
+-- and a closed request's pictures are removed.
+alter table public.feedback_messages add column if not exists image text;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('feedback', 'feedback', false, 2000000, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do nothing;
