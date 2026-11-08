@@ -43,7 +43,6 @@ test('"how do I…" questions about the app are answered from the guide', () => 
     'איך מתכננים טיול לאילת': 'trips',
     'איך מזמינים את אשתי': 'invite',
     'איך אני מוסיף את בעלי': 'invite',
-    'איך משנים את הסף של ההחלטות ביחד': 'agreement',
     'איך מוסיפים חשבון בנק נוסף': 'account',
     'איך מוסיפים כרטיס אשראי': 'card',
     'איך אני רושם הלוואה': 'loan',

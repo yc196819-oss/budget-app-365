@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TABS, parseRoute, hrefFor, DEFAULT_TAB } from '../public/app/src/domain/routes.js';
 
-test('five tabs in the agreed order', () => {
-  assert.deepEqual(TABS.map((t) => t.key), ['home', 'money', 'together', 'plans', 'assets']);
+test('four tabs in the agreed order; shared decisions only from links', () => {
+  assert.deepEqual(TABS.map((t) => t.key), ['home', 'money', 'plans', 'assets']);
+  assert.equal(TABS.find((t) => t.key === 'plans').label, 'יעדים');
 });
 
 test('parseRoute accepts known tabs and falls back to home', () => {

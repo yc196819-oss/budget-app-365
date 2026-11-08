@@ -3,7 +3,7 @@ import { partnerWord, genderOf } from '../domain/people.js';
 import { track, setScreen } from '../lib/telemetry.js';
 import { Loading } from '../components/Loading.js';
 import { useEffect, useState } from 'preact/hooks';
-import { TABS } from '../domain/routes.js';
+import { tabLabel } from '../domain/routes.js';
 import { dateLabel, initials } from '../domain/format.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
 import { Icon } from '../components/Icon.js';
@@ -167,7 +167,7 @@ export function Shell({ tab, session }) {
     </main>`;
   }
   const Screen = SCREENS[tab];
-  const title = TABS.find((t) => t.key === tab).label;
+  const title = tabLabel(tab);
   const close = () => setOverlay(null);
 
   return html`

@@ -10,10 +10,17 @@ import { TripsView } from '../trips/TripsView.js';
 import { useTrips } from '../../data/useTrips.js';
 import { openLater } from '../../data/trips.js';
 
-const VIEWS = [{ key: 'months', label: 'החודשים הקרובים' }, { key: 'budget', label: 'תקציב ויעדים' }, { key: 'trips', label: 'טיולים' }];
+const VIEWS = [{ key: 'budget', label: 'תקציב ויעדים' }, { key: 'months', label: 'החודשים הקרובים' }, { key: 'trips', label: 'טיולים' }];
+const viewOf = (hash) => (VIEWS.some((v) => v.key === routeView(hash)) ? routeView(hash) : 'budget');
 
 export function PlansScreen({ data }) {
-  const [view, setView] = useState(() => (VIEWS.some((v) => v.key === routeView(location.hash)) ? routeView(location.hash) : 'months'));
+  const [view, setView] = useState(() => viewOf(location.hash));
+  // A link to another view of this tab (#/plans/months) while it is open.
+  useEffect(() => {
+    const on = () => { if (/^#\/plans/.test(location.hash) && routeView(location.hash) && routeView(location.hash) !== 'checkin') setView(viewOf(location.hash)); };
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
   const sheet = usePlanSheet();
   // #/plans/checkin (the weekly check-in notification) opens the check-in.
   useEffect(() => {
