@@ -81,6 +81,7 @@ function applyFilters(rows, params) {
     const val = rest.join('.');
     if (op === 'eq') out = out.filter((r) => String(r[k]) === val);
     else if (op === 'gte') out = out.filter((r) => String(r[k]) >= val);
+    else if (op === 'is' && val === 'null') out = out.filter((r) => r[k] == null);
     else if (op === 'in') {
       const set = new Set(val.replace(/^\(|\)$/g, '').split(',').map((s) => s.replace(/^"|"$/g, '')));
       out = out.filter((r) => set.has(String(r[k])));

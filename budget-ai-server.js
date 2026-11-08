@@ -2115,6 +2115,18 @@ app.get('/api/admin/today', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'failed' });
   }
 });
+// Which supermarket price sites answer this server (some block visitors
+// from abroad). Owner only; a few public pages, nothing is stored.
+const prices = require('./server/prices');
+app.get('/api/admin/prices/reach', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    return res.json({ at: new Date().toISOString(), sites: await prices.probeAll(fetch) });
+  } catch (err) {
+    console.error('price reach failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
 // The owner's evening summary email (pg_cron job "owner-daily-digest").
 let todaySummary = null;
 import(require('url').pathToFileURL(path.join(__dirname, 'public/app/src/domain/people-health.js')).href)
