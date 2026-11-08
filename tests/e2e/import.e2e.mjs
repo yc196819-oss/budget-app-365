@@ -165,6 +165,33 @@ test('an old binary .xls statement is read on the device, like a new one', async
   await page.close();
 });
 
+test('a PDF whose purchases all came out on the charge day: fixed before saving, and said so', async () => {
+  const charge = iso(prev(1));
+  const statement = Array.from({ length: 12 }, (_, i) => ({ date: charge, description: 'עסק בדיקה ' + 'אבגדהוזחטיכל'[i], amount: 30 + i, type: 'expense', category_id: 'food' }));
+  const { page, db } = await open(390, { statement });
+  await page.click('text=העלאת פירוט כרטיס');
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'card.pdf', mimeType: 'application/pdf', buffer: makePdf(['Card statement', 'test lines']) });
+  await page.waitForSelector('.import-fixed', { timeout: 20000 });
+  assert.match(await page.locator('.import-fixed').textContent(), /12 קניות הופיעו בקובץ כאילו כולן נעשו/);
+  const before = db.tables.transactions.length;
+  await page.click('.import-actions .btn');
+  await page.waitForSelector('.toast');
+  const added = db.tables.transactions.slice(before);
+  assert.equal(added.length, 12);
+  assert.ok(added.every((t) => t.tx_date !== charge), 'no line kept the charge day');
+  await page.close();
+});
+
+test('a file that is not a statement is not saved, with a clear reason', async () => {
+  const statement = Array.from({ length: 15 }, (_, i) => ({ date: iso(prev(3)), description: 'שורת טקסט ממסמך ' + i, amount: 1, type: 'expense', category_id: null }));
+  const { page } = await open(390, { statement });
+  await page.click('text=העלאת פירוט כרטיס');
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'letter.pdf', mimeType: 'application/pdf', buffer: makePdf(['A letter', 'not a statement']) });
+  await page.waitForSelector('[role="alert"]', { timeout: 20000 });
+  assert.match(await page.locator('[role="alert"]').textContent(), /לא נראה כמו פירוט/);
+  await page.close();
+});
+
 test('a broken .xls and unknown files get a clear message, and another file can be picked', async () => {
   const { page } = await open();
   await page.click('text=העלאת פירוט כרטיס');

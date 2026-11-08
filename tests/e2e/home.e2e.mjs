@@ -85,9 +85,30 @@ test('attention: an over-budget category and a suspected double charge, each wit
   assert.ok(all.some((s) => /חריגה ברכב/.test(s)), all.join(' | '));
   assert.ok(all.some((s) => /חיוב כפול ב/.test(s)), all.join(' | '));
   assert.ok(all.length <= 3);
-  await att.filter({ hasText: 'חיוב כפול' }).locator('.att-btn').click();
+  await att.filter({ hasText: 'חיוב כפול' }).locator('.att-btn').first().click();
   await page.waitForSelector('.sheet');
   assert.equal(await page.locator('.sheet h2').textContent(), 'פרטי תנועה');
+  await page.close();
+});
+
+test('a suspected double charge: "both are real" keeps both lines and the question goes away for good', async () => {
+  const db = makeFakeDb();
+  const t = new Date();
+  const day = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  db.tables.transactions.push(
+    { id: 'r1', household_id: 'h1', type: 'expense', amount: 12, description: 'רכבת דמו', tx_date: day, category_id: 'car', nature: 'variable', spread: 'month', created_at: day + 'T09:00:00Z' },
+    { id: 'r2', household_id: 'h1', type: 'expense', amount: 12, description: 'רכבת דמו', tx_date: day, category_id: 'car', nature: 'variable', spread: 'month', created_at: day + 'T18:00:00Z' }
+  );
+  const { page } = await open(390, db);
+  const card = page.locator('.att', { hasText: 'חיוב כפול ברכבת דמו' });
+  await card.locator('.att-btn2').click();
+  await page.waitForSelector('.toast');
+  assert.equal(await page.locator('.att', { hasText: 'חיוב כפול ברכבת דמו' }).count(), 0);
+  assert.equal(db.tables.transactions.filter((x) => x.id === 'r1' || x.id === 'r2').length, 2, 'nothing deleted');
+  await page.reload();
+  await page.waitForSelector('.hero');
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('.att', { hasText: 'חיוב כפול ברכבת דמו' }).count(), 0, 'remembered');
   await page.close();
 });
 

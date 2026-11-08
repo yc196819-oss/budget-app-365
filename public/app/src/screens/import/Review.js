@@ -30,6 +30,10 @@ export function Review({ items, categories, cards = [], cardId, onCard, onChange
       ].filter(Boolean).join(' · ')}</span>
       ${s.from && html`<span>${'מ-' + shortDate(s.from) + ' עד ' + shortDate(s.to) + ' · הוצאות ' + money(s.expense) + (s.income ? ' · זיכויים ' + money(s.income) : '')}</span>`}
     </div>
+    ${s.chargeDay && html`<div class="card import-fixed" role="status">
+      <b>תיקנו את התאריכים בקובץ הזה</b>
+      <span>${s.moved} קניות הופיעו בקובץ כאילו כולן נעשו ב-${shortDate(s.chargeDay)}, יום החיוב של הכרטיס. רשמנו אותן ב-${shortDate(s.movedTo)}, החודש שבו כנראה קניתם, כדי שהחודשים יהיו נכונים.${s.likely ? ' קניות שכבר נמצאות אצלכם עם התאריך הנכון לא מסומנות.' : ''} אפשר לשנות כל שורה לפני השמירה.</span>
+    </div>`}
     ${cards.length > 0 && html`<div class="stack" style="gap:6px">
       <b style="font-size:13px;color:var(--muted)">מאיזה כרטיס הפירוט?</b>
       <div class="chips" role="group" aria-label="כרטיס">

@@ -90,3 +90,49 @@ test('a big shopping day in a real statement is not a mistake', () => {
   const nine = Array.from({ length: 9 }, () => tx({ import_id: 'imp-9' }));
   assert.deepEqual(findRepairs(nine), [], 'fewer than 10 lines: never');
 });
+
+// ── at upload time ──
+import { fixChargeDay, looksLikeJunk } from '../public/app/src/domain/repair.js';
+import { prepare, summary, importPrompt } from '../public/app/src/domain/statement.js';
+
+const fileLines = () => [
+  { date: '2026-10-10', description: 'מאפיית הדר', amount: 42.5, type: 'expense' },
+  ...Array.from({ length: 10 }, (_, i) => ({ date: '2026-10-10', description: 'חנות ספרים ' + 'אבגדהוזחטי'[i], amount: 20 + i, type: 'expense' })),
+  { date: '2026-10-10', description: 'זיכוי', amount: 15, type: 'income' }
+];
+const saved = [{ id: 'h1', tx_date: '2026-09-05', description: 'מאפיית הדר 12', amount: 42.5, type: 'expense', card_id: 'c1' }];
+
+test('upload: a file dated by the charge day is fixed before saving, and what is already here starts unchecked', () => {
+  const { items, fixed } = fixChargeDay(fileLines(), saved);
+  assert.deepEqual(fixed, { day: '2026-10-10', moveTo: '2026-09-30', count: 11, dropped: 1 });
+  assert.ok(items.filter((t) => t.type !== 'income').every((t) => t.date === '2026-09-30'));
+  assert.equal(items.find((t) => t.type === 'income').date, '2026-10-10', 'a refund keeps its date');
+  const ready = prepare(fileLines(), saved, {});
+  const bakery = ready.find((t) => t.description === 'מאפיית הדר');
+  assert.equal(bakery.include, false);
+  assert.equal(bakery.dupe, 'likely');
+  assert.equal(bakery.dupeOf.date, '2026-09-05');
+  const s = summary(ready);
+  assert.equal(s.chargeDay, '2026-10-10');
+  assert.equal(s.movedTo, '2026-09-30');
+  assert.equal(s.moved, 11);
+});
+
+test('upload: a normal statement is left exactly as it is', () => {
+  const normal = Array.from({ length: 20 }, (_, i) => ({ date: '2026-10-' + String(i + 1).padStart(2, '0'), description: 'עסק ' + i, amount: 10 + i, type: 'expense' }));
+  const { items, fixed } = fixChargeDay(normal, saved);
+  assert.equal(fixed, null);
+  assert.deepEqual(items, normal);
+});
+
+test('upload: a file that is not a statement is recognized', () => {
+  assert.equal(looksLikeJunk(Array.from({ length: 17 }, () => ({ amount: 1, description: 'טקסט ארוך ממכתב' }))), true);
+  assert.equal(looksLikeJunk(fileLines()), false);
+  assert.equal(looksLikeJunk([{ amount: 1 }, { amount: 1 }]), false, 'too few lines to tell');
+});
+
+test('the AI is told to take the purchase date, never the charge date', () => {
+  const p = importPrompt([], new Date(2026, 10, 8));
+  assert.match(p, /date הוא תאריך העסקה עצמה/);
+  assert.match(p, /לא תאריך החיוב/);
+});

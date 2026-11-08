@@ -83,15 +83,22 @@ export function Shell({ tab, session }) {
   const roomForRail = useMedia('(min-width: 1440px)');
   const roomForNav = useMedia('(min-width: 1180px)');
   const [navPref, setNavPref] = useState(() => readLocal('nav:mini', ''));
-  const [railPref, setRailPref] = useState(() => readLocal('rail:on', ''));
+  // The advisor on a computer: 'side' (always open next to the screen),
+  // 'float' (a small window that can be minimized to the button and brought
+  // back) or 'button' (opens over the screen). Chosen once, remembered.
+  const [modePref, setModePref] = useState(() => readLocal('advisor:mode', '') || (readLocal('rail:on', '') === '1' ? 'side' : readLocal('rail:on', '') === '0' ? 'button' : ''));
+  const [floatOpen, setFloatOpen] = useState(false);
   const navMini = navPref ? navPref === '1' : !roomForNav;
-  const railOn = desktop && (railPref ? railPref === '1' : roomForRail);
+  const advisorMode = modePref || (roomForRail ? 'side' : 'float');
+  const railOn = desktop && advisorMode === 'side';
+  const floating = desktop && advisorMode === 'float';
   const setMini = (on) => { const v = on ? '1' : '0'; writeLocal('nav:mini', v); setNavPref(v); };
-  const setRail = (on) => { const v = on ? '1' : '0'; writeLocal('rail:on', v); setRailPref(v); };
+  const setMode = (m) => { writeLocal('advisor:mode', m); setModePref(m); setOverlay((o) => (o === 'advisor' ? null : o)); setFloatOpen(m === 'float'); };
+  const openAdvisor = () => (floating ? setFloatOpen(true) : setOverlay('advisor'));
   const askAdvisor = () => {
     if (railOn) { document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus(); return; }
-    setOverlay('advisor');
-    setTimeout(() => document.querySelector('.sheet [aria-label="שאלה ליועץ"]')?.focus(), 350);
+    openAdvisor();
+    setTimeout(() => document.querySelector('.adv-float [aria-label="שאלה ליועץ"], .sheet [aria-label="שאלה ליועץ"]')?.focus(), 350);
   };
   // Shared decisions: the "together" tab shows how many wait for my answer.
   const dec = useDecisions(session.household?.household_id, session.user.id);
@@ -135,7 +142,7 @@ export function Shell({ tab, session }) {
     if (action === 'add' || action === 'voice' || action === 'talk') setOverlay(action);
     else if (action === 'ask') {
       if (railOn) setTimeout(() => document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus(), 300);
-      else setOverlay('advisor');
+      else openAdvisor();
     }
   }, []);
   // Opening the app: counted once per launch (who comes back).
@@ -155,7 +162,7 @@ export function Shell({ tab, session }) {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [desktop, overlay, session.household, railOn]);
+  }, [desktop, overlay, session.household, railOn, floating]);
   if (solo) {
     return html`<main class="advisor-solo" aria-label="היועץ">
       <header class="rail-head">
@@ -171,7 +178,7 @@ export function Shell({ tab, session }) {
   const close = () => setOverlay(null);
 
   return html`
-    <div class=${'shell' + (desktop && navMini ? ' nav-mini' : '') + (desktop && !railOn ? ' no-rail' : '')}>
+    <div class=${'shell' + (desktop && navMini ? ' nav-mini' : '') + (desktop && !railOn ? ' no-rail' : '') + (floating && floatOpen ? ' float-open' : '')}>
       <${Sidebar} mini=${navMini} onMini=${() => setMini(!navMini)} tab=${tab} badges=${{ ...badges, profile: answers }} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => setOverlay('import') : null} onLearn=${() => setOverlay('learn')} onProfile=${() => { setProfileView('main'); setOverlay('profile'); }} />
       <main class="shell-main">
         <header class="topbar">
@@ -183,8 +190,9 @@ export function Shell({ tab, session }) {
         ${session.household ? html`<${Screen} key=${tab + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
-      ${railOn && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} onHide=${() => setRail(false)} />`}
-      <button type="button" class="ask-fab" onClick=${() => setOverlay('advisor')}><span class="orb"><${Icon} name="spark" size=${18} stroke=${2.2} /></span>שאל את היועץ</button>
+      ${railOn && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} onFloat=${() => setMode('float')} onHide=${() => setMode('button')} />`}
+      ${floating && floatOpen && html`<${AdvisorRail} floating=${true} data=${data} session=${session} screen=${tab} onPin=${() => setMode('side')} onMinimize=${() => setFloatOpen(false)} />`}
+      <button type="button" class="ask-fab" onClick=${openAdvisor}><span class="orb"><${Icon} name="spark" size=${18} stroke=${2.2} /></span>שאל את היועץ</button>
       <${BottomNav} tab=${tab} badges=${badges} onAdd=${() => setOverlay('add')} />
 
       ${overlay === 'profile' && html`<${ProfileSheet} answers=${answers} start=${profileView} profile=${profile} hid=${session.household ? session.household.household_id : null} userId=${session.user.id} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
@@ -195,7 +203,7 @@ export function Shell({ tab, session }) {
       ${overlay === 'learn' && html`<${LearnSheet} userId=${session.user.id} householdId=${session.household ? session.household.household_id : null} data=${session.household && data.status === 'ready' ? data : null} onClose=${close} />`}
       ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} data=${data} onClose=${close} />`}
       ${overlay === 'advisor' && !railOn && html`<${Sheet} title="היועץ" onClose=${close}>
-        ${desktop && html`<button type="button" class="btn-text rail-pin" onClick=${() => { setRail(true); close(); }}>להציג את היועץ קבוע בצד המסך</button>`}
+        ${desktop && html`<span class="adv-modes"><button type="button" class="btn-text rail-pin" onClick=${() => setMode('side')}>להציג קבוע בצד המסך</button> · <button type="button" class="btn-text float-pin" onClick=${() => setMode('float')}>כחלון צף</button></span>`}
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} />` : html`<${Loading} />`}
       <//>`}
       <${ToastHost} />

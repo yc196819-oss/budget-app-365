@@ -201,7 +201,10 @@ export function doubleCardCharges(txs) {
   });
 }
 
-export function attention({ txs, categories, budgets, cards, today, plan, limit = 3 }) {
+// The same two lines, whichever came first.
+export const dupePair = (d) => [d.tx.id, d.of.id].sort().join('|');
+
+export function attention({ txs, categories, budgets, cards, today, plan, limit = 3, dupeOk = new Set() }) {
   const items = [];
   // Counted twice: it changes every number in the app, so it comes first.
   const twice = doubleCardCharges(txs);
@@ -234,10 +237,11 @@ export function attention({ txs, categories, budgets, cards, today, plan, limit 
       : { kind: 'near', tone: 'warn', title: r.name + ': ' + Math.round((r.spent / r.budget) * 100) + '% מהתקציב', detail: 'נשארו ' + money(r.budget - r.spent) + ' עד סוף החודש.', action: { label: 'לפירוט', to: 'money-cats' } });
   }
 
-  const dupes = suspectedDuplicates(txs, today);
+  // A pair the household said is two real purchases is not asked about again.
+  const dupes = suspectedDuplicates(txs, today).filter((d) => !dupeOk.has(dupePair(d)));
   if (dupes.length) {
     const d = dupes[dupes.length - 1];
-    items.push({ kind: 'dupe', tone: 'warn', title: 'חיוב כפול ב' + d.tx.description + '?', detail: money(d.tx.amount) + ' ב-' + dm(d.of.tx_date) + ' ושוב ב-' + dm(d.tx.tx_date) + '.', action: { label: 'לבדוק', to: 'tx', id: d.tx.id } });
+    items.push({ kind: 'dupe', tone: 'warn', title: 'חיוב כפול ב' + d.tx.description + '?', detail: money(d.tx.amount) + ' ב-' + dm(d.of.tx_date) + ' ושוב ב-' + dm(d.tx.tx_date) + '.', action: { label: 'לבדוק', to: 'tx', id: d.tx.id }, second: { label: 'שתיהן נכונות, להשאיר', to: 'dupe-ok', key: dupePair(d) } });
   }
 
   const loose = txs.filter((t) => !t.category_id && monthShare(t, mo) > 0);

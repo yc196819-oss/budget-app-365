@@ -139,6 +139,20 @@ test('suspectedDuplicates: same amount, same or next day, similar text', () => {
   assert.deepEqual([out[0].tx.id, out[0].of.id], ['b', 'a']);
 });
 
+test('a suspected double charge offers "both are real", and a pair marked so is not asked about again', () => {
+  const txs = [
+    tx({ id: 'a', description: 'רכבת ישראל', amount: 12, tx_date: '2026-10-08' }),
+    tx({ id: 'b', description: 'רכבת ישראל', amount: 12, tx_date: '2026-10-08' })
+  ];
+  const plan = { canForecast: false, projectedEnd: 0 };
+  const items = attention({ txs, categories: [], budgets: [], cards: [], today: TODAY, plan });
+  const d = items.find((i) => i.kind === 'dupe');
+  assert.equal(d.second.to, 'dupe-ok');
+  assert.equal(d.second.key, 'a|b');
+  const after = attention({ txs, categories: [], budgets: [], cards: [], today: TODAY, plan, dupeOk: new Set(['a|b']) });
+  assert.equal(after.find((i) => i.kind === 'dupe'), undefined);
+});
+
 test('attention: most important first, at most three, each with an action', () => {
   const txs = [
     tx({ type: 'income', amount: 1000, tx_date: '2026-08-01', category_id: 'sal' }), tx({ amount: 1500, tx_date: '2026-08-02' }),
