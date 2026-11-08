@@ -105,6 +105,9 @@ test('a suspected double charge: "both are real" keeps both lines and the questi
   await page.waitForSelector('.toast');
   assert.equal(await page.locator('.att', { hasText: 'חיוב כפול ברכבת דמו' }).count(), 0);
   assert.equal(db.tables.transactions.filter((x) => x.id === 'r1' || x.id === 'r2').length, 2, 'nothing deleted');
+  assert.deepEqual(db.tables.dupe_ok.map((r) => [r.household_id, r.pair]), [['h1', 'r1|r2']], 'saved for the whole household');
+  // Another device of the household (nothing saved on it) is not asked either.
+  await page.evaluate(() => localStorage.removeItem('dupe:ok:h1'));
   await page.reload();
   await page.waitForSelector('.hero');
   await page.waitForTimeout(300);

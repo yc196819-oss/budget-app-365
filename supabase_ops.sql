@@ -467,3 +467,19 @@ alter table public.feedback_messages add column if not exists image text;
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('feedback', 'feedback', false, 2000000, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do nothing;
+
+-- Applied 2026-11-08 (dupe_ok): two lines that look like a double charge but
+-- are two real purchases, kept for the whole household.
+create table if not exists public.dupe_ok (
+  household_id uuid not null references public.households(id) on delete cascade,
+  pair text not null check (char_length(pair) between 3 and 80),
+  created_by uuid default auth.uid(),
+  created_at timestamptz not null default now(),
+  primary key (household_id, pair)
+);
+alter table public.dupe_ok enable row level security;
+create policy dupe_ok_household_all on public.dupe_ok for all to authenticated
+  using (household_id in (select memberships.household_id from public.memberships where memberships.user_id = (select auth.uid())))
+  with check (household_id in (select memberships.household_id from public.memberships where memberships.user_id = (select auth.uid())));
+create policy two_step_required on public.dupe_ok as restrictive for all to authenticated
+  using ((select public.mfa_ok())) with check ((select public.mfa_ok()));
