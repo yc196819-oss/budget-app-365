@@ -462,3 +462,25 @@ test('at most one email a week, whatever its kind; what the person asked for doe
   const list = ops.campaignList('start', { users, sent: [{ user_id: 'a', campaign: 'thanks-x', sent_at: ago(3) }], now });
   assert.deepEqual(list.map((u) => u.id), ['b']);
 });
+
+test('whole lists, page by page: nothing is cut at 1,000', async () => {
+  const rows = Array.from({ length: 2500 }, (_, i) => i);
+  const asked = [];
+  const all = await ops.pageAll(async (from, to, page) => { asked.push([from, to, page]); return rows.slice(from, to + 1); });
+  assert.equal(all.length, 2500);
+  assert.deepEqual(asked, [[0, 999, 1], [1000, 1999, 2], [2000, 2999, 3]]);
+  // Exactly 1,000: one more (empty) page confirms the end.
+  assert.equal((await ops.pageAll(async (from, to) => rows.slice(0, 1000).slice(from, to + 1))).length, 1000);
+  assert.deepEqual(await ops.pageAll(async () => []), []);
+  // An error is not swallowed: the caller decides.
+  await assert.rejects(ops.pageAll(async () => { throw new Error('down'); }), /down/);
+});
+
+test('AI actions a month: the household\'s own limit, else a default far above real use', () => {
+  assert.equal(ops.aiMonthlyLimit(50), 50);
+  assert.equal(ops.aiMonthlyLimit(0), 0);
+  assert.equal(ops.aiMonthlyLimit(null), ops.AI_MONTHLY_DEFAULT);
+  assert.equal(ops.aiMonthlyLimit(undefined, '900'), 900);
+  assert.equal(ops.aiMonthlyLimit(null, 'junk'), ops.AI_MONTHLY_DEFAULT);
+  assert.ok(ops.AI_MONTHLY_DEFAULT >= 450, 'never below the busiest household today');
+});
