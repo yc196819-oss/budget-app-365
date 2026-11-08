@@ -2,7 +2,13 @@
 // owner looks at (who uses it, who comes back, what breaks). Pure.
 
 // The only events kept: what someone did, never what they wrote or how much.
-const EVENTS = ['app_open', 'tx_add', 'import_done', 'advisor_ask', 'advisor_talk', 'decision_open', 'decision_message', 'trip_plan', 'news_open', 'lesson_done', 'shortcut', 'export', 'restore', 'import_fail', 'guide_step', 'guide_skip', 'learn_auto', 'learn_undo', 'onboard_0', 'onboard_1', 'onboard_2', 'onboard_3', 'onboard_4', 'onboard_5', 'onboard_done', 'share', 'share_joined', 'howto', 'repair_shown', 'repair_fix', 'repair_skip'];
+const EVENTS = ['app_open', 'tx_add', 'import_done', 'advisor_ask', 'advisor_talk', 'decision_open', 'decision_message', 'trip_plan', 'news_open', 'lesson_done', 'shortcut', 'export', 'restore', 'import_fail', 'guide_step', 'guide_skip', 'learn_auto', 'learn_undo', 'onboard_0', 'onboard_1', 'onboard_2', 'onboard_3', 'onboard_4', 'onboard_5', 'onboard_done', 'share', 'share_joined', 'howto', 'repair_shown', 'repair_fix', 'repair_skip',
+  // Where an upload stops: opened, which kind of file, why it failed (a fixed word), left at which step.
+  'import_open', 'import_file_xlsx', 'import_file_xls', 'import_file_csv', 'import_file_pdf', 'import_file_image', 'import_file_other',
+  ...['ai_off', 'excel', 'password', 'xls', 'type', 'empty', 'pdf_scan', 'image_big', 'no_rows', 'junk', 'other'].map((c) => 'import_fail_' + c),
+  ...['pick', 'work', 'review', 'error'].map((s) => 'import_abandon_' + s),
+  // The first month built from their own data; the shopping list in use.
+  'first_value', 'shop_add', 'shop_done', 'shop_reuse'];
 const text = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 // A failure report from the app -> a row, or null. Never more than 20 at once.
@@ -115,6 +121,61 @@ function aiMonthlyLimit(own, fallback) {
   if (own != null && Number.isFinite(Number(own))) return Number(own);
   const f = Number(fallback);
   return Number.isFinite(f) && f > 0 ? f : AI_MONTHLY_DEFAULT;
+}
+
+// The owner's weekly view: people grouped by the week they signed up
+// (weeks start on Sunday), and how far each group got: a household, data of
+// their own, an upload, back a week later. "Back" is counted only for whoever
+// signed up more than 8 days ago. Ids in, numbers out. Pure.
+function weekOf(iso) {
+  const d = new Date(iso);
+  const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  day.setUTCDate(day.getUTCDate() - day.getUTCDay());
+  return day.toISOString().slice(0, 10);
+}
+function cohorts({ users = [], info = new Map(), events = [], now = new Date(), weeks = 8 }) {
+  const byUser = new Map();
+  for (const e of events) { if (!byUser.has(e.user_id)) byUser.set(e.user_id, []); byUser.get(e.user_id).push(e); }
+  const from = weekOf(new Date(now.getTime() - (weeks - 1) * 7 * DAY).toISOString());
+  const rows = new Map();
+  for (const u of users) {
+    const week = weekOf(u.created_at);
+    if (week < from) continue;
+    const r = rows.get(week) || { week, signups: 0, household: 0, withData: 0, imported: 0, oldEnough: 0, cameBack: 0 };
+    const x = info.get(u.id) || {};
+    const ev = byUser.get(u.id) || [];
+    const start = new Date(u.created_at).getTime();
+    r.signups++;
+    if (x.inHousehold) r.household++;
+    if (x.txCount > 0) r.withData++;
+    if (ev.some((e) => e.name === 'import_done')) r.imported++;
+    if (now.getTime() - start > 8 * DAY) {
+      r.oldEnough++;
+      if (ev.some((e) => new Date(e.at).getTime() - start >= 7 * DAY)) r.cameBack++;
+    }
+    rows.set(week, r);
+  }
+  return [...rows.values()].sort((a, b) => b.week.localeCompare(a.week));
+}
+// Where uploads stop (30 days): how many people opened one, picked a file,
+// saved; why it failed and at which step people left, most common first. Pure.
+function uploadFunnel(events = [], now = new Date(), days = 30) {
+  const recent = events.filter((e) => now.getTime() - new Date(e.at).getTime() < days * DAY);
+  const people = (test) => new Set(recent.filter((e) => test(e.name)).map((e) => e.user_id)).size;
+  const count = (prefix) => {
+    const m = new Map();
+    for (const e of recent) if (e.name.startsWith(prefix)) { const k = e.name.slice(prefix.length); m.set(k, (m.get(k) || 0) + 1); }
+    return [...m.entries()].map(([key, n]) => ({ key, n })).sort((a, b) => b.n - a.n);
+  };
+  return {
+    opened: people((n) => n === 'import_open'),
+    picked: people((n) => n.startsWith('import_file_')),
+    saved: people((n) => n === 'import_done'),
+    failedPeople: people((n) => n === 'import_fail'),
+    files: count('import_file_'),
+    reasons: count('import_fail_'),
+    leftAt: count('import_abandon_')
+  };
 }
 
 const int = (v) => Math.max(0, Math.round(Number(v) || 0));
@@ -758,4 +819,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };

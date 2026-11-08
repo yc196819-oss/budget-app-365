@@ -127,3 +127,12 @@ export function onList(items, name) {
 export function listText(items) {
   return grouped(items).map((g) => g.label + ':\n' + g.items.filter((i) => !i.done).map((i) => '☐ ' + i.name + (i.qty ? ' (' + i.qty + ')' : '')).join('\n')).filter((s) => s.includes('☐')).join('\n\n');
 }
+
+// How much is left for the supermarket per week until the month ends, so
+// the budget lasts: what is left divided by the weeks left (at least one).
+export function perWeek(left, today = new Date()) {
+  if (!(left > 0)) return 0;
+  const end = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const daysLeft = end - today.getDate() + 1;
+  return Math.floor(left / Math.max(1, daysLeft / 7));
+}

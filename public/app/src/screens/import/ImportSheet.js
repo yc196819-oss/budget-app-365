@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { listRules } from '../../data/rules.js';
 import { track, reportError } from '../../lib/telemetry.js';
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { readStatement, ImportError } from '../../data/importer.js';
 import { addImported, removeMany, removeImport, saveRow } from '../../data/household.js';
@@ -14,6 +14,12 @@ import { Review } from './Review.js';
 // Upload a card statement: pick a file, watch it being read, review what
 // was found (categories, duplicates), save. Saving can be undone.
 // phase: 'pick' | 'work' | 'review' | 'error'
+const fileType = (name) => {
+  const ext = String(name || '').split('.').pop().toLowerCase();
+  if (ext === 'xlsx' || ext === 'xls' || ext === 'csv' || ext === 'pdf') return ext;
+  return /^(png|jpe?g|webp|heic|gif)$/.test(ext) ? 'image' : 'other';
+};
+
 export function ImportSheet({ data, onClose }) {
   const [phase, setPhase] = useState('pick');
   const [step, setStep] = useState(null);
@@ -23,10 +29,20 @@ export function ImportSheet({ data, onClose }) {
   const [saving, setSaving] = useState(false);
   const [cardId, setCardId] = useState(() => (data.cards.length === 1 ? data.cards[0].id : null));
   const run = useRef(0);
+  // The owner's numbers: where people stop in an upload (fixed words only:
+  // the step, the kind of file, why it failed; never the file itself).
+  const stage = useRef('pick');
+  stage.current = phase;
+  const saved = useRef(false);
+  useEffect(() => {
+    track('import_open');
+    return () => { if (!saved.current) track('import_abandon_' + stage.current); };
+  }, []);
 
   const start = async (file) => {
     const id = ++run.current;
     setFileName(file.name);
+    track('import_file_' + fileType(file.name));
     setPhase('work');
     setStep('read');
     try {
@@ -43,6 +59,7 @@ export function ImportSheet({ data, onClose }) {
       if (run.current !== id) return;
       // Which kind of file failed and why (our message, never its content).
       track('import_fail');
+      track('import_fail_' + (err instanceof ImportError ? err.code : 'other'));
       reportError(err, 'import:' + (String(file.name).split('.').pop() || '').toLowerCase().slice(0, 5));
       setError(err instanceof ImportError ? err.message : 'משהו השתבש בקריאת הקובץ (' + (err.message || err) + '). נסו שוב, או קובץ אחר.');
       setPhase('error');
@@ -62,6 +79,7 @@ export function ImportSheet({ data, onClose }) {
       const deals = installmentDeals(rows, data.installments);
       for (const d of deals.create) await saveRow('installments', d).catch(() => {});
       for (const u of deals.update) await saveRow('installments', u).catch(() => {});
+      saved.current = true;
       onClose();
       const ids = added.map((r) => r.id);
       const importId = added[0] && added[0].import_id;

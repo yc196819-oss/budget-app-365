@@ -15,6 +15,39 @@ function costParts(s) {
   return parts.length ? ' (מתוכם ' + parts.join(', ') + ')' : '';
 }
 
+// The fixed words from the app, in Hebrew, for the upload numbers.
+const FAIL_WHY = { ai_off: 'ה-AI כבוי אצלם', excel: 'אקסל שלא נפתח', password: 'אקסל נעול בסיסמה', xls: 'אקסל ישן שלא נפתח', type: 'סוג קובץ לא נתמך', empty: 'קובץ ריק', pdf_scan: 'PDF סרוק בלי טקסט', image_big: 'תמונה גדולה מדי', no_rows: 'לא נמצאו תנועות', junk: 'לא נראה כמו פירוט', other: 'תקלה אחרת' };
+const LEFT_AT = { pick: 'לפני שבחרו קובץ', work: 'בזמן הקריאה', review: 'במסך הבדיקה, לפני שמירה', error: 'אחרי שגיאה' };
+const FILE_KIND = { xlsx: 'אקסל', xls: 'אקסל ישן', csv: 'CSV', pdf: 'PDF', image: 'צילום', other: 'אחר' };
+const dmy = (iso) => iso.slice(8, 10) + '.' + iso.slice(5, 7);
+
+// By week of sign-up: how far each group got. The number that matters most.
+function CohortCard({ rows }) {
+  if (!rows || !rows.length) return null;
+  const pct = (n, of) => (of ? Math.round((n / of) * 100) + '%' : '–');
+  return html`<div class="card stack admin-cohorts"><b>לפי שבוע הרשמה</b>
+    <span class="faint" style="font-size:12px;line-height:1.5">כמה נרשמו בכל שבוע, וכמה מהם הגיעו לכל שלב. "חזרו" נספר רק למי שנרשם לפני יותר מ-8 ימים.</span>
+    <div style="overflow-x:auto"><table class="admin-table">
+      <thead><tr><th>שבוע</th><th>נרשמו</th><th>משק בית</th><th>יש נתונים</th><th>העלו</th><th>חזרו אחרי שבוע</th></tr></thead>
+      <tbody>${rows.map((r) => html`<tr key=${r.week}><td>${dmy(r.week)}</td><td class="num">${r.signups}</td><td class="num">${r.household}</td>
+        <td class="num">${r.withData} <span class="faint">${pct(r.withData, r.signups)}</span></td><td class="num">${r.imported}</td>
+        <td class="num">${r.oldEnough ? html`${r.cameBack} <span class="faint">${pct(r.cameBack, r.oldEnough)}</span>` : html`<span class="faint">מוקדם</span>`}</td></tr>`)}</tbody>
+    </table></div>
+  </div>`;
+}
+
+// Where uploads stop (30 days).
+function UploadCard({ u }) {
+  if (!u || !u.opened) return html`<div class="card stack admin-upload"><b>איפה נעצרים בהעלאה</b><span class="muted" style="font-size:13px">עוד אין נתונים. המדידה התחילה עכשיו, והמספרים יופיעו כשאנשים יעלו קבצים.</span></div>`;
+  const list = (items, names) => items.map((x) => html`<div key=${x.key} style="display:flex;justify-content:space-between;font-size:13px"><span>${names[x.key] || x.key}</span><b class="num">${x.n}</b></div>`);
+  return html`<div class="card stack admin-upload"><b>איפה נעצרים בהעלאה (30 יום)</b>
+    <span style="font-size:14px">פתחו העלאה <b class="num">${u.opened}</b> · בחרו קובץ <b class="num">${u.picked}</b> · שמרו <b class="num">${u.saved}</b>${u.failedPeople ? html` · <span style="color:var(--danger)">נכשלו ${u.failedPeople}</span>` : ''}</span>
+    ${u.reasons.length > 0 && html`<span class="faint" style="font-size:12px">למה נכשל</span>${list(u.reasons, FAIL_WHY)}`}
+    ${u.leftAt.length > 0 && html`<span class="faint" style="font-size:12px">יצאו באמצע</span>${list(u.leftAt, LEFT_AT)}`}
+    ${u.files.length > 0 && html`<span class="faint" style="font-size:12px">סוגי קבצים</span>${list(u.files, FILE_KIND)}`}
+  </div>`;
+}
+
 // The owner's dashboard: who uses the app, who came back, what broke.
 // The monthly summary email: see it in your own inbox, then send it to all.
 function MonthlyMailCard() {
@@ -171,6 +204,8 @@ export function AdminView({ onBack }) {
             <i style=${'display:block;width:100%;border-radius:3px 3px 0 0;background:var(--accent);height:' + Math.max(2, Math.round((d.active / top) * 70)) + 'px'}></i>
             <span class="num faint" style="font-size:9px">${Number(d.day.slice(8))}</span></div>`; })}
         </div><span class="faint" style="font-size:11px">גובה = משתמשים פעילים ביום. מעבר עם העכבר מראה גם את עלות ה-AI.</span></div>`}
+      <${CohortCard} rows=${s.cohorts} />
+      <${UploadCard} u=${s.upload} />
       ${f && html`<div class="card stack admin-funnel"><b>מהרשמה לשימוש (30 יום)</b>
         ${[['נרשמו', f.signups], ['הקימו משק בית', f.household], ['הכניסו תנועות', f.tx], ['העלו פירוט', f.import], ['חזרו אחרי שבוע', f.cameBack]].map(([label, n]) => html`<div style="display:flex;align-items:center;gap:8px;font-size:13px">
           <span style="width:110px">${label}</span>

@@ -21,10 +21,14 @@ const MAX_IMAGE_BYTES = 1400000; // the server accepts a 2MB request
 const PART = 6000;
 const MERCHANTS_PER_CALL = 80;
 
-export class ImportError extends Error {}
+// A reading failure we can explain. code: a short fixed word for the owner's
+// numbers (which step fails most), never the file or its content.
+export class ImportError extends Error {
+  constructor(message, code = 'other') { super(message); this.code = code; }
+}
 
 async function aiImport(body) {
-  if (!aiEnabled()) throw new ImportError('היועץ (AI) כבוי בפרופיל, ולכן אפשר לקרוא כרגע רק קובצי אקסל ו-CSV. הפעילו אותו כדי לקרוא PDF או צילום.');
+  if (!aiEnabled()) throw new ImportError('היועץ (AI) כבוי בפרופיל, ולכן אפשר לקרוא כרגע רק קובצי אקסל ו-CSV. הפעילו אותו כדי לקרוא PDF או צילום.', 'ai_off');
   const res = await api('/api/ai/import', { method: 'POST', body });
   return Array.isArray(res.transactions) ? res.transactions : [];
 }
@@ -38,16 +42,16 @@ async function readTable(file, kind) {
     try {
       return (await readXlsx(bytes.buffer)).flatMap((s) => s.rows);
     } catch (_err) {
-      throw new ImportError('לא הצלחנו לפתוח את קובץ האקסל. נסו להוריד אותו שוב, או להעלות PDF.');
+      throw new ImportError('לא הצלחנו לפתוח את קובץ האקסל. נסו להוריד אותו שוב, או להעלות PDF.', 'excel');
     }
   }
   if (isBinaryXls(bytes)) {
     try {
       return readXls(bytes.buffer).flatMap((s) => s.rows);
     } catch (err) {
-      if (err && err.code === 'password') throw new ImportError('קובץ האקסל נעול בסיסמה. פתחו אותו, הסירו את הסיסמה ושמרו, או העלו את ה-PDF של הפירוט.');
+      if (err && err.code === 'password') throw new ImportError('קובץ האקסל נעול בסיסמה. פתחו אותו, הסירו את הסיסמה ושמרו, או העלו את ה-PDF של הפירוט.', 'password');
       reportError(err, 'xls');
-      throw new ImportError('לא הצלחנו לפתוח את קובץ האקסל הישן. נסו להוריד אותו שוב, או להעלות PDF.');
+      throw new ImportError('לא הצלחנו לפתוח את קובץ האקסל הישן. נסו להוריד אותו שוב, או להעלות PDF.', 'xls');
     }
   }
   const text = decodeText(bytes);
@@ -65,7 +69,7 @@ async function aiTextImport(text, categories, today) {
 // steps: 'read' -> 'find' -> 'sort' -> 'dupes'
 export async function readStatement(file, { categories, history, rules = [], today = new Date(), onStep = () => {} }) {
   const kind = fileKind(file);
-  if (!kind) throw new ImportError('סוג הקובץ לא נתמך. אפשר אקסל, CSV, PDF או צילום של הפירוט.');
+  if (!kind) throw new ImportError('סוג הקובץ לא נתמך. אפשר אקסל, CSV, PDF או צילום של הפירוט.', 'type');
   onStep('read');
   let items = [];
   let via = 'table';
@@ -76,25 +80,25 @@ export async function readStatement(file, { categories, history, rules = [], tod
     if (!items.length) {
       // Not a table we recognize: let the AI read the text.
       const text = rows.map((r) => r.join(' | ')).join('\n');
-      if (!text.trim()) throw new ImportError('הקובץ ריק או לא קריא.');
+      if (!text.trim()) throw new ImportError('הקובץ ריק או לא קריא.', 'empty');
       via = 'ai';
       items = await aiTextImport(text, categories, today);
     }
   } else if (kind === 'pdf') {
     const text = await pdfText(await file.arrayBuffer());
-    if (!text.trim()) throw new ImportError('לא מצאנו טקסט ב-PDF הזה (אולי זו סריקה). נסו צילום מסך או קובץ אקסל.');
+    if (!text.trim()) throw new ImportError('לא מצאנו טקסט ב-PDF הזה (אולי זו סריקה). נסו צילום מסך או קובץ אקסל.', 'pdf_scan');
     onStep('find');
     via = 'ai';
     items = await aiTextImport(text, categories, today);
   } else {
-    if (file.size > MAX_IMAGE_BYTES) throw new ImportError('התמונה גדולה מדי. צלמו מסך של הפירוט או הקטינו את התמונה.');
+    if (file.size > MAX_IMAGE_BYTES) throw new ImportError('התמונה גדולה מדי. צלמו מסך של הפירוט או הקטינו את התמונה.', 'image_big');
     onStep('find');
     via = 'ai';
     const mimeType = file.type === 'image/jpg' ? 'image/jpeg' : file.type || 'image/png';
     const fileData = base64(new Uint8Array(await file.arrayBuffer()));
     items = fromAi(await aiImport({ prompt: importPrompt(categories, today), text: '', fileData, mimeType }), categories);
   }
-  if (!items.length) throw new ImportError('לא מצאנו תנועות בקובץ. בדקו שזה הפירוט עצמו ולא סיכום.');
+  if (!items.length) throw new ImportError('לא מצאנו תנועות בקובץ. בדקו שזה הפירוט עצמו ולא סיכום.', 'no_rows');
 
   onStep('sort');
   // The household's own rules first, then their past choices, then the AI for the rest.
@@ -116,7 +120,7 @@ export async function readStatement(file, { categories, history, rules = [], tod
   }
   // A file that was not a statement (a letter, a form): nothing is saved.
   if (looksLikeJunk(items)) {
-    throw new ImportError('הקובץ הזה לא נראה כמו פירוט של כרטיס או בנק: כמעט כל השורות בו יצאו ₪1. כדאי לבדוק שזה הקובץ הנכון, או להעלות את הפירוט כאקסל או כצילום מסך.');
+    throw new ImportError('הקובץ הזה לא נראה כמו פירוט של כרטיס או בנק: כמעט כל השורות בו יצאו ₪1. כדאי לבדוק שזה הקובץ הנכון, או להעלות את הפירוט כאקסל או כצילום מסך.', 'junk');
   }
   onStep('dupes');
   // A card's own statement (most lines carry its last 4 digits) has no bank

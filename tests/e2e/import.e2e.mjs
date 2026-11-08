@@ -249,3 +249,28 @@ test('where to get the statement: a short how-to right where the file is picked'
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('the owner learns where uploads stop: fixed words only (opened, kind of file, why it failed, step left)', async () => {
+  const { page } = await open(390);
+  const names = [];
+  await page.route('**/api/telemetry', async (r) => {
+    const body = JSON.parse(r.request().postData() || '{}');
+    names.push(...(body.events || []));
+    // Nothing from the file reaches the owner: not its name, not its lines.
+    if (/max\.xlsx|אינו|ZARA/.test(r.request().postData() || '')) names.push('LEAK');
+    await r.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+  await page.click('text=העלאת פירוט כרטיס');
+  // A file that is not a statement fails, and the person leaves.
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('אינו פירוט') });
+  await page.waitForSelector('.sheet :text("לא מצאנו תנועות")');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.sheet'));
+  for (let i = 0; i < 100 && !names.includes('import_abandon_error'); i++) await page.waitForTimeout(100);
+  assert.ok(names.includes('import_open'), names.join());
+  assert.ok(names.includes('import_file_other'), names.join());
+  assert.ok(names.includes('import_fail_no_rows'), names.join());
+  assert.ok(names.includes('import_abandon_error'), names.join());
+  assert.ok(!names.includes('LEAK'));
+  await page.close();
+});

@@ -1,6 +1,7 @@
 import { html } from '../../lib/html.js';
 import { Loading } from '../../components/Loading.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { track } from '../../lib/telemetry.js';
 import { monthPlan, cashNow, upcoming, attention, topCategories } from '../../domain/home.js';
 import { TxSheet } from '../money/TxSheet.js';
 import { Hero } from './Hero.js';
@@ -42,6 +43,14 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
   // The holiday plan and the quarterly check-in have their own sheets.
   const planSheet = usePlanSheet();
   const trips = useTrips(data.hid);
+  // The owner's numbers: the first time this person sees a month built from
+  // their own data (once per person on this device; nothing else is sent).
+  const hasData = data.status === 'ready' && data.txs.length > 0;
+  useEffect(() => {
+    if (!hasData || !userId || readLocal('fv:' + userId, '')) return;
+    writeLocal('fv:' + userId, '1');
+    track('first_value');
+  }, [hasData, userId]);
 
   if (data.status === 'loading' || data.status === 'idle') return html`<${Loading} label="טוען…" />`;
   if (data.status === 'error') {

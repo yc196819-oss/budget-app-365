@@ -1793,7 +1793,8 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     const [{ count: memberCount }, { data: funnel }] = await Promise.all([members, funnelOf()]);
     return res.json({
       ...ops.stats({ events, errors: er.data || [] }), members: memberCount || 0, signedUp: signedUp.length, ...per,
-      live: presence.snapshot(Date.now(), owners), funnel: funnel || null, sharing: sh.totals, daily: ops.daily({ events, calls: calls.data || [] })
+      live: presence.snapshot(Date.now(), owners), funnel: funnel || null, sharing: sh.totals, daily: ops.daily({ events, calls: calls.data || [] }),
+      cohorts: ops.cohorts({ users: signedUp, info, events }), upload: ops.uploadFunnel(events)
     });
   } catch (err) {
     console.error('admin stats failed:', err.message);

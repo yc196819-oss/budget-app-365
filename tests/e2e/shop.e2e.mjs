@@ -24,15 +24,15 @@ async function open(width = 1280, setup = () => {}) {
   return { page, db, errors };
 }
 
-test('shopping is a tab on the computer menu and on the phone bar, marked new', async () => {
+test('shopping is a tab on the computer menu and on the phone bar, marked as a trial', async () => {
   const { page, errors } = await open(1280);
   assert.equal(await page.locator('.side-item[href="#/shop"]').count(), 1);
   assert.equal(await page.locator('.side-item[href="#/shop"][aria-current="page"]').count(), 1);
-  assert.equal((await page.locator('.side-item[href="#/shop"] .nav-tag').textContent()).trim(), 'חדש');
+  assert.equal((await page.locator('.side-item[href="#/shop"] .nav-tag').textContent()).trim(), 'בהרצה');
   await page.close();
   const phone = await open(390);
   assert.equal(await phone.page.locator('.bottom-nav .nav-item[href="#/shop"]').count(), 1);
-  assert.equal((await phone.page.locator('.bottom-nav .nav-item[href="#/shop"] .nav-tag').textContent()).trim(), 'חדש');
+  assert.equal((await phone.page.locator('.bottom-nav .nav-item[href="#/shop"] .nav-tag').textContent()).trim(), 'בהרצה');
   await phone.page.close();
   assert.deepEqual(errors, []);
 });
@@ -113,6 +113,36 @@ test('the food budget beside the list, the area is saved, and sharing by email f
   await page.emulateMedia({ media: 'print' });
   assert.equal(await page.locator('.shop-print').isVisible(), true);
   assert.match(await page.locator('.shop-print').textContent(), /חלב \(×2\)/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('the first time, what the tab is for: saving at the supermarket; "הבנתי" hides it for good, "מה זה?" brings it back', async () => {
+  const { page, errors } = await open(1280);
+  const intro = page.locator('.shop-intro');
+  assert.match(await intro.textContent(), /עוזרים לכם לחסוך בסופר/);
+  assert.equal(await intro.locator('.shop-benefits li').count(), 3);
+  // No promise of a price comparison before there is a reliable source.
+  assert.doesNotMatch(await page.locator('.shop').textContent(), /הכי זול/);
+  await intro.locator('.shop-intro-ok').click();
+  assert.equal(await page.locator('.shop-intro').count(), 0);
+  await page.reload();
+  await page.waitForSelector('.shop-add');
+  assert.equal(await page.locator('.shop-intro').count(), 0, 'stays hidden');
+  await page.locator('.shop-what').click();
+  assert.equal(await page.locator('.shop-intro').count(), 1);
+  // Beside the list: how much a week keeps the food budget.
+  assert.match(await page.locator('.shop-week').textContent(), /כדי לעמוד בתקציב: עד ₪[\d,]+ לשבוע עד סוף החודש/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a trial: the tab says so, and "כתבו לנו" opens the feedback form', async () => {
+  const { page, errors } = await open(1280);
+  assert.match(await page.locator('.shop-trial').textContent(), /בהרצה: הטאב חדש ועוד משתפר, וייתכנו תקלות/);
+  await page.locator('.shop-trial-talk').click();
+  await page.waitForSelector('.sheet');
+  assert.match(await page.locator('.sheet').textContent(), /תקל|רעיון/);
   assert.deepEqual(errors, []);
   await page.close();
 });

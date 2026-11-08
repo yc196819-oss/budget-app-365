@@ -5,7 +5,7 @@ import { TABS, parseRoute, hrefFor, DEFAULT_TAB } from '../public/app/src/domain
 test('five tabs in the agreed order; shared decisions only from links', () => {
   assert.deepEqual(TABS.map((t) => t.key), ['home', 'money', 'shop', 'plans', 'assets']);
   assert.equal(TABS.find((t) => t.key === 'plans').label, 'יעדים');
-  assert.equal(TABS.find((t) => t.key === 'shop').tag, 'חדש');
+  assert.equal(TABS.find((t) => t.key === 'shop').tag, 'בהרצה');
 });
 
 test('parseRoute accepts known tabs and falls back to home', () => {

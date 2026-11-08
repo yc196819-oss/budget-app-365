@@ -749,6 +749,22 @@ body.chat-open { overflow: hidden; }
 .shop-del { width: 36px; height: 36px; flex: none; color: var(--muted); }
 .shop-finish { justify-self: start; width: auto; padding-inline: 22px; }
 .shop-print { display: none; }
+.shop-intro { display: grid; gap: 14px; border: 1px solid var(--accent-tint); background: linear-gradient(135deg, var(--accent-tint), var(--surface) 55%); }
+.shop-intro-head { display: flex; gap: 12px; align-items: flex-start; }
+.shop-intro-head h2 { margin: 0 0 2px; font-size: 19px; }
+.shop-intro-ic { width: 38px; height: 38px; border-radius: 12px; flex: none; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); }
+.shop-benefits { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.shop-benefits li { display: flex; gap: 12px; align-items: flex-start; line-height: 1.5; }
+.shop-benefits li > span:last-child { display: grid; gap: 1px; font-size: 15px; }
+.shop-benefits .muted { font-size: 14px; }
+.shop-b-ic { width: 34px; height: 34px; border-radius: 10px; flex: none; display: grid; place-items: center; background: var(--surface-2); color: var(--accent); }
+.shop-intro-ok { justify-self: start; width: auto; padding-inline: 22px; }
+.shop-what { font-size: 14px; }
+.shop-trial { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }
+.shop-trial b { color: var(--text); }
+.shop-trial .btn-text { min-height: 0; padding: 0 4px; font-size: 14px; color: var(--accent); text-decoration: underline; }
+.shop-week { font-size: 14px; background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }
+@media (min-width: 1024px) { .shop-benefits { grid-template-columns: repeat(3, 1fr); } }
 @media (min-width: 1024px) {
   .shop { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 20px; }
   .shop-side { position: sticky; top: 16px; }
@@ -764,3 +780,8 @@ body.chat-open { overflow: hidden; }
   .shop-print .pl { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
   .shop-print .pc { width: 12px; height: 12px; border: 1.5px solid #000; flex: none; }
 }
+
+/* Owner dashboard tables */
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th { text-align: start; color: var(--muted); font-weight: 700; padding: 4px 6px; white-space: nowrap; }
+.admin-table td { padding: 6px; border-top: 1px solid var(--line); white-space: nowrap; }
