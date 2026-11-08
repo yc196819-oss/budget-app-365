@@ -24,13 +24,15 @@ async function open(width = 1280, setup = () => {}) {
   return { page, db, errors };
 }
 
-test('shopping is a tab on the computer menu and on the phone bar', async () => {
+test('shopping is a tab on the computer menu and on the phone bar, marked new', async () => {
   const { page, errors } = await open(1280);
   assert.equal(await page.locator('.side-item[href="#/shop"]').count(), 1);
   assert.equal(await page.locator('.side-item[href="#/shop"][aria-current="page"]').count(), 1);
+  assert.equal((await page.locator('.side-item[href="#/shop"] .nav-tag').textContent()).trim(), 'חדש');
   await page.close();
   const phone = await open(390);
   assert.equal(await phone.page.locator('.bottom-nav .nav-item[href="#/shop"]').count(), 1);
+  assert.equal((await phone.page.locator('.bottom-nav .nav-item[href="#/shop"] .nav-tag').textContent()).trim(), 'חדש');
   await phone.page.close();
   assert.deepEqual(errors, []);
 });

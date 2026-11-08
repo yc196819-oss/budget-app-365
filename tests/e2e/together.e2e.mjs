@@ -62,6 +62,8 @@ test('"not now" needs a reason; the answer is saved and the partner is notified'
   await page.waitForFunction(() => !document.querySelector('.sheet'));
   assert.deepEqual(db.tables.decision_votes.map((v) => [v.decision_id, v.user_id, v.vote, v.note]), [['d1', 'u1', 'not_now', 'בואו נחכה לבונוס בדצמבר']]);
   assert.equal(db.tables.shared_decisions[0].status, 'not_now');
+  // The partner is notified in the background, after the answer is saved.
+  for (let i = 0; i < 60 && !notified.length; i++) await page.waitForTimeout(50);
   assert.deepEqual(notified, [{ decisionId: 'd1', event: 'answered' }]);
   // It stays in the conversation until we decide together, and the badge is gone.
   await page.waitForSelector('section:has-text("בשיחה, עוד לא החלטנו") .decision');

@@ -14,7 +14,7 @@ export function Sidebar({ tab, onAdd, onImport, onLearn, onProfile, profile, bad
       <nav aria-label="ניווט ראשי" class="stack" style="gap:4px">
         ${TABS.map((t) => html`
           <a class="side-item" href=${hrefFor(t.key)} aria-current=${tab === t.key ? 'page' : 'false'} title=${tip(t.label)} aria-label=${mini ? t.label : undefined}>
-            <${Icon} name=${t.icon} /><span class="side-label">${t.label}</span>${badges[t.key] > 0 && html`<span class="nav-badge side">${badges[t.key]}</span>`}
+            <${Icon} name=${t.icon} /><span class="side-label">${t.label}</span>${t.tag && html`<span class="nav-tag side-label">${t.tag}</span>`}${badges[t.key] > 0 && html`<span class="nav-badge side">${badges[t.key]}</span>`}
           </a>`)}
       </nav>
       <div class="side-sep"></div>

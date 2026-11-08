@@ -234,8 +234,18 @@ function feedbackPatch(body) {
 //   first: opened a household, never uploaded a statement
 //   more:  uploaded, but less than 6 months of statements
 const CAMPAIGNS = ['start', 'first', 'more'];
+// At most one email a week from us to a person, whatever its kind. Not
+// counted: what the person asked for (the monthly summary they turned on,
+// an answer to their request, sign-in codes, sign-up and password emails,
+// which Supabase sends). A send that failed did not reach them. Pure.
+const WEEK = 7 * DAY;
+const askedFor = (campaign) => /^monthly-/.test(String(campaign || ''));
+function mailedThisWeek(rows = [], now = new Date()) {
+  return rows.some((r) => !askedFor(r.campaign) && r.ok !== false && r.sent_at && now.getTime() - new Date(r.sent_at).getTime() < WEEK);
+}
 function campaignList(campaign, { users = [], members = [], spans = [], sent = [], owners = [], stopped = [], now = new Date() }) {
   const off = new Set(stopped);
+  for (const u of new Set(sent.map((r) => r.user_id))) if (mailedThisWeek(sent.filter((r) => r.user_id === u), now)) off.add(u);
   const householdOf = new Map(members.map((m) => [m.user_id, m.household_id]));
   const span = new Map(spans.map((x) => [x.household_id, { n: Number(x.n) || 0, months: Number(x.months) || 0 }]));
   const done = new Set(sent.filter((r) => (r.campaign || 'start') === campaign).map((r) => r.user_id));
@@ -724,4 +734,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

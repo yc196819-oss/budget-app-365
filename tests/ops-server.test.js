@@ -448,3 +448,17 @@ test('thanks to the person whose link it was: never says who joined, counts frie
   assert.match(three.text, /עד היום הצטרפו בזכותך 3 אנשים/);
   assert.doesNotMatch(three.html, /להסרה/);
 });
+
+test('at most one email a week, whatever its kind; what the person asked for does not count', () => {
+  const now = new Date('2026-11-08T10:00:00Z');
+  const ago = (d) => new Date(now.getTime() - d * 86400000).toISOString();
+  assert.equal(ops.mailedThisWeek([], now), false);
+  assert.equal(ops.mailedThisWeek([{ campaign: 'thanks-x', sent_at: ago(3) }], now), true);
+  assert.equal(ops.mailedThisWeek([{ campaign: 'start', sent_at: ago(8) }], now), false);
+  assert.equal(ops.mailedThisWeek([{ campaign: 'monthly-2026-10', sent_at: ago(1) }], now), false, 'the monthly summary they turned on');
+  assert.equal(ops.mailedThisWeek([{ campaign: 'first', sent_at: ago(2), ok: false }], now), false, 'a failed send did not reach them');
+  // The help emails skip someone who got a thank-you three days ago.
+  const users = [{ id: 'a', email: 'a@example.com', email_confirmed_at: ago(20), created_at: ago(20) }, { id: 'b', email: 'b@example.com', email_confirmed_at: ago(20), created_at: ago(20) }];
+  const list = ops.campaignList('start', { users, sent: [{ user_id: 'a', campaign: 'thanks-x', sent_at: ago(3) }], now });
+  assert.deepEqual(list.map((u) => u.id), ['b']);
+});

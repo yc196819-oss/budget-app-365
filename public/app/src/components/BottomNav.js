@@ -9,7 +9,7 @@ export function BottomNav({ tab, onAdd, badges = {} }) {
   const half = 2;
   const item = (t) => html`
     <a class="nav-item" href=${hrefFor(t.key)} aria-current=${tab === t.key ? 'page' : 'false'}>
-      <span class="pill"><${Icon} name=${t.icon} />${badges[t.key] > 0 && html`<span class="nav-badge" aria-label=${badges[t.key] + ' מחכים לך'}>${badges[t.key]}</span>`}</span>${t.label}
+      <span class="pill"><${Icon} name=${t.icon} />${t.tag && !(badges[t.key] > 0) && html`<span class="nav-tag">${t.tag}</span>`}${badges[t.key] > 0 && html`<span class="nav-badge" aria-label=${badges[t.key] + ' מחכים לך'}>${badges[t.key]}</span>`}</span>${t.label}
     </a>`;
   return html`
     <nav class="bottom-nav" aria-label="ניווט ראשי">
