@@ -6,6 +6,7 @@ import { pdfText } from '../lib/pdf.js';
 import { fileKind, decodeText, isBinaryXls, htmlTables, base64 } from '../lib/files.js';
 import { aiEnabled } from '../lib/settings.js';
 import { splitText, inParts } from '../domain/pdftext.js';
+import { looksLikeJunk } from '../domain/repair.js';
 import { reportError } from '../lib/telemetry.js';
 import { parseCsv, rowsToTransactions, fromAi, importPrompt, categorizePrompt, categorizeText, waitingMerchants, applyAiCategories, prepare, categorizeFromHistory } from '../domain/statement.js';
 
@@ -112,6 +113,10 @@ export async function readStatement(file, { categories, history, rules = [], tod
         reportError(err, 'import:categorize');
       }
     });
+  }
+  // A file that was not a statement (a letter, a form): nothing is saved.
+  if (looksLikeJunk(items)) {
+    throw new ImportError('הקובץ הזה לא נראה כמו פירוט של כרטיס או בנק: כמעט כל השורות בו יצאו ₪1. כדאי לבדוק שזה הקובץ הנכון, או להעלות את הפירוט כאקסל או כצילום מסך.');
   }
   onStep('dupes');
   // A card's own statement (most lines carry its last 4 digits) has no bank

@@ -104,3 +104,49 @@ export function findRepairs(txs, skipped = new Set()) {
   const junkFiles = new Set(junk.map((j) => j.importId));
   return [...junk, ...chargeDateIssues(txs).filter((c) => !junkFiles.has(c.importId))].filter((r) => !skipped.has(r.key));
 }
+
+// ── at upload time, before anything is saved ─────────────────────────────
+// The same two mistakes, caught on the lines of a file being uploaded (they
+// carry `date`, not `tx_date`). Pure.
+
+// A file that is not a statement: dozens of ₪1 lines.
+export function looksLikeJunk(items) {
+  if (items.length < MIN_LINES) return false;
+  return items.filter((t) => Math.abs(Number(t.amount) || 0) <= 1).length / items.length >= JUNK_SHARE;
+}
+
+// Every purchase on the card's charge day: each moves to an estimated date in
+// the month it was bought, and one that is already here (the same name and
+// amount, once, within the 75 days before the charge) starts unchecked as a
+// duplicate. Returns the lines, and what was done for the review screen.
+export function fixChargeDay(items, history = []) {
+  const buys = items.filter((t) => t.type !== 'income');
+  if (buys.length < MIN_LINES) return { items, fixed: null };
+  const byDay = new Map();
+  for (const t of buys) byDay.set(t.date, (byDay.get(t.date) || 0) + 1);
+  const [day, count] = [...byDay].sort((a, b) => b[1] - a[1])[0];
+  if (count < MIN_LINES || count / buys.length < SHARE || byDay.size > MAX_DAYS) return { items, fixed: null };
+  const moveTo = estimatedDate(day);
+  const charged = new Date(day + 'T12:00:00Z').getTime();
+  const sig = (t) => normName(t.description) + '|' + cents(t.amount);
+  const seen = new Map();
+  for (const o of history) {
+    if (o.type === 'income') continue;
+    const s = sig(o);
+    seen.set(s, [...(seen.get(s) || []), o]);
+  }
+  const inFile = new Map();
+  for (const t of buys) if (t.date === day) inFile.set(sig(t), (inFile.get(sig(t)) || 0) + 1);
+  let dropped = 0;
+  const out = items.map((t) => {
+    if (t.type === 'income' || t.date !== day) return t;
+    const twins = seen.get(sig(t)) || [];
+    const near = twins.filter((o) => { const gap = charged - new Date(o.tx_date + 'T12:00:00Z').getTime(); return gap >= 0 && gap <= 75 * DAY; });
+    if (twins.length === 1 && near.length === 1 && inFile.get(sig(t)) === 1) {
+      dropped++;
+      return { ...t, date: moveTo, chargeDay: day, dupeHere: { date: near[0].tx_date, description: near[0].description || '' } };
+    }
+    return { ...t, date: moveTo, chargeDay: day };
+  });
+  return { items: out, fixed: { day, moveTo, count, dropped } };
+}

@@ -705,3 +705,7 @@ body.chat-open { overflow: hidden; }
 .goal-monthly { font-size: 14px; font-weight: 700; color: var(--accent); }
 .suggest-line { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
 .suggest-line + .suggest-line { border-top: 1px solid var(--line); }
+
+/* Import: the dates of a file were fixed before saving */
+.import-fixed { display: flex; flex-direction: column; gap: 6px; border-inline-start: 4px solid var(--accent); font-size: 14px; line-height: 1.6; }
+.import-fixed b { font-size: 15px; }

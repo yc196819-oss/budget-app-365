@@ -4,6 +4,7 @@
 //     category_id, subcategory_id, auto: 'history'|'ai'|null, dupe: 'likely'|'maybe'|null, dupeOf, include }
 
 import { isoDate, guessCategory, sameMerchant } from './money.js';
+import { fixChargeDay } from './repair.js';
 
 // ── cells ──────────────────────────────────────────────────────────────
 
@@ -179,6 +180,7 @@ export function importPrompt(categories, today) {
     + 'לכל תנועה בחר קטגוריה מהרשימה, ברמה הכי ספציפית שקיימת. השאר את שם בית העסק מלא כפי שהוא מופיע. '
     + 'זיכוי או החזר הם type "income". אל תכלול שורות סיכום. '
     + 'כלול כל שורת עסקה, גם כששם בית העסק או הפרטים נשברים לכמה שורות, וגם הוראות קבע, העברות (BIT, פייבוקס) ועמלות. שתי שורות זהות הן שתי עסקאות. '
+    + 'date הוא תאריך העסקה עצמה (עמודת "תאריך עסקה" או "תאריך רכישה"), לא תאריך החיוב של הכרטיס ("תאריך חיוב", שהוא אותו יום לכל השורות). '
     + 'amount הוא הסכום בשקלים שחויב (עמודת "סכום ₪" או "סכום חיוב"), לא הסכום המקורי במטבע זר ולא סכום העסקה המלא. '
     + 'בעסקה בתשלומים ("תשלום 3 מתוך 14"): installment הוא {"n":3,"of":14}, ו-date הוא מועד החיוב של התשלום הזה, לא תאריך העסקה המקורי. '
     + 'אם בפירוט כמה כרטיסים, card הוא 4 הספרות האחרונות של הכרטיס שהשורה שייכת אליו.\n\n' + categoryTreeText(categories)
@@ -391,8 +393,14 @@ export function withKeys(items) {
   return items.map((t, i) => ({ ...t, key: 'i' + i }));
 }
 
+// The lines of a file, ready for review: dates fixed when the whole file
+// carries the card's charge day, then duplicates flagged. A line that is
+// already here with its real date starts unchecked.
 export function prepare(items, history, opts) {
-  return flagDuplicates(withKeys(items), history, opts);
+  const { items: fixed } = fixChargeDay(items, history);
+  return flagDuplicates(withKeys(fixed), history, opts).map((t) => (t.dupeHere
+    ? { ...t, dupe: 'likely', dupeOf: t.dupeHere, include: false }
+    : t));
 }
 
 export function summary(items) {
@@ -406,6 +414,9 @@ export function summary(items) {
     likely: items.filter((t) => t.dupe === 'likely').length,
     maybe: items.filter((t) => t.dupe === 'maybe').length,
     cardCharges: items.filter((t) => t.cardCharge).length,
+    chargeDay: (items.find((t) => t.chargeDay) || {}).chargeDay || null,
+    movedTo: (items.find((t) => t.chargeDay) || {}).date || null,
+    moved: items.filter((t) => t.chargeDay).length,
     expense: chosen.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
     income: chosen.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0),
     from: chosen.reduce((m, t) => (!m || t.date < m ? t.date : m), null),
