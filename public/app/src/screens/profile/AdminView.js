@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach } from '../../data/account.js';
+import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach, priceService, priceSample } from '../../data/account.js';
 import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
@@ -83,6 +83,37 @@ function PriceReachCard() {
     ${r && r.sites && html`<div role="status" class="stack" style="gap:4px;font-size:13px">
       <span>${r.sites.filter((x) => x.ok).length} מתוך ${r.sites.length} עונים</span>
       ${r.sites.map((x) => html`<span key=${x.key}><b style=${'color:' + (x.ok ? 'var(--accent)' : 'var(--danger)')}>${x.ok ? '✓' : '✕'}</b> ${x.name}: ${why(x)}</span>`)}
+    </div>`}
+  </div>`;
+}
+
+// The outside price service: first what it is and costs, then one small run
+// to see real rows (chain, store, product, price, when updated).
+function PriceServiceCard() {
+  const [about, setAbout] = useState(null);
+  const [sample, setSample] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  const run = async (key, fn, set) => { setBusy(key); setErr(''); try { set(await fn()); } catch (e) { setErr(e.message || 'הבדיקה נכשלה'); } setBusy(''); };
+  const p = about && about.pricing;
+  return html`<div class="card stack admin-price-service"><b>מחירי סופר: השירות החיצוני (Apify)</b>
+    <span class="muted" style="font-size:13px;line-height:1.55">שלב 1: מה השירות מבקש ומה הוא עולה (בחינם). שלב 2: הרצה קטנה אחת, עד 15 תוצאות, כדי לראות מחירים אמיתיים. ההרצה משתמשת בקצת מהקרדיט החודשי.</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => run('a', priceService, setAbout)}>${busy === 'a' ? 'בודק…' : '1. מה השירות'}</button>
+      <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => run('s', () => priceSample(), setSample)}>${busy === 's' ? 'מריץ… (עד 2 דקות)' : '2. הרצה קטנה'}</button>
+    </div>
+    ${err && html`<span role="status" style="font-size:13px;color:var(--danger)">${err}</span>`}
+    ${about && html`<div role="status" class="stack" style="gap:4px;font-size:13px">
+      <span><b>${about.title}</b>${about.modified ? ' · עודכן ' + String(about.modified).slice(0, 10) : ''}</span>
+      ${about.description && html`<span class="muted">${about.description}</span>`}
+      <span>מחיר: ${p ? (p.model || '') + (p.perUnit != null ? ' · $' + p.perUnit + ' ל-' + (p.unit || 'יחידה') : '') + (p.events ? ' · ' + JSON.stringify(p.events).slice(0, 160) : '') : 'לא צוין'}</span>
+      ${about.fields.length > 0 && html`<span class="faint">שדות שהוא מקבל:</span>${about.fields.map((f) => html`<span key=${f.key} dir="auto"><bdi>${f.key}</bdi>${f.title ? ' – ' + f.title : ''}${f.example !== undefined ? ' (למשל ' + JSON.stringify(f.example).slice(0, 60) + ')' : ''}</span>`)}`}
+    </div>`}
+    ${sample && html`<div role="status" class="stack" style="gap:4px;font-size:13px">
+      <span>${sample.count} תוצאות ב-${sample.seconds} שניות</span>
+      <span class="faint" dir="auto">שדות: ${sample.keys.join(', ')}</span>
+      <div style="overflow-x:auto"><table class="admin-table" dir="auto"><thead><tr>${sample.keys.slice(0, 8).map((k) => html`<th key=${k}>${k}</th>`)}</tr></thead>
+        <tbody>${sample.rows.map((r, i) => html`<tr key=${i}>${sample.keys.slice(0, 8).map((k) => html`<td key=${k}>${r[k] ?? ''}</td>`)}</tr>`)}</tbody></table></div>
     </div>`}
   </div>`;
 }
@@ -194,6 +225,7 @@ export function AdminView({ onBack }) {
     </div>`}
     ${back && html`<${MonthlyMailCard} />`}
     ${back && html`<${PriceReachCard} />`}
+    ${back && html`<${PriceServiceCard} />`}
     ${s && html`
       <div style="display:flex;gap:8px">${tile('פעילים היום', s.active.day)}${tile('השבוע', s.active.week)}${tile('החודש', s.active.month)}</div>
       ${today && html`<div style="display:flex;gap:8px">${tile('נרשמו היום', (f && f.byDay && f.byDay[today.day]) || 0)}${tile('עלות AI היום', '$' + today.cost)}${tile('עלות AI ב-30 יום', '$' + (s.aiCost30d ?? 0))}</div>`}

@@ -101,3 +101,17 @@ test('the confirmation link opened in another browser: the code saved with the a
   assert.deepEqual(calls, [{ ref: 'd4e5f6' }]);
   await page.close();
 });
+
+test('the share buttons wait for the personal link, so it always carries the code', async () => {
+  const { page } = await open({ share: false });
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await page.route('**/api/share', async (r) => { await gate; await r.fulfill({ status: 200, contentType: 'application/json', body: '{"code":"a1b2c3","joined":0}' }); });
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.locator('.share-wait').waitFor();
+  assert.equal(await page.locator('.share-more').count(), 0, 'no link without the code');
+  release();
+  await page.locator('.share-more').waitFor();
+  assert.match(await page.locator('.share-more a:has-text("וואטסאפ")').getAttribute('href'), /ref%3Da1b2c3/);
+  await page.close();
+});
