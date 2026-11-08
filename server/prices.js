@@ -102,3 +102,41 @@ async function apifySample(fetchFn, token, input, { actor = ACTOR, limit = 15, s
 module.exports.apifyAbout = apifyAbout;
 module.exports.apifySample = apifySample;
 module.exports.APIFY_ACTOR = ACTOR;
+
+// A small test search: one product, one store per chain, few rows, no
+// photos. Built from the fields the service itself lists.
+const SAMPLE_INPUT = { mode: 'compareProducts', productQueries: ['חלב 3%'], oneStorePerChain: true, includeImages: false, maxItems: 15, maxRowsPerChain: 5 };
+
+// The run is started and then checked on, instead of waiting on one long
+// request (the server gives up on those before the service is done).
+async function apifyStart(fetchFn, token, input, { actor = ACTOR, seconds = 300 } = {}) {
+  const r = await fetchFn(APIFY + '/acts/' + actor + '/runs?timeout=' + seconds, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(input || {}) });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('Apify ' + r.status + ': ' + String((body.error && body.error.message) || '').slice(0, 200));
+  return { runId: body.data && body.data.id, status: body.data && body.data.status };
+}
+const DONE = ['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'];
+async function apifyCheck(fetchFn, token, runId, { limit = 15 } = {}) {
+  if (!/^[A-Za-z0-9]{6,40}$/.test(String(runId || ''))) throw new Error('bad run');
+  const run = await apifyGet(fetchFn, token, '/actor-runs/' + runId);
+  const status = (run && run.status) || 'UNKNOWN';
+  const seconds = run && run.startedAt ? Math.round(((run.finishedAt ? new Date(run.finishedAt) : new Date()) - new Date(run.startedAt)) / 1000) : 0;
+  const cost = run && run.usageTotalUsd != null ? Number(run.usageTotalUsd) : null;
+  if (!DONE.includes(status)) return { status, done: false, seconds, cost };
+  let items = [];
+  if (status === 'SUCCEEDED' && run.defaultDatasetId) {
+    const r = await fetchFn(APIFY + '/datasets/' + run.defaultDatasetId + '/items?clean=true&limit=' + limit, { headers: { Authorization: 'Bearer ' + token } });
+    items = await r.json().catch(() => []);
+    if (!Array.isArray(items)) items = [];
+  }
+  return { status, done: true, seconds, cost, ...shape(items, limit) };
+}
+function shape(items, limit) {
+  const keys = [...new Set(items.flatMap((x) => (x && typeof x === 'object' ? Object.keys(x) : [])))].slice(0, 40);
+  const short = (v) => (v && typeof v === 'object' ? JSON.stringify(v).slice(0, 120) : String(v ?? '').slice(0, 120));
+  return { count: items.length, keys, rows: items.slice(0, limit).map((x) => Object.fromEntries(Object.entries(x || {}).slice(0, 14).map(([k, v]) => [k, short(v)]))) };
+}
+
+module.exports.SAMPLE_INPUT = SAMPLE_INPUT;
+module.exports.apifyStart = apifyStart;
+module.exports.apifyCheck = apifyCheck;

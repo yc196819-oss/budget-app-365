@@ -490,7 +490,10 @@ test('owner: the outside price service, what it takes and costs, then one small 
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
   await page.route('**/api/admin/prices/service', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ title: 'Israeli Supermarket Prices', description: 'Official price files', modified: '2026-10-01', pricing: { model: 'PAY_PER_EVENT', perUnit: null, unit: '', events: null }, fields: [{ key: 'query', title: 'Product', type: 'string', example: 'חלב' }], example: { query: 'חלב' } }) }));
   let ran = null;
-  await page.route('**/api/admin/prices/sample', (r) => { ran = JSON.parse(r.request().postData() || '{}'); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ input: { query: 'חלב' }, seconds: 12, count: 2, keys: ['chain', 'store', 'item', 'price', 'updated'], rows: [{ chain: 'שופרסל', store: 'דיזנגוף', item: 'חלב 3%', price: '6.9', updated: '2026-11-08' }, { chain: 'רמי לוי', store: 'תלפיות', item: 'חלב 3%', price: '6.5', updated: '2026-11-08' }] }) }); });
+  let checks = 0;
+  await page.route('**/api/admin/prices/sample', (r) => { ran = JSON.parse(r.request().postData() || '{}'); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ input: { productQueries: ['חלב 3%'] }, runId: 'run1abcdef', status: 'RUNNING' }) }); });
+  await page.route('**/api/admin/prices/sample/run1abcdef', (r) => { checks++; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(checks < 2 ? { status: 'RUNNING', done: false, seconds: 5 } : { status: 'SUCCEEDED', done: true, seconds: 12, cost: 0.012, count: 2, keys: ['chain', 'store', 'item', 'price', 'updated'], rows: [{ chain: 'שופרסל', store: 'דיזנגוף', item: 'חלב 3%', price: '6.9', updated: '2026-11-08' }, { chain: 'רמי לוי', store: 'תלפיות', item: 'חלב 3%', price: '6.5', updated: '2026-11-08' }] }) }); });
+  await page.clock.install();
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
   const card = page.locator('.admin-price-service');
@@ -500,9 +503,13 @@ test('owner: the outside price service, what it takes and costs, then one small 
   assert.match(await card.textContent(), /PAY_PER_EVENT/);
   assert.match(await card.textContent(), /query – Product \(למשל "חלב"\)/);
   await card.locator('button:has-text("2. הרצה קטנה")').click();
+  // Checked every 5 seconds until the run is done.
+  await page.clock.runFor(5100);
+  await page.clock.runFor(5100);
   await card.locator('table').waitFor();
-  assert.deepEqual(ran, {}, 'the service\'s own example is used');
-  assert.match(await card.textContent(), /2 תוצאות ב-12 שניות/);
+  assert.deepEqual(ran, {}, 'the server picks the test search');
+  assert.equal(checks, 2);
+  assert.match(await card.textContent(), /2 תוצאות ב-12 שניות · עלה \$0\.012 · חיפוש: חלב 3%/);
   assert.equal(await card.locator('tbody tr').count(), 2);
   assert.match(await card.locator('tbody').textContent(), /רמי לוי.*6\.5/s);
   assert.deepEqual(errors, []);

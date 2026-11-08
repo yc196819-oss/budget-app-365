@@ -54,3 +54,30 @@ test('one small run: capped, the fields and a few rows as they came; a refusal i
   const no = async () => ({ ok: false, status: 402, text: async () => JSON.stringify({ error: { message: 'Not enough credit' } }) });
   await assert.rejects(apifySample(no, 'tok', {}), /402: Not enough credit/);
 });
+
+const { apifyStart, apifyCheck, SAMPLE_INPUT } = createRequire(import.meta.url)('../server/prices.js');
+
+test('a test search is started, then checked until done, with the fields the service lists', async () => {
+  assert.deepEqual(SAMPLE_INPUT.productQueries, ['חלב 3%']);
+  assert.equal(SAMPLE_INPUT.mode, 'compareProducts');
+  assert.equal(SAMPLE_INPUT.includeImages, false);
+  let started = '';
+  const start = await apifyStart(async (url, opts) => { started = url + ' ' + opts.body + ' ' + opts.headers.Authorization; return { ok: true, json: async () => ({ data: { id: 'run123abc', status: 'RUNNING' } }) }; }, 'tok', SAMPLE_INPUT);
+  assert.deepEqual(start, { runId: 'run123abc', status: 'RUNNING' });
+  assert.match(started, /\/runs\?timeout=300 .*"productQueries":\["חלב 3%"\].* Bearer tok$/);
+  let runStatus = 'RUNNING';
+  const fake = async (url) => {
+    if (url.includes('/actor-runs/run123abc')) return { ok: true, json: async () => ({ data: { status: runStatus, startedAt: '2026-11-08T10:00:00Z', finishedAt: runStatus === 'SUCCEEDED' ? '2026-11-08T10:00:40Z' : null, defaultDatasetId: 'ds1', usageTotalUsd: 0.012 } }) };
+    if (url.includes('/datasets/ds1/items')) return { ok: true, json: async () => [{ chain: 'shufersal', name: 'חלב 3%', barcode: '7290000000001', price: 6.9 }] };
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  const running = await apifyCheck(fake, 'tok', 'run123abc');
+  assert.equal(running.done, false);
+  runStatus = 'SUCCEEDED';
+  const done = await apifyCheck(fake, 'tok', 'run123abc');
+  assert.equal(done.done, true);
+  assert.equal(done.seconds, 40);
+  assert.equal(done.count, 1);
+  assert.deepEqual(done.keys, ['chain', 'name', 'barcode', 'price']);
+  await assert.rejects(apifyCheck(fake, 'tok', '../x'), /bad run/);
+});

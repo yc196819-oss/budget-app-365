@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach, priceService, priceSample } from '../../data/account.js';
+import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach, priceService, priceSample, priceRun } from '../../data/account.js';
 import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
@@ -95,12 +95,28 @@ function PriceServiceCard() {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
   const run = async (key, fn, set) => { setBusy(key); setErr(''); try { set(await fn()); } catch (e) { setErr(e.message || 'הבדיקה נכשלה'); } setBusy(''); };
+  const [wait, setWait] = useState(0);
+  // Start the run, then check every 5 seconds (up to 5 minutes) until it ends.
+  const runSample = async () => {
+    setSample(null); setWait(0);
+    const start = await priceSample();
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const r = await priceRun(start.runId);
+      setWait(r.seconds || (i + 1) * 5);
+      if (r.done) {
+        if (r.status !== 'SUCCEEDED') throw new Error('ההרצה הסתיימה בלי תוצאות (' + r.status + ')');
+        return { ...r, input: start.input };
+      }
+    }
+    throw new Error('ההרצה לוקחת יותר מ-5 דקות. אפשר לנסות שוב מאוחר יותר.');
+  };
   const p = about && about.pricing;
   return html`<div class="card stack admin-price-service"><b>מחירי סופר: השירות החיצוני (Apify)</b>
-    <span class="muted" style="font-size:13px;line-height:1.55">שלב 1: מה השירות מבקש ומה הוא עולה (בחינם). שלב 2: הרצה קטנה אחת, עד 15 תוצאות, כדי לראות מחירים אמיתיים. ההרצה משתמשת בקצת מהקרדיט החודשי.</span>
+    <span class="muted" style="font-size:13px;line-height:1.55">שלב 1: מה השירות מבקש ומה הוא עולה (בחינם). שלב 2: הרצה קטנה אחת (חלב 3%, סניף אחד מכל רשת, עד 15 תוצאות) כדי לראות מחירים אמיתיים. ההרצה משתמשת בקצת מהקרדיט החודשי.</span>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => run('a', priceService, setAbout)}>${busy === 'a' ? 'בודק…' : '1. מה השירות'}</button>
-      <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => run('s', () => priceSample(), setSample)}>${busy === 's' ? 'מריץ… (עד 2 דקות)' : '2. הרצה קטנה'}</button>
+      <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => run('s', runSample, setSample)}>${busy === 's' ? 'מריץ… ' + (wait ? wait + ' שניות' : '') : '2. הרצה קטנה'}</button>
     </div>
     ${err && html`<span role="status" style="font-size:13px;color:var(--danger)">${err}</span>`}
     ${about && html`<div role="status" class="stack" style="gap:4px;font-size:13px">
@@ -110,7 +126,7 @@ function PriceServiceCard() {
       ${about.fields.length > 0 && html`<span class="faint">שדות שהוא מקבל:</span>${about.fields.map((f) => html`<span key=${f.key} dir="auto"><bdi>${f.key}</bdi>${f.title ? ' – ' + f.title : ''}${f.example !== undefined ? ' (למשל ' + JSON.stringify(f.example).slice(0, 60) + ')' : ''}</span>`)}`}
     </div>`}
     ${sample && html`<div role="status" class="stack" style="gap:4px;font-size:13px">
-      <span>${sample.count} תוצאות ב-${sample.seconds} שניות</span>
+      <span>${sample.count} תוצאות ב-${sample.seconds} שניות${sample.cost != null ? ' · עלה $' + Number(sample.cost).toFixed(3) : ''}${sample.input && sample.input.productQueries ? ' · חיפוש: ' + sample.input.productQueries.join(', ') : ''}</span>
       <span class="faint" dir="auto">שדות: ${sample.keys.join(', ')}</span>
       <div style="overflow-x:auto"><table class="admin-table" dir="auto"><thead><tr>${sample.keys.slice(0, 8).map((k) => html`<th key=${k}>${k}</th>`)}</tr></thead>
         <tbody>${sample.rows.map((r, i) => html`<tr key=${i}>${sample.keys.slice(0, 8).map((k) => html`<td key=${k}>${r[k] ?? ''}</td>`)}</tr>`)}</tbody></table></div>
