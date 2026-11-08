@@ -93,5 +93,6 @@ export async function setMonthlyMail(userId, on) {
 export const priceReach = () => api('/api/admin/prices/reach');
 export const priceService = () => api('/api/admin/prices/service');
 export const priceSample = (input) => api('/api/admin/prices/sample', { method: 'POST', body: input ? { input } : {} });
+export const priceRun = (runId) => api('/api/admin/prices/sample/' + encodeURIComponent(runId));
 export const testMonthlyMail = () => api('/api/admin/monthly-mail/test', { method: 'POST' });
 export const sendMonthlyMail = () => api('/api/admin/monthly-mail/send', { method: 'POST' });
