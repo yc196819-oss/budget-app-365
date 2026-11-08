@@ -308,7 +308,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 // day, from a single verified address (no domain of our own needed).
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 const BREVO_FROM = process.env.BREVO_FROM || '';
-const BREVO_NAME = process.env.BREVO_NAME || 'קובי מהתקציב שלנו';
+const BREVO_NAME = process.env.BREVO_NAME || 'התקציב שלנו';
 // resend.dev works immediately with no domain setup -- fine for a personal
 // app. Once/if a real domain is verified on the Resend account, set
 // RESEND_FROM to an address on that domain instead.

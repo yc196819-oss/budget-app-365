@@ -275,27 +275,27 @@ const MAILS = {
   start: {
     title: 'נרשמו ולא פתחו משק בית',
     subject: 'בוא נראה יחד לאן הכסף שלך הולך',
-    body: ['שמחתי לראות שנרשמת ל"התקציב שלנו".', 'האפליקציה מראה בכל רגע כמה נשאר להוציא החודש, לאן הכסף הולך ומה צפוי בחודשים הקרובים, ויש בה יועץ חכם שעונה על שאלות על הכסף שלך.', 'כדי להתחיל: נכנסים, עונים על שתי שאלות (לוקח 10 שניות), ומעלים פירוט אשראי של 6 החודשים האחרונים, מכל הכרטיסים. ' + WHY, WHERE],
+    body: ['שמחנו לראות שנרשמת ל"התקציב שלנו".', 'האפליקציה מראה בכל רגע כמה נשאר להוציא החודש, לאן הכסף הולך ומה צפוי בחודשים הקרובים, ויש בה יועץ חכם שעונה על שאלות על הכסף שלך.', 'כדי להתחיל: נכנסים, עונים על שתי שאלות (לוקח 10 שניות), ומעלים פירוט אשראי של 6 החודשים האחרונים, מכל הכרטיסים. ' + WHY, WHERE],
     button: 'לפתוח את התקציב שלי'
   },
   first: {
     title: 'פתחו משק בית ולא העלו פירוט',
     subject: 'הצעד שיפתח לך את התמונה המלאה',
-    body: ['ראיתי שפתחת משק בית ב"התקציב שלנו". כל הכבוד!', 'הצעד הבא הוא זה שמפעיל את הכל: להעלות פירוט אשראי. המערכת קוראת וממיינת לבד, ותוך דקה רואים לאן הלך הכסף. כמה טיפים:', TIP_MONTHS, TIP_CARDS, TIP_CASH, WHERE],
+    body: ['ראינו שפתחת משק בית ב"התקציב שלנו". כל הכבוד!', 'הצעד הבא הוא זה שמפעיל את הכל: להעלות פירוט אשראי. המערכת קוראת וממיינת לבד, ותוך דקה רואים לאן הלך הכסף. כמה טיפים:', TIP_MONTHS, TIP_CARDS, TIP_CASH, WHERE],
     button: 'להעלות פירוט'
   },
   more: {
     title: 'העלו פירוט, פחות מ-6 חודשים',
     subject: '3 טיפים שיעשו את התקציב שלך מדויק באמת',
-    body: ['ראיתי שכבר העלית פירוט ל"התקציב שלנו". מעולה!', 'כדי שהמערכת והיועץ יוכלו לעזור לך באמת, הם צריכים לראות את התמונה המלאה. שלושה טיפים:', TIP_MONTHS.replace('להעלות פירוט של 3 עד 6 החודשים האחרונים', 'להוסיף עוד חודשים אחורה, כך שיהיו בסך הכל 3 עד 6 חודשים'), TIP_CARDS, TIP_CASH, WHERE],
+    body: ['ראינו שכבר העלית פירוט ל"התקציב שלנו". מעולה!', 'כדי שהמערכת והיועץ יוכלו לעזור לך באמת, הם צריכים לראות את התמונה המלאה. שלושה טיפים:', TIP_MONTHS.replace('להעלות פירוט של 3 עד 6 החודשים האחרונים', 'להוסיף עוד חודשים אחורה, כך שיהיו בסך הכל 3 עד 6 חודשים'), TIP_CARDS, TIP_CASH, WHERE],
     button: 'להוסיף עוד פירוט'
   }
 };
 function campaignMail(campaign, link, unsubLink) {
   const m = MAILS[campaign];
   if (!m) return null;
-  const sign = 'אם משהו לא עבד או לא היה ברור, פשוט תענה למייל הזה. אני קורא כל תשובה.';
-  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + link + '\n\n' + sign + '\nקובי\n\n' + (unsubLink ? 'לא רוצה לקבל עוד מיילים כאלה? להסרה: ' + unsubLink : 'לא רוצה לקבל עוד מיילים? תענה "הסר".');
+  const sign = 'אם משהו לא עבד או לא היה ברור, אפשר פשוט לענות למייל הזה. אנחנו קוראים כל תשובה.';
+  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + link + '\n\n' + sign + '\nצוות התקציב שלנו\n\n' + (unsubLink ? 'לא רוצה לקבל עוד מיילים כאלה? להסרה: ' + unsubLink : 'לא רוצה לקבל עוד מיילים? תענה "הסר".');
   let body = '';
   let list = [];
   const P = 'margin:0 0 14px;font-size:16px;line-height:1.65;color:#2B2118';
@@ -323,7 +323,7 @@ function campaignMail(campaign, link, unsubLink) {
     + '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 22px"><tr><td style="background:#92490A;border-radius:12px">'
     + '<a href="' + link + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none">' + m.button + '</a></td></tr></table>'
     + '<p style="margin:0;font-size:15px;line-height:1.6;color:#5B4B3D">' + sign + '</p>'
-    + '<p style="margin:10px 0 0;font-size:15px;font-weight:bold;color:#2B2118">קובי</p></td></tr>'
+    + '<p style="margin:10px 0 0;font-size:15px;font-weight:bold;color:#2B2118">צוות התקציב שלנו</p></td></tr>'
     + '<tr><td style="padding:16px 8px 0;font-size:13px;line-height:1.7;color:#8A7B6E;text-align:center">קיבלת את המייל כי נרשמת ל"התקציב שלנו".<br>לא רוצה לקבל עוד מיילים כאלה? ' + (unsubLink ? '<a href="' + escHtml(unsubLink) + '" style="color:#92490A;font-weight:bold;text-decoration:underline">להסרה לחץ כאן</a>' : 'תענה "הסר".') + '</td></tr>'
     + '</table></td></tr></table></body></html>';
   return { subject: m.subject, text, html };
@@ -496,10 +496,10 @@ function answerMail({ question, answer, link }) {
     + '<p style="margin:0 0 18px;font-size:16px;line-height:1.65;color:#2B2118;white-space:pre-wrap">' + escHtml(answer) + '</p>'
     + mailButton(link, 'לאפליקציה')
     + '<p style="margin:14px 0 0;font-size:15px;color:#5B4B3D">רוצה להוסיף משהו? אפשר לענות למייל הזה.</p>'
-    + '<p style="margin:10px 0 0;font-size:15px;font-weight:bold;color:#2B2118">קובי</p>';
+    + '<p style="margin:10px 0 0;font-size:15px;font-weight:bold;color:#2B2118">צוות התקציב שלנו</p>';
   return {
     subject: 'ענינו על הפנייה שלך ב"התקציב שלנו"',
-    text: 'כתבת:\n' + String(question || '').slice(0, 600) + '\n\nהתשובה:\n' + answer + '\n\nלאפליקציה: ' + link + '\n\nקובי',
+    text: 'כתבת:\n' + String(question || '').slice(0, 600) + '\n\nהתשובה:\n' + answer + '\n\nלאפליקציה: ' + link + '\n\nצוות התקציב שלנו',
     html: mailShell({ origin, inner, footer: 'קיבלת את המייל כי שלחת פנייה מתוך האפליקציה.' })
   };
 }
@@ -528,7 +528,7 @@ function draftPrompt({ status, hint = '', kind = '', name = '', messages = [], g
   if (!how) return null;
   const thread = messages.map((m) => (m.author === 'owner' ? 'אנחנו' : m.author === 'note' ? null : (name || 'המשתמש')) + ': ' + String(m.text || '').slice(0, 1500))
     .filter((l) => !l.startsWith('null')).join('\n');
-  return 'כתוב תשובה קצרה בעברית למשתמש באפליקציה "התקציב שלנו", בשם קובי, בעל האפליקציה. '
+  return 'כתוב תשובה קצרה בעברית למשתמש באפליקציה "התקציב שלנו", בשם צוות האפליקציה (חותמים "צוות התקציב שלנו", בלי שם פרטי). '
     + 'חם, פשוט וענייני, 2–4 משפטים, בלי כותרות, בלי markdown ובלי חתימה (החתימה מתווספת לבד). '
     + (name ? 'פנה אליו בשמו הפרטי (' + String(name).slice(0, 40) + ') רק אם הוא נשמע כמו שם אמיתי. ' : '')
     + 'אל תמציא יכולות, מסכים או תאריכים שלא כתובים כאן. ענה רק על מה שנשאל בפנייה.\n'

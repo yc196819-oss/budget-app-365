@@ -1,4 +1,6 @@
 import { html } from '../../lib/html.js';
+import { TEXT_SIZES, setTextSize } from '../../lib/textsize.js';
+import { readLocal } from '../../lib/storage.js';
 import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
 import { setAiEnabled, autoLearn, setAutoLearn } from '../../lib/settings.js';
@@ -18,6 +20,14 @@ import { FeedbackView } from './FeedbackView.js';
 import { SecurityView } from './SecurityView.js';
 import { telemetryOn, setTelemetry } from '../../lib/telemetry.js';
 import { CONFIG } from '../../config.js';
+
+function TextSize() {
+  const [size, setSize] = useState(() => readLocal('text:size', ''));
+  return html`<div class="stack text-size" style="gap:6px">
+    <b style="font-size:14px;color:var(--muted)">גודל הטקסט</b>
+    <div class="chips" role="radiogroup" aria-label="גודל הטקסט">${TEXT_SIZES.map((t) => html`<button type="button" role="radio" class="chip" aria-checked=${String(size === t.key)} aria-pressed=${String(size === t.key)} onClick=${() => { setTextSize(t.key); setSize(t.key); }} style=${'font-size:' + Math.round(13 * t.zoom) + 'px'}>${t.label}</button>`)}</div>
+  </div>`;
+}
 
 export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTheme, onSignOut, onClose, hid, userId }) {
   const aiOn = useAiSetting();
@@ -84,6 +94,7 @@ export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTh
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('data')}><${Icon} name="box" />המידע שלנו: קבצים, ייצוא ושחזור</button>`}
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
       ${isAdmin && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('admin')}><${Icon} name="chart" />לוח בעלים</button>`}
+      <${TextSize} />
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
       <button type="button" class="btn btn-ghost" style="color:var(--danger)" onClick=${onSignOut}><${Icon} name="logout" />יציאה</button>
       <p class="faint" style="font-size:12px;margin:0">ביציאה נמחקים מהמכשיר גם מפתחות ונתונים רגישים ששמורים בו.</p>
