@@ -119,6 +119,8 @@ test('owner dashboard: only for the owner, with active people, return rate and f
     funnel: { signups: 28, household: 15, tx: 7, import: 7, cameBack: 0, oldEnough: 0, byDay: { [new Date().toISOString().slice(0, 10)]: 2 } },
     daily: Array.from({ length: 14 }, (_, i) => ({ day: new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10), active: i, cost: 0.05 })),
     ownerCost30d: 0.9, sharing: { shares: 5, friends: 2, sharers: 1, mine: { shares: 3, friends: 4 } },
+    cohorts: [{ week: '2026-11-01', signups: 12, household: 10, withData: 3, imported: 3, oldEnough: 0, cameBack: 0 }, { week: '2026-10-25', signups: 9, household: 8, withData: 2, imported: 2, oldEnough: 9, cameBack: 1 }],
+    upload: { opened: 7, picked: 5, saved: 3, failedPeople: 2, files: [{ key: 'pdf', n: 4 }, { key: 'xlsx', n: 2 }], reasons: [{ key: 'pdf_scan', n: 2 }], leftAt: [{ key: 'review', n: 1 }] },
     users: [{ who: '#a1b2c3', name: 'רון', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 9, added: 2, imports: 3, importFails: 1, asked: 14, aiCalls: 20, tokens: 51000, cost: 0.31, shares: 5, friends: 2, health: { level: 'good', label: 'משתמש פעיל, נעזר ביועץ', reasons: [] } },
       { who: '#bb22cc', name: '', joined: '2026-10-20', lastSeen: null, opens: 0, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, tokens: 0, cost: 0, health: { level: 'stuck', label: 'נרשם ולא סיים הרשמה', reasons: ['נרשם לפני 15 ימים'] } }]
   }) }));
@@ -157,6 +159,15 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   assert.match(t, /\+ 1 לא מחוברים/);
   assert.match(t, /בית 2 · כסף 1 · כניסה 1/);
   assert.match(await s.locator('.admin-funnel').textContent(), /הקימו משק בית15 54%/);
+  // By week of sign-up, and where uploads stop: numbers only, in Hebrew.
+  const coh = await s.locator('.admin-cohorts').textContent();
+  assert.match(coh, /01\.11.*12.*10.*3 25%/s);
+  assert.match(coh, /מוקדם/);
+  assert.match(coh, /25\.10.*1 11%/s);
+  const up = await s.locator('.admin-upload').textContent();
+  assert.match(up, /פתחו העלאה 7 · בחרו קובץ 5 · שמרו 3/);
+  assert.match(up, /PDF סרוק בלי טקסט2/);
+  assert.match(up, /במסך הבדיקה, לפני שמירה1/);
   assert.match(t, /2נרשמו היום/);
   // An email only on request.
   await page.route('**/api/admin/email?who=*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ email: new URL(r.request().url()).searchParams.get('who') === '#a1b2c3' ? 'ron@example.com' : '' }) }));

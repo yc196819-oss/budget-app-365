@@ -9,6 +9,7 @@ import { money } from '../../domain/format.js';
 import { useShopping, addItems, setDone, removeItem, finishShopping, getArea, setArea } from '../../data/shopping.js';
 import { canListen, listen } from '../../lib/speech.js';
 import { showToast } from '../../lib/toast.js';
+import { track } from '../../lib/telemetry.js';
 
 // The food budget of this month, from the goals tab: the category named
 // food (אוכל / מזון) or the one holding the supermarket.
@@ -31,8 +32,7 @@ const INTRO_KEY = 'shop:intro-seen';
 const BENEFITS = [
   ['cart', 'לא קונים פעמיים', 'רשימה אחת לכל הבית. מה שאחד מוסיף או מסמן, השני רואה מיד.'],
   ['chart', 'לא חורגים מהתקציב', 'ליד הרשימה רואים כמה נשאר לסופר החודש, וכמה אפשר להוציא בכל שבוע.'],
-  ['check', 'פחות קניות דחף', 'קונים לפי רשימה, עם מה שקניתם בפעם הקודמת ומה שאתם קונים בדרך כלל.'],
-  ['pin', 'בקרוב: איפה הכי זול באזור', 'נשווה את הסל שלכם בין הסופרים באזור, לפי המחירים שהרשתות מפרסמות.']
+  ['check', 'פחות קניות דחף', 'קונים לפי רשימה, עם מה שקניתם בפעם הקודמת ומה שאתם קונים בדרך כלל.']
 ];
 function Intro({ onClose }) {
   return html`<section class="card shop-intro" aria-labelledby="shop-intro-h">
@@ -70,13 +70,14 @@ export function ShopScreen({ data }) {
   // Who added an item matters only when more than one person shops.
   const many = Object.keys(data.members || {}).length > 1;
 
-  const add = async (list) => {
+  const add = async (list, from = 'typed') => {
     const fresh = list.filter((i) => !onList(items, i.name));
     if (!fresh.length) { showToast(list.length === 1 ? list[0].name + ' כבר ברשימה' : 'הכול כבר ברשימה'); return; }
     setBusy(true);
     try {
       const rows = await addItems(data.hid, fresh);
       shop.patch((all) => [...all, ...rows.filter((r) => !all.some((a) => a.id === r.id))]);
+      track(from === 'typed' ? 'shop_add' : 'shop_reuse');
     } catch (_e) { showToast('לא נוסף. נסו שוב.'); }
     setBusy(false);
   };
@@ -97,7 +98,7 @@ export function ShopScreen({ data }) {
     try { await removeItem(i.id); } catch (_e) { shop.reload(); showToast('לא נמחק. נסו שוב.'); }
   };
   const finish = async () => {
-    try { await finishShopping(data.hid); await shop.reload(); showToast('נשמר. מה שקניתם יופיע ב"מה שאתם קונים בדרך כלל".'); } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
+    try { await finishShopping(data.hid); track('shop_done'); await shop.reload(); showToast('נשמר. מה שקניתם יופיע ב"מה שאתם קונים בדרך כלל".'); } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
   };
   const voice = () => {
     if (listening) return;
@@ -115,7 +116,7 @@ export function ShopScreen({ data }) {
   return html`<div class="shop">
     <section class="shop-main stack">
       <div class="shop-head">
-        <span class="muted" style="font-size:14px">עוזרים לכם לחסוך בסופר: רשימה אחת לכל הבית, כמה נשאר לסופר, ובקרוב איפה הכי זול. ${!intro && html`<button type="button" class="btn-text shop-what" onClick=${() => setIntro(true)}>מה זה?</button>`}</span>
+        <span class="muted" style="font-size:14px">עוזרים לכם לחסוך בסופר: רשימה אחת לכל הבית, וכמה נשאר לסופר החודש. ${!intro && html`<button type="button" class="btn-text shop-what" onClick=${() => setIntro(true)}>מה זה?</button>`}</span>
         <span class="shop-tools">
           <a class="btn btn-ghost" href=${mailHref} aria-disabled=${String(!open.some((i) => !i.done))}><${Icon} name="mail" size=${17} />לשלוח במייל</a>
           <button type="button" class="btn btn-ghost" onClick=${copy} disabled=${!open.some((i) => !i.done)}>להעתיק</button>
@@ -159,15 +160,15 @@ export function ShopScreen({ data }) {
       ${prev.length > 0 && html`<div class="card stack" style="gap:8px">
         <b>הרשימה מהפעם הקודמת</b>
         <span class="muted" style="font-size:14px;line-height:1.5">${prev.slice(0, 6).map((i) => i.name).join(', ')}${prev.length > 6 ? ' ועוד ' + (prev.length - 6) : ''}</span>
-        <button type="button" class="btn btn-ghost" onClick=${() => add(prev.map((i) => ({ name: i.name, qty: i.qty, aisle: i.aisle || aisleOf(i.name) })))}>להחזיר את כל ${prev.length} לרשימה</button>
+        <button type="button" class="btn btn-ghost" onClick=${() => add(prev.map((i) => ({ name: i.name, qty: i.qty, aisle: i.aisle || aisleOf(i.name) })), 'reuse')}>להחזיר את כל ${prev.length} לרשימה</button>
       </div>`}
       ${usualList.length > 0 && html`<div class="card stack" style="gap:8px">
         <b>מה שאתם קונים בדרך כלל</b>
-        <div class="chips">${usualList.map((n) => html`<button type="button" class="chip" onClick=${() => add([{ name: n, qty: null, aisle: aisleOf(n) }])}>+ ${n}</button>`)}</div>
+        <div class="chips">${usualList.map((n) => html`<button type="button" class="chip" onClick=${() => add([{ name: n, qty: null, aisle: aisleOf(n) }], 'reuse')}>+ ${n}</button>`)}</div>
       </div>`}
       <form class="card stack shop-area" style="gap:8px" onSubmit=${saveArea}>
         <b>איפה אתם קונים?</b>
-        <span class="muted" style="font-size:14px;line-height:1.5">עיר או שכונה. בקרוב נראה כאן באיזה סופר באזור הרשימה שלכם הכי זולה, לפי המחירים שהרשתות מפרסמות.</span>
+        <span class="muted" style="font-size:14px;line-height:1.5">עיר או שכונה. אנחנו בודקים אפשרות להשוות מחירים בין הסופרים באזור, ונעדכן רק כשזה יהיה מדויק ואמין.</span>
         <span style="display:flex;gap:8px"><input class="input" value=${area || ''} onInput=${(e) => setAreaText(e.target.value)} maxLength="60" aria-label="עיר או שכונה" placeholder="למשל: בית שמש, רמת ג׳" style="flex:1;min-width:0" />
         <button type="submit" class="btn btn-ghost" style="width:auto">לשמור</button></span>
       </form>

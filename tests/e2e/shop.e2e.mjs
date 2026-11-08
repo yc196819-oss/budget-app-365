@@ -121,8 +121,9 @@ test('the first time, what the tab is for: saving at the supermarket; "הבנת�
   const { page, errors } = await open(1280);
   const intro = page.locator('.shop-intro');
   assert.match(await intro.textContent(), /עוזרים לכם לחסוך בסופר/);
-  assert.equal(await intro.locator('.shop-benefits li').count(), 4);
-  assert.match(await intro.textContent(), /בקרוב: איפה הכי זול באזור/);
+  assert.equal(await intro.locator('.shop-benefits li').count(), 3);
+  // No promise of a price comparison before there is a reliable source.
+  assert.doesNotMatch(await page.locator('.shop').textContent(), /הכי זול/);
   await intro.locator('.shop-intro-ok').click();
   assert.equal(await page.locator('.shop-intro').count(), 0);
   await page.reload();

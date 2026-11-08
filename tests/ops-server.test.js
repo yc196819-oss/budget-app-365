@@ -484,3 +484,45 @@ test('AI actions a month: the household\'s own limit, else a default far above r
   assert.equal(ops.aiMonthlyLimit(null, 'junk'), ops.AI_MONTHLY_DEFAULT);
   assert.ok(ops.AI_MONTHLY_DEFAULT >= 450, 'never below the busiest household today');
 });
+
+test('by week of sign-up: how far each group got; "back" only once a week has passed', () => {
+  const now = new Date('2026-11-08T10:00:00Z'); // a Sunday
+  const day = (d) => new Date(now.getTime() - d * 86400000).toISOString();
+  const users = [
+    { id: 'a', created_at: day(10) }, { id: 'b', created_at: day(9) }, { id: 'c', created_at: day(2) }, { id: 'old', created_at: day(90) }
+  ];
+  const info = new Map([['a', { inHousehold: true, txCount: 40 }], ['b', { inHousehold: true, txCount: 0 }], ['c', { inHousehold: false, txCount: 0 }]]);
+  const events = [
+    { user_id: 'a', name: 'import_done', at: day(10) }, { user_id: 'a', name: 'app_open', at: day(1) },
+    { user_id: 'b', name: 'app_open', at: day(8) }
+  ];
+  const rows = ops.cohorts({ users, info, events, now });
+  assert.deepEqual(rows.map((r) => r.week), ['2026-11-01', '2026-10-25']);
+  assert.deepEqual(rows[1], { week: '2026-10-25', signups: 2, household: 2, withData: 1, imported: 1, oldEnough: 2, cameBack: 1 });
+  assert.deepEqual(rows[0], { week: '2026-11-01', signups: 1, household: 0, withData: 0, imported: 0, oldEnough: 0, cameBack: 0 });
+  assert.equal(ops.weekOf('2026-11-11T23:00:00Z'), '2026-11-08');
+});
+
+test('where uploads stop: opened, picked, saved; why it failed and where people left', () => {
+  const now = new Date('2026-11-08T10:00:00Z');
+  const at = now.toISOString();
+  const e = (user_id, name) => ({ user_id, name, at });
+  const u = ops.uploadFunnel([
+    e('a', 'import_open'), e('a', 'import_file_pdf'), e('a', 'import_fail'), e('a', 'import_fail_pdf_scan'), e('a', 'import_abandon_error'),
+    e('b', 'import_open'), e('b', 'import_file_xlsx'), e('b', 'import_done'),
+    e('c', 'import_open'), e('c', 'import_abandon_pick'),
+    { user_id: 'd', name: 'import_open', at: '2026-09-01T00:00:00Z' }
+  ], now);
+  assert.equal(u.opened, 3);
+  assert.equal(u.picked, 2);
+  assert.equal(u.saved, 1);
+  assert.equal(u.failedPeople, 1);
+  assert.deepEqual(u.reasons, [{ key: 'pdf_scan', n: 1 }]);
+  assert.deepEqual(u.leftAt.map((x) => x.key).sort(), ['error', 'pick']);
+  assert.deepEqual(u.files.map((x) => x.key).sort(), ['pdf', 'xlsx']);
+});
+
+test('every new event name the app sends is allowed, and nothing free-form', () => {
+  for (const n of ['import_open', 'import_file_image', 'import_fail_no_rows', 'import_abandon_review', 'first_value', 'shop_add', 'shop_done', 'shop_reuse']) assert.ok(ops.EVENTS.includes(n), n);
+  assert.equal(ops.EVENTS.some((n) => /\s/.test(n)), false);
+});

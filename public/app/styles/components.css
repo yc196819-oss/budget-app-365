@@ -761,7 +761,7 @@ body.chat-open { overflow: hidden; }
 .shop-intro-ok { justify-self: start; width: auto; padding-inline: 22px; }
 .shop-what { font-size: 14px; }
 .shop-week { font-size: 14px; background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }
-@media (min-width: 1024px) { .shop-benefits { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1024px) { .shop-benefits { grid-template-columns: repeat(3, 1fr); } }
 @media (min-width: 1024px) {
   .shop { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 20px; }
   .shop-side { position: sticky; top: 16px; }
@@ -777,3 +777,8 @@ body.chat-open { overflow: hidden; }
   .shop-print .pl { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
   .shop-print .pc { width: 12px; height: 12px; border: 1.5px solid #000; flex: none; }
 }
+
+/* Owner dashboard tables */
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th { text-align: start; color: var(--muted); font-weight: 700; padding: 4px 6px; white-space: nowrap; }
+.admin-table td { padding: 6px; border-top: 1px solid var(--line); white-space: nowrap; }
