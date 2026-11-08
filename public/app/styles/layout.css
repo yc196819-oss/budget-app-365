@@ -165,3 +165,24 @@ kbd { font-family: inherit; font-size: 11px; font-weight: 800; padding: 1px 6px;
 .advisor-solo .adv-log { max-height: none; flex: 1; }
 .rail-pop { width: 36px; height: 36px; flex: none; }
 .advisor-solo .rail-head { display: flex; align-items: center; gap: 10px; }
+
+/* Desktop: the menu shrinks to icons, the advisor hides behind a button. */
+@media (min-width: 1024px) {
+  .brand { position: relative; white-space: nowrap; }
+  .side-who { display: flex; flex-direction: column; min-width: 0; }
+  .side-mini { margin-inline-start: auto; width: 34px; height: 34px; flex-shrink: 0; }
+  .shell.no-rail { grid-template-columns: 236px minmax(0, 1fr); }
+  .shell.nav-mini { grid-template-columns: 76px minmax(0, 1fr) 340px; }
+  .shell.nav-mini.no-rail { grid-template-columns: 76px minmax(0, 1fr); }
+  .nav-mini .sidebar { padding-inline: 10px; align-items: center; }
+  .nav-mini .side-label, .nav-mini .side-who, .nav-mini .sidebar kbd, .nav-mini .nav-badge.side { display: none; }
+  .nav-mini .brand { flex-direction: column; padding: 0 0 14px; gap: 10px; }
+  .nav-mini .side-mini { margin: 0; }
+  .nav-mini .side-item { width: 48px; padding: 0; justify-content: center; position: relative; }
+  .nav-mini .sidebar .btn { width: 48px; padding: 0; justify-content: center; }
+  .nav-mini .side-sep { width: 40px; }
+  .nav-mini .side-profile { padding: 4px; }
+  .shell.no-rail .ask-fab { display: flex; bottom: 24px; left: 24px; }
+  .rail-hide { flex-shrink: 0; }
+  .rail-pin { align-self: flex-start; font-size: 14px; }
+}

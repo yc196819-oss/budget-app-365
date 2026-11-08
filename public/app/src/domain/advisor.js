@@ -158,7 +158,7 @@ export function starters(screen) {
   return STARTERS[screen] || STARTERS.home;
 }
 
-const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', plans: 'תוכניות', assets: 'נכסים' };
+const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', plans: 'יעדים', assets: 'נכסים' };
 export function newTitle(firstMessage, screen, today = new Date()) {
   const t = String(firstMessage || '').trim().replace(/\s+/g, ' ');
   const short = t.length > 40 ? t.slice(0, 38) + '…' : t;

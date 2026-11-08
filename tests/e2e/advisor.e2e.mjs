@@ -124,7 +124,7 @@ test('with the advisor off nothing is sent, and old conversations can still be r
 });
 
 test('desktop: the advisor sits in the side rail', async () => {
-  const { page, errors } = await open({ width: 1280 });
+  const { page, errors } = await open({ width: 1536 });
   await page.waitForSelector('.rail .adv .row');
   assert.equal(await page.locator('.adv').count(), 1);
   assert.deepEqual(errors, []);
@@ -188,7 +188,7 @@ test('the question box: a long question is shown in full (the box grows), Enter 
 });
 
 test('desktop: the advisor opens in its own window, with only the conversation', async () => {
-  const { page, errors } = await open({ width: 1280 });
+  const { page, errors } = await open({ width: 1536 });
   await page.waitForSelector('.rail .rail-pop');
   // The button asks the browser for a separate window at #/advisor.
   await page.evaluate(() => { window.__opened = []; window.open = (...a) => { window.__opened.push(a); return { focus() {} }; }; });

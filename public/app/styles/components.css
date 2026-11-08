@@ -694,3 +694,14 @@ body.chat-open { overflow: hidden; }
 .repair-list { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.55; }
 .repair-actions { display: flex; gap: 8px; }
 .repair-actions .btn { flex: 1; }
+
+/* Goals: the month's pace, suggestions, per-person, new goal */
+.pace-bar { position: relative; overflow: visible; display: block; }
+.pace-bar > span { overflow: hidden; }
+.pace-tick { position: absolute; top: -4px; width: 2px; height: 14px; border-radius: 1px; background: var(--text); opacity: .55; transform: translateX(50%); }
+.suggest-card { background: var(--accent-tint); border-color: transparent; }
+.suggest-title { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 16px; }
+.budget-edit2 { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 14px; }
+.goal-monthly { font-size: 14px; font-weight: 700; color: var(--accent); }
+.suggest-line { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.suggest-line + .suggest-line { border-top: 1px solid var(--line); }

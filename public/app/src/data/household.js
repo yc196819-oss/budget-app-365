@@ -55,7 +55,8 @@ export function snapshot() {
     installments: state.installments,
     loans: state.loans,
     investments: state.investments,
-    income: state.income
+    income: state.income,
+    people: state.people || null
   };
 }
 
@@ -87,7 +88,7 @@ export async function load(hid, userId, { force = false } = {}) {
   try {
     const now = new Date();
     const since = isoDate(new Date(now.getFullYear(), now.getMonth() - MONTHS_BACK, 1));
-    const [txs, cats, budgets, mems, accounts, cards, goals, installments, loans, investments, household] = await Promise.all([
+    const [txs, cats, budgets, mems, accounts, cards, goals, installments, loans, investments, household, people] = await Promise.all([
       fetchAllTransactions(hid, since),
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
@@ -98,7 +99,9 @@ export async function load(hid, userId, { force = false } = {}) {
       sb.from('installments').select('*').eq('household_id', hid),
       sb.from('loans').select('*').eq('household_id', hid),
       sb.from('investments').select('*').eq('household_id', hid),
-      sb.from('households').select('income_expectations').eq('id', hid).maybeSingle()
+      sb.from('households').select('income_expectations').eq('id', hid).maybeSingle(),
+      // Its own request: until the column exists everywhere, a failure here changes nothing else.
+      sb.from('households').select('people').eq('id', hid).maybeSingle()
     ]);
     for (const r of [cats, budgets, mems]) if (r.error) throw r.error;
     // Accounts, cards, goals, installments, loans and investments add to home,
@@ -124,6 +127,7 @@ export async function load(hid, userId, { force = false } = {}) {
       loans: loans.error ? [] : loans.data || [],
       investments: investments.error ? [] : investments.data || [],
       income: !household.error && household.data && Array.isArray(household.data.income_expectations) ? household.data.income_expectations : [],
+      people: !people.error && people.data && Number(people.data.people) > 0 ? Number(people.data.people) : null,
       hidden: new Set()
     });
   } catch (err) {
@@ -317,6 +321,15 @@ export async function setIncomeLine(label, amount) {
   const { error } = await sb.from('households').update({ income_expectations: next }).eq('id', state.hid);
   if (error) throw error;
   state.income = next;
+  emit();
+}
+
+// How many people live at home (for "per person" amounts).
+export async function setPeople(n) {
+  const value = Math.max(1, Math.min(20, Math.round(Number(n) || 0)));
+  const { error } = await sb.from('households').update({ people: value }).eq('id', state.hid);
+  if (error) throw error;
+  state.people = value;
   emit();
 }
 

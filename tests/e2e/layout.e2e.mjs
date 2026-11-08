@@ -32,3 +32,38 @@ for (const width of [360, 390]) {
     await page.close();
   });
 }
+
+test('a narrower computer screen: the menu shrinks to icons, the advisor waits behind a button; both can be changed and are remembered', async () => {
+  const page = await browser.newPage({ viewport: { width: 1100, height: 760 } });
+  await mockSupabase(page, makeFakeDb());
+  await signIn(page, server.base);
+  await page.waitForSelector('.home');
+  assert.ok(await page.locator('.shell.nav-mini.no-rail').count(), 'small menu, no advisor rail');
+  assert.equal(await page.locator('.rail').count(), 0);
+  // The screen keeps most of the width.
+  const main = await page.locator('.shell-main').boundingBox();
+  assert.ok(main.width > 900, 'main width ' + main.width);
+  // The advisor opens from the button.
+  await page.click('.ask-fab');
+  await page.waitForSelector('.sheet[aria-label="היועץ"]');
+  await page.click('.rail-pin');
+  await page.waitForSelector('.rail');
+  // The menu opens wide again.
+  await page.click('.side-mini');
+  assert.equal(await page.locator('.shell.nav-mini').count(), 0);
+  await page.reload();
+  await page.waitForSelector('.rail');
+  assert.equal(await page.locator('.shell.nav-mini').count(), 0, 'remembered');
+  await page.click('.rail-hide');
+  assert.equal(await page.locator('.rail').count(), 0);
+  await page.close();
+});
+
+test('a wide computer screen keeps both the menu and the advisor open', async () => {
+  const page = await browser.newPage({ viewport: { width: 1536, height: 860 } });
+  await mockSupabase(page, makeFakeDb());
+  await signIn(page, server.base);
+  await page.waitForSelector('.rail');
+  assert.equal(await page.locator('.shell.nav-mini').count(), 0);
+  await page.close();
+});
