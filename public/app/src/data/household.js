@@ -56,7 +56,8 @@ export function snapshot() {
     loans: state.loans,
     investments: state.investments,
     income: state.income,
-    people: state.people || null
+    people: state.people || null,
+    dupeOk: state.dupeOk || []
   };
 }
 
@@ -88,7 +89,7 @@ export async function load(hid, userId, { force = false } = {}) {
   try {
     const now = new Date();
     const since = isoDate(new Date(now.getFullYear(), now.getMonth() - MONTHS_BACK, 1));
-    const [txs, cats, budgets, mems, accounts, cards, goals, installments, loans, investments, household, people] = await Promise.all([
+    const [txs, cats, budgets, mems, accounts, cards, goals, installments, loans, investments, household, people, dupeOk] = await Promise.all([
       fetchAllTransactions(hid, since),
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
@@ -101,7 +102,8 @@ export async function load(hid, userId, { force = false } = {}) {
       sb.from('investments').select('*').eq('household_id', hid),
       sb.from('households').select('income_expectations').eq('id', hid).maybeSingle(),
       // Its own request: until the column exists everywhere, a failure here changes nothing else.
-      sb.from('households').select('people').eq('id', hid).maybeSingle()
+      sb.from('households').select('people').eq('id', hid).maybeSingle(),
+      sb.from('dupe_ok').select('pair').eq('household_id', hid)
     ]);
     for (const r of [cats, budgets, mems]) if (r.error) throw r.error;
     // Accounts, cards, goals, installments, loans and investments add to home,
@@ -128,6 +130,7 @@ export async function load(hid, userId, { force = false } = {}) {
       investments: investments.error ? [] : investments.data || [],
       income: !household.error && household.data && Array.isArray(household.data.income_expectations) ? household.data.income_expectations : [],
       people: !people.error && people.data && Number(people.data.people) > 0 ? Number(people.data.people) : null,
+      dupeOk: dupeOk.error ? [] : (dupeOk.data || []).map((r) => r.pair),
       hidden: new Set()
     });
   } catch (err) {
@@ -322,6 +325,15 @@ export async function setIncomeLine(label, amount) {
   if (error) throw error;
   state.income = next;
   emit();
+}
+
+// Two lines that look like a double charge but are two real purchases: kept
+// for the whole household, so no member is asked about them again.
+export async function keepBoth(pair) {
+  state.dupeOk = [...new Set([...(state.dupeOk || []), pair])];
+  emit();
+  const { error } = await sb.from('dupe_ok').upsert({ household_id: state.hid, pair }, { onConflict: 'household_id,pair' });
+  if (error) throw error;
 }
 
 // How many people live at home (for "per person" amounts).

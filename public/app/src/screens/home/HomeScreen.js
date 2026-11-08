@@ -21,7 +21,7 @@ import { ImportNotice } from './ImportNotice.js';
 import { RepairCard } from './RepairCard.js';
 import { AnswerNotice } from './AnswerNotice.js';
 import { MonthlyAsk } from './MonthlyAsk.js';
-import { removeMany } from '../../data/household.js';
+import { removeMany, keepBoth } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { SortSheet } from '../money/SortSheet.js';
@@ -33,9 +33,12 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
   const [sheet, setSheet] = useState(null);
   // Pairs the household said are two real purchases (not a double charge).
   const dupeKey = 'dupe:ok:' + data.hid;
+  // Saved for the whole household; this device's own list is kept as well
+  // (from before, or while offline).
   const [, setDupeVer] = useState(0);
-  let dupeOk;
-  try { dupeOk = new Set(JSON.parse(readLocal(dupeKey, '[]'))); } catch (_e) { dupeOk = new Set(); }
+  let local = [];
+  try { local = JSON.parse(readLocal(dupeKey, '[]')); } catch (_e) { local = []; }
+  const dupeOk = new Set([...(data.dupeOk || []), ...local]);
   // The holiday plan and the quarterly check-in have their own sheets.
   const planSheet = usePlanSheet();
   const trips = useTrips(data.hid);
@@ -64,10 +67,10 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
 
   const act = async (a) => {
     if (a.to === 'dupe-ok') {
-      const next = new Set(dupeOk); next.add(a.key);
-      writeLocal(dupeKey, JSON.stringify([...next]));
+      writeLocal(dupeKey, JSON.stringify([...new Set([...local, a.key])]));
       setDupeVer((v) => v + 1);
-      showToast('נשמר: שתי קניות נפרדות. לא נשאל עליהן שוב.');
+      try { await keepBoth(a.key); showToast('נשמר: שתי קניות נפרדות. לא נשאל עליהן שוב, גם לא את בן או בת הזוג.'); }
+      catch (_e) { showToast('נשמר במכשיר הזה. לא הצלחנו לשמור לכל משק הבית, ננסה שוב בפעם הבאה.'); }
       return;
     }
     if (a.to === 'cardtwice') {
