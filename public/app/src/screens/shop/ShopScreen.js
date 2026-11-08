@@ -10,6 +10,7 @@ import { useShopping, addItems, setDone, removeItem, finishShopping, getArea, se
 import { canListen, listen } from '../../lib/speech.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
+import { go } from '../../lib/go.js';
 
 // The food budget of this month, from the goals tab: the category named
 // food (אוכל / מזון) or the one holding the supermarket.
@@ -124,6 +125,7 @@ export function ShopScreen({ data }) {
           <a class="btn btn-ghost" href=${waHref} target="_blank" rel="noopener" aria-disabled=${String(!open.some((i) => !i.done))}>וואטסאפ</a>
         </span>
       </div>
+      <p class="shop-trial" role="note"><b>בהרצה:</b> הטאב חדש ועוד משתפר, וייתכנו תקלות. ראיתם משהו לא תקין? <button type="button" class="btn-text shop-trial-talk" onClick=${() => go('profile/feedback')}>כתבו לנו</button>.</p>
       ${intro && html`<${Intro} onClose=${closeIntro} />`}
       <form class="shop-add" onSubmit=${submit}>
         <input ref=${input} class="input" value=${text} onInput=${(e) => setText(e.target.value)} maxLength="300"

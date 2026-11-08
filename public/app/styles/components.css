@@ -760,6 +760,9 @@ body.chat-open { overflow: hidden; }
 .shop-b-ic { width: 34px; height: 34px; border-radius: 10px; flex: none; display: grid; place-items: center; background: var(--surface-2); color: var(--accent); }
 .shop-intro-ok { justify-self: start; width: auto; padding-inline: 22px; }
 .shop-what { font-size: 14px; }
+.shop-trial { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }
+.shop-trial b { color: var(--text); }
+.shop-trial .btn-text { min-height: 0; padding: 0 4px; font-size: 14px; color: var(--accent); text-decoration: underline; }
 .shop-week { font-size: 14px; background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }
 @media (min-width: 1024px) { .shop-benefits { grid-template-columns: repeat(3, 1fr); } }
 @media (min-width: 1024px) {
