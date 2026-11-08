@@ -237,12 +237,17 @@ async function aiQuota(req, res, next) {
     if (hhErr) return next();                       // column not there yet (DB not migrated) → don't block
     const month = israelToday().slice(0, 7);
     const { data: used } = await supabaseAdmin.rpc('bump_ai_usage', { p_household: m.household_id, p_month: month });
-    const limit = hh && hh.ai_monthly_limit;
-    if (limit != null && Number(used) > Number(limit)) {
+    const limit = ops.aiMonthlyLimit(hh && hh.ai_monthly_limit, process.env.AI_MONTHLY_DEFAULT);
+    if (Number(used) > limit) {
       return res.status(429).json({ error: `הגעתם למכסת ה-AI החודשית (${limit} פעולות). היא מתאפסת בתחילת החודש הבא.`, quota: { used: Number(used) - 1, limit } });
     }
     return next();
-  } catch (_e) { return next(); }                   // never block on a quota bug
+  } catch (err) {
+    // Never block a person on a quota bug; the daily cap for the whole app
+    // (aiDay) still holds, so a bug cannot run up the bill.
+    console.error('ai quota check failed:', err.message);
+    return next();
+  }
 }
 const notifyLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -903,134 +908,8 @@ app.post('/api/ai/import', requireAuth, aiLimiter, aiQuota, async (req, res) => 
   }
 });
 
-app.post('/api/ai/advice', requireAuth, aiLimiter, aiQuota, async (req, res) => {
-  try {
-    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
-      return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
-    }
 
-    const { summary } = req.body || {};
-    if (!summary) {
-      return res.status(400).json({ error: 'summary is required' });
-    }
 
-    const prompt = `אתה יועץ פיננסי מקצועי שמנתח נתוני תקציב משפחתי אמיתיים בעברית, עבור משתמש בשם "${summary.userName || ''}". קיבלת סיכום נתונים (JSON) של הכנסות/הוצאות לפי חודש, פילוח לפי קטגוריות ברמת משק הבית (categorySpendingHistory, כולל מגמה של 6 חודשים לכל קטגוריה), פילוח אישי של המשתמש הזה בלבד לחודש הנוכחי (personalCategoryBreakdown), תקציבים מול בפועל, ויעדי חיסכון. אפשר לפנות למשתמש בשמו ולהתייחס גם להוצאות האישיות שלו וגם למצב הכולל של משק הבית. תן ניתוח קצר, כן וממוקד — לא כללי, מבוסס על המספרים בפועל.
-
-חשוב: ענה אך ורק בפורמט JSON תקני (בלי markdown, בלי טקסט מסביב), במבנה הבא בדיוק:
-{"healthLevel":"good|watch|risk","headline":"משפט אחד קצר שמסכם את המצב","strengths":["..."],"concerns":["..."],"tips":["..."]}
-
-כללים: strengths/concerns/tips - כל אחד 2-4 פריטים, משפט קצר וברור, מבוסס על נתונים ספציפיים (ציין מספרים/קטגוריות בפועל). healthLevel="risk" אם יש חריגה משמעותית מתקציב או מאזן שלילי חוזר, "watch" אם יש נקודות לשיפור לא דרמטיות, "good" אם המצב יציב.`;
-
-    const aiResult = await generateWithFallback({ prompt, text: JSON.stringify(summary) });
-    const output = aiResult.output || '{}';
-    let parsed = null;
-    try {
-      parsed = JSON.parse(extractJsonText(output));
-    } catch (_err) {
-      const candidate = String(output).match(/\{[\s\S]*\}/);
-      if (candidate && candidate[0]) {
-        try {
-          parsed = JSON.parse(candidate[0]);
-        } catch (_err2) {
-          parsed = null;
-        }
-      }
-    }
-
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return res.status(502).json({ error: 'AI response could not be parsed', rawOutput: output });
-    }
-
-    return res.json({
-      advice: parsed,
-      aiProvider: aiResult.provider,
-      aiModel: aiResult.model
-    });
-  } catch (err) {
-    const statusCode = err.statusCode || 502;
-    return res.status(statusCode).json({ error: err.message || 'Unexpected error' });
-  }
-});
-
-app.post('/api/ai/advice-chat', requireAuth, aiLimiter, aiQuota, async (req, res) => {
-  try {
-    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
-      return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
-    }
-
-    const { summary, history, message } = req.body || {};
-    if (!message) {
-      return res.status(400).json({ error: 'message is required' });
-    }
-
-    const historyText = Array.isArray(history)
-      ? history.map((h) => `${h.role === 'user' ? 'משתמש' : 'יועץ'}: ${h.text}`).join('\n')
-      : '';
-
-    const prompt = `אתה יועץ פיננסי מקצועי ואדיב שעונה בעברית על שאלות המשך לגבי תקציב משפחתי, עבור משתמש בשם "${(summary && summary.userName) || ''}", בהתבסס על נתוני סיכום (JSON) שצורפו. שים לב: categorySpendingHistory מכיל נתונים מפורטים ברמת משק הבית לכל קטגוריה (מגמה חודשית 6 חודשים אחורה, ממוצע חודשי, ותתי-קטגוריות של החודש הנוכחי), ו-personalCategoryBreakdown מכיל את ההוצאות האישיות של המשתמש הזה בלבד לחודש הנוכחי. אם השאלה נוגעת לקטגוריה ספציפית (למשל רכב, אוכל, בריאות) או "ההוצאות שלי", חפש בנתונים האלה וענה על סמך המספרים בפועל, אל תגיד שאין לך מידע אם הקטגוריה קיימת בנתונים. ענה בקצרה ובאופן פרקטי (2-5 משפטים), ישירות לשאלה, בלי markdown ובלי כותרות. אם השאלה לא קשורה לכסף/תקציב, הפנה בעדינות בחזרה לנושא.
-${historyText ? '\nהיסטוריית שיחה קודמת:\n' + historyText + '\n' : ''}
-שאלת המשתמש הנוכחית: ${message}`;
-
-    const aiResult = await generateWithFallback({ prompt, text: JSON.stringify(summary || {}) });
-    return res.json({ reply: (aiResult.output || '').trim(), aiProvider: aiResult.provider });
-  } catch (err) {
-    const statusCode = err.statusCode || 502;
-    return res.status(statusCode).json({ error: err.message || 'Unexpected error' });
-  }
-});
-
-app.post('/api/ai/onboarding', requireAuth, aiLimiter, aiQuota, async (req, res) => {
-  try {
-    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
-      return res.status(503).json({ error: 'No AI key configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY and/or GROK_API_KEY' });
-    }
-
-    const { qaText } = req.body || {};
-    if (!qaText) {
-      return res.status(400).json({ error: 'qaText is required' });
-    }
-
-    const prompt = `אתה עוזר שמקים חשבון תקציב משפחתי חדש עבור משתמש, על סמך ראיון שאלות-ותשובות בעברית שצורף. חלץ מהתשובות נתונים מובנים כדי להקים את המערכת עבורו. אם משהו לא צוין או לא רלוונטי, השמט אותו (אל תמציא נתונים).
-
-החזר JSON בלבד (ללא markdown), במבנה הבא בדיוק:
-{
-  "bankAccounts": [{"name":"שם תיאורי, למשל 'חשבון קובי'"}],
-  "creditCards": [{"name":"שם הכרטיס","billingDay":מספר 1-28,"accountIndex":אינדקס בתוך bankAccounts (0 אם לא ברור)}],
-  "recurringIncome": [{"description":"למשל 'משכורת קובי'","amount":מספר חודשי}],
-  "recurringExpenses": [{"description":"למשל 'משכנתא' או 'שכירות' או 'חינוך ילדים'","amount":מספר חודשי}],
-  "debts": [{"counterparty":"למי חייבים","amount":מספר,"note":"הערה חופשית כולל מועד פירעון אם צוין"}],
-  "goals": [{"name":"שם היעד, למשל 'חיסכון חודשי' או 'חיסכון לילדים'","targetAmount":מספר או null אם לא צוין}]
-}
-
-ראיון השאלות-תשובות:
-${qaText}`;
-
-    const aiResult = await generateWithFallback({ prompt, text: qaText });
-    const output = aiResult.output || '{}';
-    let parsed = null;
-    try {
-      parsed = JSON.parse(extractJsonText(output));
-    } catch (_err) {
-      const candidate = String(output).match(/\{[\s\S]*\}/);
-      if (candidate && candidate[0]) {
-        try {
-          parsed = JSON.parse(candidate[0]);
-        } catch (_err2) {
-          parsed = null;
-        }
-      }
-    }
-
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return res.status(502).json({ error: 'AI response could not be parsed', rawOutput: output });
-    }
-
-    return res.json({ setup: parsed, aiProvider: aiResult.provider, aiModel: aiResult.model });
-  } catch (err) {
-    const statusCode = err.statusCode || 502;
-    return res.status(statusCode).json({ error: err.message || 'Unexpected error' });
-  }
-});
 
 app.post('/api/chat/parse', requireAuth, aiLimiter, aiQuota, async (req, res) => {
   try {
@@ -1151,8 +1030,7 @@ async function fetchSpyQuote() {
     return { price: close, changePct: open ? ((close - open) / open) * 100 : null };
   }
 }
-// ═══ AI advisor → action plan (tasks with clear steps + push reminders) ═══
-const TASK_TABS = ['dash', 'expenses', 'charts', 'categories', 'accounts', 'loans', 'installments', 'investments', 'planning'];
+// ═══ dates in Israel ═══
 function israelToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date()); // YYYY-MM-DD
 }
@@ -1162,74 +1040,6 @@ function addDaysIso(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 
-app.post('/api/ai/action-plan', requireAuth, aiLimiter, aiQuota, async (req, res) => {
-  try {
-    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) {
-      return res.status(503).json({ error: 'No AI key configured' });
-    }
-    const { summary, advice, messages } = req.body || {};
-    if (!summary) return res.status(400).json({ error: 'summary is required' });
-
-    const convo = (Array.isArray(messages) ? messages : [])
-      .filter((m) => m && (m.role === 'user' || m.role === 'ai') && m.text)
-      .slice(-12)
-      .map((m) => `${m.role === 'user' ? 'משתמש' : 'יועץ'}: ${String(m.text).slice(0, 1500)}`)
-      .join('\n');
-
-    const prompt = `אתה יועץ פיננסי שהופך ייעוץ לתוכנית פעולה מעשית בעברית, עבור "${summary.userName || ''}".
-קיבלת: סיכום נתוני התקציב (JSON), את הניתוח שנתת (advice) ואת השיחה עם המשתמש.
-צור 3 עד 6 משימות שהמשתמש צריך לבצע כדי ליישם את ההמלצות. כל משימה:
-- title: פעולה אחת ברורה, מתחילה בפועל (למשל "להוריד את תקציב המסעדות ל-600 ₪ בחודש"), עד 60 תווים.
-- why: משפט אחד שמסביר למה, עם המספרים האמיתיים מהנתונים.
-- steps: 2 עד 5 צעדים קצרים וקונקרטיים לביצוע, כל אחד פעולה שאפשר לסמן כבוצעה (למשל "להיכנס לאתר של חברת הביטוח ולבקש הצעה מתחרה").
-- due_in_days: בעוד כמה ימים לבצע (0 עד 30). משימות קלות ודחופות מוקדם, גדולות מאוחר יותר.
-- link_tab: המסך באפליקציה שבו מבצעים את זה, אחד מ: ${TASK_TABS.join(', ')}, או null.
-- target_amount: סכום יעד בשקלים אם רלוונטי, אחרת null.
-- deliverable_kind: אם כדאי שהיועץ יכין תוצר מוכן למשימה: "checklist" (רשימת בדיקה), "budget" (תקציב חודשי לקטגוריות), "meal_plan" (תפריט שבועי ורשימת קניות), "comparison" (השוואת הצעות מחיר), "message" (מכתב/הודעה/תסריט שיחה), "savings_plan" (תוכנית חיסכון ליעד), "loan_payoff" (סדר פירעון הלוואות), "info" (משכנתא/השקעות: חישובים ושאלות), אחרת null.
-- בכל צעד שבו המשתמש צריך לדווח מידע (הצעת מחיר, תשובה שקיבל, תאריך), הפוך את הצעד לאובייקט: {"text":"...","input":{"type":"number|text|date|choice","label":"...","options":["..."]}}. צעד בלי דיווח נשאר מחרוזת.
-אל תמציא נתונים שלא מופיעים בסיכום. העדף משימות שהשיחה עסקה בהן.
-ענה אך ורק ב-JSON תקני בלי markdown: {"tasks":[{"title":"","why":"","steps":["", {"text":"","input":{"type":"number","label":""}}],"due_in_days":0,"link_tab":null,"target_amount":null,"deliverable_kind":null}]}`;
-
-    const text = JSON.stringify({ summary, advice: advice || null }) + (convo ? '\n\nהשיחה:\n' + convo : '');
-    const aiResult = await generateWithFallback({ prompt, text });
-    let parsed = null;
-    try { parsed = JSON.parse(extractJsonText(aiResult.output || '')); } catch (_e) {
-      const m = String(aiResult.output || '').match(/\{[\s\S]*\}/);
-      if (m) { try { parsed = JSON.parse(m[0]); } catch (_e2) { parsed = null; } }
-    }
-    const raw = parsed && Array.isArray(parsed.tasks) ? parsed.tasks : null;
-    if (!raw) return res.status(502).json({ error: 'AI response could not be parsed' });
-
-    const today = israelToday();
-    const tasks = raw.slice(0, 6).map((t) => {
-      const days = Math.max(0, Math.min(60, parseInt(t.due_in_days, 10) || 7));
-      const INPUT_TYPES = ['number', 'text', 'date', 'choice'];
-      const steps = (Array.isArray(t.steps) ? t.steps : []).slice(0, 6).map((x) => {
-        const text = String((x && typeof x === 'object') ? x.text : x || '').trim().slice(0, 200);
-        if (!text) return null;
-        const step = { text, done: false };
-        const inp = x && typeof x === 'object' ? x.input : null;
-        if (inp && INPUT_TYPES.includes(inp.type)) {
-          step.input = { type: inp.type, label: String(inp.label || '').slice(0, 80) };
-          if (inp.type === 'choice') step.input.options = (Array.isArray(inp.options) ? inp.options : ['כן', 'לא']).map(String).slice(0, 5);
-        }
-        return step;
-      }).filter(Boolean);
-      return {
-        title: String(t.title || '').trim().slice(0, 120),
-        why: String(t.why || '').trim().slice(0, 400) || null,
-        steps,
-        due_date: addDaysIso(today, days),
-        link_tab: TASK_TABS.includes(t.link_tab) ? t.link_tab : null,
-        target_amount: Number.isFinite(+t.target_amount) && +t.target_amount > 0 ? Math.round(+t.target_amount) : null,
-        deliverable_kind: ['checklist', 'budget', 'meal_plan', 'comparison', 'message', 'savings_plan', 'loan_payoff', 'info'].includes(t.deliverable_kind) ? t.deliverable_kind : null
-      };
-    }).filter((t) => t.title);
-    return res.json({ tasks, aiProvider: aiResult.provider });
-  } catch (err) {
-    return res.status(err.statusCode || 502).json({ error: err.message || 'Unexpected error' });
-  }
-});
 
 // ═══ advisor chat v2: streaming (SSE), shared conversations, follow-up chips ═══
 const SUGG_MARK = '@@הצעות:';
@@ -1345,57 +1155,6 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
     console.error('advice-chat-stream failed:', err.message);
     send({ error: 'היועץ לא הצליח לענות כרגע. נסו שוב בעוד דקה.' });
     return res.end();
-  }
-});
-
-// ═══ deliverables: create / revise together / shopping list ═══
-const DELIVERABLE_SPECS = {
-  checklist: '{"items":[{"text":"..."}]}  — 4 עד 12 פריטים קונקרטיים לבדיקה או לביצוע.',
-  budget: '{"lines":[{"category":"שם קטגוריה קיים בדיוק כמו בנתונים","current_avg":0,"proposed":0,"note":"..."}]}  — current_avg מהנתונים בפועל; proposed מציאותי.',
-  meal_plan: '{"days":[{"day":"ראשון","meal":"...","note":""}],"assumptions":"...","est_weekly_cost":0}  — ארוחות ערב לשבוע, פשוטות וחסכוניות, לפי מה שנאמר בשיחה.',
-  comparison: '{"subject":"...","columns":["חברה/אפשרות","מחיר בחודש","הערה"],"rows":[{"name":"...","monthly":0,"note":"...","current":true}],"best":"שם האפשרות הכי משתלמת או null","yearly_saving":0}  — כלול את המצב הנוכחי מהנתונים (current:true). סכומים שהמשתמש דיווח בצעדי המשימה (value) הם נתונים אמיתיים; אל תמציא הצעות מחיר — אם חסר, השאר את השורה עם monthly null ו-note "לבירור".',
-  message: '{"channel":"email|whatsapp|call","to":"למי","subject":"נושא או null","body":"הנוסח המלא","tips":["טיפ קצר לשיחה"]}  — בעברית, מנומס וענייני, עם המספרים האמיתיים. בשיחת טלפון body הוא תסריט קצר.',
-  savings_plan: '{"goal_name":"...","target_amount":0,"monthly":0,"months":0,"target_date":"YYYY-MM-DD","start_from":0,"notes":"..."}  — ריאלי לפי המאזן החודשי בפועל; start_from = סכום שכבר נחסך אם ידוע.',
-  loan_payoff: '{"strategy":"שם הגישה","order":[{"loan":"שם ההלוואה כפי שמופיע בנתונים","balance":0,"monthly":0,"extra":0,"payoff_date":"YYYY-MM"}],"total_interest_saved":0,"notes":"..."}  — רק הלוואות שמופיעות בנתונים; אם חסר מידע כמו ריבית, ציין הנחה.',
-  info: '{"topic":"...","calcs":[{"label":"...","value":"..."}],"questions":["שאלה לבדוק מול בנק/יועץ"],"considerations":["..."],"disclaimer":"מידע וחישובים בלבד, לא ייעוץ מורשה"}  — משכנתא/השקעות: חישובים על הנתונים, שאלות נכונות, בלי המלצה על מוצר או נייר ערך ספציפי.',
-  shopping_list: '{"sections":[{"name":"מחלקה","items":[{"text":"מוצר, כמות","for":"לאיזו ארוחה"}]}],"at_home":["..."],"est_cost":0}  — מאוחד (בלי כפילויות), לפי מחלקות בסופר, בלי מה שכבר יש בבית.'
-};
-app.post('/api/ai/deliverable', requireAuth, aiLimiter, aiQuota, async (req, res) => {
-  try {
-    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'No AI key configured' });
-    const { summary, task, kind, content, chat, message, action, authorName } = req.body || {};
-    const outKind = action === 'shopping_list' ? 'shopping_list' : kind;
-    if (!DELIVERABLE_SPECS[outKind]) return res.status(400).json({ error: 'unknown deliverable kind' });
-    const chatText = (Array.isArray(chat) ? chat : []).slice(-16)
-      .map((m) => `${m.role === 'user' ? (m.author || 'משתמש') : 'יועץ'}: ${String(m.text || '').slice(0, 1200)}`).join('\n');
-    const mode = action === 'shopping_list'
-      ? 'בנה רשימת קניות מהתפריט המאושר (content).'
-      : content ? 'עדכן את הטיוטה הקיימת (content) לפי ההודעה האחרונה. שנה רק מה שהתבקש.'
-        : 'צור טיוטה ראשונה. אם חסר מידע חיוני (למשל בתפריט: כמה נפשות, הגבלות ומה לא אוכלים, כמה ערבים מבשלים) — אל תיצור עדיין, רק שאל עד 3 שאלות קצרות.';
-    const prompt = `אתה יועץ פיננסי למשק בית, בונה תוצר מעשי בעברית עבור המשימה: "${(task && task.title) || ''}".
-${mode}
-מבנה התוכן (content) לסוג "${outKind}": ${DELIVERABLE_SPECS[outKind]}
-ענה אך ורק ב-JSON תקני בלי markdown:
-{"reply":"משפט או שניים למשתמש","questions":["..."] או [],"content":<תוכן לפי המבנה או null אם אתה רק שואל>,"changes":["מה שונה מהגרסה הקודמת"]}
-${chatText ? '\nהשיחה על התוצר:\n' + chatText : ''}
-${message ? `\nהודעה חדשה (${authorName || 'משתמש'}): ${message}` : ''}`;
-    const text = JSON.stringify({ summary: summary || null, task: task || null, content: content || null }).slice(0, 12000);
-    const ai = await generateWithFallback({ prompt, text });
-    let parsed = null;
-    try { parsed = JSON.parse(extractJsonText(ai.output || '')); } catch (_e) {
-      const m = String(ai.output || '').match(/\{[\s\S]*\}/);
-      if (m) { try { parsed = JSON.parse(m[0]); } catch (_e2) { parsed = null; } }
-    }
-    if (!parsed || typeof parsed !== 'object') return res.status(502).json({ error: 'AI response could not be parsed' });
-    return res.json({
-      kind: outKind,
-      reply: String(parsed.reply || '').slice(0, 1500),
-      questions: Array.isArray(parsed.questions) ? parsed.questions.map(String).slice(0, 4) : [],
-      content: parsed.content && typeof parsed.content === 'object' ? parsed.content : null,
-      changes: Array.isArray(parsed.changes) ? parsed.changes.map(String).slice(0, 8) : []
-    });
-  } catch (err) {
-    return res.status(err.statusCode || 502).json({ error: err.message || 'Unexpected error' });
   }
 });
 
@@ -1779,53 +1538,8 @@ app.post('/api/checkin/run', async (req, res) => {
 });
 
 // ═══ stage 2: "what if" — turn a sentence into dated cash-flow events ═══
-app.post('/api/ai/scenario', requireAuth, aiLimiter, aiQuota, async (req, res) => {
-  try {
-    const { text, summary } = req.body || {};
-    if (!text) return res.status(400).json({ error: 'text is required' });
-    const today = israelToday();
-    const prompt = `המר תרחיש "מה אם" של משק בית לאירועים כספיים. היום ${today}. החודשים בפורמט YYYY-MM.
-אירוע חד-פעמי: {"type":"once","month":"YYYY-MM","amount":<שלילי להוצאה, חיובי להכנסה>,"label":"..."}
-שינוי חודשי קבוע: {"type":"monthly","from":"YYYY-MM","to":"YYYY-MM או null","amount":<שינוי בחודש, שלילי/חיובי>,"label":"..."}
-אם כתוב "הלוואה"/"תשלומים", פצל לסכום מקדמה (once) + תשלום חודשי (monthly) רק אם יש מספרים. אל תמציא מספרים שלא נאמרו — אם חסר סכום, החזר "question".
-ענה רק ב-JSON: {"events":[...],"question":null או "שאלה קצרה","title":"כותרת קצרה לתרחיש"}`;
-    const ai = await generateWithFallback({ prompt, text: `התרחיש: ${text}\n\nסיכום נתונים: ${JSON.stringify(summary || {}).slice(0, 6000)}` });
-    let j = null;
-    try { j = JSON.parse(extractJsonText(ai.output || '')); } catch (_e) { const m = String(ai.output || '').match(/\{[\s\S]*\}/); if (m) { try { j = JSON.parse(m[0]); } catch (_e2) { j = null; } } }
-    if (!j) return res.status(502).json({ error: 'AI response could not be parsed' });
-    const ym = /^\d{4}-\d{2}$/;
-    const events = (Array.isArray(j.events) ? j.events : []).filter((e) => e && Number.isFinite(+e.amount) && +e.amount !== 0 &&
-      ((e.type === 'once' && ym.test(e.month)) || (e.type === 'monthly' && ym.test(e.from) && (!e.to || ym.test(e.to)))))
-      .slice(0, 10).map((e) => ({ ...e, amount: Math.round(+e.amount), label: String(e.label || '').slice(0, 60) }));
-    return res.json({ events, question: j.question ? String(j.question).slice(0, 200) : null, title: String(j.title || text).slice(0, 80) });
-  } catch (err) {
-    return res.status(err.statusCode || 502).json({ error: err.message || 'Unexpected error' });
-  }
-});
 
 // ═══ stage 4: advisor memory — pull durable decisions/preferences out of a chat ═══
-app.post('/api/ai/extract-memories', requireAuth, aiLimiter, aiQuota, async (req, res) => {
-  try {
-    const { messages, existing } = req.body || {};
-    const convo = (Array.isArray(messages) ? messages : []).filter((m) => m && (m.role === 'user' || m.role === 'ai') && m.text)
-      .slice(-20).map((m) => `${m.role === 'user' ? (m.author || 'משתמש') : 'יועץ'}: ${String(m.text).slice(0, 1200)}`).join('\n');
-    if (!convo) return res.json({ memories: [] });
-    const prompt = `מתוך שיחה עם יועץ פיננסי למשק בית, חלץ רק דברים שכדאי לזכור לשיחות הבאות:
-החלטות שבני הזוג קיבלו ("סיכמנו לא לקנות רכב השנה"), העדפות קבועות ("חשוב לנו להפריש מעשרות"), יעדים שהוגדרו, ועובדות יציבות על המשפחה שהם אמרו.
-לא: עצות של היועץ שלא אושרו, מספרים שמשתנים כל חודש, רגשות רגעיים, פרטים רפואיים.
-כל פריט — משפט קצר בעברית (עד 80 תווים). עד 5 פריטים. אל תחזור על מה שכבר קיים: ${JSON.stringify((existing || []).slice(0, 40))}
-ענה רק ב-JSON: {"memories":[{"text":"...","kind":"decision|preference|goal|fact"}]}`;
-    const ai = await generateWithFallback({ prompt, text: convo, effort: 'low' });
-    let j = null;
-    try { j = JSON.parse(extractJsonText(ai.output || '')); } catch (_e) { j = null; }
-    const kinds = ['decision', 'preference', 'goal', 'fact'];
-    const memories = (j && Array.isArray(j.memories) ? j.memories : []).filter((m) => m && m.text)
-      .map((m) => ({ text: String(m.text).trim().slice(0, 120), kind: kinds.includes(m.kind) ? m.kind : 'decision' })).slice(0, 5);
-    return res.json({ memories });
-  } catch (err) {
-    return res.status(err.statusCode || 502).json({ error: err.message || 'Unexpected error' });
-  }
-});
 
 // ═══ what the advisor learned from a conversation: approvable updates ═══
 app.post('/api/ai/learn-from-chat', requireAuth, aiLimiter, aiQuota, async (req, res) => {
@@ -1989,11 +1703,23 @@ const FEEDBACK_TO = String(process.env.FEEDBACK_TO || ADMIN_EMAILS.find((e) => e
 // The owner's own accounts, by id (asked of the auth server, kept 10 minutes):
 // left out of every count on the dashboard.
 let ownerIdsCache = { at: 0, ids: [] };
+// Whole lists, never cut at 1,000 (see ops.pageAll). Same { data, error }
+// shape as a single query, so callers stay as they were.
+const allRows = (build) => ops.pageAll(async (from, to) => {
+  const { data, error } = await build().range(from, to);
+  if (error) throw error;
+  return data || [];
+}).then((data) => ({ data, error: null }), (error) => ({ data: null, error }));
+const listAllUsers = () => ops.pageAll(async (_from, _to, page) => {
+  const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+  if (error) throw error;
+  return (data && data.users) || [];
+}).then((users) => ({ data: { users }, error: null }), (error) => ({ data: null, error }));
 async function ownerIds(allUsers) {
   if (allUsers) {
     ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())).map((u) => u.id) };
   } else if (Date.now() - ownerIdsCache.at > 10 * 60 * 1000 && supabaseAdmin) {
-    const { data } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const { data } = await listAllUsers();
     return ownerIds((data && data.users) || []);
   }
   return ownerIdsCache.ids;
@@ -2004,7 +1730,7 @@ const ADMIN_SALT = process.env.ADMIN_SALT || VAPID_PRIVATE_KEY || 'budget';
 // sign-up), their household and how much data it has. Emails stay here.
 async function peopleInfo(all) {
   const [{ data: members }, { data: spans }] = await Promise.all([
-    supabaseAdmin.from('memberships').select('user_id,household_id,display_name,created_at').order('created_at', { ascending: true }),
+    allRows(() => supabaseAdmin.from('memberships').select('user_id,household_id,display_name,created_at').order('created_at', { ascending: true })),
     supabaseAdmin.rpc('ops_tx_span')
   ]);
   const first = new Map();
@@ -2028,11 +1754,11 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     const since = new Date(Date.now() - 60 * 86400000).toISOString();
     const month = new Date(Date.now() - 30 * 86400000).toISOString();
     const [ev, er, calls, people] = await Promise.all([
-      supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).order('at', { ascending: false }).limit(50000),
+      allRows(() => supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).order('at', { ascending: false })),
       supabaseAdmin.from('app_errors').select('message,path,at,source').gte('at', new Date(Date.now() - 7 * 86400000).toISOString()).order('at', { ascending: false }).limit(2000),
-      supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', month).limit(100000),
+      allRows(() => supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', month).order('at')),
       // Ids, sign-up dates and names reach the dashboard; an email only on request.
-      supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+      listAllUsers()
     ]);
     const all = (people.data && people.data.users) || [];
     // The owner's own accounts (by id; the emails stay here) are left out of
@@ -2046,7 +1772,7 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     // Each person's name and how they are doing (by their label; no ids or emails leave).
     const info = await peopleInfo(all.filter((u) => others(u.id)));
     // Shares and friends who joined, per person (by label) and in total.
-    const { data: refs } = await supabaseAdmin.from('referrals').select('ref_code').limit(100000);
+    const { data: refs } = await allRows(() => supabaseAdmin.from('referrals').select('ref_code').order('user_id'));
     const sh = ops.shareStats({ users: all, events: ev.data || [], referrals: refs || [], salt: ADMIN_SALT, owners });
     const shareByLabel = new Map(all.filter((u) => others(u.id)).map((u) => [ops.alias(u.id, ADMIN_SALT), sh.byUser.get(u.id)]));
     const byLabel = new Map([...info.values()].map((x) => [x.label, x]));
@@ -2089,10 +1815,10 @@ async function isAdmin(userId) {
 async function todayItems() {
   const since = new Date(Date.now() - 30 * 3600 * 1000).toISOString();
     const [ev, calls, er, people] = await Promise.all([
-      supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).limit(20000),
-      supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', since).limit(20000),
-      supabaseAdmin.from('app_errors').select('user_id,at').gte('at', since).limit(5000),
-      supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+      allRows(() => supabaseAdmin.from('app_events').select('user_id,name,at').gte('at', since).order('at')),
+      allRows(() => supabaseAdmin.from('ai_calls').select('user_id,provider,model,input_tokens,output_tokens,at').gte('at', since).order('at')),
+      allRows(() => supabaseAdmin.from('app_errors').select('user_id,at').gte('at', since).order('at')),
+      listAllUsers()
     ]);
     const all = (people.data && people.data.users) || [];
     const owners = await ownerIds(all);
@@ -2161,7 +1887,7 @@ app.get('/api/share', requireAuth, async (req, res) => {
 // not to someone who turned off emails from us.
 async function thankSharer(ref, req) {
   if (!mailStatus().ready) return;
-  const { data } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const { data } = await listAllUsers();
   const u = ((data && data.users) || []).find((x) => ops.refCode(x.id, ADMIN_SALT) === ref);
   if (!u || !u.email || ADMIN_EMAILS.includes(String(u.email).toLowerCase())) return;
   const { data: pref } = await supabaseAdmin.from('mail_prefs').select('news').eq('user_id', u.id).maybeSingle();
@@ -2207,7 +1933,7 @@ app.get('/api/admin/email', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   const who = String(req.query.who || '').slice(0, 20);
   if (!/^#[0-9a-f]{6}$/.test(who)) return res.status(400).json({ error: 'bad request' });
-  const { data } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const { data } = await listAllUsers();
   const u = ((data && data.users) || []).find((x) => ops.alias(x.id, ADMIN_SALT) === who);
   if (!u) return res.status(404).json({ error: 'not found' });
   console.log('owner viewed an email:', who);
@@ -2223,12 +1949,12 @@ app.get('/api/admin/live', requireAuth, async (req, res) => {
 // ═══ one-time emails from the dashboard (the owner reads, then sends) ═══
 async function campaignData() {
   const [{ data: people }, { data: members }, { data: spans }, { data: sent }, { data: oldSent }, { data: off }] = await Promise.all([
-    supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-    supabaseAdmin.from('memberships').select('user_id,household_id,created_at').order('created_at', { ascending: true }),
+    listAllUsers(),
+    allRows(() => supabaseAdmin.from('memberships').select('user_id,household_id,created_at').order('created_at', { ascending: true })),
     supabaseAdmin.rpc('ops_tx_span'),
-    supabaseAdmin.from('mail_sent').select('user_id,campaign,sent_at,ok'),
-    supabaseAdmin.from('reengage_sent').select('user_id'),
-    supabaseAdmin.from('mail_prefs').select('user_id').eq('news', false)
+    allRows(() => supabaseAdmin.from('mail_sent').select('user_id,campaign,sent_at,ok').order('sent_at')),
+    allRows(() => supabaseAdmin.from('reengage_sent').select('user_id').order('user_id')),
+    allRows(() => supabaseAdmin.from('mail_prefs').select('user_id').eq('news', false).order('user_id'))
   ]);
   // A person's first household, as the app opens it.
   const first = new Map();
@@ -2644,8 +2370,10 @@ app.post('/api/admin/monthly-mail/send', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   if (!mailStatus().ready) return res.status(503).json({ error: 'השרת עוד לא מוגדר לשלוח מיילים.' });
   try {
-    const { data: rows } = await supabaseAdmin.from('monthly_reports').select('household_id,month').order('month', { ascending: false }).limit(500);
-    const month = rows && rows[0] && rows[0].month;
+    // The latest month, then every household's report for it (never cut short).
+    const { data: last } = await supabaseAdmin.from('monthly_reports').select('month').order('month', { ascending: false }).limit(1);
+    const month = last && last[0] && last[0].month;
+    const { data: rows } = month ? await allRows(() => supabaseAdmin.from('monthly_reports').select('household_id,month').eq('month', month).order('household_id')) : { data: [] };
     let sent = 0;
     for (const r of (rows || []).filter((x) => x.month === month)) {
       const report = await latestReport(r.household_id);

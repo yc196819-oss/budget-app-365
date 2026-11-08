@@ -93,6 +93,30 @@ function costOf(c) {
   return ((Number(c.input_tokens) || 0) * p[0] + (Number(c.output_tokens) || 0) * p[1]) / 1e6;
 }
 
+// Every row, page by page: the database hands back at most 1,000 rows (and
+// the auth server 1,000 people) per request, so a longer list would be cut
+// short without a word. fetchPage(from, to, page) returns one page. Stops at
+// a short page; maxPages is a safety net, never reached in practice.
+async function pageAll(fetchPage, size = 1000, maxPages = 500) {
+  const out = [];
+  for (let p = 0; p < maxPages; p++) {
+    const rows = await fetchPage(p * size, p * size + size - 1, p + 1);
+    out.push(...(rows || []));
+    if (!rows || rows.length < size) break;
+  }
+  return out;
+}
+
+// A household's AI actions a month: its own limit when one was set, else a
+// default far above what anyone uses today (the busiest home is near 450),
+// so nobody real is stopped while a runaway loop or abuse is.
+const AI_MONTHLY_DEFAULT = 600;
+function aiMonthlyLimit(own, fallback) {
+  if (own != null && Number.isFinite(Number(own))) return Number(own);
+  const f = Number(fallback);
+  return Number.isFinite(f) && f > 0 ? f : AI_MONTHLY_DEFAULT;
+}
+
 const int = (v) => Math.max(0, Math.round(Number(v) || 0));
 function aiCallRow({ userId = null, route = 'system', provider, model = null, inputTokens, outputTokens }) {
   return { user_id: userId || null, route: text(route, 80), provider: text(provider, 20), model: text(model, 60) || null, input_tokens: int(inputTokens), output_tokens: int(outputTokens) };
@@ -734,4 +758,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };
+module.exports = { aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily };

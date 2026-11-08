@@ -88,7 +88,7 @@ test('pdf.js and its worker are served as JavaScript modules', async () => {
 });
 
 test('protected API routes still require a session', async () => {
-  const res = await fetch(BASE + '/api/ai/advice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  const res = await fetch(BASE + '/api/ai/advice-chat-stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.ok(res.status === 401 || res.status === 503);
 });
 
