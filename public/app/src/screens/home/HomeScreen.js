@@ -23,6 +23,7 @@ import { AnswerNotice } from './AnswerNotice.js';
 import { MonthlyAsk } from './MonthlyAsk.js';
 import { removeMany } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
+import { readLocal, writeLocal } from '../../lib/storage.js';
 import { SortSheet } from '../money/SortSheet.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
@@ -30,6 +31,11 @@ import { SortSheet } from '../money/SortSheet.js';
 export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
   // One sheet at a time: { kind: 'hero' } | { kind: 'tx', id } | null
   const [sheet, setSheet] = useState(null);
+  // Pairs the household said are two real purchases (not a double charge).
+  const dupeKey = 'dupe:ok:' + data.hid;
+  const [, setDupeVer] = useState(0);
+  let dupeOk;
+  try { dupeOk = new Set(JSON.parse(readLocal(dupeKey, '[]'))); } catch (_e) { dupeOk = new Set(); }
   // The holiday plan and the quarterly check-in have their own sheets.
   const planSheet = usePlanSheet();
   const trips = useTrips(data.hid);
@@ -44,7 +50,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
   const plan = monthPlan({ txs: data.txs, budgets: data.budgets, today });
   const cash = cashNow(data.accounts, data.cards, data.txs, today);
   const soon = upcoming({ txs: data.txs, cards: data.cards, today });
-  const items = attention({ txs: data.txs, categories: data.categories, budgets: data.budgets, cards: data.cards, today, plan });
+  const items = attention({ txs: data.txs, categories: data.categories, budgets: data.budgets, cards: data.cards, today, plan, dupeOk });
   const top = topCategories(data.txs, data.categories, data.budgets, today);
 
   const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} />`;
@@ -57,6 +63,13 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
   }
 
   const act = async (a) => {
+    if (a.to === 'dupe-ok') {
+      const next = new Set(dupeOk); next.add(a.key);
+      writeLocal(dupeKey, JSON.stringify([...next]));
+      setDupeVer((v) => v + 1);
+      showToast('נשמר: שתי קניות נפרדות. לא נשאל עליהן שוב.');
+      return;
+    }
     if (a.to === 'cardtwice') {
       // Into the recycle bin: they come back from "המידע שלנו" within 30 days.
       try { await removeMany(a.ids); showToast(a.ids.length === 1 ? 'החיוב הכפול הוסר. אפשר לשחזר תוך 30 יום.' : a.ids.length + ' חיובים כפולים הוסרו. אפשר לשחזר תוך 30 יום.'); }

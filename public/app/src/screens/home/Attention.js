@@ -9,7 +9,8 @@ export function Attention({ items, onAct }) {
     ${items.map((a) => html`<div class="card att rise" key=${a.kind + a.title} style=${'--tone:' + TONE[a.tone]}>
       <span class="att-dot" aria-hidden="true"></span>
       <span class="att-main"><b>${a.title}</b><span>${a.detail}</span>
-        <button type="button" class="att-btn" onClick=${() => onAct(a.action)}>${a.action.label}</button></span>
+        <span class="att-actions"><button type="button" class="att-btn" onClick=${() => onAct(a.action)}>${a.action.label}</button>
+        ${a.second && html`<button type="button" class="att-btn att-btn2" onClick=${() => onAct(a.second)}>${a.second.label}</button>`}</span></span>
     </div>`)}
   </section>`;
 }
