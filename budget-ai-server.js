@@ -1854,6 +1854,33 @@ app.get('/api/admin/prices/reach', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'failed' });
   }
 });
+// The outside price service (Apify): what it asks for and costs, then one
+// small run. Owner only; the key never leaves the server; nothing is stored.
+const APIFY_TOKEN = process.env.APIFY_TOKEN || '';
+app.get('/api/admin/prices/service', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!APIFY_TOKEN) return res.status(503).json({ error: 'המפתח של Apify לא מוגדר בשרת (APIFY_TOKEN).' });
+    return res.json(await prices.apifyAbout(fetch, APIFY_TOKEN));
+  } catch (err) {
+    console.error('price service info failed:', err.message);
+    return res.status(502).json({ error: String(err.message).slice(0, 200) });
+  }
+});
+app.post('/api/admin/prices/sample', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!APIFY_TOKEN) return res.status(503).json({ error: 'המפתח של Apify לא מוגדר בשרת (APIFY_TOKEN).' });
+    const input = req.body && req.body.input && typeof req.body.input === 'object' && !Array.isArray(req.body.input) ? req.body.input : null;
+    if (input && JSON.stringify(input).length > 2000) return res.status(400).json({ error: 'bad request' });
+    const about = input ? null : await prices.apifyAbout(fetch, APIFY_TOKEN);
+    const used = input || (about && about.example) || {};
+    return res.json({ input: used, ...(await prices.apifySample(fetch, APIFY_TOKEN, used)) });
+  } catch (err) {
+    console.error('price service sample failed:', err.message);
+    return res.status(502).json({ error: String(err.message).slice(0, 200) });
+  }
+});
 // The owner's evening summary email (pg_cron job "owner-daily-digest").
 let todaySummary = null;
 import(require('url').pathToFileURL(path.join(__dirname, 'public/app/src/domain/people-health.js')).href)

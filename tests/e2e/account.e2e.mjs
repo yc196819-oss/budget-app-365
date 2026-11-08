@@ -481,3 +481,30 @@ test('emails to users: when the server cannot email people yet, the dashboard sa
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('owner: the outside price service, what it takes and costs, then one small run with real rows', async () => {
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
+  await page.route('**/api/admin/prices/service', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ title: 'Israeli Supermarket Prices', description: 'Official price files', modified: '2026-10-01', pricing: { model: 'PAY_PER_EVENT', perUnit: null, unit: '', events: null }, fields: [{ key: 'query', title: 'Product', type: 'string', example: 'חלב' }], example: { query: 'חלב' } }) }));
+  let ran = null;
+  await page.route('**/api/admin/prices/sample', (r) => { ran = JSON.parse(r.request().postData() || '{}'); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ input: { query: 'חלב' }, seconds: 12, count: 2, keys: ['chain', 'store', 'item', 'price', 'updated'], rows: [{ chain: 'שופרסל', store: 'דיזנגוף', item: 'חלב 3%', price: '6.9', updated: '2026-11-08' }, { chain: 'רמי לוי', store: 'תלפיות', item: 'חלב 3%', price: '6.5', updated: '2026-11-08' }] }) }); });
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  const card = page.locator('.admin-price-service');
+  await card.waitFor();
+  await card.locator('button:has-text("1. מה השירות")').click();
+  await card.locator('text=Israeli Supermarket Prices').waitFor();
+  assert.match(await card.textContent(), /PAY_PER_EVENT/);
+  assert.match(await card.textContent(), /query – Product \(למשל "חלב"\)/);
+  await card.locator('button:has-text("2. הרצה קטנה")').click();
+  await card.locator('table').waitFor();
+  assert.deepEqual(ran, {}, 'the service\'s own example is used');
+  assert.match(await card.textContent(), /2 תוצאות ב-12 שניות/);
+  assert.equal(await card.locator('tbody tr').count(), 2);
+  assert.match(await card.locator('tbody').textContent(), /רמי לוי.*6\.5/s);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

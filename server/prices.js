@@ -36,3 +36,69 @@ async function probeAll(fetchFn, chains = CHAINS, timeoutMs) {
 }
 
 module.exports = { CHAINS, probeOne, probeAll };
+
+// ═══ the outside price service (Apify), first a check ═══
+// A service that reads the same official price files from inside Israel.
+// Before building on it: what it asks for, what one small run returns, and
+// what it costs. The key stays on the server (APIFY_TOKEN); nothing is kept.
+const APIFY = 'https://api.apify.com/v2';
+const ACTOR = process.env.APIFY_ACTOR || 'swerve~supermarket-prices';
+
+async function apifyGet(fetchFn, token, path) {
+  const r = await fetchFn(APIFY + path, { headers: { Authorization: 'Bearer ' + token } });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('Apify ' + r.status + ': ' + String((body.error && body.error.message) || '').slice(0, 160));
+  return body.data;
+}
+
+// What the service is, what it costs, and the fields it takes.
+async function apifyAbout(fetchFn, token, actor = ACTOR) {
+  const a = await apifyGet(fetchFn, token, '/acts/' + actor);
+  let fields = [];
+  const buildId = a && a.taggedBuilds && a.taggedBuilds.latest && a.taggedBuilds.latest.buildId;
+  if (buildId) {
+    const b = await apifyGet(fetchFn, token, '/actor-builds/' + buildId).catch(() => null);
+    let schema = b && b.inputSchema;
+    if (typeof schema === 'string') { try { schema = JSON.parse(schema); } catch (_e) { schema = null; } }
+    const props = (schema && schema.properties) || {};
+    fields = Object.entries(props).slice(0, 30).map(([key, p]) => ({
+      key, title: String(p.title || '').slice(0, 80), type: p.type || p.editor || '',
+      example: p.prefill !== undefined ? p.prefill : p.default !== undefined ? p.default : (p.enum ? p.enum.slice(0, 8) : undefined)
+    }));
+  }
+  let example = null;
+  const ex = a && a.exampleRunInput && a.exampleRunInput.body;
+  if (ex) { try { example = JSON.parse(ex); } catch (_e) { example = null; } }
+  const pricing = ((a && a.pricingInfos) || []).slice(-1)[0] || null;
+  return {
+    title: String((a && a.title) || actor).slice(0, 100),
+    description: String((a && a.description) || '').slice(0, 400),
+    modified: (a && a.modifiedAt) || null,
+    pricing: pricing ? { model: pricing.pricingModel || '', perUnit: pricing.pricePerUnitUsd ?? null, unit: pricing.unitName || '', events: pricing.pricingPerEvent || null } : null,
+    fields, example
+  };
+}
+
+// One small run (at most `limit` results), with the input given or the
+// service's own example. Returns the field names and a few rows as they came.
+async function apifySample(fetchFn, token, input, { actor = ACTOR, limit = 15, seconds = 120 } = {}) {
+  const started = Date.now();
+  const url = APIFY + '/acts/' + actor + '/run-sync-get-dataset-items?timeout=' + seconds + '&maxItems=' + limit + '&clean=true';
+  const r = await fetchFn(url, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(input || {}) });
+  const text = await r.text();
+  let items = [];
+  try { items = JSON.parse(text); } catch (_e) { items = []; }
+  if (!r.ok) {
+    let msg = '';
+    try { msg = JSON.parse(text).error.message; } catch (_e) { msg = text; }
+    throw new Error('Apify ' + r.status + ': ' + String(msg).slice(0, 200));
+  }
+  if (!Array.isArray(items)) items = [];
+  const keys = [...new Set(items.flatMap((x) => (x && typeof x === 'object' ? Object.keys(x) : [])))].slice(0, 40);
+  const short = (v) => (v && typeof v === 'object' ? JSON.stringify(v).slice(0, 120) : String(v ?? '').slice(0, 120));
+  return { seconds: Math.round((Date.now() - started) / 1000), count: items.length, keys, rows: items.slice(0, limit).map((x) => Object.fromEntries(Object.entries(x || {}).slice(0, 14).map(([k, v]) => [k, short(v)]))) };
+}
+
+module.exports.apifyAbout = apifyAbout;
+module.exports.apifySample = apifySample;
+module.exports.APIFY_ACTOR = ACTOR;
