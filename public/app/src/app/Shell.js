@@ -88,7 +88,11 @@ export function Shell({ tab, session }) {
   const railOn = desktop && (railPref ? railPref === '1' : roomForRail);
   const setMini = (on) => { const v = on ? '1' : '0'; writeLocal('nav:mini', v); setNavPref(v); };
   const setRail = (on) => { const v = on ? '1' : '0'; writeLocal('rail:on', v); setRailPref(v); };
-  const askAdvisor = () => (railOn ? document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus() : setOverlay('advisor'));
+  const askAdvisor = () => {
+    if (railOn) { document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus(); return; }
+    setOverlay('advisor');
+    setTimeout(() => document.querySelector('.sheet [aria-label="שאלה ליועץ"]')?.focus(), 350);
+  };
   // Shared decisions: the "together" tab shows how many wait for my answer.
   const dec = useDecisions(session.household?.household_id, session.user.id);
   // Answers waiting for me, plus cards with new messages in their conversation.

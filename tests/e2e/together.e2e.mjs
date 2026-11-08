@@ -189,7 +189,7 @@ test('mobile bar: the "+" stays in the exact middle, all five tabs on one row', 
 });
 
 test('desktop keyboard shortcuts: N adds, 1-5 switch tabs, / asks the advisor; not while typing', async () => {
-  const { page } = await open({ hash: '#/home', width: 1280 });
+  const { page } = await open({ hash: '#/home', width: 1536 });
   await page.waitForSelector('.hero');
   await page.keyboard.press('Digit3');
   await page.waitForSelector('.together');

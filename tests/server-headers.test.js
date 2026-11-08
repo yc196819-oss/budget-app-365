@@ -148,7 +148,11 @@ test('the logo and the manifest: installable from the new app, on phone and desk
   for (const i of m.icons) assert.equal((await fetch(BASE + i.src)).status, 200, i.src);
   const shell = await (await fetch(BASE + '/app/')).text();
   assert.match(shell, /<link rel="manifest" href="\/manifest.json">/);
-  assert.match(shell, /<link rel="apple-touch-icon" href="\/wallet-180.png">/);
+  assert.match(shell, /<link rel="apple-touch-icon" href="\/wallet-180.png\?v=\d+">/);
+  // Full-bleed squares only: the launcher draws its own shape. An SVG with its
+  // own rounded corners would be shrunk inside it ("an icon pasted on an icon").
+  assert.ok(m.icons.every((i) => /\.png\?v=\d+$/.test(i.src)), 'png icons with a version');
+  assert.ok(m.icons.some((i) => i.purpose === 'maskable'));
 });
 
 test('the exchange-rate endpoint needs a signed-in user', async () => {
