@@ -1,5 +1,6 @@
 import { sb } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
+import { CONFIG } from '../config.js';
 import { useEffect, useState } from 'preact/hooks';
 
 // Requests to the owner (a problem or an idea). Each is a short
@@ -20,7 +21,7 @@ export async function myFeedback(userId) {
   if (error) throw error;
   const rows = data || [];
   const ids = rows.map((f) => f.id);
-  const { data: msgs } = ids.length ? await sb.from('feedback_messages').select('feedback_id,author,text,created_at').in('feedback_id', ids).order('created_at', { ascending: true }) : { data: [] };
+  const { data: msgs } = ids.length ? await sb.from('feedback_messages').select('feedback_id,author,text,created_at,image').in('feedback_id', ids).order('created_at', { ascending: true }) : { data: [] };
   return rows.map((f) => ({
     ...f,
     unread: isUnread(f),
@@ -74,3 +75,40 @@ export async function draftReply(id, status, hint = '') {
 
 export const FEEDBACK_KIND = { bug: { icon: 'wrench', label: 'תקלה' }, idea: { icon: 'bulb', label: 'רעיון' }, other: { icon: 'mail', label: 'אחר' } };
 export const FEEDBACK_STATUS = { new: 'חדש', working: 'בטיפול', done: 'טופל', wontfix: 'לא נטפל כרגע' };
+
+// ── a picture with a request ──
+// Made smaller on the device first (at most 1600px, JPEG), so it sends fast
+// and stays under the server's limit.
+const MAX_SIDE = 1600;
+export async function shrinkImage(file) {
+  if (!/^image\//.test(file.type || '')) throw new Error('אפשר לצרף רק תמונה.');
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => fail(new Error('לא הצלחנו לפתוח את התמונה.')); i.src = url; });
+    const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    for (const q of [0.82, 0.7, 0.55]) {
+      const data = canvas.toDataURL('image/jpeg', q);
+      if (data.length * 0.75 < 1.4 * 1024 * 1024) return data;
+    }
+    throw new Error('התמונה גדולה מדי.');
+  } finally { URL.revokeObjectURL(url); }
+}
+
+export async function attachImage(id, file) {
+  const data = await shrinkImage(file);
+  return api('/api/feedback/' + encodeURIComponent(id) + '/image', { method: 'POST', body: { data } });
+}
+
+// The picture itself comes through the server (only the writer and the owner
+// may see it), as a local address for an <img>.
+export async function imageUrl(path) {
+  const { data } = await sb.auth.getSession();
+  const token = data?.session?.access_token;
+  const res = await fetch(CONFIG.apiBase + '/api/feedback-image?p=' + encodeURIComponent(path), { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) return null;
+  return URL.createObjectURL(await res.blob());
+}

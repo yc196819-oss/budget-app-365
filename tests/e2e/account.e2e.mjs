@@ -227,6 +227,38 @@ test('writing to the owner: an answer waits on the profile and home, opens as a 
   await page.close();
 });
 
+// A tiny real PNG (1x1), made-up content.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg==', 'base64');
+
+test('a picture with a request: shrunk on the device, sent after the text, and shown in the conversation', async () => {
+  const sentImg = [];
+  const { page, errors } = await open({ setup: (d) => {
+    d.tables.feedback = [{ id: '11111111-1111-1111-1111-111111111111', user_id: 'u1', kind: 'bug', text: 'מסך נתקע', status: 'new', closed: false, last_by: 'user', last_at: '2026-11-07T10:00:00Z', created_at: '2026-11-07T10:00:00Z' }];
+    d.tables.feedback_messages = [{ feedback_id: '11111111-1111-1111-1111-111111111111', author: 'user', text: 'צירפתי תמונה', image: '11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.png', created_at: '2026-11-07T10:01:00Z' }];
+  } });
+  await page.route('**/api/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"id":"33333333-3333-3333-3333-333333333333"}' }));
+  await page.route('**/api/feedback/*/image', (r) => { sentImg.push({ url: r.request().url(), body: JSON.parse(r.request().postData()) }); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
+  await page.route('**/api/feedback-image?**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+  await page.click('.topbar .icon-btn');
+  await page.click('text=תקלות ורעיונות לשיפור');
+  // The picture in an existing conversation.
+  await page.locator('.feedback .fb-item').first().click();
+  await page.waitForSelector('.fb-msg img.fb-img');
+  // A new request with a picture.
+  await page.click('text=→ הפניות שלי');
+  await page.click('button:has-text("+ פנייה חדשה")');
+  await page.fill('textarea[aria-label="הפנייה"]', 'הכפתור למטה מרצד');
+  await page.setInputFiles('input[aria-label="צירוף תמונה"]', { name: 'shot.png', mimeType: 'image/png', buffer: PNG });
+  await page.waitForSelector('.img-pick-chosen img');
+  await page.click('.feedback button[type=submit]');
+  await page.waitForSelector('text=נשלח. תודה!');
+  assert.equal(sentImg.length, 1);
+  assert.match(sentImg[0].url, /\/api\/feedback\/33333333-3333-3333-3333-333333333333\/image$/);
+  assert.match(sentImg[0].body.data, /^data:image\/jpeg;base64,/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('owner inbox: like a messaging app; unread first, the name, answer and close or ask, notes, read ticks', async () => {
   const { page, errors } = await open({ email: 'yc196819@gmail.com' });
   const acts = [];

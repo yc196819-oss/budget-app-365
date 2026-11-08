@@ -122,7 +122,7 @@ const NEW_APP_CSP = [
   ("script-src 'self' " + inlineScriptHash(path.join(NEW_APP_DIR, 'index.html'), 'importmap')).trim(),
   "style-src 'self'",
   "font-src 'self'",
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:",
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
   "manifest-src 'self'",
   "object-src 'none'",
@@ -2373,7 +2373,7 @@ app.get('/api/admin/feedback', requireAuth, async (req, res) => {
   if (error) return res.status(500).json({ error: 'failed' });
   const rows = data || [];
   const ids = rows.map((f) => f.id);
-  const { data: msgs } = ids.length ? await supabaseAdmin.from('feedback_messages').select('feedback_id,author,text,created_at').in('feedback_id', ids).order('created_at', { ascending: true }) : { data: [] };
+  const { data: msgs } = ids.length ? await supabaseAdmin.from('feedback_messages').select('feedback_id,author,text,created_at,image').in('feedback_id', ids).order('created_at', { ascending: true }) : { data: [] };
   const names = await feedbackNames([...new Set(rows.map((f) => f.user_id))]);
   const by = {};
   for (const m of msgs || []) (by[m.feedback_id] = by[m.feedback_id] || []).push(m);
@@ -2388,6 +2388,8 @@ app.post('/api/admin/feedback/:id', requireAuth, async (req, res) => {
   const id = String(req.params.id);
   const { data, error } = await supabaseAdmin.from('feedback').update(act.row).eq('id', id).select('id,user_id,text').maybeSingle();
   if (error || !data) return res.status(404).json({ error: 'not found' });
+  // Closed: its pictures are no longer needed.
+  if (act.row && act.row.closed === true) removeFeedbackImages(id);
   const rows = [];
   if (act.note) rows.push({ feedback_id: id, author: 'note', text: act.note });
   if (act.message) rows.push({ feedback_id: id, author: 'owner', text: act.message });
@@ -2490,6 +2492,54 @@ app.post('/api/feedback/:id', requireAuth, replyLimiter, async (req, res) => {
   }
 });
 
+
+// A picture with a request (what went wrong, or the idea). Kept in a private
+// storage bucket; only the person who wrote and the owner can see it, through
+// the server. Pictures go when the request is closed.
+const imageLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip, message: { error: 'צירפתם הרבה תמונות בשעה האחרונה. נסו שוב מאוחר יותר.' } });
+app.post('/api/feedback/:id/image', requireAuth, imageLimiter, async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const id = String(req.params.id);
+    if (!/^[0-9a-f-]{36}$/.test(id)) return res.status(400).json({ error: 'bad request' });
+    const { data: f } = await supabaseAdmin.from('feedback').select('id,user_id').eq('id', id).maybeSingle();
+    if (!f || f.user_id !== req.authUserId) return res.status(404).json({ error: 'not found' });
+    const img = ops.feedbackImage(req.body && req.body.data);
+    if (!img) return res.status(400).json({ error: 'אפשר לצרף תמונה (PNG, JPG או WebP) עד 1.5MB.' });
+    const file = id + '/' + require('crypto').randomUUID() + '.' + img.ext;
+    const { error: upErr } = await supabaseAdmin.storage.from('feedback').upload(file, img.buf, { contentType: img.type, upsert: false });
+    if (upErr) throw upErr;
+    const now = new Date().toISOString();
+    const { error: mErr } = await supabaseAdmin.from('feedback_messages').insert({ feedback_id: id, author: 'user', text: 'צירפתי תמונה', image: file });
+    if (mErr) throw mErr;
+    await supabaseAdmin.from('feedback').update({ last_at: now, last_by: 'user' }).eq('id', id);
+    return res.json({ ok: true, image: file });
+  } catch (err) {
+    console.error('feedback image failed:', err.message);
+    return res.status(500).json({ error: 'התמונה לא נשלחה. נסו שוב.' });
+  }
+});
+app.get('/api/feedback-image', requireAuth, async (req, res) => {
+  try {
+    const file = String(req.query.p || '');
+    if (!supabaseAdmin || !ops.IMAGE_PATH.test(file)) return res.status(400).end();
+    const { data: f } = await supabaseAdmin.from('feedback').select('user_id').eq('id', file.split('/')[0]).maybeSingle();
+    if (!f || (f.user_id !== req.authUserId && !(await isAdmin(req.authUserId)))) return res.status(404).end();
+    const { data, error } = await supabaseAdmin.storage.from('feedback').download(file);
+    if (error || !data) return res.status(404).end();
+    res.setHeader('Content-Type', data.type || 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    return res.send(Buffer.from(await data.arrayBuffer()));
+  } catch (err) { return res.status(500).end(); }
+});
+async function removeFeedbackImages(id) {
+  try {
+    const { data } = await supabaseAdmin.storage.from('feedback').list(id, { limit: 100 });
+    const files = (data || []).map((o) => id + '/' + o.name);
+    if (files.length) await supabaseAdmin.storage.from('feedback').remove(files);
+  } catch (err) { console.error('feedback image cleanup failed:', err.message); }
+}
 
 // ═══ the monthly summary by email ═══
 // Each member who asked for it gets it once a month. The link at the

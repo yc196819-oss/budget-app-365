@@ -245,6 +245,13 @@ test("the owner's evening email runs only with the cron secret", async () => {
   assert.equal(res.status, 401);
 });
 
+test('request pictures: sending or seeing one needs a signed-in user', async () => {
+  const up = await fetch(BASE + '/api/feedback/11111111-1111-1111-1111-111111111111/image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"data":"x"}' });
+  assert.ok(up.status === 401 || up.status === 503, String(up.status));
+  const see = await fetch(BASE + '/api/feedback-image?p=11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.png');
+  assert.ok(see.status === 401 || see.status === 503, String(see.status));
+});
+
 test('the stop-these-emails link: a wrong one changes nothing', async () => {
   const bad = await fetch(BASE + '/unsubscribe?u=3f1c2b4a-1111-2222-3333-444455556666&t=' + 'a'.repeat(32) + '&k=news');
   assert.equal(bad.status, 400);

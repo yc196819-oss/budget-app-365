@@ -417,3 +417,20 @@ test('the list of changes: dated, newest first, in plain words', () => {
   for (const c of changes) { assert.match(c.date, /^\d{4}-\d{2}-\d{2}$/); assert.ok(c.text.length > 10); }
   for (let i = 1; i < changes.length; i++) assert.ok(changes[i - 1].date >= changes[i].date, 'newest first');
 });
+
+test('a picture with a request: only a real PNG, JPEG or WebP, under the size limit', () => {
+  const { feedbackImage, IMAGE_PATH } = require('../server/ops');
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg==', 'base64');
+  const ok = feedbackImage('data:image/png;base64,' + png.toString('base64'));
+  assert.equal(ok.type, 'image/png');
+  assert.equal(ok.ext, 'png');
+  assert.equal(feedbackImage('data:image/jpeg;base64,' + png.toString('base64')), null, 'says JPEG, is a PNG');
+  assert.equal(feedbackImage('data:text/html;base64,PGI+aGk8L2I+'), null);
+  assert.equal(feedbackImage('data:image/png;base64,' + Buffer.from('<svg onload=x>').toString('base64')), null, 'not a picture inside');
+  const big = Buffer.concat([png, Buffer.alloc(1.6 * 1024 * 1024)]);
+  assert.equal(feedbackImage('data:image/png;base64,' + big.toString('base64')), null, 'too big');
+  assert.equal(feedbackImage(null), null);
+  assert.ok(IMAGE_PATH.test('11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.jpg'));
+  assert.ok(!IMAGE_PATH.test('../secrets/x.jpg'));
+  assert.ok(!IMAGE_PATH.test('11111111-1111-1111-1111-111111111111/a.svg'));
+});

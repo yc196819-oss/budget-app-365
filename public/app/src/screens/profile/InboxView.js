@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { FbImage } from '../../components/FbImage.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { adminFeedback, setFeedback, draftReply, FEEDBACK_KIND, FEEDBACK_STATUS } from '../../data/feedback.js';
 import { showToast } from '../../lib/toast.js';
@@ -98,7 +99,7 @@ function InboxThread({ f, onBack, reload, patchLocal }) {
     <div class="wa-log inbox-log" ref=${log} aria-live="polite">
       ${f.messages.map((m, i) => html`<div key=${i} class=${'fb-msg ' + (m.author === 'owner' ? 'me' : m.author === 'note' ? 'note' : 'them')}>
         ${m.author === 'note' && html`<small class="fb-from">הערה פנימית (רק אתה רואה)</small>`}
-        <span>${m.text}</span>
+        ${m.image ? html`<${FbImage} path=${m.image} />` : html`<span>${m.text}</span>`}
         <small class=${'fb-meta' + (m === lastOwner && f.readByUser ? ' read' : '')}>${hm(m.created_at)}${m.author === 'owner' ? (m === lastOwner && f.readByUser ? ' ✓✓' : ' ✓') : ''}</small>
       </div>`)}
     </div>
