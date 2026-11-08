@@ -116,3 +116,22 @@ test('the food budget beside the list, the area is saved, and sharing by email f
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('the first time, what the tab is for: saving at the supermarket; "הבנתי" hides it for good, "מה זה?" brings it back', async () => {
+  const { page, errors } = await open(1280);
+  const intro = page.locator('.shop-intro');
+  assert.match(await intro.textContent(), /עוזרים לכם לחסוך בסופר/);
+  assert.equal(await intro.locator('.shop-benefits li').count(), 4);
+  assert.match(await intro.textContent(), /בקרוב: איפה הכי זול באזור/);
+  await intro.locator('.shop-intro-ok').click();
+  assert.equal(await page.locator('.shop-intro').count(), 0);
+  await page.reload();
+  await page.waitForSelector('.shop-add');
+  assert.equal(await page.locator('.shop-intro').count(), 0, 'stays hidden');
+  await page.locator('.shop-what').click();
+  assert.equal(await page.locator('.shop-intro').count(), 1);
+  // Beside the list: how much a week keeps the food budget.
+  assert.match(await page.locator('.shop-week').textContent(), /כדי לעמוד בתקציב: עד ₪[\d,]+ לשבוע עד סוף החודש/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

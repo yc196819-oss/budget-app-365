@@ -2,7 +2,8 @@ import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { Loading } from '../../components/Loading.js';
-import { parseItems, aisleOf, grouped, usual, previousList, onList, listText } from '../../domain/shopping.js';
+import { parseItems, aisleOf, grouped, usual, previousList, onList, listText, perWeek } from '../../domain/shopping.js';
+import { readLocal, writeLocal } from '../../lib/storage.js';
 import { categoryRows } from '../../domain/money.js';
 import { money } from '../../domain/format.js';
 import { useShopping, addItems, setDone, removeItem, finishShopping, getArea, setArea } from '../../data/shopping.js';
@@ -23,6 +24,25 @@ function foodBudget(data, today) {
   return { name: food.name, budget, spent, left: budget - spent };
 }
 
+
+// What this tab is for, the first time (and again from "מה זה?"): not just a
+// list, help to spend less at the supermarket.
+const INTRO_KEY = 'shop:intro-seen';
+const BENEFITS = [
+  ['cart', 'לא קונים פעמיים', 'רשימה אחת לכל הבית. מה שאחד מוסיף או מסמן, השני רואה מיד.'],
+  ['chart', 'לא חורגים מהתקציב', 'ליד הרשימה רואים כמה נשאר לסופר החודש, וכמה אפשר להוציא בכל שבוע.'],
+  ['check', 'פחות קניות דחף', 'קונים לפי רשימה, עם מה שקניתם בפעם הקודמת ומה שאתם קונים בדרך כלל.'],
+  ['pin', 'בקרוב: איפה הכי זול באזור', 'נשווה את הסל שלכם בין הסופרים באזור, לפי המחירים שהרשתות מפרסמות.']
+];
+function Intro({ onClose }) {
+  return html`<section class="card shop-intro" aria-labelledby="shop-intro-h">
+    <div class="shop-intro-head"><span class="shop-intro-ic"><${Icon} name="spark" size=${20} /></span>
+      <div><h2 id="shop-intro-h">קניות חכמות: עוזרים לכם לחסוך בסופר</h2><span class="muted">לא עוד רשימת קניות. כך זה עוזר לכם להוציא פחות:</span></div></div>
+    <ul class="shop-benefits">${BENEFITS.map(([ic, t, d]) => html`<li key=${t}><span class="shop-b-ic"><${Icon} name=${ic} size=${18} /></span><span><b>${t}</b><span class="muted">${d}</span></span></li>`)}</ul>
+    <button type="button" class="btn shop-intro-ok" onClick=${onClose}>הבנתי, בואו נתחיל</button>
+  </section>`;
+}
+
 // "Shopping": one list for the whole household, live, sorted by department,
 // remembered from one shopping to the next. Built for a computer first (type
 // several items and press Enter; email, copy or print it; WhatsApp last), and works on a phone.
@@ -33,6 +53,8 @@ export function ShopScreen({ data }) {
   const [area, setAreaText] = useState(null);
   const [listening, setListening] = useState(false);
   const input = useRef(null);
+  const [intro, setIntro] = useState(() => !readLocal(INTRO_KEY, ''));
+  const closeIntro = () => { writeLocal(INTRO_KEY, '1'); setIntro(false); };
   useEffect(() => { if (data.hid) getArea(data.hid).then((a) => setAreaText(a)).catch(() => setAreaText('')); }, [data.hid]);
 
   if (shop.status === 'loading' || data.status !== 'ready') return html`<${Loading} label="טוען את הרשימה…" />`;
@@ -93,7 +115,7 @@ export function ShopScreen({ data }) {
   return html`<div class="shop">
     <section class="shop-main stack">
       <div class="shop-head">
-        <span class="muted" style="font-size:14px">רשימה אחת לכל הבית. מה שאחד מוסיף, השני רואה מיד.</span>
+        <span class="muted" style="font-size:14px">עוזרים לכם לחסוך בסופר: רשימה אחת לכל הבית, כמה נשאר לסופר, ובקרוב איפה הכי זול. ${!intro && html`<button type="button" class="btn-text shop-what" onClick=${() => setIntro(true)}>מה זה?</button>`}</span>
         <span class="shop-tools">
           <a class="btn btn-ghost" href=${mailHref} aria-disabled=${String(!open.some((i) => !i.done))}><${Icon} name="mail" size=${17} />לשלוח במייל</a>
           <button type="button" class="btn btn-ghost" onClick=${copy} disabled=${!open.some((i) => !i.done)}>להעתיק</button>
@@ -101,6 +123,7 @@ export function ShopScreen({ data }) {
           <a class="btn btn-ghost" href=${waHref} target="_blank" rel="noopener" aria-disabled=${String(!open.some((i) => !i.done))}>וואטסאפ</a>
         </span>
       </div>
+      ${intro && html`<${Intro} onClose=${closeIntro} />`}
       <form class="shop-add" onSubmit=${submit}>
         <input ref=${input} class="input" value=${text} onInput=${(e) => setText(e.target.value)} maxLength="300"
           aria-label="מה להוסיף לרשימה" placeholder="מה להוסיף? אפשר כמה ביחד: חלב, 2 ביצים, לחם" />
@@ -131,6 +154,7 @@ export function ShopScreen({ data }) {
         <div class="sec-row"><b>נשאר לסופר החודש</b><b class="num">${money(Math.max(0, fb.left))}</b></div>
         <span class="bar"><span style=${'width:' + Math.min(100, Math.round((fb.spent / fb.budget) * 100)) + '%;background:' + (fb.left < 0 ? 'var(--danger)' : 'var(--accent)')}></span></span>
         <span class="muted" style="font-size:13px">${fb.left < 0 ? 'עברתם את התקציב ל' + fb.name + ' ב-' + money(-fb.left) : 'מתוך ' + money(fb.budget) + ' ל' + fb.name + ' · הוצאתם ' + money(fb.spent)}</span>
+        ${fb.left > 0 && html`<span class="shop-week">כדי לעמוד בתקציב: עד <b class="num">${money(perWeek(fb.left))}</b> לשבוע עד סוף החודש</span>`}
       </div>`}
       ${prev.length > 0 && html`<div class="card stack" style="gap:8px">
         <b>הרשימה מהפעם הקודמת</b>

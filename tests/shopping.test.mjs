@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { aisleOf, parseItem, parseItems, grouped, usual, previousList, onList, listText } from '../public/app/src/domain/shopping.js';
+import { aisleOf, parseItem, parseItems, grouped, usual, previousList, onList, listText, perWeek } from '../public/app/src/domain/shopping.js';
 
 test('each item goes to its department; a longer match wins', () => {
   assert.equal(aisleOf('חלב 3%'), 'dairy');
@@ -59,4 +59,13 @@ test('the previous shopping, to bring back, without what is already on the list'
 
 test('the list as text for an email or print: open items only, by department', () => {
   assert.equal(listText(list), 'מאפים:\n☐ לחם (×2)\n\nמוצרי חלב:\n☐ חלב');
+});
+
+test('how much per week keeps the food budget until the month ends', () => {
+  // 8 November: 23 days left, about 3.3 weeks.
+  assert.equal(perWeek(1000, new Date(2026, 10, 8)), 304);
+  // The last days of the month count as one whole week.
+  assert.equal(perWeek(500, new Date(2026, 10, 29)), 500);
+  assert.equal(perWeek(0, new Date(2026, 10, 8)), 0);
+  assert.equal(perWeek(-50, new Date(2026, 10, 8)), 0);
 });
