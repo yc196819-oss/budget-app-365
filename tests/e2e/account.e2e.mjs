@@ -534,7 +534,7 @@ test('owner on a phone: the main screen has the numbers and a button for each pa
   await page.click('text=לוח בעלים');
   const s = page.locator('.admin-stats');
   await s.locator('.admin-hub').waitFor();
-  assert.deepEqual((await s.locator('.admin-hub-btn b').allTextContents()), ['פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
+  assert.deepEqual((await s.locator('.admin-hub-btn b').allTextContents()), ['שאלו את הנתונים', 'פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
   // The numbers come a moment after the buttons (while they load, "טוען…").
   await s.locator('.admin-kpi').first().waitFor();
   // The numbers count up to their value.
@@ -553,5 +553,68 @@ test('owner on a phone: the main screen has the numbers and a button for each pa
   await s.locator('button:has-text("לוח הבעלים")').click();
   await s.locator('.admin-hub').waitFor();
   assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('owner dashboard, part two: a greeting, what is happening now, a month chart, where people spend time, and a question for the AI', async () => {
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com', width: 1280 });
+  const now = Date.now();
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    active: { day: 9, week: 20, month: 40 }, retention: { started: 10, cameBack: 3, pct: 30 }, members: 1, errors: { week: 0, top: [] }, aiCost30d: 4.2,
+    use: [{ name: 'app_open', count: 400 }, { name: 'tx_add', count: 30 }, { name: 'advisor_ask', count: 50 }, { name: 'shop_add', count: 20 }],
+    daily: Array.from({ length: 30 }, (_, i) => ({ day: new Date(now - (29 - i) * 86400000).toISOString().slice(0, 10), active: i === 29 ? 9 : 3, cost: 0.05 })),
+    feed: [{ at: new Date(now - 4 * 60000).toISOString(), who: 'דנה', what: 'העלה/תה פירוט', kind: 'data' }, { at: new Date(now - 90 * 60000).toISOString(), who: 'משתמש/ת', what: 'נרשם/ה', kind: 'join' }],
+    users: [{ who: '#a1b2c3', name: 'דנה', email: 'x@example.com', joined: '2026-10-28', lastSeen: '2026-11-01', opens: 1, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, tokens: 0, cost: 0, health: { level: 'good', label: 'ok', reasons: [] } }]
+  }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":1,"visitors":0,"screens":{},"devices":{"mobile":1,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
+  let asked = null;
+  await page.route('**/api/admin/ask', (r) => { asked = JSON.parse(r.request().postData()); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ answer: 'השבוע נרשמו 5.' }) }); });
+  await page.click('.side-profile');
+  await page.click('text=לוח בעלים');
+  const s = page.locator('.admin-stats');
+  await s.locator('.admin-feed').waitFor();
+  assert.match(await s.locator('.admin-hello').textContent(), /(בוקר טוב|צהריים טובים|ערב טוב|לילה טוב)יום /);
+  const feed = await s.locator('.admin-feed li').allTextContents();
+  assert.equal(feed.length, 2);
+  assert.match(feed[0], /דנה העלה\/תה פירוט.*לפני 4 דק׳/);
+  // A record of the month: today is the busiest of 30 days.
+  assert.match(await s.locator('.admin-record').textContent(), /שיא חודשי: 9 פעילים היום/);
+  // Two weeks first, a month on request.
+  assert.equal(await s.locator('.admin-daily .admin-bar').count(), 14);
+  await s.locator('.admin-daily button:has-text("חודש")').click();
+  assert.equal(await s.locator('.admin-daily .admin-bar').count(), 30);
+  // Where people spend their actions, without app openings.
+  const legend = await s.locator('.admin-donut-legend li').allTextContents();
+  assert.deepEqual(legend, ['יועץ50%', 'כסף ותנועות30%', 'קניות20%']);
+  // Tools are tiles that jump to their part.
+  assert.deepEqual(await s.locator('.admin-tool b').allTextContents(), ['פניות', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
+  // A question: the answer shows, and the stats sent along are whitelisted on the server.
+  await s.locator('.admin-ask-chips .chip').first().click();
+  await s.locator('.admin-ask-answer:has-text("השבוע נרשמו 5.")').waitFor();
+  assert.equal(asked.q, 'כמה נרשמו השבוע לעומת שבוע שעבר?');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('owner on a phone: what is happening now on the main screen, and the question box behind its own button', async () => {
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] },
+    feed: Array.from({ length: 8 }, (_, i) => ({ at: new Date(Date.now() - i * 600000).toISOString(), who: 'משתמש/ת', what: 'הוסיף/ה תנועה', kind: 'use' })) }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
+  await page.route('**/api/admin/ask', (r) => r.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'לא התקבלה תשובה. נסו שוב.' }) }));
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  const s = page.locator('.admin-stats');
+  await s.locator('.admin-feed').waitFor();
+  assert.equal(await s.locator('.admin-feed li').count(), 4, 'a short feed on the phone');
+  await s.locator('.admin-hub-btn:has-text("שאלו את הנתונים")').click();
+  await s.locator('.admin-ask input').fill('מה קרה היום?');
+  await s.locator('.admin-ask button[type="submit"]').click();
+  await s.locator('.admin-ask-answer.is-error:has-text("לא התקבלה תשובה")').waitFor();
+  assert.deepEqual(errors.filter((e) => !/502/.test(e)), []);
   await page.close();
 });

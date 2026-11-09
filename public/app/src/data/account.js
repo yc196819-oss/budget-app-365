@@ -66,6 +66,9 @@ export async function adminEmail(who) {
   try { return (await api('/api/admin/email?who=' + encodeURIComponent(who))).email || ''; } catch (_e) { return ''; }
 }
 
+// A question about the numbers (only totals are sent to the AI).
+export const adminAsk = (q, stats) => api('/api/admin/ask', { method: 'POST', body: { q, stats } });
+
 export async function adminLive() {
   try { return await api('/api/admin/live'); } catch (_e) { return null; }
 }

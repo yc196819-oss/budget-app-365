@@ -833,7 +833,7 @@ body.chat-open { overflow: hidden; }
 .admin-kpi { position: relative; overflow: hidden; animation: admin-pop .5s var(--spring, ease) both; }
 .admin-kpi:nth-child(2) { animation-delay: .06s; } .admin-kpi:nth-child(3) { animation-delay: .12s; } .admin-kpi:nth-child(4) { animation-delay: .18s; }
 .admin-hub-btn { animation: admin-rise .45s var(--out, ease) both; transition: transform .15s ease, box-shadow .2s ease; }
-.admin-hub-btn:nth-child(1) { animation-delay: .2s; } .admin-hub-btn:nth-child(2) { animation-delay: .26s; } .admin-hub-btn:nth-child(3) { animation-delay: .32s; } .admin-hub-btn:nth-child(4) { animation-delay: .38s; } .admin-hub-btn:nth-child(5) { animation-delay: .44s; }
+.admin-hub-btn:nth-child(1) { animation-delay: .2s; } .admin-hub-btn:nth-child(2) { animation-delay: .26s; } .admin-hub-btn:nth-child(3) { animation-delay: .32s; } .admin-hub-btn:nth-child(4) { animation-delay: .38s; } .admin-hub-btn:nth-child(5) { animation-delay: .44s; } .admin-hub-btn:nth-child(6) { animation-delay: .5s; }
 .admin-hub-btn:active { transform: scale(.98); }
 .admin-hub-btn:hover .admin-hub-ic { background: var(--accent); color: var(--accent-ink); }
 .admin-hub-ic { transition: background-color .2s ease, color .2s ease; }
@@ -849,6 +849,59 @@ body.chat-open { overflow: hidden; }
 .admin-confetti i { position: absolute; top: 0; left: calc(var(--i) * 5.5%); width: 7px; height: 11px; border-radius: 2px; background: var(--accent); opacity: 0; animation: admin-fall 2.4s linear calc(var(--i) * .13s) 2; }
 .admin-confetti i:nth-child(3n) { background: var(--income); } .admin-confetti i:nth-child(4n) { background: var(--danger); }
 .admin-kpi:hover { box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
+
+/* Owner dashboard, part two: greeting, a question box, a live feed, a ring, tools */
+.admin-hello { flex: 1; display: grid; text-align: center; line-height: 1.25; animation: admin-rise .5s var(--out, ease) both; }
+.admin-hello b { font-family: var(--font-display); font-size: 18px; }
+.admin-hello small { font-size: 12.5px; }
+.admin-daily .seg { padding: 2px; background: var(--surface-2); }
+.admin-daily .seg button { height: 28px; padding: 0 10px; font-size: 12.5px; }
+.admin-daily .seg button.on { background: var(--surface); color: var(--text); }
+.admin-ask { border: 1px solid var(--accent-tint); background: linear-gradient(160deg, var(--accent-tint), var(--surface) 55%); }
+.admin-ask-title { display: flex; align-items: center; gap: 10px; font-size: 16px; }
+.admin-ask-row { display: flex; gap: 8px; }
+.admin-ask-row .input { flex: 1; min-width: 0; }
+.admin-ask-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.admin-ask-chips .chip { height: auto; min-height: 32px; padding: 4px 12px; text-align: start; color: var(--text); background: var(--surface); }
+.admin-ask-wait { display: flex; gap: 5px; padding: 6px 2px; }
+.admin-ask-wait i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: admin-bounce 1s ease-in-out infinite; }
+.admin-ask-wait i:nth-child(2) { animation-delay: .15s; } .admin-ask-wait i:nth-child(3) { animation-delay: .3s; }
+@keyframes admin-bounce { 0%, 100% { transform: translateY(0); opacity: .5; } 50% { transform: translateY(-6px); opacity: 1; } }
+.admin-ask-answer { background: var(--surface); border-radius: var(--radius-m); padding: 10px 12px; border-inline-start: 3px solid var(--accent); animation: admin-rise .4s var(--out, ease) both; }
+.admin-ask-answer p { margin: 4px 0 0; line-height: 1.6; white-space: pre-wrap; }
+.admin-ask-answer.is-error { border-color: var(--danger); }
+.admin-feed-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.admin-feed-list li { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px solid var(--line); font-size: 14px; animation: admin-rise .4s var(--out, ease) both; animation-delay: calc(var(--i) * 60ms); }
+.admin-feed-list li:last-child { border-bottom: 0; }
+.admin-feed-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--faint); }
+.admin-feed-list .is-join .admin-feed-dot { background: var(--income); box-shadow: 0 0 0 4px var(--income-tint); }
+.admin-feed-list .is-data .admin-feed-dot { background: var(--accent); }
+.admin-feed-list .is-ai .admin-feed-dot { background: #7aa7e0; }
+.admin-feed-list .is-fail .admin-feed-dot { background: var(--danger); }
+.admin-feed-list li:first-child .admin-feed-dot { animation: admin-ping 1.8s ease-out infinite; }
+.admin-feed-t { flex: 1; min-width: 0; }
+.admin-feed-when { font-size: 12px; white-space: nowrap; }
+.admin-donut { display: grid; gap: 10px; }
+.admin-donut-body { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.admin-donut svg { transform: rotate(-90deg); flex: none; }
+.admin-donut-seg { animation: admin-ring .9s var(--out, ease) both; }
+@keyframes admin-ring { from { stroke-dasharray: 0 100; } }
+.admin-donut-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; flex: 1; min-width: 150px; }
+.admin-donut-legend li { display: flex; align-items: center; gap: 8px; }
+.admin-donut-legend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.admin-donut-legend b { margin-inline-start: auto; }
+.admin-record.is-month { border-width: 2px; }
+@media (min-width: 1024px) {
+  .admin-row { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; align-items: start; }
+  .admin-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .admin-tool { display: flex; align-items: center; gap: 10px; border: 0; padding: 10px 12px; text-align: start; cursor: pointer; color: var(--text); font: inherit; animation: admin-pop .45s var(--spring, ease) both; transition: transform .15s ease, box-shadow .2s ease; }
+  .admin-tool:nth-child(2) { animation-delay: .05s; } .admin-tool:nth-child(3) { animation-delay: .1s; } .admin-tool:nth-child(4) { animation-delay: .15s; }
+  .admin-tool:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
+  .admin-tool:hover .admin-hub-ic { background: var(--accent); color: var(--accent-ink); }
+  .admin-tool small { color: var(--muted); font-size: 12px; }
+  .admin-sec { scroll-margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .admin-donut-seg { animation: none; } }
 
 /* ═══ opening screen: a picture drawn while the app loads ═══ */
 .splash { min-height: 58vh; padding: 24px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }

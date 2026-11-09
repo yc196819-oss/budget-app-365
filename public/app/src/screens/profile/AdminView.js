@@ -1,10 +1,11 @@
 import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach, priceService, priceSample, priceRun } from '../../data/account.js';
+import { adminStats, adminLive, adminAsk, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach, priceService, priceSample, priceRun } from '../../data/account.js';
 import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
+import { greeting, ago, areas, record } from '../../domain/admin.js';
 
 const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', shop: 'קניות', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
 const NAMES = { app_open: 'פתיחות', tx_add: 'הוספת תנועה', import_done: 'ייבוא', advisor_ask: 'שאלות ליועץ', advisor_talk: 'שיחה קולית', decision_open: 'החלטה חדשה', decision_message: 'הודעות ביחד', trip_plan: 'תכנון טיול', news_open: 'חדשות', lesson_done: 'שיעור', shortcut: 'קיצור דרך', export: 'ייצוא', restore: 'שחזור', import_fail: 'ייבוא שנכשל', guide_step: 'צעד במסלול התחלה', guide_skip: 'דילוג במסלול', learn_auto: 'עדכון אוטומטי מהיועץ', learn_undo: 'ביטול עדכון של היועץ', onboard_0: 'הרשמה: מסך פתיחה', onboard_1: 'הרשמה: מי אתם', onboard_2: 'הרשמה: מה רלוונטי', onboard_3: 'הרשמה: כרטיסים', onboard_4: 'הרשמה: הכנסה', onboard_5: 'הרשמה: פרטיות', onboard_done: 'הרשמה הושלמה' };
@@ -169,17 +170,85 @@ function Spark({ values }) {
     <path class="area" d=${d + ' L0 36 L200 36Z'} /><path class="line" d=${d} pathLength="100" /></svg>`;
 }
 
-// Today the busiest day of the last two weeks: a small celebration.
+// Today the busiest day of the month (or of two weeks): a small celebration.
 function Record({ daily }) {
-  if (!daily || daily.length < 7) return null;
-  const today = daily[daily.length - 1].active;
-  const before = Math.max(...daily.slice(0, -1).map((d) => d.active));
-  if (!(today > 0 && today > before)) return null;
-  return html`<div class="card admin-record" role="status">
-    <span class="admin-confetti" aria-hidden="true">${Array.from({ length: 18 }, (_, i) => html`<i key=${i} style=${'--i:' + i}></i>`)}</span>
+  const r = record(daily || []);
+  if (!r) return null;
+  const month = r.span === 'month';
+  return html`<div class=${'card admin-record' + (month ? ' is-month' : '')} role="status">
+    <span class="admin-confetti" aria-hidden="true">${Array.from({ length: month ? 28 : 18 }, (_, i) => html`<i key=${i} style=${'--i:' + i}></i>`)}</span>
     <span class="admin-trophy" aria-hidden="true"><${Icon} name="spark" size=${18} /></span>
-    <span><b>שיא של שבועיים: ${today} פעילים היום</b><br /><span class="muted">יותר מכל יום ב-14 הימים האחרונים.</span></span>
+    <span><b>${month ? 'שיא חודשי' : 'שיא של שבועיים'}: ${r.today} פעילים היום</b><br /><span class="muted">יותר מכל יום ב-${month ? '30' : '14'} הימים האחרונים.</span></span>
   </div>`;
+}
+
+// A question about the numbers, answered by the AI from totals only.
+const ASK_EXAMPLES = ['כמה נרשמו השבוע לעומת שבוע שעבר?', 'איפה אנשים נתקעים בהעלאה?', 'מה הכי השתנה בחודש האחרון?'];
+function AskCard({ s }) {
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [answer, setAnswer] = useState(null);
+  const ask = async (text) => {
+    const t = String(text ?? q).trim();
+    if (t.length < 3 || busy) return;
+    setQ(t); setBusy(true); setAnswer(null);
+    try { setAnswer({ q: t, text: (await adminAsk(t, s)).answer }); } catch (err) { setAnswer({ q: t, error: err.message || 'לא התקבלה תשובה. נסו שוב.' }); }
+    setBusy(false);
+  };
+  return html`<div class="card stack admin-ask">
+    <b class="admin-ask-title"><span class="admin-spark" aria-hidden="true"><${Icon} name="spark" size=${16} /></span>שאלו את הנתונים</b>
+    <form class="admin-ask-row" onSubmit=${(e) => { e.preventDefault(); ask(); }}>
+      <input class="input" value=${q} maxlength="400" placeholder="למשל: כמה מהנרשמים השבוע כבר העלו פירוט?" aria-label="שאלה על הנתונים" onInput=${(e) => setQ(e.currentTarget.value)} />
+      <button type="submit" class="btn" style="width:auto" disabled=${busy || q.trim().length < 3}>${busy ? 'חושב…' : 'לשאול'}</button>
+    </form>
+    <div class="admin-ask-chips">${ASK_EXAMPLES.map((x) => html`<button type="button" class="chip" key=${x} disabled=${busy} onClick=${() => ask(x)}>${x}</button>`)}</div>
+    ${busy && html`<div class="admin-ask-wait" role="status"><i></i><i></i><i></i><span class="sr-only">חושב…</span></div>`}
+    ${answer && html`<div class=${'admin-ask-answer' + (answer.error ? ' is-error' : '')} role="status" aria-live="polite"><small class="faint">${answer.q}</small><p>${answer.error || answer.text}</p></div>`}
+    <span class="faint" style="font-size:11.5px">נשלחים ל-AI רק סיכומים (מספרים לפי יום ושבוע), בלי שמות ובלי מיילים. כל שאלה עולה כסנט או שניים.</span>
+  </div>`;
+}
+
+// What is happening right now: the last meaningful moments, newest first.
+function FeedCard({ items, limit = 14 }) {
+  if (!items) return null;
+  const now = new Date();
+  return html`<div class="card stack admin-feed"><b>מה קורה עכשיו</b>
+    ${items.length === 0 ? html`<span class="muted">שקט ביומיים האחרונים.</span>` : html`<ol class="admin-feed-list">
+      ${items.slice(0, limit).map((x, i) => html`<li key=${i} class=${'is-' + x.kind} style=${'--i:' + i}><span class="admin-feed-dot" aria-hidden="true"></span><span class="admin-feed-t"><b>${x.who}</b> ${x.what}</span><span class="faint admin-feed-when">${ago(x.at, now)}</span></li>`)}
+    </ol>`}
+  </div>`;
+}
+
+// Active people each day: two weeks or a month.
+function DailyChart({ daily }) {
+  const [span, setSpan] = useState(14);
+  if (!daily || !daily.length) return null;
+  const days = daily.slice(-span);
+  const top = Math.max(1, ...days.map((x) => x.active));
+  return html`<div class="card stack admin-daily">
+    <span style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>${span === 14 ? '14 הימים האחרונים' : '30 הימים האחרונים'}</b>
+      <span class="seg" role="group" aria-label="תקופה">${[14, 30].map((n) => html`<button type="button" key=${n} class=${'seg-btn' + (span === n ? ' on' : '')} aria-pressed=${span === n} onClick=${() => setSpan(n)}>${n === 14 ? 'שבועיים' : 'חודש'}</button>`)}</span></span>
+    <div key=${span} style="display:flex;align-items:flex-end;gap:${span === 14 ? 4 : 2}px;height:90px" aria-label="פעילים לפי יום">
+      ${days.map((d, i) => html`<div title=${d.day + ': ' + d.active + ' פעילים, $' + d.cost} style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;justify-content:flex-end;height:100%">
+        ${span === 14 && html`<span class="num faint" style="font-size:10px">${d.active || ''}</span>`}
+        <i class="admin-bar" style=${'display:block;width:100%;border-radius:3px 3px 0 0;background:var(--accent);height:' + Math.max(2, Math.round((d.active / top) * 70)) + 'px;animation-delay:' + (i * (span === 14 ? 35 : 18)) + 'ms'}></i>
+        <span class="num faint" style="font-size:9px">${span === 14 || i % 5 === 0 || i === days.length - 1 ? Number(d.day.slice(8)) : ''}</span></div>`)}
+    </div><span class="faint" style="font-size:11px">גובה = משתמשים פעילים ביום. מעבר עם העכבר מראה גם את עלות ה-AI.</span></div>`;
+}
+
+// Where people spend their actions (30 days): a ring that draws itself.
+const AREA_COLORS = ['var(--accent)', 'var(--income)', '#7aa7e0', '#c98a3e', '#b07ad6', 'var(--danger)', 'var(--faint)'];
+function UseDonut({ use }) {
+  const a = areas(use || []);
+  if (!a.length) return null;
+  let at = 0;
+  return html`<div class="card admin-donut"><b>איפה משתמשים (30 יום)</b>
+    <div class="admin-donut-body">
+      <svg viewBox="0 0 42 42" width="132" height="132" aria-hidden="true"><circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--line)" stroke-width="6" />
+        ${a.map((x, i) => { const seg = html`<circle key=${x.key} class="admin-donut-seg" cx="21" cy="21" r="15.9" fill="none" stroke=${AREA_COLORS[i % AREA_COLORS.length]} stroke-width="6" pathLength="100" stroke-dasharray=${Math.max(0, x.pct - 0.6) + ' ' + (100 - Math.max(0, x.pct - 0.6))} stroke-dashoffset=${-at} style=${'animation-delay:' + i * 0.12 + 's'} />`; at += x.pct; return seg; })}
+      </svg>
+      <ul class="admin-donut-legend">${a.map((x, i) => html`<li key=${x.key}><i style=${'background:' + AREA_COLORS[i % AREA_COLORS.length]}></i>${x.label}<b class="num">${x.pct}%</b></li>`)}</ul>
+    </div></div>`;
 }
 
 // The four numbers at the top, and one plain sentence, from what the
@@ -194,11 +263,11 @@ export function adminKpis(s) {
   const c = (s.cohorts || [])[0];
   const u = s.upload;
   const tiles = [
-    { label: 'פעילים היום', value: s.active.day, series: daily.map((d) => d.active), note: diff == null ? '' : diff === 0 ? 'כמו אתמול' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ' מאתמול', tone: diff > 0 ? 'up' : diff < 0 ? 'down' : '' },
+    { label: 'פעילים היום', value: s.active.day, series: daily.slice(-14).map((d) => d.active), note: diff == null ? '' : diff === 0 ? 'כמו אתמול' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ' מאתמול', tone: diff > 0 ? 'up' : diff < 0 ? 'down' : '' },
     // "This week" is since Sunday, the same as the sentence below and the weekly table.
     { label: 'נרשמו השבוע', value: c ? c.signups : week, note: s.sharing && s.sharing.friends ? s.sharing.friends + ' מחבר (סה"כ)' : '' },
     { label: 'חזרו אחרי שבוע', value: s.retention && s.retention.pct != null ? s.retention.pct + '%' : '–', note: s.retention && s.retention.started ? s.retention.cameBack + ' מתוך ' + s.retention.started : '' },
-    { label: 'עלות AI היום', value: '$' + (Number(today.cost) || 0).toFixed(2), series: daily.map((d) => Number(d.cost) || 0), note: '$' + (s.aiCost30d ?? 0) + ' ב-30 יום' }
+    { label: 'עלות AI היום', value: '$' + (Number(today.cost) || 0).toFixed(2), series: daily.slice(-14).map((d) => Number(d.cost) || 0), note: '$' + (s.aiCost30d ?? 0) + ' ב-30 יום' }
   ];
   const parts = [];
   if (c) parts.push('השבוע נרשמו ' + c.signups + (c.signups ? ', ' + c.withData + ' מהם כבר עם נתונים' : ''));
@@ -291,6 +360,7 @@ export function AdminView({ onBack }) {
   const [section, setSection] = useState(null);
   const k = s ? adminKpis(s) : null;
   const sections = [
+    { key: 'ask', icon: 'spark', title: 'שאלו את הנתונים', sub: 'שאלה במילים, תשובה מה-AI', body: () => html`${s && html`<${AskCard} s=${s} />`}` },
     { key: 'inbox', icon: 'chat', title: 'פניות', sub: 'פניות ותשובות, ומה קרה היום', body: () => html`<${TodayCard} /><${InboxView} />` },
     { key: 'activity', icon: 'chart', title: 'פעילות ומשתמשים', sub: 'גרף, לפי שבוע הרשמה, איפה נעצרים, מי משתמש', body: () => html`
     ${live && html`<div class="card stack admin-live" role="status">
@@ -303,13 +373,7 @@ export function AdminView({ onBack }) {
     </div>`}
     ${s && html`
       <div class="card admin-counts"><span>פעילים: היום <b class="num">${s.active.day}</b> · השבוע <b class="num">${s.active.week}</b> · החודש <b class="num">${s.active.month}</b></span>${today && html`<span>נרשמו היום <b class="num">${(f && f.byDay && f.byDay[today.day]) || 0}</b></span>`}</div>
-      ${s.daily && html`<div class="card stack admin-daily"><b>14 הימים האחרונים</b>
-        <div style="display:flex;align-items:flex-end;gap:4px;height:90px" aria-label="פעילים לפי יום">
-          ${s.daily.map((d, i) => { const top = Math.max(1, ...s.daily.map((x) => x.active)); return html`<div title=${d.day + ': ' + d.active + ' פעילים, $' + d.cost} style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;justify-content:flex-end;height:100%">
-            <span class="num faint" style="font-size:10px">${d.active || ''}</span>
-            <i class="admin-bar" style=${'display:block;width:100%;border-radius:3px 3px 0 0;background:var(--accent);height:' + Math.max(2, Math.round((d.active / top) * 70)) + 'px;animation-delay:' + (i * 35) + 'ms'}></i>
-            <span class="num faint" style="font-size:9px">${Number(d.day.slice(8))}</span></div>`; })}
-        </div><span class="faint" style="font-size:11px">גובה = משתמשים פעילים ביום. מעבר עם העכבר מראה גם את עלות ה-AI.</span></div>`}
+      <${DailyChart} daily=${s.daily} />
       <${CohortCard} rows=${s.cohorts} />
       <${UploadCard} u=${s.upload} />
       ${f && html`<div class="card stack admin-funnel"><b>מהרשמה לשימוש (30 יום)</b>
@@ -324,6 +388,7 @@ export function AdminView({ onBack }) {
         <span class="faint" style="font-size:12px">נרשמו: <span class="num">${s.signedUp ?? s.members}</span> · עם משק בית: <span class="num">${s.members}</span></span></div>
       <div class="card stack"><b>מה משתמשים (30 יום)</b>
         ${s.use.length === 0 ? html`<span class="muted">עוד אין.</span>` : s.use.map((u) => html`<div style="display:flex;justify-content:space-between"><span>${NAMES[u.name] || u.name}</span><b class="num">${u.count}</b></div>`)}</div>
+      <${UseDonut} use=${s.use} />
       ${s.users && html`<${PeopleCard} users=${s.users} aiCost=${s.aiCost30d} costNote=${costParts(s)} sharing=${s.sharing} />`}
 `}` },
     { key: 'mail', icon: 'mail', title: 'מיילים', sub: 'מיילי עזרה וסיכום חודשי', body: () => html`
@@ -353,10 +418,15 @@ export function AdminView({ onBack }) {
         ${s.errors.top.map((e) => html`<div style="font-size:13px"><b class="num">${e.count}×</b> ${e.message}<div class="faint" style="font-size:11px">${e.path || ''}</div></div>`)}</div>`}` }
   ];
   const open = sections.find((x) => x.key === section);
+  const hi = greeting();
+  // On a computer the tools are small tiles that jump to their part below.
+  const tools = sections.filter((x) => !['ask', 'activity'].includes(x.key));
+  const go = (key) => { const el = document.getElementById('adm-' + key); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   return html`<div class=${'stack admin-stats' + (wide ? ' admin-wide' : '')}>
     <div class="admin-top">
       ${open && !wide ? html`<button type="button" class="btn-text" onClick=${() => setSection(null)}>→ לוח הבעלים</button>`
         : html`<button type="button" class="btn-text" onClick=${onBack}>→ חזרה</button>`}
+      ${(!open || wide) && html`<span class="admin-hello"><b>${hi.hello}</b><small class="muted">${hi.date}</small></span>`}
       ${live && html`<span class="admin-pill" role="status"><span class="admin-dot" aria-hidden="true"></span><b class="num">${live.users}</b> עכשיו</span>`}
     </div>
     ${s === undefined && html`<span class="muted">טוען…</span>`}
@@ -367,12 +437,16 @@ export function AdminView({ onBack }) {
       <div class="admin-kpis">
         ${k.tiles.map((t) => html`<div class="card admin-kpi" key=${t.label}><span class="muted">${t.label}</span><${CountUp} value=${t.value} />${t.note && html`<span class=${'admin-chg ' + (t.tone || '')}>${t.note}</span>`}<${Spark} values=${t.series} /></div>`)}
       </div>`}
+    ${wide && s && html`<div class="admin-row"><${AskCard} s=${s} /><${FeedCard} items=${s.feed} limit=${9} /></div>
+      <nav class="admin-tools" aria-label="כלים">${tools.map((x) => html`<button type="button" class="card admin-tool" key=${x.key} onClick=${() => go(x.key)}>
+        <span class="admin-hub-ic"><${Icon} name=${x.icon} size=${18} /></span><span class="admin-hub-t"><b>${x.title}</b><small>${x.sub}</small></span></button>`)}</nav>`}
+    ${!wide && !open && s && html`<${FeedCard} items=${s.feed} limit=${4} />`}
     ${!wide && !open && html`<nav class="admin-hub" aria-label="חלקי לוח הבעלים">
       ${sections.map((x) => html`<button type="button" class="card admin-hub-btn" key=${x.key} onClick=${() => setSection(x.key)}>
         <span class="admin-hub-ic"><${Icon} name=${x.icon} size=${18} /></span><span class="admin-hub-t"><b>${x.title}</b><small>${x.sub}</small></span><span aria-hidden="true">‹</span></button>`)}
     </nav>`}
     ${!wide && open && html`<h3 class="admin-sec-title">${open.title}</h3><div class="stack">${open.body()}</div>`}
-    ${wide && html`<div class="admin-grid">${sections.map((x) => html`<section class=${'admin-sec admin-sec-' + x.key} key=${x.key} aria-labelledby=${'adm-' + x.key}>
+    ${wide && html`<div class="admin-grid">${sections.filter((x) => x.key !== 'ask').map((x) => html`<section class=${'admin-sec admin-sec-' + x.key} key=${x.key} aria-labelledby=${'adm-' + x.key}>
       <h3 class="admin-sec-title" id=${'adm-' + x.key}>${x.title}</h3><div class="stack">${x.body()}</div></section>`)}</div>`}
   </div>`;
 }
