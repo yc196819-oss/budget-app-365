@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDERS, guessProvider, sourcesOf, billingMonth, filesOf, statusOf, dueMonth, tracker, reminder, checkFile, issuerOf, companiesOf, otherSource, nameOf, howTo } from '../public/app/src/domain/sources.js';
+import { PROVIDERS, guessProvider, sourcesOf, billingMonth, filesOf, statusOf, dueMonth, tracker, reminder, checkFile, issuerOf, companiesOf, otherSource, nameOf, howTo, missingCards } from '../public/app/src/domain/sources.js';
 
 // Made-up household: one bank account, two cards.
 const today = new Date(2026, 10, 12); // 12 Nov 2026
@@ -164,4 +164,19 @@ test('a file of another company or card: where to move it', () => {
   const own = { kind: 'card', id: 'x', provider: 'leumi' };
   assert.equal(otherSource({ source: own, items: [], issuer: 'max', sources: [...list, own] }), null);
   assert.equal(cal.provider, 'cal');
+});
+
+test('a company with several cards: a file with only some of them is noticed', () => {
+  const two = sourcesOf({ cards: [{ id: 'm1', provider: 'max', last4: '4821' }, { id: 'm2', provider: 'max', last4: '5555' }, { id: 'k1', provider: 'cal' }] });
+  assert.deepEqual(missingCards({ source: two[0], items: [{ card4: '4821' }, { card4: '4821' }], sources: two }), { found: 1, total: 2 });
+  assert.equal(missingCards({ source: two[0], items: [{ card4: '4821' }, { card4: '5555' }], sources: two }), null);
+  assert.equal(missingCards({ source: two[0], items: [{}], sources: two }), null, 'no digits in the file: nothing to say');
+  assert.equal(missingCards({ source: two[2], items: [{ card4: '1' }], sources: two }), null, 'one card only');
+});
+
+test('a file with the digits of another card of the same company is fine', () => {
+  const two = sourcesOf({ cards: [{ id: 'm1', provider: 'max', last4: '4821' }, { id: 'm2', provider: 'max', last4: '5555' }] });
+  const items = [{ card4: '5555', include: true, date: '2026-10-20', amount: 10 }];
+  assert.ok(!checkFile({ source: two[0], items, sources: two }).some((c) => c.ok === false));
+  assert.ok(checkFile({ source: two[0], items: [{ card4: '9999', include: true, date: '2026-10-20', amount: 10 }], sources: two }).some((c) => c.ok === false));
 });

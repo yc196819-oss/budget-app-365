@@ -125,6 +125,8 @@ test('without AI the lines still import; unknown merchants just wait for a categ
   await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: statementXlsx() });
   await page.waitForSelector('.import-summary');
   assert.match(await page.locator('.import-summary').textContent(), /4 מחכות לכם/);
+  // The card was found in the file: a short line, and "לשנות" to choose another.
+  await page.click('.import-okline button:has-text("לשנות")');
   await page.click('.sheet .import-src:has-text("אחר / לא בטוח")');
   await page.click('text=לשמור 5 תנועות');
   await page.waitForSelector('.toast');

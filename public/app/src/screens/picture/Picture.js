@@ -199,7 +199,7 @@ export function PictureSheet({ data, onClose, onUpload }) {
           </div>`)}
         </div>
         <div class="pic-legend"><span><i class="pic-dot is-ok"></i>הועלה</span><span><i class="pic-dot is-missing"></i>חסר</span><span><i class="pic-dot is-partial"></i>חלקי</span><span><i class="pic-dot is-waiting"></i>עוד לא הגיע הזמן</span></div>
-        <p class="faint" style="font-size:12px;line-height:1.5;margin:6px 0 0">לחיצה על לוגו פותחת את האתר הרשמי בחלון חדש, כדי להוריד משם את הפירוט. כרטיס נספר לפי חודש החיוב; חשבון בנק לפי החודש הקלנדרי.</p>
+        <p class="faint" style="font-size:12px;line-height:1.5;margin:6px 0 0">לחיצה על לוגו פותחת את האתר הרשמי בחלון חדש, כדי להוריד משם את הפירוט. כרטיס נספר לפי חודש החיוב; חשבון בנק לפי החודש הקלנדרי. הלוגואים שייכים לבעליהם, ואין לנו קשר עסקי איתם.</p>
       </div>
       <div class="card pic-why"><b>למה צריך גם את הבנק וגם את האשראי?</b>
         <span><b>כרטיס האשראי</b> מראה מה קניתם: סופר, דלק, מסעדות.</span>

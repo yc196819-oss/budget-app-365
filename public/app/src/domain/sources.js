@@ -90,6 +90,16 @@ export function otherSource({ source, items = [], issuer = null, sources = [] })
   const to = sources.find((x) => x.kind === source.kind && x.provider === p.key) || null;
   return { to, provider: p.key, text: 'זה נראה כמו פירוט של ' + p.name + ', לא של ' + mine.name };
 }
+// A company with several cards: does the file carry all of them? Returns
+// { found, total } when some card's digits are missing, else null (the
+// digits the lines carry are counted; a file without digits says nothing).
+export function missingCards({ source, items = [], sources = [] }) {
+  if (!source || source.kind !== 'card' || !source.provider) return null;
+  const total = sources.filter((x) => x.kind === 'card' && x.provider === source.provider).length;
+  const found = new Set(items.map((t) => t.card4).filter(Boolean)).size;
+  return total > 1 && found > 0 && found < total ? { found, total } : null;
+}
+
 // The name people know a source by: the company, or "אשראי לאומי" for a
 // card the bank issued.
 export function nameOf(s) {
@@ -234,7 +244,7 @@ export function reminder(source, key, status, today = new Date()) {
 }
 
 // A file being uploaded, checked against the source it was chosen for.
-export function checkFile({ source, items = [], fromCard = false, today = new Date() }) {
+export function checkFile({ source, items = [], fromCard = false, sources = [], today = new Date() }) {
   const out = [];
   const kept = items.filter((t) => t.include);
   if (!source) return out;
@@ -246,7 +256,9 @@ export function checkFile({ source, items = [], fromCard = false, today = new Da
   else out.push({ ok: true, text: 'זה פירוט של ' + name + (source.last4 ? ' (כרטיס ' + source.last4 + ')' : '') });
   if (source.kind === 'card' && source.last4) {
     const fours = new Set(items.map((t) => t.card4).filter(Boolean));
-    if (fours.size && !fours.has(String(source.last4))) out.push({ ok: false, text: 'בקובץ מופיע כרטיס ' + [...fours].join(', ') + ', לא ' + source.last4 + '.' });
+    // Any card of the same company is fine: one statement covers them all.
+    const mine = new Set([source, ...sources.filter((x) => x.kind === 'card' && source.provider && x.provider === source.provider)].map((x) => x.last4).filter(Boolean).map(String));
+    if (fours.size && ![...fours].some((f) => mine.has(f))) out.push({ ok: false, text: 'בקובץ מופיע כרטיס ' + [...fours].join(', ') + ', לא ' + source.last4 + '.' });
   }
   const dates = kept.map((t) => t.date).filter(Boolean).sort();
   if (dates.length) {

@@ -92,8 +92,10 @@ test('a file of another company moves there without uploading again, and its lin
   assert.match(await page.locator('.import-move').textContent(), /פירוט של כאל, לא של מקס/);
   await page.click('.import-move button:has-text("להעביר לכאל")');
   await page.waitForSelector('.sheet:has-text("העלאת פירוט: כאל")');
+  // Straight on to its lines, under Cal.
+  await page.waitForSelector('.import-okline');
   assert.equal(await page.locator('.import-move').count(), 0);
-  assert.match(await page.locator('.import-checks li').first().textContent(), /זה פירוט של כאל/);
+  assert.match(await page.locator('.import-okline').textContent(), /פירוט כאל/);
   await page.click('.sheet button:has-text("לשמור")');
   await page.waitForSelector('.toast:has-text("נשמרו")');
   const imp = db.tables.imports.find((f) => f.source_id === 'c2');
@@ -142,8 +144,12 @@ test('the ring and 6 months: what is uploaded, what is missing, and an upload fr
   await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: xlsx });
   await page.waitForSelector('.import-checks');
   const checks = await page.locator('.import-checks li').allTextContents();
+  assert.match(await page.locator('.scan-result h3').textContent(), /הכול תקין/);
   assert.match(checks[0], /זה פירוט של מקס \(כרטיס 4821\)/);
   assert.match(checks.join(' '), /2 תנועות, סה״כ ₪200/);
+  // All fine: on to the lines by itself, under the card.
+  await page.waitForSelector('.import-okline');
+  assert.match(await page.locator('.import-okline').textContent(), /פירוט מקס/);
   await page.click('.sheet button:has-text("לשמור")');
   await page.waitForSelector('.toast:has-text("נשמרו")');
   const imp = db.tables.imports.find((f) => f.source_id === 'c1');
@@ -167,6 +173,11 @@ test('a bank file is kept as the bank account\'s, and a card file chosen for the
   await page.setInputFiles('.sheet input[type="file"]', { name: 'x.xlsx', mimeType: '', buffer: xlsx });
   await page.waitForSelector('.import-checks');
   assert.match(await page.locator('.import-checks li.bad').first().textContent(), /נראה כמו פירוט של כרטיס/);
+  // A problem stops on the check: nothing goes on by itself.
+  assert.match(await page.locator('.scan-result h3').textContent(), /משהו לא מתאים/);
+  await page.waitForTimeout(1600);
+  assert.equal(await page.locator('.import-summary').count(), 0);
+  await page.click('.sheet button:has-text("להמשיך בכל זאת")');
   await page.click('.sheet button:has-text("לשמור")');
   await page.waitForSelector('.toast:has-text("נשמרו")');
   const imp = db.tables.imports.find((f) => f.source_id === 'a1');
@@ -185,5 +196,27 @@ test('a new household with nothing uploaded yet sees the card too', async () => 
   await page.goto(server.base + '/app/#/home');
   await page.waitForSelector('.pic-card');
   assert.match(await page.locator('.pic-card').textContent(), /איפה הכסף שלכם/);
+  await page.close();
+});
+
+test('a company with two cards: a file with only one of them says so, and can be saved anyway', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.bank_accounts = [];
+    d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10, last4: '4821' }, { id: 'c2', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10, last4: '5555' }];
+    d.tables.imports = [];
+  });
+  await page.click('.pic-card');
+  await page.waitForSelector('.pic-task');
+  assert.equal(await page.locator('.pic-task').count(), 1, 'one statement for the company');
+  await page.click('.pic-task button:has-text("להעלות")');
+  const xlsx = makeXlsx([['פירוט עסקאות'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב', '4 ספרות אחרונות'], [dd(1, 3), 'מסעדה בדויה', '80.00', '80.00', '4821'], [dd(1, 5), 'חנות בדויה', '20.00', '20.00', '4821'], ['', 'סה"כ', '', '100.00', '']]);
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'm.xlsx', mimeType: '', buffer: xlsx });
+  await page.waitForSelector('.scan-result');
+  assert.match(await page.locator('.scan-result h3').textContent(), /נמצא כרטיס אחד מתוך 2/);
+  await page.click('.sheet button:has-text("לשמור, ולהעלות את השני")');
+  await page.click('.sheet button:has-text("לשמור")');
+  await page.waitForSelector('.toast:has-text("נשמרו")');
+  assert.ok(db.tables.imports.find((f) => f.source_id === 'c1'));
+  assert.deepEqual(errors, []);
   await page.close();
 });
