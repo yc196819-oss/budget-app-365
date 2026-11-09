@@ -43,12 +43,15 @@ test('first time: choose the bank and card companies by their logos, with the da
   assert.equal(db.tables.credit_cards.length, 1);
   // The details for reminders: the card's billing day and digits, the salary day.
   const card = page.locator('.pic-details li', { hasText: 'מקס' });
+  await page.route('**/rest/v1/credit_cards*', async (r) => { if (r.request().method() === 'PATCH') await new Promise((ok) => setTimeout(ok, 300)); return r.fallback(); });
   await card.locator('select').selectOption('2');
   await card.locator('input').fill('4821');
+  await page.waitForTimeout(500);
+  assert.equal(await card.locator('input').inputValue(), '4821', 'a save that returns while typing does not wipe the digits');
   await card.locator('input').blur();
   await page.locator('.pic-details li', { hasText: 'לאומי' }).locator('select').selectOption('10');
-  await page.waitForFunction(() => true);
-  await page.waitForTimeout(300);
+  // Each detail is saved on its own; typing is never wiped by another save.
+  for (let i = 0; i < 50 && !(db.tables.credit_cards[0].last4 === '4821' && db.tables.credit_cards[0].billing_day === 2 && db.tables.bank_accounts[0].salary_day === 10); i++) await page.waitForTimeout(100);
   assert.equal(db.tables.credit_cards[0].billing_day, 2);
   assert.equal(db.tables.credit_cards[0].last4, '4821');
   assert.equal(db.tables.bank_accounts[0].salary_day, 10);
