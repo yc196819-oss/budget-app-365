@@ -123,7 +123,7 @@ test('a household with no transactions gets the setup guide, opened at the state
   assert.match(await guide.textContent(), /בואו נסדר לכם את התמונה/);
   assert.match(await guide.locator('.guide-step.open').textContent(), /מעלים פירוטי אשראי של 6 חודשים/);
   await guide.locator('text=להעלות פירוט').click();
-  assert.equal(await page.locator('.sheet h2').textContent(), 'העלאת פירוט כרטיס');
+  assert.equal(await page.locator('.sheet h2').textContent(), 'העלאת פירוט');
   assert.deepEqual(errors, []);
   await page.close();
 });

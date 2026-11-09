@@ -13,6 +13,7 @@ const FEED = {
   tx_add: 'הוסיף/ה תנועה',
   shop_add: 'הוסיף/ה לרשימת הקניות',
   shop_done: 'סיים/ה קנייה',
+  price_open: 'בדק/ה כמה הרשימה תעלה',
   decision_open: 'פתח/ה החלטה משותפת',
   trip_plan: 'תכנן/ה טיול',
   lesson_done: 'סיים/ה שיעור',

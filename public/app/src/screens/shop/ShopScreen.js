@@ -11,6 +11,7 @@ import { canListen, listen } from '../../lib/speech.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
 import { go } from '../../lib/go.js';
+import { PricePanel, PriceTeaser } from './PricePanel.js';
 
 // The food budget of this month, from the goals tab: the category named
 // food (אוכל / מזון) or the one holding the supermarket.
@@ -47,7 +48,7 @@ function Intro({ onClose }) {
 // "Shopping": one list for the whole household, live, sorted by department,
 // remembered from one shopping to the next. Built for a computer first (type
 // several items and press Enter; email, copy or print it; WhatsApp last), and works on a phone.
-export function ShopScreen({ data }) {
+export function ShopScreen({ data, owner = false }) {
   const shop = useShopping(data.hid);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -55,6 +56,7 @@ export function ShopScreen({ data }) {
   const [listening, setListening] = useState(false);
   const input = useRef(null);
   const [intro, setIntro] = useState(() => !readLocal(INTRO_KEY, ''));
+  const [prices, setPrices] = useState(false);
   const closeIntro = () => { writeLocal(INTRO_KEY, '1'); setIntro(false); };
   useEffect(() => { if (data.hid) getArea(data.hid).then((a) => setAreaText(a)).catch(() => setAreaText('')); }, [data.hid]);
 
@@ -133,6 +135,7 @@ export function ShopScreen({ data }) {
         ${canListen() && html`<button type="button" class=${'icon-btn shop-mic' + (listening ? ' on' : '')} aria-label="להוסיף בקול" onClick=${voice}><${Icon} name="mic" size=${19} /></button>`}
         <button type="submit" class="btn" disabled=${busy || !text.trim()}>להוסיף</button>
       </form>
+      ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}
       ${groups.map((g) => html`<div class="shop-group" key=${g.aisle}>
         <h2 class="shop-aisle">${g.label}</h2>
@@ -153,6 +156,12 @@ export function ShopScreen({ data }) {
       </div>
     </section>
     <aside class="shop-side stack">
+      ${!owner && html`<${PriceTeaser} />`}
+      ${owner && !prices && open.some((i) => !i.done) && html`<div class="card stack shop-prices-cta">
+        <b>כמה הרשימה תעלה?</b>
+        <span class="muted" style="font-size:14px;line-height:1.5">לכל מוצר נבחר המוצר הזול ביותר בכשרות שבחרתם, ורואים כמה כל הרשימה עולה בכל רשת.</span>
+        <button type="button" class="btn" onClick=${() => { setPrices(true); track('price_open'); }}><${Icon} name="cart" size=${17} />השוואת מחירים</button>
+      </div>`}
       ${fb && html`<div class="card stack shop-budget">
         <div class="sec-row"><b>נשאר לסופר החודש</b><b class="num">${money(Math.max(0, fb.left))}</b></div>
         <span class="bar"><span style=${'width:' + Math.min(100, Math.round((fb.spent / fb.budget) * 100)) + '%;background:' + (fb.left < 0 ? 'var(--danger)' : 'var(--accent)')}></span></span>
@@ -170,7 +179,7 @@ export function ShopScreen({ data }) {
       </div>`}
       <form class="card stack shop-area" style="gap:8px" onSubmit=${saveArea}>
         <b>איפה אתם קונים?</b>
-        <span class="muted" style="font-size:14px;line-height:1.5">עיר או שכונה. אנחנו בודקים אפשרות להשוות מחירים בין הסופרים באזור, ונעדכן רק כשזה יהיה מדויק ואמין.</span>
+        <span class="muted" style="font-size:14px;line-height:1.5">עיר או שכונה. בהמשך נשתמש בזה כדי להראות מחירים מהסניפים הקרובים אליכם.</span>
         <span style="display:flex;gap:8px"><input class="input" value=${area || ''} onInput=${(e) => setAreaText(e.target.value)} maxLength="60" aria-label="עיר או שכונה" placeholder="למשל: בית שמש, רמת ג׳" style="flex:1;min-width:0" />
         <button type="submit" class="btn btn-ghost" style="width:auto">לשמור</button></span>
       </form>

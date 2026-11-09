@@ -9,7 +9,7 @@ after(async () => { await browser?.close(); server?.stop(); });
 
 const TODAY = new Date(2026, 10, 8, 10);
 
-async function open(width = 1280, setup = () => {}) {
+async function open(width = 1280, setup = () => {}, email = null) {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   await page.clock.setFixedTime(TODAY);
   const db = makeFakeDb(TODAY);
@@ -19,7 +19,9 @@ async function open(width = 1280, setup = () => {}) {
   const errors = collectErrors(page);
   await mockSupabase(page, db);
   await signIn(page, server.base);
+  if (email) await page.evaluate((e) => { const k = 'sb-bwwupwbakefjhwropdin-auth-token'; const x = JSON.parse(localStorage.getItem(k)); x.user.email = e; localStorage.setItem(k, JSON.stringify(x)); }, email);
   await page.goto(server.base + '/app/#/shop');
+  await page.reload();
   await page.waitForSelector('.shop-add');
   return { page, db, errors };
 }
@@ -122,8 +124,9 @@ test('the first time, what the tab is for: saving at the supermarket; "הבנת�
   const intro = page.locator('.shop-intro');
   assert.match(await intro.textContent(), /עוזרים לכם לחסוך בסופר/);
   assert.equal(await intro.locator('.shop-benefits li').count(), 3);
-  // No promise of a price comparison before there is a reliable source.
-  assert.doesNotMatch(await page.locator('.shop').textContent(), /הכי זול/);
+  // No price promise in the intro: the comparison is shown only as "coming soon", with sample products.
+  assert.doesNotMatch(await intro.textContent(), /הכי זול/);
+  assert.match(await page.locator('.price-teaser').textContent(), /בקרוב.*דוגמה בלבד/s);
   await intro.locator('.shop-intro-ok').click();
   assert.equal(await page.locator('.shop-intro').count(), 0);
   await page.reload();
@@ -145,4 +148,108 @@ test('a trial: the tab says so, and "כתבו לנו" opens the feedback form', 
   assert.match(await page.locator('.sheet').textContent(), /תקל|רעיון/);
   assert.deepEqual(errors, []);
   await page.close();
+});
+
+const OWNER = 'budgetapp2852@gmail.com';
+
+// Made-up products and prices for the price comparison.
+const CATALOG = {
+  'חלב 3%': [
+    { barcode: '1001', name: 'חלב 3% בשקית', names: 'חלב 3% בשקית', maker: 'מחלבה א', qty: 1, unit: 'ליטר', offers: [{ chain: 'x', chain_name: 'רשת א', price: 6.2 }, { chain: 'y', chain_name: 'רשת ב', price: 6.6 }], kosher: { owner: null, votes: { mehadrin: 3 }, mine: null } },
+    { barcode: '1002', name: 'חלב 3% קרטון', names: 'חלב 3% קרטון', maker: 'מחלבה ב', qty: 1, unit: 'ליטר', offers: [{ chain: 'y', chain_name: 'רשת ב', price: 5.5 }], kosher: { owner: null, votes: {}, mine: null } }
+  ],
+  'ביצים': [
+    { barcode: '2001', name: 'ביצים L 12', names: 'ביצים L 12', maker: 'משק', qty: 12, unit: 'יחידות', offers: [{ chain: 'x', chain_name: 'רשת א', price: 14.9 }, { chain: 'y', chain_name: 'רשת ב', price: 13.9 }], kosher: { owner: null, votes: {}, mine: null } }
+  ]
+};
+async function priceRoutes(page, { found = {}, db } = {}) {
+  const calls = { search: [], fetch: [] };
+  const cat = JSON.parse(JSON.stringify(CATALOG));
+  await page.route('**/rest/v1/rpc/price_search', (r) => {
+    const qs = JSON.parse(r.request().postData()).p_queries;
+    calls.search.push(qs);
+    const rows = [];
+    // The household's own kashrut votes count, as in the database.
+    const mine = (code) => ((db && db.tables.kosher_votes) || []).filter((v) => v.barcode === code);
+    qs.forEach((q, i) => (cat[q] || []).forEach((p) => {
+      const votes = { ...p.kosher.votes };
+      mine(p.barcode).forEach((v) => { votes[v.level] = (votes[v.level] || 0) + 1; });
+      rows.push({ q: i + 1, ...p, kosher: { ...p.kosher, votes, mine: mine(p.barcode)[0]?.level || null } });
+    }));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) });
+  });
+  await page.route('**/api/prices/fetch', (r) => { calls.fetch.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"runId":"run123abc","asked":1}' }); });
+  await page.route('**/api/prices/fetch/run123abc', (r) => { Object.assign(cat, found); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"done":true,"status":"SUCCEEDED","products":1,"offers":2}' }); });
+  return { calls, cat };
+}
+
+test('prices: the household picks a kashrut level once, then every item gets the cheapest product at that level', async () => {
+  const { page, db, errors } = await open(1280, (d) => {
+    d.tables.shopping_items = [
+      { id: 's1', household_id: d.hid, name: 'חלב 3%', qty: '×2', aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null },
+      { id: 's2', household_id: d.hid, name: 'ביצים', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:01:00Z', cleared_at: null },
+      { id: 's3', household_id: d.hid, name: 'קפה', qty: null, aisle: 'dry', done: false, created_at: '2026-11-08T08:02:00Z', cleared_at: null }
+    ];
+    d.tables.price_prefs = [];
+    d.tables.kosher_votes = [];
+  }, OWNER);
+  const { calls } = await priceRoutes(page, { db, found: { 'קפה': [{ barcode: '3001', name: 'קפה נמס 200 גרם', names: 'קפה נמס 200 גרם', maker: 'קלייה', qty: 200, unit: 'גרם', offers: [{ chain: 'x', chain_name: 'רשת א', price: 21 }], kosher: { owner: 'mehadrin', votes: {}, mine: null } }] } });
+  await page.click('.shop-prices-cta button');
+  // First the kashrut question, saved for the household.
+  await page.click('.price-pref-btn:has-text("מהדרין")');
+  assert.equal(db.tables.price_prefs[0].kosher, 'mehadrin');
+  await page.waitForSelector('.price-item');
+  assert.deepEqual(calls.search[0], ['חלב 3%', 'ביצים', 'קפה'], 'the whole list in one search');
+  // Milk: the confirmed one, though the other is cheaper.
+  const milk = page.locator('.price-item', { hasText: 'חלב 3%' }).first();
+  assert.match(await milk.textContent(), /נבחר אוטומטית.*חלב 3% בשקית.*כשר למהדרין · אישרו 3 משפחות.*₪6\.20/);
+  // Eggs: nothing confirmed, so the household chooses or confirms.
+  const eggs = page.locator('.price-item', { hasText: 'ביצים' }).first();
+  assert.match(await eggs.textContent(), /בחרו מוצר/);
+  await eggs.locator('.price-vote .chip:has-text("כשר למהדרין")').click();
+  assert.deepEqual(db.tables.kosher_votes.map((v) => [v.barcode, v.level]), [['2001', 'mehadrin']]);
+  await page.waitForSelector('.price-item.is-auto:has-text("ביצים L 12")');
+  // Coffee was not in our catalog: asked of the service once, then found.
+  assert.deepEqual(calls.fetch[0].queries, ['קפה']);
+  await page.waitForSelector('.price-item.is-auto:has-text("קפה נמס")', { timeout: 15000 });
+  // The whole list at each chain, cheapest first (milk counted twice).
+  const best = await page.locator('.price-chain.best').textContent();
+  assert.match(best, /הכי זול₪48\.30רשת א/);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('prices: changing the product for an item is remembered on the list', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+  }, OWNER);
+  await priceRoutes(page);
+  await page.click('.shop-prices-cta button');
+  const item = page.locator('.price-item').first();
+  await item.waitFor();
+  assert.match(await item.textContent(), /חלב 3% קרטון/, 'no preference: the cheapest');
+  await item.locator('button:has-text("להחליף מוצר")').click();
+  await item.locator('.price-opts li', { hasText: 'חלב 3% בשקית' }).locator('.price-pick').click();
+  await page.waitForSelector('.price-item.is-chosen:has-text("חלב 3% בשקית")');
+  assert.equal(db.tables.shopping_items[0].barcode, '1001');
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('prices for everyone else: a "coming soon" preview with sample products, and "tell me when it opens"', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+  });
+  const sent = [];
+  await page.route('**/api/telemetry', (r) => { sent.push(r.request().postData()); return r.fulfill({ status: 204, body: '' }); });
+  await page.waitForSelector('.price-teaser');
+  assert.equal(await page.locator('.shop-prices-cta').count(), 0, 'no real comparison yet');
+  assert.match(await page.locator('.price-teaser').textContent(), /בקרוב.*דוגמה בלבד/s);
+  await page.click('.price-teaser button:has-text("תודיעו לי")');
+  await page.waitForSelector('.price-teaser-ok');
+  await page.reload();
+  await page.waitForSelector('.price-teaser-ok');
+  await page.close();
+  assert.deepEqual(errors, []);
 });

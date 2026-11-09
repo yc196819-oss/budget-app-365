@@ -1902,6 +1902,146 @@ app.post('/api/admin/prices/sample', requireAuth, async (req, res) => {
 app.get('/api/admin/prices/sample/:runId', requireAuth, async (req, res) => {
   try {
     if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+
+// ═══ prices for families: our catalog first, the service only for what is missing ═══
+// A search is matched in our own catalog (price_search in the database, from
+// the app). Only items with nothing there are asked of the service, at most
+// 15 at a time, each at most once a week, a few runs per household a day and
+// a cap for the whole app, because every run costs money.
+const priceRuns = new Map(); // runId -> { hid, at, queries }
+const priceAsked = new Map(); // query -> time asked
+const priceDay = { day: '', all: 0, byHid: new Map() };
+// Limits, changeable in the server settings (Render) without a code change.
+const PRICE_RUNS_PER_HOUSEHOLD = Number(process.env.PRICE_RUNS_PER_HOUSEHOLD) || 6;
+const PRICES_OPEN = process.env.PRICES_OPEN === '1';
+const PRICE_RUNS_PER_DAY = Number(process.env.PRICE_RUNS_PER_DAY) || 40;
+function takePriceRun(hid) {
+  const d = israelToday();
+  if (priceDay.day !== d) { priceDay.day = d; priceDay.all = 0; priceDay.byHid = new Map(); }
+  const mine = priceDay.byHid.get(hid) || 0;
+  if (mine >= PRICE_RUNS_PER_HOUSEHOLD || priceDay.all >= PRICE_RUNS_PER_DAY) return false;
+  priceDay.byHid.set(hid, mine + 1);
+  priceDay.all++;
+  return true;
+}
+async function saveCatalog(items) {
+  const { products, offers } = prices.catalogRows(items);
+  for (let i = 0; i < products.length; i += 500) {
+    const { error } = await supabaseAdmin.from('price_products').upsert(products.slice(i, i + 500), { onConflict: 'barcode' });
+    if (error) throw error;
+  }
+  for (let i = 0; i < offers.length; i += 500) {
+    const { error } = await supabaseAdmin.from('price_offers').upsert(offers.slice(i, i + 500), { onConflict: 'barcode,chain' });
+    if (error) throw error;
+  }
+  return { products: products.length, offers: offers.length };
+}
+app.post('/api/prices/fetch', requireAuth, async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    if (!APIFY_TOKEN) return res.status(503).json({ error: 'השוואת המחירים עוד לא פעילה.' });
+    const hid = String((req.body && req.body.hid) || '');
+    if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
+    // While the catalog grows ("בקרוב" for everyone else), only the owner searches.
+    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
+    const week = Date.now() - 7 * 86400000;
+    const fresh = (Array.isArray(req.body.queries) ? req.body.queries : []).filter((q) => !(priceAsked.get(String(q).trim()) > week));
+    const input = prices.fetchInput(fresh);
+    if (!input) return res.json({ runId: null, asked: 0 });
+    if (!takePriceRun(hid)) return res.status(429).json({ error: 'הגעתם למספר החיפושים החדשים להיום. מחר נמשיך, ומה שכבר נמצא זמין.' });
+    const run = await prices.apifyStart(fetch, APIFY_TOKEN, input);
+    input.productQueries.forEach((q) => priceAsked.set(q, Date.now()));
+    priceRuns.set(run.runId, { hid, at: Date.now(), queries: input.productQueries });
+    return res.json({ runId: run.runId, asked: input.productQueries.length });
+  } catch (err) {
+    console.error('price fetch failed:', err.message);
+    return res.status(502).json({ error: 'לא הצלחנו לחפש מחירים כרגע. נסו שוב בעוד כמה דקות.' });
+  }
+});
+app.get('/api/prices/fetch/:runId', requireAuth, async (req, res) => {
+  try {
+    const job = priceRuns.get(String(req.params.runId));
+    if (!job || !(await isHouseholdMember(req.authUserId, job.hid))) return res.status(404).json({ error: 'not found' });
+    if (job.result) return res.json(job.result);
+    const r = await prices.apifyItems(fetch, APIFY_TOKEN, req.params.runId);
+    if (!r.done) return res.json({ done: false, status: r.status });
+    const saved = r.status === 'SUCCEEDED' ? await saveCatalog(r.items) : { products: 0, offers: 0 };
+    job.result = { done: true, status: r.status, ...saved };
+    return res.json(job.result);
+  } catch (err) {
+    console.error('price fetch check failed:', err.message);
+    return res.status(502).json({ error: 'לא הצלחנו לבדוק. נסו שוב.' });
+  }
+});
+
+// The owner: load a first catalog (what most families buy), and confirm
+// products' kashrut (the owner's word counts as confirmed).
+const seedRuns = new Map();
+app.post('/api/admin/prices/seed', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!APIFY_TOKEN) return res.status(503).json({ error: 'המפתח של Apify לא מוגדר בשרת (APIFY_TOKEN).' });
+    const part = Math.max(0, Math.min(9, Number(req.body && req.body.part) || 0));
+    const list = prices.SEED.slice(part * 20, part * 20 + 20);
+    if (!list.length) return res.json({ runId: null, done: true });
+    const input = prices.fetchInput(list, { max: 20 });
+    const run = await prices.apifyStart(fetch, APIFY_TOKEN, input, { seconds: 600 });
+    seedRuns.set(run.runId, {});
+    return res.json({ runId: run.runId, part, parts: Math.ceil(prices.SEED.length / 20), queries: list });
+  } catch (err) {
+    console.error('price seed failed:', err.message);
+    return res.status(502).json({ error: String(err.message).slice(0, 200) });
+  }
+});
+app.get('/api/admin/prices/seed/:runId', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const job = seedRuns.get(String(req.params.runId)) || {};
+    if (job.result) return res.json(job.result);
+    const r = await prices.apifyItems(fetch, APIFY_TOKEN, req.params.runId);
+    if (!r.done) return res.json({ done: false, status: r.status, cost: r.cost });
+    const saved = r.status === 'SUCCEEDED' ? await saveCatalog(r.items) : { products: 0, offers: 0 };
+    job.result = { done: true, status: r.status, cost: r.cost, rows: r.items.length, ...saved };
+    seedRuns.set(String(req.params.runId), job);
+    return res.json(job.result);
+  } catch (err) {
+    console.error('price seed check failed:', err.message);
+    return res.status(502).json({ error: String(err.message).slice(0, 200) });
+  }
+});
+app.get('/api/admin/kosher', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const [{ count: products }, { data: owned }] = await Promise.all([
+      supabaseAdmin.from('price_products').select('barcode', { count: 'exact', head: true }),
+      allRows(() => supabaseAdmin.from('kosher_votes').select('barcode').eq('by_owner', true).order('barcode'))
+    ]);
+    const done = new Set((owned || []).map((x) => x.barcode));
+    const q = String(req.query.q || '').trim().slice(0, 40);
+    let rows = supabaseAdmin.from('price_products').select('barcode,name,maker,qty,unit').order('seen_at', { ascending: false }).limit(400);
+    if (q) rows = rows.ilike('names', '%' + q.replace(/[%_,()]/g, ' ') + '%');
+    const { data } = await rows;
+    const waiting = (data || []).filter((p) => !done.has(p.barcode)).slice(0, 60);
+    return res.json({ products: products || 0, confirmed: done.size, waiting });
+  } catch (err) {
+    console.error('kosher list failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+app.post('/api/admin/kosher', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const level = String((req.body && req.body.level) || '');
+    const codes = (Array.isArray(req.body && req.body.barcodes) ? req.body.barcodes : []).map(String).filter((c) => /^[0-9]{4,20}$/.test(c)).slice(0, 200);
+    if (!['none', 'regular', 'mehadrin'].includes(level) || !codes.length) return res.status(400).json({ error: 'bad request' });
+    const { error } = await supabaseAdmin.from('kosher_votes').upsert(codes.map((barcode) => ({ barcode, household_id: prices.OWNER_VOTE, level, by_owner: true })), { onConflict: 'barcode,household_id' });
+    if (error) throw error;
+    return res.json({ ok: true, count: codes.length });
+  } catch (err) {
+    console.error('kosher confirm failed:', err.message);
+    return res.status(500).json({ error: 'לא נשמר.' });
+  }
+});
     if (!APIFY_TOKEN) return res.status(503).json({ error: 'המפתח של Apify לא מוגדר בשרת (APIFY_TOKEN).' });
     return res.json(await prices.apifyCheck(fetch, APIFY_TOKEN, req.params.runId));
   } catch (err) {

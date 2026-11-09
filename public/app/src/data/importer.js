@@ -73,10 +73,15 @@ export async function readStatement(file, { categories, history, rules = [], tod
   onStep('read');
   let items = [];
   let via = 'table';
+  // A table with a card statement's headings (and no balance column) is a
+  // card's statement even when its lines do not carry the card's digits.
+  let cardTable = false;
   if (kind === 'xlsx' || kind === 'xls' || kind === 'csv' || kind === 'text') {
     const rows = await readTable(file, kind);
     onStep('find');
     items = rowsToTransactions(rows);
+    const head = rows.slice(0, 15).map((r) => r.join(' ')).join(' ');
+    cardTable = /בית ה?עסק|סכום חיוב|פירוט עסקאות/.test(head) && !/יתרה/.test(head);
     if (!items.length) {
       // Not a table we recognize: let the AI read the text.
       const text = rows.map((r) => r.join(' | ')).join('\n');
@@ -125,7 +130,7 @@ export async function readStatement(file, { categories, history, rules = [], tod
   onStep('dupes');
   // A card's own statement (most lines carry its last 4 digits) has no bank
   // card-charge lines to leave out.
-  const fromCard = items.filter((t) => t.card4).length > items.length / 2;
+  const fromCard = cardTable || items.filter((t) => t.card4).length > items.length / 2;
   return { items: prepare(items, history, { fromCard }), via, fromCard };
 }
 

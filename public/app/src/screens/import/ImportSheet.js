@@ -10,6 +10,8 @@ import { showToast } from '../../lib/toast.js';
 import { PickFile } from './PickFile.js';
 import { Steps } from './Steps.js';
 import { Review } from './Review.js';
+import { sourcesOf, checkFile } from '../../domain/sources.js';
+import { Logo } from '../picture/Picture.js';
 
 // Upload a card statement: pick a file, watch it being read, review what
 // was found (categories, duplicates), save. Saving can be undone.
@@ -20,14 +22,20 @@ const fileType = (name) => {
   return /^(png|jpe?g|webp|heic|gif)$/.test(ext) ? 'image' : 'other';
 };
 
-export function ImportSheet({ data, onClose }) {
+export function ImportSheet({ data, onClose, source: preset = null }) {
   const [phase, setPhase] = useState('pick');
   const [step, setStep] = useState(null);
   const [items, setItems] = useState([]);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
   const [saving, setSaving] = useState(false);
-  const [cardId, setCardId] = useState(() => (data.cards.length === 1 ? data.cards[0].id : null));
+  const sources = sourcesOf({ accounts: data.accounts, cards: data.cards });
+  // Which account or card this file is (chosen before, or found in the file).
+  const [sourceId, setSourceId] = useState(preset ? preset.id : null);
+  const source = sources.find((x) => x.id === sourceId) || null;
+  const [cardId, setCardIdRaw] = useState(() => (preset ? (preset.kind === 'card' ? preset.id : null) : data.cards.length === 1 ? data.cards[0].id : null));
+  const setCardId = (id) => { setCardIdRaw(id); if (id) setSourceId(id); };
+  const pickSource = (x) => { setSourceId(x ? x.id : null); setCardIdRaw(x && x.kind === 'card' ? x.id : null); };
   const run = useRef(0);
   // The owner's numbers: where people stop in an upload (fixed words only:
   // the step, the kind of file, why it failed; never the file itself).
@@ -58,6 +66,15 @@ export function ImportSheet({ data, onClose }) {
       if (run.current !== id) return;
       setItems(out.items);
       setFromCard(!!out.fromCard);
+      // No account chosen yet: the one the file points at, when there is one.
+      if (!sourceId) {
+        const fours = new Set(out.items.map((t) => t.card4).filter(Boolean));
+        const cardsOnly = sources.filter((x) => x.kind === 'card');
+        const banks = sources.filter((x) => x.kind === 'bank');
+        const byFour = cardsOnly.find((c) => c.last4 && fours.has(String(c.last4)));
+        const guess = out.fromCard ? byFour || (cardsOnly.length === 1 ? cardsOnly[0] : null) : banks.length === 1 ? banks[0] : null;
+        if (guess) pickSource(guess);
+      }
       setDropCharges(true);
       setPhase('review');
     } catch (err) {
@@ -82,7 +99,7 @@ export function ImportSheet({ data, onClose }) {
     if (!rows.length || saving) return;
     setSaving(true);
     try {
-      const added = await addImported(rows, { fileName, kind: String(fileName).split('.').pop().toLowerCase().slice(0, 5) });
+      const added = await addImported(rows, { fileName, kind: String(fileName).split('.').pop().toLowerCase().slice(0, 5), source });
       // Installment payments create (or correct) their deal, so the payments
       // still to come are in the forecast. Never holds up the import.
       const deals = installmentDeals(rows, data.installments);
@@ -112,7 +129,7 @@ export function ImportSheet({ data, onClose }) {
     }
   };
 
-  return html`<${Sheet} title="העלאת פירוט כרטיס" onClose=${() => { run.current++; onClose(); }}>
+  return html`<${Sheet} title=${preset ? 'העלאת פירוט: ' + preset.name : 'העלאת פירוט'} onClose=${() => { run.current++; onClose(); }}>
     ${phase === 'pick' && html`<${PickFile} onFile=${start} />`}
     ${phase === 'work' && html`<${Steps} step=${step} fileName=${fileName} />`}
     ${phase === 'error' && html`<div class="card" role="alert" style="display:flex;flex-direction:column;gap:10px">
@@ -120,7 +137,13 @@ export function ImportSheet({ data, onClose }) {
         <span class="muted" style="line-height:1.5">${error}</span>
       </div>
       <button type="button" class="btn" onClick=${reset}>לבחור קובץ אחר</button>`}
-    ${phase === 'review' && html`<${Review} items=${items} categories=${data.categories} cards=${data.cards} cardId=${cardId} onCard=${setCardId} onChange=${setItems} onSave=${save} saving=${saving} onAnother=${reset}
+    ${phase === 'review' && sources.length > 0 && html`<div class="card stack import-source">
+      <b>מאיזה חשבון או כרטיס הקובץ?</b>
+      <div class="import-source-pick" role="group" aria-label="החשבון או הכרטיס של הקובץ">${sources.map((x) => html`<button type="button" key=${x.id} class=${'import-src' + (sourceId === x.id ? ' on' : '')} aria-pressed=${sourceId === x.id} onClick=${() => pickSource(x)}><${Logo} provider=${x.provider} name=${x.name} size="s" /><small>${x.kind === 'card' ? (x.last4 || x.name) : 'עו״ש'}</small></button>`)}
+        <button type="button" class=${'import-src' + (!sourceId ? ' on' : '')} aria-pressed=${!sourceId} onClick=${() => pickSource(null)}><small>אחר / לא בטוח</small></button></div>
+      ${source && html`<ul class="import-checks" aria-label="בדיקת הקובץ">${checkFile({ source, items, fromCard }).map((c, i) => html`<li key=${i} class=${c.ok === true ? 'ok' : c.ok === false ? 'bad' : 'warn'}><i aria-hidden="true">${c.ok === true ? '✓' : '!'}</i>${c.text}</li>`)}</ul>`}
+    </div>`}
+    ${phase === 'review' && html`<${Review} items=${items} categories=${data.categories} cards=${sources.length ? [] : data.cards} cardId=${cardId} onCard=${setCardId} onChange=${setItems} onSave=${save} saving=${saving} onAnother=${reset}
       covered=${fromCard || cardId ? coveredCharges(items, data.txs) : []} dropCharges=${dropCharges} onDropCharges=${setDropCharges} />`}
   <//>`;
 }

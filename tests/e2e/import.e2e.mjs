@@ -125,7 +125,7 @@ test('without AI the lines still import; unknown merchants just wait for a categ
   await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: statementXlsx() });
   await page.waitForSelector('.import-summary');
   assert.match(await page.locator('.import-summary').textContent(), /4 מחכות לכם/);
-  await page.click('.sheet .chip:has-text("לא מכרטיס")');
+  await page.click('.sheet .import-src:has-text("אחר / לא בטוח")');
   await page.click('text=לשמור 5 תנועות');
   await page.waitForSelector('.toast');
   assert.equal(db.tables.transactions.length, before + 5);
@@ -210,7 +210,7 @@ test('the add sheet links to the statement upload, replacing itself (no sheet on
   await page.click('.bottom-nav .nav-add');
   await page.click('text=או: העלאת פירוט חודשי של כרטיס');
   assert.equal(await page.locator('.sheet').count(), 1);
-  assert.equal(await page.locator('.sheet h2').textContent(), 'העלאת פירוט כרטיס');
+  assert.equal(await page.locator('.sheet h2').textContent(), 'העלאת פירוט');
   await page.close();
 });
 

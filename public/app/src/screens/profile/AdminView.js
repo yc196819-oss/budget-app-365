@@ -6,6 +6,8 @@ import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
 import { greeting, ago, areas, record } from '../../domain/admin.js';
+import { seedStart, seedStatus, kosherList, kosherConfirm } from '../../data/prices.js';
+import { kosherHint, LEVEL_NAMES, size, sizeText } from '../../domain/prices.js';
 
 const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', shop: 'קניות', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
 const NAMES = { app_open: 'פתיחות', tx_add: 'הוספת תנועה', import_done: 'ייבוא', advisor_ask: 'שאלות ליועץ', advisor_talk: 'שיחה קולית', decision_open: 'החלטה חדשה', decision_message: 'הודעות ביחד', trip_plan: 'תכנון טיול', news_open: 'חדשות', lesson_done: 'שיעור', shortcut: 'קיצור דרך', export: 'ייצוא', restore: 'שחזור', import_fail: 'ייבוא שנכשל', guide_step: 'צעד במסלול התחלה', guide_skip: 'דילוג במסלול', learn_auto: 'עדכון אוטומטי מהיועץ', learn_undo: 'ביטול עדכון של היועץ', onboard_0: 'הרשמה: מסך פתיחה', onboard_1: 'הרשמה: מי אתם', onboard_2: 'הרשמה: מה רלוונטי', onboard_3: 'הרשמה: כרטיסים', onboard_4: 'הרשמה: הכנסה', onboard_5: 'הרשמה: פרטיות', onboard_done: 'הרשמה הושלמה' };
@@ -132,6 +134,63 @@ function PriceServiceCard() {
       <div style="overflow-x:auto"><table class="admin-table" dir="auto"><thead><tr>${sample.keys.slice(0, 8).map((k) => html`<th key=${k}>${k}</th>`)}</tr></thead>
         <tbody>${sample.rows.map((r, i) => html`<tr key=${i}>${sample.keys.slice(0, 8).map((k) => html`<td key=${k}>${r[k] ?? ''}</td>`)}</tr>`)}</tbody></table></div>
     </div>`}
+  </div>`;
+}
+
+// The first catalog: what most families buy, loaded part by part (20
+// products a run). After that the catalog grows by itself from searches.
+function SeedCard() {
+  const [st, setSt] = useState(null);
+  const run = async () => {
+    let added = 0, cost = 0;
+    for (let part = 0; part < 10; part++) {
+      let r;
+      try { r = await seedStart(part); } catch (err) { setSt({ error: err.message || 'לא התחיל.' }); return; }
+      if (!r.runId) break;
+      setSt({ part: part + 1, parts: r.parts, added, cost, running: true });
+      for (let i = 0; i < 120; i++) {
+        await new Promise((ok) => setTimeout(ok, 5000));
+        const c = await seedStatus(r.runId).catch(() => null);
+        if (c && c.done) { added += c.products || 0; cost += Number(c.cost) || 0; break; }
+      }
+      if (part + 1 >= r.parts) break;
+    }
+    setSt({ done: true, added, cost });
+  };
+  return html`<div class="card stack price-seed"><b>קטלוג המוצרים שלנו</b>
+    <span class="muted" style="font-size:13px;line-height:1.55">טעינה ראשונה של המוצרים שרוב המשפחות קונות (כ-90 סוגים, בכל הרשתות). אחרי זה הקטלוג גדל לבד מכל חיפוש. כל ריצה עולה כמה סנטים מהקרדיט של Apify.</span>
+    ${!st && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${run}>לטעון את הקטלוג הראשון</button>`}
+    ${st && st.running && html`<span role="status">טוען חלק ${st.part} מתוך ${st.parts}… (עד עכשיו ${st.added} מוצרים)</span>`}
+    ${st && st.done && html`<span role="status">נטענו ${st.added} מוצרים${st.cost ? ' · עלות $' + st.cost.toFixed(2) : ''}.</span>`}
+    ${st && st.error && html`<span role="alert" style="color:var(--danger)">${st.error}</span>`}
+  </div>`;
+}
+
+// Products waiting for a kashrut word. The owner's word counts as confirmed;
+// names that say "מהדרין" are marked so a whole group can be confirmed at once.
+function KosherCard() {
+  const [d, setD] = useState(false);
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState(() => new Set());
+  const load = (text = q) => kosherList(text).then((x) => { setD(x); setSel(new Set()); }).catch(() => setD(null));
+  const confirm = async (codes, level) => {
+    if (!codes.length) return;
+    try { await kosherConfirm(codes, level); showToast('נשמר: ' + codes.length + ' מוצרים, ' + LEVEL_NAMES[level]); load(); } catch (err) { showToast(err.message || 'לא נשמר.'); }
+  };
+  // Opened on request, so the dashboard does not ask for it every time.
+  if (d === false) return html`<div class="card stack kosher-admin"><b>אישור כשרות</b><span class="muted" style="font-size:13px">מוצרים בקטלוג שעוד לא אישרתם את הכשרות שלהם.</span><button type="button" class="btn btn-ghost" style="width:auto" onClick=${() => { setD(undefined); load(''); }}>להציג מוצרים שמחכים לאישור</button></div>`;
+  if (d === undefined) return html`<div class="card"><span class="muted">טוען…</span></div>`;
+  if (d === null) return html`<div class="card"><span class="muted">רשימת הכשרות לא זמינה כרגע.</span></div>`;
+  const hinted = d.waiting.filter((p) => kosherHint(p.name) === 'mehadrin').map((p) => p.barcode);
+  const toggle = (c) => setSel((s) => { const n = new Set(s); n.has(c) ? n.delete(c) : n.add(c); return n; });
+  return html`<div class="card stack kosher-admin"><b>אישור כשרות</b>
+    <span class="muted" style="font-size:13px;line-height:1.55">${d.products} מוצרים בקטלוג · ${d.confirmed} אושרו על ידיכם. מוצר שלא אושר לא נבחר לבד למשפחה שביקשה כשרות. האישור שלכם נחשב מאושר.</span>
+    <form style="display:flex;gap:8px" onSubmit=${(e) => { e.preventDefault(); load(q); }}><input class="input" value=${q} placeholder="לחפש: חלב, תנובה…" aria-label="חיפוש מוצר" onInput=${(e) => setQ(e.currentTarget.value)} style="flex:1;min-width:0" /><button class="btn btn-ghost" style="width:auto">לחפש</button></form>
+    ${hinted.length > 0 && html`<button type="button" class="btn btn-ghost" onClick=${() => confirm(hinted, 'mehadrin')}>לאשר כמהדרין את ${hinted.length} שכתוב בשמם "מהדרין"</button>`}
+    ${d.waiting.length === 0 ? html`<span class="muted">אין מוצרים שמחכים.</span>` : html`<ul class="kosher-list">${d.waiting.map((p) => html`<li key=${p.barcode}>
+      <label><input type="checkbox" checked=${sel.has(p.barcode)} onChange=${() => toggle(p.barcode)} /><span><b>${p.name}</b><small class="muted">${[p.maker, sizeText(size(p.qty, p.unit)), p.barcode].filter(Boolean).join(' · ')}</small></span></label>
+      ${kosherHint(p.name) && html`<span class="kosher kosher-unknown">בשם: ${kosherHint(p.name) === 'mehadrin' ? 'מהדרין' : 'כשר'}</span>`}</li>`)}</ul>`}
+    ${sel.size > 0 && html`<div class="kosher-bar">${['mehadrin', 'regular', 'none'].map((l) => html`<button type="button" class="btn btn-ghost" key=${l} style="width:auto" onClick=${() => confirm([...sel], l)}>${LEVEL_NAMES[l]} (${sel.size})</button>`)}</div>`}
   </div>`;
 }
 
@@ -412,41 +471,39 @@ export function AdminView({ onBack }) {
       </div>`)}
     </div>`}
     ${back && html`<${MonthlyMailCard} />`}` },
-    { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'אילו רשתות עונות, והשירות החיצוני', body: () => html`${back && html`<${PriceReachCard} />`}${back && html`<${PriceServiceCard} />`}` },
+    { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים, אישור כשרות, והשירות החיצוני', body: () => html`${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceServiceCard} />`}${back && html`<${PriceReachCard} />`}` },
     { key: 'system', icon: 'wrench', title: 'מצב המערכת', sub: s ? 'תקלות השבוע: ' + s.errors.week : 'תקלות ומה שבור', body: () => html`${s && html`
       <div class="card stack"><b>תקלות השבוע: <span class="num">${s.errors.week}</span></b>
         ${s.errors.top.map((e) => html`<div style="font-size:13px"><b class="num">${e.count}×</b> ${e.message}<div class="faint" style="font-size:11px">${e.path || ''}</div></div>`)}</div>`}` }
   ];
   const open = sections.find((x) => x.key === section);
   const hi = greeting();
-  // On a computer the tools are small tiles that jump to their part below.
-  const tools = sections.filter((x) => !['ask', 'activity'].includes(x.key));
-  const go = (key) => { const el = document.getElementById('adm-' + key); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  // On a computer and on a phone alike: a main screen (the numbers, what is
+  // happening now) with a button for each part, and each part on its own
+  // page with a way back. Only up-and-down scrolling, never sideways.
+  const hub = wide ? sections.filter((x) => x.key !== 'ask') : sections;
+  const openPart = (key) => { setSection(key); const el = document.querySelector('.sheet-body, .sheet'); if (el) el.scrollTop = 0; };
   return html`<div class=${'stack admin-stats' + (wide ? ' admin-wide' : '')}>
     <div class="admin-top">
-      ${open && !wide ? html`<button type="button" class="btn-text" onClick=${() => setSection(null)}>→ לוח הבעלים</button>`
+      ${open ? html`<button type="button" class="btn-text" onClick=${() => setSection(null)}>→ לוח הבעלים</button>`
         : html`<button type="button" class="btn-text" onClick=${onBack}>→ חזרה</button>`}
-      ${(!open || wide) && html`<span class="admin-hello"><b>${hi.hello}</b><small class="muted">${hi.date}</small></span>`}
+      ${!open && html`<span class="admin-hello"><b>${hi.hello}</b><small class="muted">${hi.date}</small></span>`}
       ${live && html`<span class="admin-pill" role="status"><span class="admin-dot" aria-hidden="true"></span><b class="num">${live.users}</b> עכשיו</span>`}
     </div>
     ${s === undefined && html`<span class="muted">טוען…</span>`}
     ${s === null && html`<span class="muted">הנתונים לא זמינים כרגע.</span>`}
-    ${(!open || wide) && k && html`
+    ${!open && k && html`
       <${Record} daily=${s.daily} />
       <div class="card admin-summary"><span class="admin-spark" aria-hidden="true"><${Icon} name="spark" size=${16} /></span><span>${k.summary}</span></div>
       <div class="admin-kpis">
         ${k.tiles.map((t) => html`<div class="card admin-kpi" key=${t.label}><span class="muted">${t.label}</span><${CountUp} value=${t.value} />${t.note && html`<span class=${'admin-chg ' + (t.tone || '')}>${t.note}</span>`}<${Spark} values=${t.series} /></div>`)}
       </div>`}
-    ${wide && s && html`<div class="admin-row"><${AskCard} s=${s} /><${FeedCard} items=${s.feed} limit=${9} /></div>
-      <nav class="admin-tools" aria-label="כלים">${tools.map((x) => html`<button type="button" class="card admin-tool" key=${x.key} onClick=${() => go(x.key)}>
-        <span class="admin-hub-ic"><${Icon} name=${x.icon} size=${18} /></span><span class="admin-hub-t"><b>${x.title}</b><small>${x.sub}</small></span></button>`)}</nav>`}
-    ${!wide && !open && s && html`<${FeedCard} items=${s.feed} limit=${4} />`}
-    ${!wide && !open && html`<nav class="admin-hub" aria-label="חלקי לוח הבעלים">
-      ${sections.map((x) => html`<button type="button" class="card admin-hub-btn" key=${x.key} onClick=${() => setSection(x.key)}>
+    ${!open && wide && s && html`<div class="admin-row"><${AskCard} s=${s} /><${FeedCard} items=${s.feed} limit=${6} /></div>`}
+    ${!open && !wide && s && html`<${FeedCard} items=${s.feed} limit=${4} />`}
+    ${!open && html`<nav class=${wide ? 'admin-tools' : 'admin-hub'} aria-label="חלקי לוח הבעלים">
+      ${hub.map((x) => html`<button type="button" class=${'card ' + (wide ? 'admin-tool' : 'admin-hub-btn')} key=${x.key} onClick=${() => openPart(x.key)}>
         <span class="admin-hub-ic"><${Icon} name=${x.icon} size=${18} /></span><span class="admin-hub-t"><b>${x.title}</b><small>${x.sub}</small></span><span aria-hidden="true">‹</span></button>`)}
     </nav>`}
-    ${!wide && open && html`<h3 class="admin-sec-title">${open.title}</h3><div class="stack">${open.body()}</div>`}
-    ${wide && html`<div class="admin-grid">${sections.filter((x) => x.key !== 'ask').map((x) => html`<section class=${'admin-sec admin-sec-' + x.key} key=${x.key} aria-labelledby=${'adm-' + x.key}>
-      <h3 class="admin-sec-title" id=${'adm-' + x.key}>${x.title}</h3><div class="stack">${x.body()}</div></section>`)}</div>`}
+    ${open && html`<section class=${'admin-sec admin-sec-' + open.key} aria-labelledby="adm-open"><h3 class="admin-sec-title" id="adm-open">${open.title}</h3><div class="stack">${open.body()}</div></section>`}
   </div>`;
 }
