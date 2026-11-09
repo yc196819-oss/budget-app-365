@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDERS, guessProvider, sourcesOf, billingMonth, filesOf, statusOf, dueMonth, tracker, reminder, checkFile } from '../public/app/src/domain/sources.js';
+import { PROVIDERS, guessProvider, sourcesOf, billingMonth, filesOf, statusOf, dueMonth, tracker, reminder, checkFile, issuerOf, companiesOf, otherSource, nameOf, howTo } from '../public/app/src/domain/sources.js';
 
 // Made-up household: one bank account, two cards.
 const today = new Date(2026, 10, 12); // 12 Nov 2026
@@ -8,7 +8,8 @@ const accounts = [{ id: 'b1', name: 'עו״ש', bank_name: 'לאומי', salary_
 const cards = [{ id: 'c1', name: 'מקס של דנה', billing_day: 10, last4: '4821' }, { id: 'c2', name: 'כאל', billing_day: 2, last4: '1234' }, { id: 'c3', name: 'ישן', is_active: false }];
 
 test('every provider has a logo, an https site and a Hebrew name; names are recognised', () => {
-  assert.equal(PROVIDERS.filter((p) => p.kind === 'bank').length, 11);
+  assert.equal(PROVIDERS.filter((p) => p.kind === 'bank').length, 12);
+  assert.equal(guessProvider('בנק פאג"י', 'bank'), 'pagi');
   assert.equal(PROVIDERS.filter((p) => p.kind === 'card').length, 5);
   for (const p of PROVIDERS) { assert.match(p.url, /^https:\/\//); assert.match(p.name, /[א-ת]/); assert.match(p.logo, /\.(svg|png)$/); }
   assert.equal(guessProvider('כרטיס מקס של דנה', 'card'), 'max');
@@ -112,4 +113,55 @@ test('a file is checked against the source it was chosen for', () => {
   const charges = checkFile({ source: bank, items: [{ date: '2026-10-10', amount: 3000, include: false, cardCharge: true }, { date: '2026-10-11', amount: 10, include: true }] });
   assert.ok(charges.some((c) => /לא נספרים כאן/.test(c.text)));
   assert.deepEqual(checkFile({ items }), []);
+});
+
+test('the company named first in a file is the one it is from', () => {
+  assert.equal(issuerOf('מקס איט פיננסים בע"מ | פירוט עסקאות | כרטיס 4821'), 'max');
+  assert.equal(issuerOf('בנק לאומי | תנועות בחשבון | ... | כאל חיוב חודשי'), 'leumi', 'the bank comes before the card company it shows');
+  assert.equal(issuerOf('ישראכרט · פירוט חיובים'), 'isracard');
+  assert.equal(issuerOf('תאריך | סכום | בית עסק'), null);
+});
+
+test('one statement a month for each card company, whatever the number of its cards', () => {
+  const two = [{ id: 'm1', name: 'מקס', provider: 'max', billing_day: 10 }, { id: 'm2', name: 'מקס נוסף', provider: 'max', billing_day: 10 }, { id: 'l1', name: 'אשראי לאומי', provider: 'leumi', billing_day: 2 }];
+  const g = companiesOf(sourcesOf({ accounts, cards: two }));
+  assert.deepEqual(g.map((x) => [x.kind, x.provider, x.count]), [['bank', 'leumi', 1], ['card', 'max', 2], ['card', 'leumi', 1]]);
+  assert.deepEqual(g[1].ids, ['m1', 'm2']);
+  // A file chosen for either Max card fills the month for the company.
+  const imports = [{ id: 'f1', source_kind: 'card', source_id: 'm2', date_from: '2026-10-11', date_to: '2026-11-05' }];
+  const t = tracker({ accounts, cards: two, imports }, today);
+  assert.equal(t.rows.length, 3);
+  assert.equal(t.rows[1].months[5].status, 'ok');
+  assert.equal(t.tasks.filter((x) => x.source.provider === 'max').length, 0);
+  // The card the bank issued is asked for apart from the account, by its own name.
+  const bankCard = t.tasks.find((x) => x.source.kind === 'card' && x.source.provider === 'leumi');
+  assert.match(bankCard.title, /אשראי לאומי/);
+  assert.equal(nameOf(g[2]), 'אשראי לאומי');
+  assert.match(howTo('card', 'leumi'), /באתר הבנק: כרטיסי אשראי/);
+  assert.match(howTo('card', 'max'), /פירוט עסקאות/);
+  assert.match(reminder({ ...g[1], billingDay: 10 }, '2026-11', 'missing', today).note, /2 כרטיסים, פירוט אחד לכולם/);
+});
+
+test('a file of another company or card: where to move it', () => {
+  const list = sourcesOf({ accounts, cards });
+  const [bank, max, cal] = list;
+  // Its lines carry Cal's digits: move it to Cal.
+  const byDigits = otherSource({ source: max, items: [{ card4: '1234' }, { card4: '1234' }], sources: list });
+  assert.equal(byDigits.to.id, 'c2');
+  assert.match(byDigits.text, /זה פירוט של כאל \(כרטיס 1234\), לא של מקס/);
+  // It names Cal at the top: Cal.
+  assert.equal(otherSource({ source: max, items: [], issuer: 'cal', sources: list }).to.id, 'c2');
+  // It names Isracard, not in the list yet: offered to add it.
+  const isra = otherSource({ source: max, items: [], issuer: 'isracard', sources: list });
+  assert.equal(isra.to, null);
+  assert.equal(isra.provider, 'isracard');
+  // The right one, a bank name on a card, or nothing known: nothing to move.
+  assert.equal(otherSource({ source: max, items: [{ card4: '4821' }], issuer: 'max', sources: list }), null);
+  assert.equal(otherSource({ source: max, items: [], issuer: 'leumi', sources: list }), null);
+  assert.equal(otherSource({ source: bank, items: [], issuer: null, sources: list }), null);
+  assert.equal(otherSource({ source: bank, items: [], issuer: 'hapoalim', sources: list }).provider, 'hapoalim');
+  // A card the bank issued may carry a card company's name: not a mistake.
+  const own = { kind: 'card', id: 'x', provider: 'leumi' };
+  assert.equal(otherSource({ source: own, items: [], issuer: 'max', sources: [...list, own] }), null);
+  assert.equal(cal.provider, 'cal');
 });

@@ -10,7 +10,7 @@ import { showToast } from '../../lib/toast.js';
 import { PickFile } from './PickFile.js';
 import { Steps } from './Steps.js';
 import { Review } from './Review.js';
-import { sourcesOf, checkFile } from '../../domain/sources.js';
+import { sourcesOf, checkFile, otherSource, providerOf, nameOf } from '../../domain/sources.js';
 import { Logo } from '../picture/Picture.js';
 
 // Upload a card statement: pick a file, watch it being read, review what
@@ -48,6 +48,9 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
   }, []);
   // A card's own statement (found in the file, or a card chosen for it).
   const [fromCard, setFromCard] = useState(false);
+  // The company named in the file, and a move to another source in flight.
+  const [issuer, setIssuer] = useState(null);
+  const [moving, setMoving] = useState(false);
   const [dropCharges, setDropCharges] = useState(true);
 
   const start = async (file) => {
@@ -66,6 +69,7 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
       if (run.current !== id) return;
       setItems(out.items);
       setFromCard(!!out.fromCard);
+      setIssuer(out.issuer || null);
       // No account chosen yet: the one the file points at, when there is one.
       if (!sourceId) {
         const fours = new Set(out.items.map((t) => t.card4).filter(Boolean));
@@ -86,6 +90,28 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
       setError(err instanceof ImportError ? err.message : 'משהו השתבש בקריאת הקובץ (' + (err.message || err) + '). נסו שוב, או קובץ אחר.');
       setPhase('error');
     }
+  };
+
+  // The file is another company's: it moves there, without uploading again
+  // (added to the list first when the company is not in it yet). The lines
+  // stay on screen to check and save under the right one.
+  const other = phase === 'review' ? otherSource({ source, items, issuer, sources }) : null;
+  const move = async () => {
+    if (!other || moving) return;
+    setMoving(true);
+    try {
+      let to = other.to;
+      if (!to) {
+        const p = providerOf(other.provider);
+        const row = await (p.kind === 'card' ? saveRow('credit_cards', { name: p.name, provider: p.key, billing_day: 10 }) : saveRow('bank_accounts', { name: p.name, bank_name: p.name, provider: p.key }));
+        to = { kind: p.kind, id: row.id };
+      }
+      setSourceId(to.id);
+      setCardIdRaw(to.kind === 'card' ? to.id : null);
+      track('import_moved');
+      showToast('הפירוט הועבר ל' + (providerOf(other.provider) || {}).name + '. בודקים ושומרים.');
+    } catch (_e) { showToast('ההעברה לא הצליחה. נסו שוב.'); }
+    setMoving(false);
   };
 
   const reset = () => { run.current++; setItems([]); setError(''); setPhase('pick'); };
@@ -129,7 +155,7 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
     }
   };
 
-  return html`<${Sheet} title=${preset ? 'העלאת פירוט: ' + preset.name : 'העלאת פירוט'} onClose=${() => { run.current++; onClose(); }}>
+  return html`<${Sheet} title=${source ? 'העלאת פירוט: ' + nameOf(source) : preset ? 'העלאת פירוט: ' + preset.name : 'העלאת פירוט'} onClose=${() => { run.current++; onClose(); }}>
     ${phase === 'pick' && html`<${PickFile} onFile=${start} />`}
     ${phase === 'work' && html`<${Steps} step=${step} fileName=${fileName} />`}
     ${phase === 'error' && html`<div class="card" role="alert" style="display:flex;flex-direction:column;gap:10px">
@@ -137,6 +163,11 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
         <span class="muted" style="line-height:1.5">${error}</span>
       </div>
       <button type="button" class="btn" onClick=${reset}>לבחור קובץ אחר</button>`}
+    ${other && html`<div class="card import-move" role="alert">
+      <b>${other.text}</b>
+      <span class="muted">לא צריך להעלות שוב: מעבירים אותו בלחיצה, ואז בודקים ושומרים את התנועות שם.</span>
+      <button type="button" class="btn" disabled=${moving} onClick=${move}>${other.to ? 'להעביר ל' + nameOf(other.to) : 'להוסיף את ' + providerOf(other.provider).name + ' ולהעביר אליו'}</button>
+    </div>`}
     ${phase === 'review' && sources.length > 0 && html`<div class="card stack import-source">
       <b>מאיזה חשבון או כרטיס הקובץ?</b>
       <div class="import-source-pick" role="group" aria-label="החשבון או הכרטיס של הקובץ">${sources.map((x) => html`<button type="button" key=${x.id} class=${'import-src' + (sourceId === x.id ? ' on' : '')} aria-pressed=${sourceId === x.id} onClick=${() => pickSource(x)}><${Logo} provider=${x.provider} name=${x.name} size="s" /><small>${x.kind === 'card' ? (x.last4 || x.name) : 'עו״ש'}</small></button>`)}
