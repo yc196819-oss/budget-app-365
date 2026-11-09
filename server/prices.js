@@ -140,3 +140,90 @@ function shape(items, limit) {
 module.exports.SAMPLE_INPUT = SAMPLE_INPUT;
 module.exports.apifyStart = apifyStart;
 module.exports.apifyCheck = apifyCheck;
+
+// ═══ our own catalog: what the price service returns, kept by barcode ═══
+// One run brings rows of (barcode, name, maker, size, price, chain, store).
+// They become one product per barcode (every name it was seen under, for
+// search) and one price per chain (the lowest seen in that run).
+const BAD = /^-*$|^---$|^לא ידוע$/;
+function catalogRows(items, now = new Date()) {
+  const byCode = new Map();
+  for (const x of items || []) {
+    if (!x || typeof x !== 'object') continue;
+    const code = String(x.barcode ?? x.itemCode ?? '').replace(/\D/g, '');
+    const price = Number(x.price ?? x.itemPrice);
+    const chain = String(x.chainKey || x.chainId || x.chainName || '').trim().slice(0, 40);
+    if (!/^[0-9]{4,20}$/.test(code) || !(price > 0 && price < 100000) || !chain) continue;
+    const name = String(x.itemName || x.manufacturerItemDescription || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!name) continue;
+    const p = byCode.get(code) || { names: new Map(), maker: '', qty: null, unit: '', offers: new Map() };
+    p.names.set(name, (p.names.get(name) || 0) + 1);
+    const maker = String(x.manufacturer || x.manufacturerName || '').trim();
+    if (!p.maker && maker && !BAD.test(maker)) p.maker = maker.slice(0, 80);
+    const qty = Number(x.quantity);
+    const unit = String(x.unitQty || x.unitOfMeasure || '').trim();
+    if (p.qty === null && qty > 0 && unit && !BAD.test(unit)) { p.qty = qty; p.unit = unit.slice(0, 20); }
+    const o = p.offers.get(chain);
+    if (!o || price < o.price) p.offers.set(chain, { price, chain_name: String(x.chainName || chain).slice(0, 60) });
+    byCode.set(code, p);
+  }
+  const at = now.toISOString();
+  const products = [];
+  const offers = [];
+  for (const [barcode, p] of byCode) {
+    const names = [...p.names.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length).map(([n]) => n);
+    products.push({ barcode, name: names[0], names: names.join(' | ').slice(0, 1000), maker: p.maker || null, qty: p.qty, unit: p.unit || null, seen_at: at });
+    for (const [chain, o] of p.offers) offers.push({ barcode, chain, chain_name: o.chain_name, price: Math.round(o.price * 100) / 100, seen_at: at });
+  }
+  return { products, offers };
+}
+
+// What to ask the service for: up to `max` typed items, cleaned, each asked
+// at most once a week (asked before: answered from our catalog).
+function fetchInput(queries, { max = 15 } = {}) {
+  const seen = new Set();
+  const list = [];
+  for (const q of queries || []) {
+    const t = String(q || '').replace(/[<>{}]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (t.length < 2 || seen.has(t)) continue;
+    seen.add(t);
+    list.push(t);
+    if (list.length >= max) break;
+  }
+  if (!list.length) return null;
+  return { mode: 'compareProducts', productQueries: list, oneStorePerChain: true, includeImages: false, maxRowsPerChain: 8, maxItems: Math.min(2000, list.length * 120) };
+}
+
+// A first catalog for the owner to load once: what most families buy.
+const SEED = ['חלב 3%', 'חלב 1%', 'ביצים', 'לחם אחיד', 'לחם פרוס', 'חלה', 'פיתות', 'קוטג', 'גבינה לבנה', 'גבינה צהובה', 'יוגורט', 'שמנת חמוצה', 'שמנת מתוקה', 'חמאה', 'לבן', 'מעדן', 'שוקו',
+  'אורז', 'פסטה', 'ספגטי', 'קמח', 'סוכר', 'מלח', 'שמן קנולה', 'שמן זית', 'טחינה', 'חומוס', 'עדשים', 'קוסקוס', 'פתיתים', 'קורנפלקס', 'שיבולת שועל', 'קפה', 'תה', 'דבש', 'ריבה', 'ממרח שוקולד',
+  'רסק עגבניות', 'טונה', 'תירס', 'זיתים', 'מלפפון חמוץ', 'קטשופ', 'מיונז', 'במבה', 'ביסלי', 'עוגיות', 'חטיף', 'אבקת מרק', 'פפריקה',
+  'חזה עוף', 'שניצל', 'כרעיים', 'בשר טחון', 'נקניקיות', 'סלמון', 'שניצל תירס',
+  'מים מינרליים', 'סודה', 'מיץ תפוזים', 'קולה', 'פטל',
+  'נוזל כלים', 'אבקת כביסה', 'מרכך כביסה', 'אקונומיקה', 'נייר טואלט', 'מגבות נייר', 'שקיות אשפה', 'נייר אלומיניום', 'ספוג',
+  'שמפו', 'סבון', 'משחת שיניים', 'דאודורנט', 'חיתולים', 'מגבונים', 'מטרנה', 'במבה נוגט', 'גלידה', 'ירקות קפואים', 'פיצה קפואה', 'בורקס'];
+
+// The owner's word on a product's kashrut is kept as one vote under this id.
+const OWNER_VOTE = '00000000-0000-0000-0000-000000000000';
+
+module.exports.catalogRows = catalogRows;
+module.exports.fetchInput = fetchInput;
+module.exports.SEED = SEED;
+module.exports.OWNER_VOTE = OWNER_VOTE;
+module.exports.apifyItems = apifyItems;
+
+// Every row of a finished run (not just a sample), for the catalog.
+async function apifyItems(fetchFn, token, runId, { limit = 5000 } = {}) {
+  if (!/^[A-Za-z0-9]{6,40}$/.test(String(runId || ''))) throw new Error('bad run');
+  const run = await apifyGet(fetchFn, token, '/actor-runs/' + runId);
+  const status = (run && run.status) || 'UNKNOWN';
+  const cost = run && run.usageTotalUsd != null ? Number(run.usageTotalUsd) : null;
+  if (!DONE.includes(status)) return { status, done: false, cost, items: [] };
+  let items = [];
+  if (status === 'SUCCEEDED' && run.defaultDatasetId) {
+    const r = await fetchFn(APIFY + '/datasets/' + run.defaultDatasetId + '/items?clean=true&limit=' + limit, { headers: { Authorization: 'Bearer ' + token } });
+    items = await r.json().catch(() => []);
+    if (!Array.isArray(items)) items = [];
+  }
+  return { status, done: true, cost, items };
+}

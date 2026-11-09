@@ -963,3 +963,52 @@ body.chat-open { overflow: hidden; }
   .splash .sp-win { fill: #F2B66D; fill-opacity: 1; }
 }
 .boot-word { font-size: 26px; color: var(--text); }
+
+/* ═══ shopping: what the list will cost ═══ */
+.price-panel { gap: 12px; border: 1px solid var(--accent-tint); animation: admin-rise .4s var(--out, ease) both; }
+.price-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.price-title { display: flex; align-items: center; gap: 8px; font-size: 17px; }
+.price-pref { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.price-pref .seg { background: var(--surface-2); flex: 1; max-width: 360px; }
+.price-pref .seg button { height: 32px; font-size: 13.5px; }
+.price-pref-pick { display: grid; gap: 8px; }
+.price-pref-btn { display: grid; gap: 2px; text-align: start; border: 1px solid var(--line); cursor: pointer; color: var(--text); font: inherit; padding: 12px 14px; }
+.price-pref-btn:hover { border-color: var(--accent); }
+.price-chains { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.price-chain { display: grid; gap: 1px; background: var(--surface-2); border-radius: var(--radius-m); padding: 10px 12px; font-size: 13px; animation: admin-pop .45s var(--spring, ease) both; }
+.price-chain b { font-size: 20px; }
+.price-chain.best { background: var(--income-tint); border: 1px solid var(--income); }
+.price-chain.best small:first-child { color: var(--income); font-weight: 800; }
+.price-count { font-size: 13.5px; }
+.price-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.price-item { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); }
+.price-item-head { display: flex; align-items: center; gap: 8px; }
+.price-state { margin-inline-start: auto; font-size: 12px; font-weight: 800; color: var(--muted); }
+.price-item.is-auto .price-state { color: var(--income); }
+.price-item.is-unsure .price-state { color: var(--warn); }
+.price-prod { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border-radius: var(--radius-m); padding: 8px 10px; }
+.price-prod-t { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.price-prod-t small { font-size: 12.5px; }
+.price-prod-p { display: grid; text-align: end; }
+.price-prod-p b { font-size: 16px; }
+.price-pick { width: auto; padding: 6px 12px; }
+.price-warn { font-size: 13.5px; line-height: 1.5; color: var(--warn); }
+.price-opts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.price-opts > li { display: grid; gap: 4px; }
+.price-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.price-vote { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.price-vote .chip { height: 28px; font-size: 12.5px; }
+.price-note { font-size: 12px; line-height: 1.55; margin: 0; }
+.kosher { font-size: 12px; font-weight: 700; width: fit-content; padding: 1px 8px; border-radius: 999px; }
+.kosher-mehadrin { background: var(--income-tint); color: var(--income); }
+.kosher-regular { background: var(--accent-tint); color: var(--accent); }
+.kosher-none { background: var(--danger-tint); color: var(--danger); }
+.kosher-unknown { background: var(--warn-tint); color: var(--warn); }
+.shop-prices-cta { border: 1px solid var(--accent-tint); background: linear-gradient(160deg, var(--accent-tint), var(--surface) 60%); }
+.kosher-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 420px; overflow: auto; }
+.kosher-list li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.kosher-list label { flex: 1; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.kosher-list label span { display: grid; }
+.kosher-list input { width: 18px; height: 18px; accent-color: var(--accent); }
+.kosher-bar { display: flex; gap: 8px; flex-wrap: wrap; position: sticky; bottom: 0; background: var(--surface); padding-top: 6px; }
+.price-vote-open { font-size: 13px; color: var(--muted); }
