@@ -8,7 +8,7 @@ const EVENTS = ['app_open', 'tx_add', 'import_done', 'advisor_ask', 'advisor_tal
   ...['ai_off', 'excel', 'password', 'xls', 'type', 'empty', 'pdf_scan', 'image_big', 'no_rows', 'junk', 'other'].map((c) => 'import_fail_' + c),
   ...['pick', 'work', 'review', 'error'].map((s) => 'import_abandon_' + s),
   // The first month built from their own data; the shopping list in use.
-  'first_value', 'shop_add', 'shop_done', 'shop_reuse', 'price_open', 'price_pick'];
+  'first_value', 'shop_add', 'shop_done', 'shop_reuse'];
 const text = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 // A failure report from the app -> a row, or null. Never more than 20 at once.

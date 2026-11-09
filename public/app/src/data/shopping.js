@@ -5,16 +5,12 @@ import { useEffect, useState } from 'preact/hooks';
 // other within a second. Finished shoppings stay (cleared_at) for 120 days,
 // for "the previous list" and "what you usually buy".
 const DAYS = 120;
-const COLS = 'id,name,qty,aisle,done,added_by,created_at,done_at,cleared_at,barcode';
+const COLS = 'id,name,qty,aisle,done,added_by,created_at,done_at,cleared_at';
 
 export async function loadShopping(hid) {
   const since = new Date(Date.now() - DAYS * 86400000).toISOString();
-  const get = (cols) => sb.from('shopping_items').select(cols).eq('household_id', hid)
+  const { data, error } = await sb.from('shopping_items').select(COLS).eq('household_id', hid)
     .or('cleared_at.is.null,cleared_at.gte.' + since).order('created_at', { ascending: true }).limit(2000);
-  let { data, error } = await get(COLS);
-  // Before the prices update reaches the database there is no barcode column:
-  // the list still loads, without the chosen products.
-  if (error && /barcode/.test(String(error.message || ''))) ({ data, error } = await get(COLS.replace(',barcode', '')));
   if (error) throw error;
   return data || [];
 }
@@ -22,8 +18,7 @@ export async function loadShopping(hid) {
 export async function addItems(hid, items) {
   if (!items.length) return [];
   const rows = items.map((i) => ({ household_id: hid, name: i.name, qty: i.qty || null, aisle: i.aisle || 'other' }));
-  let { data, error } = await sb.from('shopping_items').insert(rows).select(COLS);
-  if (error && /barcode/.test(String(error.message || ''))) ({ data, error } = await sb.from('shopping_items').insert(rows).select(COLS.replace(',barcode', '')));
+  const { data, error } = await sb.from('shopping_items').insert(rows).select(COLS);
   if (error) throw error;
   return data || [];
 }

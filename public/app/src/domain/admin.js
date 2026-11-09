@@ -23,7 +23,7 @@ export function ago(iso, now = new Date()) {
 const AREAS = [
   { key: 'money', label: 'כסף ותנועות', test: (n) => n === 'tx_add' || n.startsWith('import_') || n === 'export' || n === 'restore' },
   { key: 'advisor', label: 'יועץ', test: (n) => n.startsWith('advisor_') || n.startsWith('learn_') },
-  { key: 'shop', label: 'קניות', test: (n) => n.startsWith('shop_') || n.startsWith('price_') },
+  { key: 'shop', label: 'קניות', test: (n) => n.startsWith('shop_') },
   { key: 'goals', label: 'יעדים וביחד', test: (n) => n.startsWith('decision_') || n === 'trip_plan' },
   { key: 'learn', label: 'למידה וחדשות', test: (n) => n === 'lesson_done' || n === 'news_open' },
   { key: 'start', label: 'הרשמה והתחלה', test: (n) => n.startsWith('onboard_') || n.startsWith('guide_') || n === 'first_value' }

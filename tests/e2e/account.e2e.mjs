@@ -618,39 +618,3 @@ test('owner on a phone: what is happening now on the main screen, and the questi
   assert.deepEqual(errors.filter((e) => !/502/.test(e)), []);
   await page.close();
 });
-
-test('owner: confirming kashrut, one by one or every product that says "מהדרין" at once', async () => {
-  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
-  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
-  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
-  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
-  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
-  await page.route('**/api/admin/prices/**', (r) => r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"no key"}' }));
-  let waiting = [{ barcode: '1001', name: 'חלב 3% מהדרין', maker: 'מחלבה א', qty: 1, unit: 'ליטר' }, { barcode: '1002', name: 'גבינה לבנה 5%', maker: null, qty: 250, unit: 'גרם' }];
-  const confirmed = [];
-  await page.route('**/api/admin/kosher**', (r) => {
-    if (r.request().method() === 'POST') {
-      const b = JSON.parse(r.request().postData());
-      confirmed.push(b);
-      waiting = waiting.filter((p) => !b.barcodes.includes(p.barcode));
-      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, count: b.barcodes.length }) });
-    }
-    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ products: 2, confirmed: confirmed.length, waiting }) });
-  });
-  await page.click('button[aria-label="פרופיל והגדרות"]');
-  await page.click('text=לוח בעלים');
-  await page.locator('.admin-hub-btn:has-text("מחירי סופר")').click();
-  const k = page.locator('.kosher-admin');
-  await k.locator('button:has-text("להציג מוצרים")').click();
-  await k.locator('.kosher-list li').first().waitFor();
-  assert.match(await k.textContent(), /250 גרם/);
-  await k.locator('button:has-text("שכתוב בשמם")').click();
-  await page.waitForFunction(() => document.querySelectorAll('.kosher-admin .kosher-list li').length === 1);
-  assert.deepEqual(confirmed[0], { barcodes: ['1001'], level: 'mehadrin' });
-  await k.locator('.kosher-list input[type=checkbox]').check();
-  await k.locator('.kosher-bar button:has-text("כשר")').first().click();
-  await page.waitForFunction(() => /אין מוצרים שמחכים/.test(document.querySelector('.kosher-admin')?.textContent || ''));
-  assert.equal(confirmed[1].barcodes[0], '1002');
-  assert.deepEqual(errors.filter((e) => !/503/.test(e)), []);
-  await page.close();
-});
