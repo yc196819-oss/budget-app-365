@@ -1044,11 +1044,6 @@ body.chat-open { overflow: hidden; }
 .pic-chip { font-size: 12.5px; font-weight: 700; color: var(--muted); padding: 6px 10px; border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
 .pic-chip.ok { color: var(--income); background: var(--income-tint); }
 .pic-now { display: grid; gap: 10px; align-content: start; }
-.pic-now .pic-tasks { gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
-.pic-now .pic-task { flex-wrap: nowrap; align-items: center; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 14px; margin: 0; background: transparent; box-shadow: none; }
-.pic-now .pic-task:first-child { border-top: 0; }
-.pic-now .pic-task-a { width: auto; flex: none; }
-.pic-now .pic-task-a .btn { width: auto; padding: 9px 14px; }
 .pic-site { width: auto !important; justify-self: start; padding: 0 !important; min-height: 0; background: transparent !important; color: var(--accent) !important; border: 0 !important; font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; box-shadow: none !important; }
 .pic-step, .pic-n { direction: ltr; }
 @media (max-width: 560px) { .pic-now .pic-task-t .faint { display: none; } .pic-now .pic-task { padding: 12px; gap: 10px; } .pic-now .pic-task-a .btn { padding: 8px 12px; } }
@@ -1057,6 +1052,58 @@ body.chat-open { overflow: hidden; }
   .pic-chosen-h, .pic-chosen ul, .pic-chosen > .muted { display: none; }
 }
 .pic-edit { justify-self: center; margin-top: 4px; }
+/* the month at a glance: a tile for each account and card company */
+.pic .pic-hero { padding: 4px 2px 6px; background: none; border: 0; box-shadow: none; }
+.pic .pic-hero .pic-ring b { font-size: 18px; }
+.pic .pic-hero-t { font-size: 19px; }
+.pic-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pic-tile { position: relative; display: grid; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; animation: admin-rise .4s var(--out, ease) both; }
+.pic-tile:nth-child(2) { animation-delay: .05s; } .pic-tile:nth-child(3) { animation-delay: .1s; } .pic-tile:nth-child(4) { animation-delay: .15s; } .pic-tile:nth-child(n+5) { animation-delay: .2s; }
+.pic-tile.is-ok { border-color: var(--income); }
+.pic-tile-main { display: grid; justify-items: start; gap: 2px; padding: 12px 12px 10px; background: transparent; border: 0; color: var(--text); text-align: start; cursor: pointer; font: inherit; min-width: 0; }
+.pic-tile-main b { font-size: 14.5px; margin-top: 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pic-tile-main small { font-size: 12.5px; }
+.logo-t { width: 100%; height: 44px; border-radius: 12px; }
+.pic-tile-up { display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid var(--line); background: var(--accent-tint); color: var(--accent); font: inherit; font-weight: 800; font-size: 14px; padding: 9px; cursor: pointer; }
+.pic-tile-up:hover { background: var(--accent); color: var(--accent-ink); }
+.pic-tile-ok { position: absolute; top: 8px; inset-inline-end: 8px; width: 24px; height: 24px; border-radius: 50%; background: var(--income); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 900; box-shadow: 0 0 0 3px var(--surface); }
+.pic-tile-wait { font-size: 12.5px; color: var(--faint); text-align: center; padding: 8px; border-top: 1px solid var(--line); }
+.pic-links { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pic-links .btn-text { font-size: 13.5px; }
+.pic-focus { position: sticky; bottom: 0; z-index: 2; display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 14px; box-shadow: 0 -10px 30px rgba(0, 0, 0, .25); animation: scan-in .3s cubic-bezier(.22, .8, .24, 1) both; }
+.pic-focus-head { display: flex; align-items: center; gap: 10px; }
+.pic-focus-head > span { flex: 1; display: grid; }
+.pic-focus-how { margin: 0; font-size: 14px; line-height: 1.6; }
+.pic-focus-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pic-focus-acts .btn { width: 100%; }
+.pic-unknown { display: grid; gap: 8px; border: 1px solid var(--accent-tint); border-radius: 16px; padding: 12px; }
+@media (max-width: 600px) {
+  .pic-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .pic-tile { border-radius: 14px; }
+  .pic-tile-main { padding: 8px 8px 6px; }
+  .pic-tile-main b { font-size: 13px; margin-top: 6px; }
+  .pic-tile-main small { font-size: 11.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .logo-t { height: 34px; border-radius: 9px; padding: 3px 5px; }
+  .pic-tile-up { font-size: 12.5px; padding: 7px 4px; }
+  .pic-tile-up svg { display: none; }
+  .pic-tile-ok { width: 20px; height: 20px; font-size: 11px; top: 5px; inset-inline-end: 5px; }
+  .pic .pic-hero { gap: 12px; }
+}
+@media (max-width: 1023px) {
+  .pic > .pic-history, .pic-why { display: none; }
+  .pic.pic-only-history > .pic-now { display: none; }
+  .pic.pic-only-history > .pic-history { display: grid; }
+}
+@media (min-width: 1024px) {
+  .pic-hist-btn { display: none; }
+  .pic-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.pic-unknown { display: grid; gap: 8px; border: 1px solid var(--accent-tint); }
+.pic-unknown > .muted { font-size: 13.5px; line-height: 1.5; }
+.pic-unknown ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pic-unknown li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pic-u-name { flex: 1; min-width: 120px; display: grid; }
+.pic-unknown select { width: auto; min-width: 150px; height: 40px; }
 .pic-pick { position: relative; background: #fff; border: 1.5px solid var(--line); border-radius: 16px; padding: 8px; cursor: pointer; transition: border-color .15s ease, box-shadow .2s ease, transform .15s ease; }
 .pic-pick:hover { transform: translateY(-1px); }
 .pic-pick.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
@@ -1191,3 +1238,4 @@ body.chat-open { overflow: hidden; }
 .price-demo-total b { font-size: 18px; }
 .price-teaser-ok { font-size: 14px; font-weight: 800; color: var(--income); }
 .price-teaser-head .nav-tag { position: static; font-size: 12px; padding: 3px 10px; animation: admin-pop .5s var(--spring, ease) both .3s; }
+.admin-ver { font-size: 12px; text-align: center; }

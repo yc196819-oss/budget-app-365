@@ -10,7 +10,7 @@ import { showToast } from '../../lib/toast.js';
 import { PickFile } from './PickFile.js';
 import { Steps, Checked } from './Steps.js';
 import { Review } from './Review.js';
-import { sourcesOf, checkFile, otherSource, missingCards, providerOf, nameOf } from '../../domain/sources.js';
+import { sourcesOf, checkFile, otherSource, missingCards, learnProvider, providerOf, nameOf } from '../../domain/sources.js';
 import { Logo } from '../picture/Picture.js';
 
 // Upload a card statement: pick a file, watch it being read, review what
@@ -147,6 +147,10 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
       for (const d of deals.create) await saveRow('installments', d).catch(() => {});
       for (const u of deals.update) await saveRow('installments', u).catch(() => {});
       saved.current = true;
+      // An account or card saved before its company was chosen learns it
+      // from the file it was just confirmed with.
+      const learned = learnProvider({ source, issuer });
+      if (learned && source) await saveRow(source.kind === 'card' ? 'credit_cards' : 'bank_accounts', { id: source.id, provider: learned }).catch(() => {});
       if (covered.length) await removeMany(covered);
       onClose();
       const ids = added.map((r) => r.id);

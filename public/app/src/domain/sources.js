@@ -17,9 +17,9 @@ export const PROVIDERS = [
   { key: 'massad', kind: 'bank', name: 'מסד', logo: 'massad.png', url: 'https://www.bankmassad.co.il/', re: /מסד|massad/i },
   { key: 'mercantile', kind: 'bank', name: 'מרכנתיל', logo: 'mercantile.png', url: 'https://www.mercantile.co.il/', re: /מרכנתיל|mercantile/i },
   { key: 'onezero', kind: 'bank', name: 'וואן זירו', logo: 'onezero.svg', url: 'https://www.onezerobank.com/', re: /וואן זירו|one ?zero/i },
-  { key: 'max', kind: 'card', name: 'מקס', logo: 'max.svg', url: 'https://www.max.co.il/', re: /מקס|max|לאומי ?קארד/i },
+  { key: 'max', kind: 'card', name: 'מקס', logo: 'max.svg', url: 'https://www.max.co.il/', re: /מקס|max|לאומי ?קארד|dream ?card|דרים ?קארד/i },
   { key: 'cal', kind: 'card', name: 'כאל', logo: 'cal.svg', url: 'https://www.cal-online.co.il/', re: /כאל|cal\b|visa ?cal/i },
-  { key: 'isracard', kind: 'card', name: 'ישראכרט', logo: 'isracard.svg', url: 'https://www.isracard.co.il/', re: /ישראכרט|isracard/i },
+  { key: 'isracard', kind: 'card', name: 'ישראכרט', logo: 'isracard.svg', url: 'https://www.isracard.co.il/', re: /ישראכרט|isracard|רמי ?לוי/i },
   { key: 'amex', kind: 'card', name: 'אמריקן אקספרס', logo: 'amex.png', url: 'https://www.americanexpress.co.il/', re: /אמריקן|אמקס|amex|american/i },
   { key: 'diners', kind: 'card', name: 'דיינרס', logo: 'diners.png', url: 'https://www.diners.co.il/', re: /דיינרס|diners/i, dark: true }
 ];
@@ -100,6 +100,16 @@ export function missingCards({ source, items = [], sources = [] }) {
   return total > 1 && found > 0 && found < total ? { found, total } : null;
 }
 
+// A source saved before the companies were chosen (no company yet): the
+// company its file names, when it fits (a bank account: a bank; a card: a
+// card company, or a bank for a card the bank issued). Null otherwise.
+export function learnProvider({ source, issuer }) {
+  const p = providerOf(issuer);
+  if (!source || !p || source.saved) return null;
+  if (source.kind === 'bank' && p.kind !== 'bank') return null;
+  return p.key;
+}
+
 // The name people know a source by: the company, or "אשראי לאומי" for a
 // card the bank issued.
 export function nameOf(s) {
@@ -121,8 +131,8 @@ export const monthShort = (key) => SHORT[Number(key.slice(5)) - 1];
 // The household's sources: every bank account and every active card.
 export function sourcesOf({ accounts = [], cards = [] }) {
   return [
-    ...accounts.map((a) => ({ kind: 'bank', id: a.id, name: a.name || a.bank_name || 'חשבון בנק', provider: a.provider || guessProvider(a.bank_name || a.name, 'bank'), salaryDay: Number(a.salary_day) || null })),
-    ...cards.filter((c) => c.is_active !== false).map((c) => ({ kind: 'card', id: c.id, name: c.name || 'כרטיס', provider: c.provider || guessProvider(c.name, 'card'), billingDay: Number(c.billing_day) || null, last4: c.last4 || null }))
+    ...accounts.map((a) => ({ kind: 'bank', id: a.id, name: a.name || a.bank_name || 'חשבון בנק', provider: a.provider || guessProvider(a.bank_name || a.name, 'bank'), saved: !!a.provider, salaryDay: Number(a.salary_day) || null })),
+    ...cards.filter((c) => c.is_active !== false).map((c) => ({ kind: 'card', id: c.id, name: c.name || 'כרטיס', provider: c.provider || guessProvider(c.name, 'card'), saved: !!c.provider, billingDay: Number(c.billing_day) || null, last4: c.last4 || null }))
   ];
 }
 
