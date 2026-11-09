@@ -27,6 +27,7 @@ import { hrefFor } from '../domain/routes.js';
 import { ProfileSheet } from '../screens/profile/ProfileSheet.js';
 import { AddSheet } from '../screens/add/AddSheet.js';
 import { ImportSheet } from '../screens/import/ImportSheet.js';
+import { PictureSheet } from '../screens/picture/Picture.js';
 import { LearnSheet } from '../screens/learn/LearnSheet.js';
 import { ToastHost } from '../components/ToastHost.js';
 import { useHousehold } from '../data/useHousehold.js';
@@ -48,6 +49,9 @@ export function Shell({ tab, session }) {
   setScreen(tab);
   // One overlay at a time: 'profile' | 'add' | 'voice' | 'import' | 'learn' | 'advisor' | 'talk' | null.
   const [overlay, setOverlay] = useState(null);
+  // The account or card an upload is for, when it was started from one.
+  const [importFor, setImportFor] = useState(null);
+  const openImport = (src) => { setImportFor(src && src.id ? src : null); setOverlay('import'); };
   // Opened as the advisor's own window (desktop): only the conversation.
   const [solo, setSolo] = useState(() => /^#\/advisor/.test(location.hash));
   useEffect(() => {
@@ -180,7 +184,7 @@ export function Shell({ tab, session }) {
 
   return html`
     <div class=${'shell' + (desktop && navMini ? ' nav-mini' : '') + (desktop && !railOn ? ' no-rail' : '') + (floating && floatOpen ? ' float-open' : '')}>
-      <${Sidebar} mini=${navMini} onMini=${() => setMini(!navMini)} tab=${tab} badges=${{ ...badges, profile: answers }} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => setOverlay('import') : null} onLearn=${() => setOverlay('learn')} onProfile=${() => { setProfileView('main'); setOverlay('profile'); }} />
+      <${Sidebar} mini=${navMini} onMini=${() => setMini(!navMini)} tab=${tab} badges=${{ ...badges, profile: answers }} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => openImport(null) : null} onLearn=${() => setOverlay('learn')} onProfile=${() => { setProfileView('main'); setOverlay('profile'); }} />
       <main class="shell-main">
         <header class="topbar">
           <div class="topbar-title"><small>${dateLabel(new Date())}${data.refreshing && data.status === 'ready' ? html` <span class="refreshing" role="status"><span class="spinner" aria-hidden="true"></span> מתעדכן…</span>` : ''}</small><h1>${title}</h1></div>
@@ -188,7 +192,7 @@ export function Shell({ tab, session }) {
             <button type="button" class="icon-btn only-mobile" aria-label=${answers > 0 ? 'פרופיל והגדרות, יש תשובה לפנייה שלך' : 'פרופיל והגדרות'} style="position:relative" onClick=${() => { setProfileView('main'); setOverlay('profile'); }}>${profile.initials}${answers > 0 && html`<span class="fb-dot" aria-hidden="true">${answers}</span>`}</button>
           </div>
         </header>
-        ${session.household ? html`<${Screen} key=${tab + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onImport=${() => setOverlay('import')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
+        ${session.household ? html`<${Screen} key=${tab + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onImport=${openImport} onPicture=${() => setOverlay('picture')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
       ${railOn && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} onFloat=${() => setMode('float')} onHide=${() => setMode('button')} />`}
@@ -197,12 +201,13 @@ export function Shell({ tab, session }) {
       <${BottomNav} tab=${tab} badges=${badges} onAdd=${() => setOverlay('add')} />
 
       ${overlay === 'profile' && html`<${ProfileSheet} answers=${answers} start=${profileView} profile=${profile} hid=${session.household ? session.household.household_id : null} userId=${session.user.id} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
-      ${(overlay === 'add' || overlay === 'voice') && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => setOverlay('import')} startVoice=${overlay === 'voice'} />`}
+      ${(overlay === 'add' || overlay === 'voice') && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => openImport(null)} startVoice=${overlay === 'voice'} />`}
       ${overlay === 'talk' && html`<${Sheet} title="שיחה קולית עם היועץ" onClose=${close}>
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} startTalk=${true} />` : html`<${Loading} />`}
       <//>`}
       ${overlay === 'learn' && html`<${LearnSheet} userId=${session.user.id} householdId=${session.household ? session.household.household_id : null} data=${session.household && data.status === 'ready' ? data : null} onClose=${close} />`}
-      ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} data=${data} onClose=${close} />`}
+      ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} key=${importFor ? importFor.id : 'any'} data=${data} source=${importFor} onClose=${close} />`}
+      ${overlay === 'picture' && session.household && data.status === 'ready' && html`<${PictureSheet} data=${data} onClose=${close} onUpload=${openImport} />`}
       ${overlay === 'advisor' && !railOn && html`<${Sheet} title="היועץ" onClose=${close}>
         ${desktop && html`<span class="adv-modes"><button type="button" class="btn-text rail-pin" onClick=${() => setMode('side')}>להציג קבוע בצד המסך</button> · <button type="button" class="btn-text float-pin" onClick=${() => setMode('float')}>כחלון צף</button></span>`}
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} />` : html`<${Loading} />`}

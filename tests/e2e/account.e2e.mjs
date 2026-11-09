@@ -131,11 +131,20 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   await page.click('.side-profile');
   await page.click('text=לוח בעלים');
   const s = page.locator('.admin-stats');
+  // A main screen with a button for each part, on a computer too; never sideways scrolling.
+  await s.locator('.admin-tool').first().waitFor();
+  assert.deepEqual(await s.locator('.admin-tool b').allTextContents(), ['פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
+  assert.equal(await s.locator('.per-user').count(), 0);
+  await s.locator('.admin-tool:has-text("מצב המערכת")').click();
+  assert.match(await s.textContent(), /boom/);
+  await s.locator('button:has-text("לוח הבעלים")').click();
+  await s.locator('.admin-tool:has-text("פעילות ומשתמשים")').click();
   await s.locator('.per-user').waitFor();
+  const noSideways = await page.evaluate(() => [...document.querySelectorAll('.sheet, .sheet *')].every((el) => el.scrollWidth <= el.clientWidth + 2 || getComputedStyle(el).overflowX === 'hidden' || el.tagName === 'TABLE'));
+  assert.ok(noSideways, 'nothing scrolls sideways');
   const t = await s.textContent();
   assert.match(t, /60%/);
   assert.match(t, /הוספת תנועה/);
-  assert.match(t, /boom/);
   // Per person: the name they gave, what they did and how they are doing; no email until asked.
   const row = await s.locator('.per-user .people-row').first().textContent();
   assert.match(row, /רון/);
@@ -178,6 +187,8 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   await page.route('**/api/admin/today', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ day: '2026-11-04', items: [
     { who: '#a1b2c3', name: 'רון', first: '13:34', last: '17:27', newToday: false, opens: 4, added: 0, imports: 3, importFails: 0, asked: 12, aiCalls: 23, cost: 0.41, errors: 0, health: { level: 'good', label: 'משתמש פעיל, נעזר ביועץ', reasons: [] } },
     { who: '#dd33ee', name: 'נועה', first: '18:02', last: '18:02', newToday: true, opens: 1, added: 0, imports: 0, importFails: 0, asked: 0, aiCalls: 0, cost: 0, errors: 0, health: { level: 'stuck', label: 'לא העלה אף פירוט', reasons: [] } }] }) }));
+  await s.locator('button:has-text("לוח הבעלים")').click();
+  await s.locator('.admin-tool:has-text("פניות")').click();
   await s.locator('.admin-today button:has-text("מי נכנס היום?")').click();
   const today = s.locator('.admin-today');
   await today.locator('.today-summary').waitFor();
@@ -186,6 +197,8 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   assert.match(sum, /אחד העלה פירוט/);
   assert.match(sum, /כדאי לעזור ל: נועה \(לא העלה אף פירוט\)/);
   assert.match(await today.locator('.people-row').first().textContent(), /13:34–17:27.*3 פירוטים.*12 שאלות ליועץ/s);
+  await s.locator('button:has-text("לוח הבעלים")').click();
+  await s.locator('.admin-tool:has-text("פעילות ומשתמשים")').click();
   await page.clock.runFor(16000);
   await page.waitForSelector('text=מחוברים עכשיו: 5');
   assert.deepEqual(errors, []);
@@ -581,19 +594,21 @@ test('owner dashboard, part two: a greeting, what is happening now, a month char
   assert.match(feed[0], /דנה העלה\/תה פירוט.*לפני 4 דק׳/);
   // A record of the month: today is the busiest of 30 days.
   assert.match(await s.locator('.admin-record').textContent(), /שיא חודשי: 9 פעילים היום/);
+  // Tools are tiles; each part opens on its own page.
+  assert.deepEqual(await s.locator('.admin-tool b').allTextContents(), ['פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
+  // A question: the answer shows, and the stats sent along are whitelisted on the server.
+  await s.locator('.admin-ask-chips .chip').first().click();
+  await s.locator('.admin-ask-answer:has-text("השבוע נרשמו 5.")').waitFor();
+  assert.equal(asked.q, 'כמה נרשמו השבוע לעומת שבוע שעבר?');
+  await s.locator('.admin-tool:has-text("פעילות ומשתמשים")').click();
   // Two weeks first, a month on request.
+  await s.locator('.admin-daily').waitFor();
   assert.equal(await s.locator('.admin-daily .admin-bar').count(), 14);
   await s.locator('.admin-daily button:has-text("חודש")').click();
   assert.equal(await s.locator('.admin-daily .admin-bar').count(), 30);
   // Where people spend their actions, without app openings.
   const legend = await s.locator('.admin-donut-legend li').allTextContents();
   assert.deepEqual(legend, ['יועץ50%', 'כסף ותנועות30%', 'קניות20%']);
-  // Tools are tiles that jump to their part.
-  assert.deepEqual(await s.locator('.admin-tool b').allTextContents(), ['פניות', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
-  // A question: the answer shows, and the stats sent along are whitelisted on the server.
-  await s.locator('.admin-ask-chips .chip').first().click();
-  await s.locator('.admin-ask-answer:has-text("השבוע נרשמו 5.")').waitFor();
-  assert.equal(asked.q, 'כמה נרשמו השבוע לעומת שבוע שעבר?');
   assert.deepEqual(errors, []);
   await page.close();
 });

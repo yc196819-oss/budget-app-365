@@ -1,5 +1,6 @@
 import { html } from '../../lib/html.js';
 import { Splash } from '../../components/Splash.js';
+import { PictureCard } from '../picture/Picture.js';
 import { useEffect, useState } from 'preact/hooks';
 import { track } from '../../lib/telemetry.js';
 import { monthPlan, cashNow, upcoming, attention, topCategories } from '../../domain/home.js';
@@ -29,7 +30,7 @@ import { SortSheet } from '../money/SortSheet.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
 // what needs attention (one action each) and what is coming up.
-export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
+export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, userId }) {
   // One sheet at a time: { kind: 'hero' } | { kind: 'tx', id } | null
   const [sheet, setSheet] = useState(null);
   // Pairs the household said are two real purchases (not a double charge).
@@ -103,6 +104,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
       <${ImportNotice} data=${data} onImport=${onImport} />
       <${MonthlyAsk} userId=${userId} data=${data} />
       ${guide}
+      ${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}
       <${Hero} plan=${plan} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
       <${InstallCard} />
       <${TripFound} data=${data} trips=${trips} />

@@ -94,8 +94,8 @@ export async function load(hid, userId, { force = false } = {}) {
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
       sb.from('memberships').select('user_id,display_name,gender').eq('household_id', hid),
-      sb.from('bank_accounts').select('id,name,balance,balance_updated_at').eq('household_id', hid),
-      sb.from('credit_cards').select('id,name,bank_account_id,billing_day,last4,owner_user_id,credit_limit,is_active').eq('household_id', hid),
+      sb.from('bank_accounts').select('id,name,bank_name,provider,salary_day,balance,balance_updated_at').eq('household_id', hid),
+      sb.from('credit_cards').select('id,name,provider,bank_account_id,billing_day,last4,owner_user_id,credit_limit,is_active').eq('household_id', hid),
       sb.from('goals').select('*').eq('household_id', hid),
       sb.from('installments').select('*').eq('household_id', hid),
       sb.from('loans').select('*').eq('household_id', hid),
@@ -374,9 +374,11 @@ export async function archiveCard(id) {
 
 // Saves the lines of an imported statement, under one "import" (the file),
 // so a wrong file can be removed whole later. Returns the new rows.
-export async function addImported(rows, { fileName = null, kind = null } = {}) {
+export async function addImported(rows, { fileName = null, kind = null, source = null } = {}) {
   const added = [];
-  const importId = await startImport(rows, { fileName, kind });
+  // A bank file's lines belong to its account.
+  if (source && source.kind === 'bank') rows = rows.map((r) => (r.account_id ? r : { ...r, account_id: source.id }));
+  const importId = await startImport(rows, { fileName, kind, source });
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500).map((r) => ({ ...r, household_id: state.hid, created_by: state.userId, ...(importId ? { import_id: importId } : {}) }));
     const { data, error } = await sb.from('transactions').insert(chunk).select();
@@ -394,14 +396,24 @@ export async function addImported(rows, { fileName = null, kind = null } = {}) {
   return added;
 }
 
-async function startImport(rows, { fileName, kind }) {
+async function startImport(rows, { fileName, kind, source }) {
   const dates = rows.map((r) => r.tx_date).filter(Boolean).sort();
   const { data, error } = await sb.from('imports').insert({
     household_id: state.hid, created_by: state.userId, file_name: fileName ? String(fileName).slice(0, 120) : null,
-    kind: kind ? String(kind).slice(0, 10) : null, rows: rows.length, date_from: dates[0] || null, date_to: dates[dates.length - 1] || null
+    kind: kind ? String(kind).slice(0, 10) : null, rows: rows.length, date_from: dates[0] || null, date_to: dates[dates.length - 1] || null,
+    ...(source ? { source_kind: source.kind, source_id: source.id } : {})
   }).select('id').single();
   // Without the table (an older database) the lines are saved as before.
   return error || !data ? null : data.id;
+}
+
+// Which account or card each uploaded file belongs to, and the dates it
+// covers: for "complete the picture" (not the removed files).
+export async function listSourceFiles() {
+  const { data, error } = await sb.from('imports').select('id,source_kind,source_id,date_from,date_to,created_at')
+    .eq('household_id', state.hid).is('removed_at', null).order('created_at', { ascending: false }).limit(500);
+  if (error) throw error;
+  return data || [];
 }
 
 // The files uploaded to this household, newest first (not the removed ones).

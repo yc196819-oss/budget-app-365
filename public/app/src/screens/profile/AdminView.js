@@ -419,34 +419,32 @@ export function AdminView({ onBack }) {
   ];
   const open = sections.find((x) => x.key === section);
   const hi = greeting();
-  // On a computer the tools are small tiles that jump to their part below.
-  const tools = sections.filter((x) => !['ask', 'activity'].includes(x.key));
-  const go = (key) => { const el = document.getElementById('adm-' + key); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  // On a computer and on a phone alike: a main screen (the numbers, what is
+  // happening now) with a button for each part, and each part on its own
+  // page with a way back. Only up-and-down scrolling, never sideways.
+  const hub = wide ? sections.filter((x) => x.key !== 'ask') : sections;
+  const openPart = (key) => { setSection(key); const el = document.querySelector('.sheet-body, .sheet'); if (el) el.scrollTop = 0; };
   return html`<div class=${'stack admin-stats' + (wide ? ' admin-wide' : '')}>
     <div class="admin-top">
-      ${open && !wide ? html`<button type="button" class="btn-text" onClick=${() => setSection(null)}>→ לוח הבעלים</button>`
+      ${open ? html`<button type="button" class="btn-text" onClick=${() => setSection(null)}>→ לוח הבעלים</button>`
         : html`<button type="button" class="btn-text" onClick=${onBack}>→ חזרה</button>`}
-      ${(!open || wide) && html`<span class="admin-hello"><b>${hi.hello}</b><small class="muted">${hi.date}</small></span>`}
+      ${!open && html`<span class="admin-hello"><b>${hi.hello}</b><small class="muted">${hi.date}</small></span>`}
       ${live && html`<span class="admin-pill" role="status"><span class="admin-dot" aria-hidden="true"></span><b class="num">${live.users}</b> עכשיו</span>`}
     </div>
     ${s === undefined && html`<span class="muted">טוען…</span>`}
     ${s === null && html`<span class="muted">הנתונים לא זמינים כרגע.</span>`}
-    ${(!open || wide) && k && html`
+    ${!open && k && html`
       <${Record} daily=${s.daily} />
       <div class="card admin-summary"><span class="admin-spark" aria-hidden="true"><${Icon} name="spark" size=${16} /></span><span>${k.summary}</span></div>
       <div class="admin-kpis">
         ${k.tiles.map((t) => html`<div class="card admin-kpi" key=${t.label}><span class="muted">${t.label}</span><${CountUp} value=${t.value} />${t.note && html`<span class=${'admin-chg ' + (t.tone || '')}>${t.note}</span>`}<${Spark} values=${t.series} /></div>`)}
       </div>`}
-    ${wide && s && html`<div class="admin-row"><${AskCard} s=${s} /><${FeedCard} items=${s.feed} limit=${9} /></div>
-      <nav class="admin-tools" aria-label="כלים">${tools.map((x) => html`<button type="button" class="card admin-tool" key=${x.key} onClick=${() => go(x.key)}>
-        <span class="admin-hub-ic"><${Icon} name=${x.icon} size=${18} /></span><span class="admin-hub-t"><b>${x.title}</b><small>${x.sub}</small></span></button>`)}</nav>`}
-    ${!wide && !open && s && html`<${FeedCard} items=${s.feed} limit=${4} />`}
-    ${!wide && !open && html`<nav class="admin-hub" aria-label="חלקי לוח הבעלים">
-      ${sections.map((x) => html`<button type="button" class="card admin-hub-btn" key=${x.key} onClick=${() => setSection(x.key)}>
+    ${!open && wide && s && html`<div class="admin-row"><${AskCard} s=${s} /><${FeedCard} items=${s.feed} limit=${6} /></div>`}
+    ${!open && !wide && s && html`<${FeedCard} items=${s.feed} limit=${4} />`}
+    ${!open && html`<nav class=${wide ? 'admin-tools' : 'admin-hub'} aria-label="חלקי לוח הבעלים">
+      ${hub.map((x) => html`<button type="button" class=${'card ' + (wide ? 'admin-tool' : 'admin-hub-btn')} key=${x.key} onClick=${() => openPart(x.key)}>
         <span class="admin-hub-ic"><${Icon} name=${x.icon} size=${18} /></span><span class="admin-hub-t"><b>${x.title}</b><small>${x.sub}</small></span><span aria-hidden="true">‹</span></button>`)}
     </nav>`}
-    ${!wide && open && html`<h3 class="admin-sec-title">${open.title}</h3><div class="stack">${open.body()}</div>`}
-    ${wide && html`<div class="admin-grid">${sections.filter((x) => x.key !== 'ask').map((x) => html`<section class=${'admin-sec admin-sec-' + x.key} key=${x.key} aria-labelledby=${'adm-' + x.key}>
-      <h3 class="admin-sec-title" id=${'adm-' + x.key}>${x.title}</h3><div class="stack">${x.body()}</div></section>`)}</div>`}
+    ${open && html`<section class=${'admin-sec admin-sec-' + open.key} aria-labelledby="adm-open"><h3 class="admin-sec-title" id="adm-open">${open.title}</h3><div class="stack">${open.body()}</div></section>`}
   </div>`;
 }
