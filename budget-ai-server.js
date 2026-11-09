@@ -20,6 +20,7 @@ const legal = require('./server/legal');
 const news = require('./server/news');
 const limits = require('./server/limits');
 const ops = require('./server/ops');
+const insights = require('./server/insights');
 const { AsyncLocalStorage } = require('node:async_hooks');
 
 const app = express();
@@ -1793,12 +1794,30 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
     const [{ count: memberCount }, { data: funnel }] = await Promise.all([members, funnelOf()]);
     return res.json({
       ...ops.stats({ events, errors: er.data || [] }), members: memberCount || 0, signedUp: signedUp.length, ...per,
-      live: presence.snapshot(Date.now(), owners), funnel: funnel || null, sharing: sh.totals, daily: ops.daily({ events, calls: calls.data || [] }),
-      cohorts: ops.cohorts({ users: signedUp, info, events }), upload: ops.uploadFunnel(events)
+      live: presence.snapshot(Date.now(), owners), funnel: funnel || null, sharing: sh.totals, daily: ops.daily({ events, calls: calls.data || [], days: 30 }),
+      cohorts: ops.cohorts({ users: signedUp, info, events }), upload: ops.uploadFunnel(events),
+      feed: insights.feed({ events, users: signedUp, nameOf: (id) => String((info.get(id) || {}).name || '').split(' ')[0] })
     });
   } catch (err) {
     console.error('admin stats failed:', err.message);
     return res.status(500).json({ error: 'failed' });
+  }
+});
+
+// A question about the numbers, answered by the AI. Only totals are sent
+// (insights.askFacts keeps counts and drops names, labels and emails).
+app.post('/api/admin/ask', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const prompt = insights.askPrompt(req.body && req.body.q, insights.askFacts(req.body && req.body.stats));
+    if (!prompt) return res.status(400).json({ error: 'כתבו שאלה.' });
+    const ai = await generateWithFallback({ prompt, text: '', maxTokens: 700, effort: 'low' });
+    const answer = String(ai.output || '').trim().slice(0, 2000);
+    if (!answer) return res.status(502).json({ error: 'לא התקבלה תשובה. נסו שוב.' });
+    return res.json({ answer });
+  } catch (err) {
+    console.error('admin ask failed:', err.message);
+    return res.status(502).json({ error: 'לא התקבלה תשובה. נסו שוב.' });
   }
 });
 

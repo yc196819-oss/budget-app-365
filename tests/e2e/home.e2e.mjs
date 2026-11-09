@@ -149,7 +149,7 @@ test('desktop: two columns, no errors, and missing accounts tables do not break 
   await page2.close();
 });
 
-test('while the data loads, a skeleton of the screen shows instead of a blank page', async () => {
+test('while the data loads, a picture is drawn instead of a blank page', async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
   const db = makeFakeDb();
   await mockSupabase(page, db);
@@ -158,8 +158,9 @@ test('while the data loads, a skeleton of the screen shows instead of a blank pa
   await page.route('**/rest/v1/transactions*', async (r) => { await gate; return r.fallback(); });
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/home');
-  await page.waitForSelector('.loading .skel');
+  await page.waitForSelector('.splash svg');
   assert.equal(await page.locator('.loading[role="status"]').count(), 1);
+  assert.equal(await page.locator('.splash-word').textContent(), 'התקציב שלנו');
   release();
   await page.waitForSelector('.hero');
   assert.equal(await page.locator('.loading').count(), 0);
@@ -187,3 +188,36 @@ test('the month number counts up and lands exactly on the amount; with reduced m
   await still.close();
 });
 
+
+test('the opening picture takes turns: house, plant, wallet, one per opening', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  await mockSupabase(page, makeFakeDb());
+  let release;
+  let gate = new Promise((r) => { release = r; });
+  await page.route('**/rest/v1/transactions*', async (r) => { await gate; return r.fallback(); });
+  await signIn(page, server.base);
+  const seen = [];
+  for (let i = 0; i < 3; i++) {
+    await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('cache:')).forEach((k) => localStorage.removeItem(k)));
+    await page.goto(server.base + '/app/?n=' + i + '#/home');
+    await page.waitForSelector('.splash svg');
+    seen.push(await page.locator('.splash').getAttribute('data-art'));
+  }
+  assert.deepEqual([...new Set(seen)].sort(), ['house', 'plant', 'wallet']);
+  release();
+  await page.close();
+});
+
+test('with reduced motion the finished picture shows at once', async () => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 900 }, reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  await mockSupabase(page, makeFakeDb());
+  await page.route('**/rest/v1/transactions*', () => new Promise(() => {}));
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/home');
+  await page.waitForSelector('.splash svg');
+  const off = await page.locator('.splash .sp-line').first().evaluate((el) => getComputedStyle(el).strokeDashoffset);
+  assert.ok(['0', '0px'].includes(off), 'line already drawn: ' + off);
+  assert.equal(await page.locator('.splash-word').evaluate((el) => getComputedStyle(el).opacity), '1');
+  await context.close();
+});
