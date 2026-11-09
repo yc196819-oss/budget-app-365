@@ -140,3 +140,38 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
     <p class="faint price-note">המחירים מהקבצים הרשמיים שהרשתות מפרסמות, מסניף אחד בכל רשת. בסניף שלכם המחיר יכול להיות מעט שונה. הכשרות לפי אישור של משפחות ושלנו, ולכן תמיד כדאי לבדוק את החותמת על המוצר.</p>
   </section>`;
 }
+
+// For everyone but the owner, while the catalog grows: a live preview of
+// what is coming, with sample products (not real prices), and a way to say
+// "tell me when it opens" (kept on this device, counted for the owner).
+const DEMO = [
+  { item: 'חלב 3%', pick: 'חלב 3% בשקית, 1 ליטר', kosher: 'כשר למהדרין', prices: [6.2, 6.9, 6.5] },
+  { item: 'ביצים L', pick: 'תבנית 12 ביצים', kosher: 'כשר למהדרין', prices: [13.9, 15.9, 14.5] },
+  { item: 'קפה טורקי', pick: 'קפה טורקי, 200 גרם', kosher: 'כשר', prices: [14.9, 16.9, 15.5] }
+];
+const DEMO_CHAINS = ['רשת א', 'רשת ב', 'רשת ג'];
+export function PriceTeaser() {
+  const [asked, setAsked] = useState(() => { try { return localStorage.getItem('price:notify') === '1'; } catch (_e) { return false; } });
+  const [at, setAt] = useState(0);
+  useEffect(() => {
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    const t = setInterval(() => setAt((x) => (x + 1) % DEMO.length), 2600);
+    return () => clearInterval(t);
+  }, []);
+  const totals = DEMO_CHAINS.map((_, c) => DEMO.reduce((s, d) => s + d.prices[c], 0));
+  const best = totals.indexOf(Math.min(...totals));
+  const d = DEMO[at];
+  const ask = () => { try { localStorage.setItem('price:notify', '1'); } catch (_e) { /* ignore */ } setAsked(true); track('price_notify'); };
+  return html`<section class="card stack price-teaser" aria-labelledby="price-teaser-h">
+    <div class="price-teaser-head"><b id="price-teaser-h">השוואת מחירים</b><span class="nav-tag">בקרוב</span></div>
+    <span class="muted" style="font-size:14px;line-height:1.55">כותבים את הרשימה, ולכל מוצר נבחר לבד הזול ביותר בכשרות שלכם. רואים כמה כל הרשימה עולה בכל רשת, ואיפה הכי משתלם לקנות.</span>
+    <div class="price-demo" aria-hidden="true">
+      <div class="price-demo-item" key=${at}><small class="muted">${d.item}</small><b>${d.pick}</b><span class="kosher kosher-mehadrin">${d.kosher}</span>
+        <span class="price-demo-row">${DEMO_CHAINS.map((c, i) => html`<span class=${'price-demo-p' + (d.prices[i] === Math.min(...d.prices) ? ' best' : '')} key=${c}><small>${c}</small>₪${d.prices[i].toFixed(2)}</span>`)}</span></div>
+      <div class="price-demo-total"><small>הרשימה כולה, הכי זול ב${DEMO_CHAINS[best]}</small><b>₪${totals[best].toFixed(2)}</b></div>
+    </div>
+    <small class="faint">דוגמה בלבד, לא מחירים אמיתיים.</small>
+    ${asked ? html`<span class="price-teaser-ok" role="status">נרשמתם. נודיע לכם כשזה נפתח.</span>`
+      : html`<button type="button" class="btn btn-ghost" onClick=${ask}>תודיעו לי כשזה נפתח</button>`}
+  </section>`;
+}

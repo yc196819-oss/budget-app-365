@@ -1911,7 +1911,9 @@ app.get('/api/admin/prices/sample/:runId', requireAuth, async (req, res) => {
 const priceRuns = new Map(); // runId -> { hid, at, queries }
 const priceAsked = new Map(); // query -> time asked
 const priceDay = { day: '', all: 0, byHid: new Map() };
-const PRICE_RUNS_PER_HOUSEHOLD = 6;
+// Limits, changeable in the server settings (Render) without a code change.
+const PRICE_RUNS_PER_HOUSEHOLD = Number(process.env.PRICE_RUNS_PER_HOUSEHOLD) || 6;
+const PRICES_OPEN = process.env.PRICES_OPEN === '1';
 const PRICE_RUNS_PER_DAY = Number(process.env.PRICE_RUNS_PER_DAY) || 40;
 function takePriceRun(hid) {
   const d = israelToday();
@@ -1940,6 +1942,8 @@ app.post('/api/prices/fetch', requireAuth, async (req, res) => {
     if (!APIFY_TOKEN) return res.status(503).json({ error: 'השוואת המחירים עוד לא פעילה.' });
     const hid = String((req.body && req.body.hid) || '');
     if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
+    // While the catalog grows ("בקרוב" for everyone else), only the owner searches.
+    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
     const week = Date.now() - 7 * 86400000;
     const fresh = (Array.isArray(req.body.queries) ? req.body.queries : []).filter((q) => !(priceAsked.get(String(q).trim()) > week));
     const input = prices.fetchInput(fresh);

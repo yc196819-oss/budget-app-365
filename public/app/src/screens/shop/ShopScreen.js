@@ -11,7 +11,7 @@ import { canListen, listen } from '../../lib/speech.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
 import { go } from '../../lib/go.js';
-import { PricePanel } from './PricePanel.js';
+import { PricePanel, PriceTeaser } from './PricePanel.js';
 
 // The food budget of this month, from the goals tab: the category named
 // food (אוכל / מזון) or the one holding the supermarket.
@@ -48,7 +48,7 @@ function Intro({ onClose }) {
 // "Shopping": one list for the whole household, live, sorted by department,
 // remembered from one shopping to the next. Built for a computer first (type
 // several items and press Enter; email, copy or print it; WhatsApp last), and works on a phone.
-export function ShopScreen({ data }) {
+export function ShopScreen({ data, owner = false }) {
   const shop = useShopping(data.hid);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -135,7 +135,7 @@ export function ShopScreen({ data }) {
         ${canListen() && html`<button type="button" class=${'icon-btn shop-mic' + (listening ? ' on' : '')} aria-label="להוסיף בקול" onClick=${voice}><${Icon} name="mic" size=${19} /></button>`}
         <button type="submit" class="btn" disabled=${busy || !text.trim()}>להוסיף</button>
       </form>
-      ${prices && html`<${PricePanel} hid=${data.hid} items=${items} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
+      ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}
       ${groups.map((g) => html`<div class="shop-group" key=${g.aisle}>
         <h2 class="shop-aisle">${g.label}</h2>
@@ -156,7 +156,8 @@ export function ShopScreen({ data }) {
       </div>
     </section>
     <aside class="shop-side stack">
-      ${!prices && open.some((i) => !i.done) && html`<div class="card stack shop-prices-cta">
+      ${!owner && html`<${PriceTeaser} />`}
+      ${owner && !prices && open.some((i) => !i.done) && html`<div class="card stack shop-prices-cta">
         <b>כמה הרשימה תעלה?</b>
         <span class="muted" style="font-size:14px;line-height:1.5">לכל מוצר נבחר המוצר הזול ביותר בכשרות שבחרתם, ורואים כמה כל הרשימה עולה בכל רשת.</span>
         <button type="button" class="btn" onClick=${() => { setPrices(true); track('price_open'); }}><${Icon} name="cart" size=${17} />השוואת מחירים</button>

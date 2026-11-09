@@ -9,7 +9,7 @@ after(async () => { await browser?.close(); server?.stop(); });
 
 const TODAY = new Date(2026, 10, 8, 10);
 
-async function open(width = 1280, setup = () => {}) {
+async function open(width = 1280, setup = () => {}, email = null) {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   await page.clock.setFixedTime(TODAY);
   const db = makeFakeDb(TODAY);
@@ -19,7 +19,9 @@ async function open(width = 1280, setup = () => {}) {
   const errors = collectErrors(page);
   await mockSupabase(page, db);
   await signIn(page, server.base);
+  if (email) await page.evaluate((e) => { const k = 'sb-bwwupwbakefjhwropdin-auth-token'; const x = JSON.parse(localStorage.getItem(k)); x.user.email = e; localStorage.setItem(k, JSON.stringify(x)); }, email);
   await page.goto(server.base + '/app/#/shop');
+  await page.reload();
   await page.waitForSelector('.shop-add');
   return { page, db, errors };
 }
@@ -122,8 +124,9 @@ test('the first time, what the tab is for: saving at the supermarket; "הבנת�
   const intro = page.locator('.shop-intro');
   assert.match(await intro.textContent(), /עוזרים לכם לחסוך בסופר/);
   assert.equal(await intro.locator('.shop-benefits li').count(), 3);
-  // No promise of a price comparison before there is a reliable source.
-  assert.doesNotMatch(await page.locator('.shop').textContent(), /הכי זול/);
+  // No price promise in the intro: the comparison is shown only as "coming soon", with sample products.
+  assert.doesNotMatch(await intro.textContent(), /הכי זול/);
+  assert.match(await page.locator('.price-teaser').textContent(), /בקרוב.*דוגמה בלבד/s);
   await intro.locator('.shop-intro-ok').click();
   assert.equal(await page.locator('.shop-intro').count(), 0);
   await page.reload();
@@ -146,6 +149,8 @@ test('a trial: the tab says so, and "כתבו לנו" opens the feedback form', 
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+const OWNER = 'budgetapp2852@gmail.com';
 
 // Made-up products and prices for the price comparison.
 const CATALOG = {
@@ -187,7 +192,7 @@ test('prices: the household picks a kashrut level once, then every item gets the
     ];
     d.tables.price_prefs = [];
     d.tables.kosher_votes = [];
-  });
+  }, OWNER);
   const { calls } = await priceRoutes(page, { db, found: { 'קפה': [{ barcode: '3001', name: 'קפה נמס 200 גרם', names: 'קפה נמס 200 גרם', maker: 'קלייה', qty: 200, unit: 'גרם', offers: [{ chain: 'x', chain_name: 'רשת א', price: 21 }], kosher: { owner: 'mehadrin', votes: {}, mine: null } }] } });
   await page.click('.shop-prices-cta button');
   // First the kashrut question, saved for the household.
@@ -218,7 +223,7 @@ test('prices: changing the product for an item is remembered on the list', async
   const { page, db, errors } = await open(390, (d) => {
     d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
     d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
-  });
+  }, OWNER);
   await priceRoutes(page);
   await page.click('.shop-prices-cta button');
   const item = page.locator('.price-item').first();
@@ -228,6 +233,23 @@ test('prices: changing the product for an item is remembered on the list', async
   await item.locator('.price-opts li', { hasText: 'חלב 3% בשקית' }).locator('.price-pick').click();
   await page.waitForSelector('.price-item.is-chosen:has-text("חלב 3% בשקית")');
   assert.equal(db.tables.shopping_items[0].barcode, '1001');
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('prices for everyone else: a "coming soon" preview with sample products, and "tell me when it opens"', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+  });
+  const sent = [];
+  await page.route('**/api/telemetry', (r) => { sent.push(r.request().postData()); return r.fulfill({ status: 204, body: '' }); });
+  await page.waitForSelector('.price-teaser');
+  assert.equal(await page.locator('.shop-prices-cta').count(), 0, 'no real comparison yet');
+  assert.match(await page.locator('.price-teaser').textContent(), /בקרוב.*דוגמה בלבד/s);
+  await page.click('.price-teaser button:has-text("תודיעו לי")');
+  await page.waitForSelector('.price-teaser-ok');
+  await page.reload();
+  await page.waitForSelector('.price-teaser-ok');
   await page.close();
   assert.deepEqual(errors, []);
 });

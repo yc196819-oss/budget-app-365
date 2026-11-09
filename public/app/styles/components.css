@@ -1111,3 +1111,15 @@ body.chat-open { overflow: hidden; }
 .kosher-list input { width: 18px; height: 18px; accent-color: var(--accent); }
 .kosher-bar { display: flex; gap: 8px; flex-wrap: wrap; position: sticky; bottom: 0; background: var(--surface); padding-top: 6px; }
 .price-vote-open { font-size: 13px; color: var(--muted); }
+.price-teaser { border: 1px dashed var(--accent); background: linear-gradient(160deg, var(--accent-tint), var(--surface) 65%); gap: 10px; }
+.price-teaser-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 16px; }
+.price-demo { background: var(--surface); border-radius: var(--radius-m); padding: 10px 12px; display: grid; gap: 10px; }
+.price-demo-item { display: grid; gap: 3px; animation: admin-rise .45s var(--out, ease) both; }
+.price-demo-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px; }
+.price-demo-p { display: grid; text-align: center; background: var(--surface-2); border-radius: 10px; padding: 5px 2px; font-weight: 800; font-size: 14px; }
+.price-demo-p small { font-weight: 600; font-size: 11px; color: var(--muted); }
+.price-demo-p.best { background: var(--income-tint); color: var(--income); box-shadow: inset 0 0 0 1px var(--income); }
+.price-demo-total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: 8px; font-size: 13px; }
+.price-demo-total b { font-size: 18px; }
+.price-teaser-ok { font-size: 14px; font-weight: 800; color: var(--income); }
+.price-teaser-head .nav-tag { position: static; font-size: 12px; padding: 3px 10px; animation: admin-pop .5s var(--spring, ease) both .3s; }
