@@ -87,6 +87,7 @@ const CHARGE_WORDS = ['סכום חיוב', 'סכום לחיוב', 'סכום הח
 const DEBIT_WORDS = ['חובה'];
 const CREDIT_WORDS = ['זכות'];
 const AMOUNT_WORDS = ['amount'];
+const CARD_COL_WORDS = ['4 ספרות', 'ספרות אחרונות', 'מספר כרטיס', 'כרטיס'];
 const SKIP_ROW = /סה"כ|סה״כ|סך הכל|total|יתרה/i;
 
 function findCol(header, words) {
@@ -113,15 +114,21 @@ export function detectHeader(row) {
   const credit = findCol(header, CREDIT_WORDS);
   if (date < 0 || desc < 0 || date === desc) return null;
   if (amount < 0 && debit < 0) return null;
-  return { date, desc, amount, debit, credit };
+  return { date, desc, amount, debit, credit, card: findCol(header, CARD_COL_WORDS) };
 }
 
 export function rowsToTransactions(rows) {
   const out = [];
   let cols = null;
+  // The card a table belongs to: from a title above it ("לכרטיס 4821"), or
+  // from the card column of each line.
+  let titled = null;
   for (const row of rows) {
     const header = detectHeader(row);
     if (header) { cols = header; continue; }
+    const line = row.map(clean).join(' ');
+    const title = line.match(/כרטיס[^\d]{0,20}(\d{4})(?!\d)/);
+    if (title && !normalizeDate(row[cols ? cols.date : 0])) { titled = title[1]; continue; }
     if (!cols) continue;
     const description = clean(row[cols.desc]);
     const date = normalizeDate(row[cols.date]);
@@ -136,7 +143,9 @@ export function rowsToTransactions(rows) {
     } else value = parseAmount(row[cols.amount]);
     if (!value) continue;
     // On a card statement a charge is positive and a refund is negative.
-    out.push({ date, description, amount: Math.round(Math.abs(value) * 100) / 100, type: value < 0 ? 'income' : 'expense' });
+    const digits = cols.card >= 0 ? String(clean(row[cols.card])).replace(/\D/g, '').slice(-4) : '';
+    const card4 = digits.length === 4 ? digits : titled;
+    out.push({ date, description, amount: Math.round(Math.abs(value) * 100) / 100, type: value < 0 ? 'income' : 'expense', ...(card4 ? { card4 } : {}) });
   }
   return out;
 }

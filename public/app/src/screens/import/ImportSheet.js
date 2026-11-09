@@ -8,14 +8,14 @@ import { addImported, removeMany, removeImport, saveRow, undoRepair } from '../.
 import { toRows, installmentDeals, coveredCharges } from '../../domain/statement.js';
 import { showToast } from '../../lib/toast.js';
 import { PickFile } from './PickFile.js';
-import { Steps } from './Steps.js';
+import { Steps, Checked } from './Steps.js';
 import { Review } from './Review.js';
-import { sourcesOf, checkFile } from '../../domain/sources.js';
+import { sourcesOf, checkFile, otherSource, missingCards, providerOf, nameOf } from '../../domain/sources.js';
 import { Logo } from '../picture/Picture.js';
 
 // Upload a card statement: pick a file, watch it being read, review what
 // was found (categories, duplicates), save. Saving can be undone.
-// phase: 'pick' | 'work' | 'review' | 'error'
+// phase: 'pick' | 'work' | 'checked' (what the check found) | 'review' | 'error'
 const fileType = (name) => {
   const ext = String(name || '').split('.').pop().toLowerCase();
   if (ext === 'xlsx' || ext === 'xls' || ext === 'csv' || ext === 'pdf') return ext;
@@ -48,6 +48,11 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
   }, []);
   // A card's own statement (found in the file, or a card chosen for it).
   const [fromCard, setFromCard] = useState(false);
+  // The company named in the file, and a move to another source in flight.
+  const [issuer, setIssuer] = useState(null);
+  const [moving, setMoving] = useState(false);
+  // The source chips in the review, opened by "לשנות".
+  const [change, setChange] = useState(false);
   const [dropCharges, setDropCharges] = useState(true);
 
   const start = async (file) => {
@@ -66,6 +71,7 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
       if (run.current !== id) return;
       setItems(out.items);
       setFromCard(!!out.fromCard);
+      setIssuer(out.issuer || null);
       // No account chosen yet: the one the file points at, when there is one.
       if (!sourceId) {
         const fours = new Set(out.items.map((t) => t.card4).filter(Boolean));
@@ -76,7 +82,9 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
         if (guess) pickSource(guess);
       }
       setDropCharges(true);
-      setPhase('review');
+      // A file for a chosen account or card: first what the check found.
+      // All fine: a moment to see it, then on to the lines by itself.
+      setPhase(sourceId || preset ? 'checked' : 'review');
     } catch (err) {
       if (run.current !== id) return;
       // Which kind of file failed and why (our message, never its content).
@@ -88,7 +96,40 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
     }
   };
 
-  const reset = () => { run.current++; setItems([]); setError(''); setPhase('pick'); };
+  // The file is another company's: it moves there, without uploading again
+  // (added to the list first when the company is not in it yet). The lines
+  // stay on screen to check and save under the right one.
+  const other = phase === 'checked' ? otherSource({ source, items, issuer, sources }) : null;
+  const miss = phase === 'checked' ? missingCards({ source, items, sources }) : null;
+  const checks = source && (phase === 'checked' || phase === 'review') ? checkFile({ source, items, fromCard, sources }) : [];
+  const bad = checks.some((c) => c.ok === false);
+  const fine = phase === 'checked' && !other && !miss && !bad;
+  useEffect(() => {
+    if (!fine) return undefined;
+    const id = run.current;
+    const t = setTimeout(() => { if (run.current === id) setPhase('review'); }, 1400);
+    return () => clearTimeout(t);
+  }, [fine]);
+  const move = async () => {
+    if (!other || moving) return;
+    setMoving(true);
+    try {
+      let to = other.to;
+      if (!to) {
+        const p = providerOf(other.provider);
+        const row = await (p.kind === 'card' ? saveRow('credit_cards', { name: p.name, provider: p.key, billing_day: 10 }) : saveRow('bank_accounts', { name: p.name, bank_name: p.name, provider: p.key }));
+        to = { kind: p.kind, id: row.id };
+      }
+      setSourceId(to.id);
+      setCardIdRaw(to.kind === 'card' ? to.id : null);
+      track('import_moved');
+      setPhase('review');
+      showToast('הפירוט הועבר ל' + (providerOf(other.provider) || {}).name + '. בודקים ושומרים.');
+    } catch (_e) { showToast('ההעברה לא הצליחה. נסו שוב.'); }
+    setMoving(false);
+  };
+
+  const reset = () => { run.current++; setItems([]); setError(''); setChange(false); setPhase('pick'); };
 
   const save = async () => {
     const isCard = fromCard || !!cardId;
@@ -129,19 +170,34 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
     }
   };
 
-  return html`<${Sheet} title=${preset ? 'העלאת פירוט: ' + preset.name : 'העלאת פירוט'} onClose=${() => { run.current++; onClose(); }}>
+  return html`<${Sheet} title=${source ? 'העלאת פירוט: ' + nameOf(source) : preset ? 'העלאת פירוט: ' + preset.name : 'העלאת פירוט'} onClose=${() => { run.current++; onClose(); }}>
     ${phase === 'pick' && html`<${PickFile} onFile=${start} />`}
     ${phase === 'work' && html`<${Steps} step=${step} fileName=${fileName} />`}
+    ${phase === 'checked' && (other
+      ? html`<div class="import-move"><${Checked} tone="bad" title=${other.text} text="לא צריך להעלות שוב: מעבירים אותו בלחיצה, ואז בודקים ושומרים את התנועות שם." checks=${checks.slice(1)}>
+          <button type="button" class="btn" disabled=${moving} onClick=${move}>${other.to ? 'להעביר ל' + nameOf(other.to) : 'להוסיף את ' + providerOf(other.provider).name + ' ולהעביר אליו'}</button>
+          <button type="button" class="btn btn-ghost" onClick=${() => setPhase('review')}>לא, זה באמת של ${nameOf(source)}</button>
+        <//></div>`
+      : miss ? html`<${Checked} tone="warn" title=${'נמצא כרטיס אחד מתוך ' + miss.total} text="אפשר להעלות גם את הפירוט של הכרטיס השני, או לסמן שלא היה בו שימוש החודש." checks=${checks}>
+          <button type="button" class="btn" onClick=${() => setPhase('review')}>לשמור, ולהעלות את השני אחר כך</button>
+          <button type="button" class="btn btn-ghost" onClick=${() => setPhase('review')}>הכרטיס השני לא היה בשימוש</button>
+        <//>`
+      : bad ? html`<${Checked} tone="bad" title="משהו לא מתאים בקובץ" text="כדאי לבדוק שזה הקובץ הנכון לפני ששומרים." checks=${checks}>
+          <button type="button" class="btn" onClick=${() => setPhase('review')}>להמשיך בכל זאת</button>
+          <button type="button" class="btn btn-ghost" onClick=${reset}>לבחור קובץ אחר</button>
+        <//>`
+      : html`<${Checked} tone="ok" title="הכול תקין" text="עוברים לתנועות…" checks=${checks} />`)}
     ${phase === 'error' && html`<div class="card" role="alert" style="display:flex;flex-direction:column;gap:10px">
         <b style="color:var(--danger)">לא הצלחנו לקרוא את ${fileName}</b>
         <span class="muted" style="line-height:1.5">${error}</span>
       </div>
       <button type="button" class="btn" onClick=${reset}>לבחור קובץ אחר</button>`}
-    ${phase === 'review' && sources.length > 0 && html`<div class="card stack import-source">
+    ${phase === 'review' && source && !change && html`<div class="import-okline"><span aria-hidden="true">✓</span><span>פירוט ${nameOf(source)}${(checks.find((c) => c.key) || {}).text ? ' · ' + checks.find((c) => c.key).text : ''}</span><button type="button" class="btn-text" onClick=${() => setChange(true)}>לשנות</button></div>`}
+    ${phase === 'review' && sources.length > 0 && (!source || change) && html`<div class="card stack import-source">
       <b>מאיזה חשבון או כרטיס הקובץ?</b>
       <div class="import-source-pick" role="group" aria-label="החשבון או הכרטיס של הקובץ">${sources.map((x) => html`<button type="button" key=${x.id} class=${'import-src' + (sourceId === x.id ? ' on' : '')} aria-pressed=${sourceId === x.id} onClick=${() => pickSource(x)}><${Logo} provider=${x.provider} name=${x.name} size="s" /><small>${x.kind === 'card' ? (x.last4 || x.name) : 'עו״ש'}</small></button>`)}
         <button type="button" class=${'import-src' + (!sourceId ? ' on' : '')} aria-pressed=${!sourceId} onClick=${() => pickSource(null)}><small>אחר / לא בטוח</small></button></div>
-      ${source && html`<ul class="import-checks" aria-label="בדיקת הקובץ">${checkFile({ source, items, fromCard }).map((c, i) => html`<li key=${i} class=${c.ok === true ? 'ok' : c.ok === false ? 'bad' : 'warn'}><i aria-hidden="true">${c.ok === true ? '✓' : '!'}</i>${c.text}</li>`)}</ul>`}
+      ${source && html`<ul class="import-checks" aria-label="בדיקת הקובץ">${checkFile({ source, items, fromCard, sources }).map((c, i) => html`<li key=${i} class=${c.ok === true ? 'ok' : c.ok === false ? 'bad' : 'warn'}><i aria-hidden="true">${c.ok === true ? '✓' : '!'}</i>${c.text}</li>`)}</ul>`}
     </div>`}
     ${phase === 'review' && html`<${Review} items=${items} categories=${data.categories} cards=${sources.length ? [] : data.cards} cardId=${cardId} onCard=${setCardId} onChange=${setItems} onSave=${save} saving=${saving} onAnother=${reset}
       covered=${fromCard || cardId ? coveredCharges(items, data.txs) : []} dropCharges=${dropCharges} onDropCharges=${setDropCharges} />`}

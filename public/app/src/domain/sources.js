@@ -10,6 +10,7 @@ export const PROVIDERS = [
   { key: 'discount', kind: 'bank', name: 'דיסקונט', logo: 'discount.svg', url: 'https://www.discountbank.co.il/', re: /דיסקונט|discount/i },
   { key: 'mizrahi', kind: 'bank', name: 'מזרחי טפחות', logo: 'mizrahi.svg', url: 'https://www.mizrahi-tefahot.co.il/', re: /מזרחי|טפחות|mizrahi/i },
   { key: 'fibi', kind: 'bank', name: 'הבינלאומי', logo: 'fibi.png', url: 'https://www.fibi.co.il/', re: /בינלאומי|fibi/i },
+  { key: 'pagi', kind: 'bank', name: 'פאג״י', logo: 'pagi.png', url: 'https://www.pagi.co.il/', re: /פאג["״']?י|pagi/i },
   { key: 'jerusalem', kind: 'bank', name: 'בנק ירושלים', logo: 'jerusalem.svg', url: 'https://www.bankjerusalem.co.il/', re: /ירושלים|jerusalem/i },
   { key: 'yahav', kind: 'bank', name: 'יהב', logo: 'yahav.png', url: 'https://www.bank-yahav.co.il/', re: /יהב|yahav/i },
   { key: 'otsar', kind: 'bank', name: 'אוצר החייל', logo: 'otsar.png', url: 'https://www.bankotsar.co.il/', re: /אוצר החייל|otsar/i },
@@ -30,10 +31,81 @@ export function guessProvider(text, kind) {
   return p ? p.key : null;
 }
 // Where to find the statement on the provider's site, in a sentence.
-export function howTo(kind) {
+// A card the bank itself issued: its statement is on the bank's site.
+export function howTo(kind, provider = null) {
+  const p = providerOf(provider);
+  if (kind === 'card' && p && p.kind === 'bank') return 'באתר הבנק: כרטיסי אשראי ← פירוט חיובים ← בוחרים את החודש ← ייצוא לאקסל.';
   return kind === 'card'
     ? 'באתר: פירוט עסקאות ← בוחרים את החודש ← ייצוא לאקסל (או שמירה כ-PDF).'
     : 'באתר: עובר ושב ← תנועות בחשבון ← בוחרים את החודש ← ייצוא לאקסל.';
+}
+
+// Which company a file is from, by the name in its opening lines (null when
+// none is named). The first name in the text wins: a bank statement names
+// its bank before any card company that charged it.
+export function issuerOf(text) {
+  const t = String(text || '').slice(0, 1500);
+  let best = null;
+  for (const p of PROVIDERS) {
+    const m = p.re.exec(t);
+    if (m && (!best || m.index < best.at)) best = { key: p.key, at: m.index };
+  }
+  return best ? best.key : null;
+}
+
+// A company's card statement covers all its cards: one file a month for
+// the company, not one for each card. A card the bank issued counts apart
+// from the bank account. Returns the household's sources with the cards of
+// one company as one (ids: every card's id, count: how many).
+export function companiesOf(sources) {
+  const out = [];
+  const seen = new Map();
+  for (const s of sources) {
+    if (s.kind !== 'card' || !s.provider) { out.push({ ...s, ids: [s.id], count: 1 }); continue; }
+    const g = seen.get(s.provider);
+    if (g) { g.ids.push(s.id); g.count++; if (!g.billingDay && s.billingDay) g.billingDay = s.billingDay; continue; }
+    const one = { ...s, ids: [s.id], count: 1 };
+    seen.set(s.provider, one);
+    out.push(one);
+  }
+  return out;
+}
+
+// The file may belong to another account or card than the one chosen: the
+// card digits in its lines are another card's, or it names another company.
+// Returns { to, provider, text } (to: the household's source, or null when
+// the company is not in the list yet), or null when nothing says so.
+export function otherSource({ source, items = [], issuer = null, sources = [] }) {
+  if (!source) return null;
+  const fours = new Set(items.map((t) => t.card4).filter(Boolean));
+  if (source.kind === 'card' && fours.size && !(source.last4 && fours.has(String(source.last4)))) {
+    const to = sources.find((x) => x.kind === 'card' && x.id !== source.id && x.last4 && fours.has(String(x.last4)));
+    if (to && to.provider !== source.provider) return { to, provider: to.provider, text: 'זה פירוט של ' + nameOf(to) + (to.last4 ? ' (כרטיס ' + to.last4 + ')' : '') + ', לא של ' + nameOf(source) };
+  }
+  const p = providerOf(issuer);
+  const mine = providerOf(source.provider);
+  // A card the bank issued may carry a card company's name: not a mistake.
+  if (!p || !mine || p.key === mine.key || mine.kind !== source.kind) return null;
+  if (p.kind !== source.kind) return null;
+  const to = sources.find((x) => x.kind === source.kind && x.provider === p.key) || null;
+  return { to, provider: p.key, text: 'זה נראה כמו פירוט של ' + p.name + ', לא של ' + mine.name };
+}
+// A company with several cards: does the file carry all of them? Returns
+// { found, total } when some card's digits are missing, else null (the
+// digits the lines carry are counted; a file without digits says nothing).
+export function missingCards({ source, items = [], sources = [] }) {
+  if (!source || source.kind !== 'card' || !source.provider) return null;
+  const total = sources.filter((x) => x.kind === 'card' && x.provider === source.provider).length;
+  const found = new Set(items.map((t) => t.card4).filter(Boolean)).size;
+  return total > 1 && found > 0 && found < total ? { found, total } : null;
+}
+
+// The name people know a source by: the company, or "אשראי לאומי" for a
+// card the bank issued.
+export function nameOf(s) {
+  const p = providerOf(s.provider);
+  if (!p) return s.name;
+  return s.kind === 'card' && p.kind === 'bank' ? 'אשראי ' + p.name : p.name;
 }
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -137,11 +209,12 @@ export function dueMonth(source, today = new Date()) {
 // Everything the screen shows: the last 6 months for every source, the ring
 // (what is due now, how much of it is uploaded) and the reminders.
 export function tracker({ accounts = [], cards = [], imports = [], txs = [] }, today = new Date(), n = 6) {
-  const sources = sourcesOf({ accounts, cards });
-  const banks = sources.filter((s) => s.kind === 'bank').length;
+  const all = sourcesOf({ accounts, cards });
+  const banks = all.filter((s) => s.kind === 'bank').length;
+  const sources = companiesOf(all);
   const months = Array.from({ length: n }, (_, i) => { const d = new Date(today.getFullYear(), today.getMonth() - (n - 1) + i, 1); return ymOf(d); });
   const rows = sources.map((s) => {
-    const files = filesOf(s, { imports, txs, banks });
+    const files = s.ids.flatMap((id) => filesOf({ ...s, id }, { imports, txs, banks }));
     return { source: s, files, months: months.map((k) => ({ key: k, status: statusOf(s, files, k, today) })), due: dueMonth(s, today) };
   });
   const due = rows.map((r) => ({ ...r, dueStatus: statusOf(r.source, r.files, r.due, today) }));
@@ -157,12 +230,12 @@ export function tracker({ accounts = [], cards = [], imports = [], txs = [] }, t
 // One reminder, in plain words, with the date it is about.
 export function reminder(source, key, status, today = new Date()) {
   const p = providerOf(source.provider);
-  const who = p ? p.name : source.name;
+  const who = nameOf(source);
   const [y, m] = key.split('-').map(Number);
   if (source.kind === 'card') {
     const day = source.billingDay || 10;
     return { source, key, status, title: 'להעלות את פירוט ' + who + ' של ' + monthName(key),
-      note: 'החיוב ירד ב-' + day + '.' + m + (status === 'partial' ? ' · הקובץ שהועלה לא שלם' : '') + (source.last4 ? ' · כרטיס ' + source.last4 : '') };
+      note: 'החיוב ירד ב-' + day + '.' + m + (status === 'partial' ? ' · הקובץ שהועלה לא שלם' : '') + (source.count > 1 ? ' · ' + source.count + ' כרטיסים, פירוט אחד לכולם' : source.last4 ? ' · כרטיס ' + source.last4 : '') };
   }
   const salary = source.salaryDay;
   const after = salary && today.getDate() >= salary;
@@ -171,12 +244,11 @@ export function reminder(source, key, status, today = new Date()) {
 }
 
 // A file being uploaded, checked against the source it was chosen for.
-export function checkFile({ source, items = [], fromCard = false, today = new Date() }) {
+export function checkFile({ source, items = [], fromCard = false, sources = [], today = new Date() }) {
   const out = [];
   const kept = items.filter((t) => t.include);
   if (!source) return out;
-  const p = providerOf(source.provider);
-  const name = p ? p.name : source.name;
+  const name = nameOf(source);
   // A card's statement: found so by the reader, or its lines carry card digits.
   fromCard = fromCard || items.some((t) => t.card4);
   if (source.kind === 'card' && !fromCard) out.push({ ok: null, text: 'לא בטוחים שזה פירוט של כרטיס. בדקו שבחרתם את הקובץ הנכון.' });
@@ -184,7 +256,9 @@ export function checkFile({ source, items = [], fromCard = false, today = new Da
   else out.push({ ok: true, text: 'זה פירוט של ' + name + (source.last4 ? ' (כרטיס ' + source.last4 + ')' : '') });
   if (source.kind === 'card' && source.last4) {
     const fours = new Set(items.map((t) => t.card4).filter(Boolean));
-    if (fours.size && !fours.has(String(source.last4))) out.push({ ok: false, text: 'בקובץ מופיע כרטיס ' + [...fours].join(', ') + ', לא ' + source.last4 + '.' });
+    // Any card of the same company is fine: one statement covers them all.
+    const mine = new Set([source, ...sources.filter((x) => x.kind === 'card' && source.provider && x.provider === source.provider)].map((x) => x.last4).filter(Boolean).map(String));
+    if (fours.size && ![...fours].some((f) => mine.has(f))) out.push({ ok: false, text: 'בקובץ מופיע כרטיס ' + [...fours].join(', ') + ', לא ' + source.last4 + '.' });
   }
   const dates = kept.map((t) => t.date).filter(Boolean).sort();
   if (dates.length) {

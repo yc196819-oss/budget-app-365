@@ -2,8 +2,8 @@ import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
-import { PROVIDERS, providerOf, tracker, monthName, monthShort, howTo } from '../../domain/sources.js';
-import { listSourceFiles, saveRow, archiveCard } from '../../data/household.js';
+import { PROVIDERS, providerOf, tracker, monthName, monthShort, howTo, sourcesOf, nameOf } from '../../domain/sources.js';
+import { listSourceFiles, saveRow, archiveCard, deleteRow } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
 
@@ -38,6 +38,9 @@ export function useSourceFiles(hid, txsKey) {
   return files;
 }
 
+// What a row shows now: the month due and its status.
+function statusFor(t, r) { const m = r.months.find((x) => x.key === r.due); return { key: r.due, status: m ? m.status : t.tasks.some((x) => x.source.id === r.source.id) ? 'missing' : 'ok' }; }
+
 const STATUS = { ok: 'הועלה', partial: 'חלקי', missing: 'חסר', waiting: 'עוד לא' };
 
 // On the home screen: the ring and what is missing, one tap to the sheet.
@@ -58,86 +61,145 @@ export function PictureCard({ data, onOpen }) {
     <span aria-hidden="true">‹</span></button>`;
 }
 
-// Choosing the banks and card companies, and the details reminders need.
-function Picker({ data, onDone }) {
-  const sources = tracker({ accounts: data.accounts, cards: data.cards }).sources;
-  const has = (key) => sources.some((s) => s.provider === key);
+// Choosing the banks (step 1) and the card companies (step 2): a tile for
+// each company, how many accounts or cards there are, and the days the
+// reminders need. The cards a bank itself issued are counted apart: their
+// statement is on the bank's site.
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+function Picker({ data, step, onStep, onDone }) {
+  const kind = step === 'bank' ? 'bank' : 'card';
+  const all = sourcesOf({ accounts: data.accounts, cards: data.cards });
+  const of = (k, prov) => all.filter((x) => x.kind === k && x.provider === prov);
   const [busy, setBusy] = useState('');
-  const add = async (p) => {
-    if (has(p.key)) { showToast(p.name + ' כבר ברשימה. אפשר להוסיף עוד ' + (p.kind === 'card' ? 'כרטיס' : 'חשבון') + ' למטה.'); return; }
-    setBusy(p.key);
+  const banks = PROVIDERS.filter((p) => p.kind === 'bank' && of('bank', p.key).length);
+  const used = (id) => data.txs.some((t) => t.account_id === id);
+  const add = async (k, p) => {
+    setBusy(k + p.key);
     try {
-      await (p.kind === 'card' ? saveRow('credit_cards', { name: p.name, provider: p.key, billing_day: 10 }) : saveRow('bank_accounts', { name: p.name, bank_name: p.name, provider: p.key }));
+      await (k === 'card'
+        ? saveRow('credit_cards', { name: nameOf({ kind: 'card', provider: p.key, name: p.name }), provider: p.key, billing_day: (of('card', p.key)[0] || {}).billingDay || 10 })
+        : saveRow('bank_accounts', { name: p.name, bank_name: p.name, provider: p.key }));
       track('picture_add');
     } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
     setBusy('');
   };
-  const another = async (s) => {
-    const p = providerOf(s.provider);
-    try { await (s.kind === 'card' ? saveRow('credit_cards', { name: (p ? p.name : 'כרטיס') + ' נוסף', provider: s.provider, billing_day: s.billingDay || 10 }) : saveRow('bank_accounts', { name: (p ? p.name : 'חשבון') + ' נוסף', bank_name: p ? p.name : null, provider: s.provider })); } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
+  const less = async (k, p) => {
+    const list = of(k, p.key);
+    if (!list.length) return;
+    setBusy(k + p.key);
+    try {
+      if (k === 'card') await archiveCard(list[list.length - 1].id);
+      else {
+        // An account with transactions stays: they point at it.
+        const free = [...list].reverse().find((x) => !used(x.id));
+        if (free) await deleteRow('bank_accounts', free.id);
+        else showToast('בחשבון הזה כבר יש תנועות, ולכן הוא נשאר ברשימה.');
+      }
+    } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
+    setBusy('');
   };
-  const set = async (s, patch) => {
-    try { await saveRow(s.kind === 'card' ? 'credit_cards' : 'bank_accounts', { id: s.id, ...patch }); } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
+  const set = async (k, p, patch) => {
+    try { for (const x of of(k, p.key)) await saveRow(k === 'card' ? 'credit_cards' : 'bank_accounts', { id: x.id, ...patch }); } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
   };
-  const remove = async (s) => {
-    try { await archiveCard(s.id); showToast('הכרטיס הוסר מהרשימה. הקניות שלו נשארות.'); } catch (_e) { showToast('לא הוסר. נסו שוב.'); }
+  const tile = (p) => {
+    const n = of(kind, p.key).length;
+    return html`<button type="button" key=${p.key} class=${'pic-pick' + (n ? ' on' : '')} aria-pressed=${n > 0} disabled=${busy === kind + p.key}
+      onClick=${() => (n === 0 ? add(kind, p) : n === 1 ? less(kind, p) : showToast('כדי להוריד אחד, לחצו על − ברשימה למטה.'))}>
+      <${Logo} provider=${p.key} size="l" /><span class="sr-only">${p.name}</span>${n > 1 && html`<span class="pic-n" aria-hidden="true">${n}×</span>`}</button>`;
   };
-  const days = Array.from({ length: 31 }, (_, i) => i + 1);
-  const grid = (kind) => html`<div class="pic-grid">${PROVIDERS.filter((p) => p.kind === kind).map((p) => html`<button type="button" key=${p.key} class=${'pic-pick' + (has(p.key) ? ' on' : '')} aria-pressed=${has(p.key)} disabled=${busy === p.key} onClick=${() => add(p)}><${Logo} provider=${p.key} size="l" /><span class="sr-only">${p.name}</span></button>`)}</div>`;
-  return html`<div class="stack pic-picker">
-    <p class="muted" style="margin:0;line-height:1.55">סמנו את כל הבנקים וחברות האשראי שלכם, גם של בן או בת הזוג. כך נדע אילו פירוטים חסרים בכל חודש, ונזכיר לכם בזמן.</p>
-    <h3 class="pic-h">בנקים</h3>${grid('bank')}
-    <h3 class="pic-h">כרטיסי אשראי</h3>${grid('card')}
-    ${sources.length > 0 && html`<h3 class="pic-h">הפרטים לתזכורות</h3>
-      <ul class="pic-details">${sources.map((s) => html`<li key=${s.id}>
-        <${Logo} provider=${s.provider} name=${s.name} size="s" />
-        <span class="pic-d-name"><b>${s.name}</b>
-          ${!s.provider && html`<select class="input" aria-label=${'החברה של ' + s.name} onChange=${(e) => set(s, { provider: e.currentTarget.value || null })}><option value="">איזו חברה?</option>${PROVIDERS.filter((p) => p.kind === s.kind).map((p) => html`<option value=${p.key}>${p.name}</option>`)}</select>`}</span>
-        ${s.kind === 'card' ? html`<label class="pic-d-field">יום חיוב<select class="input" value=${s.billingDay || 10} onChange=${(e) => set(s, { billing_day: Number(e.currentTarget.value) })}>${days.map((d) => html`<option value=${d}>${d}</option>`)}</select></label>
-            <label class="pic-d-field">4 ספרות<input key=${'l4' + (s.last4 || '')} class="input num" inputmode="numeric" maxlength="4" defaultValue=${s.last4 || ''} placeholder="1234" onChange=${(e) => { const v = e.currentTarget.value.replace(/\D/g, '').slice(0, 4); set(s, { last4: v.length === 4 ? v : null }); }} /></label>`
-          : html`<label class="pic-d-field">המשכורת נכנסת ב-<select class="input" value=${s.salaryDay || ''} onChange=${(e) => set(s, { salary_day: Number(e.currentTarget.value) || null })}><option value="">לא יודע</option>${days.map((d) => html`<option value=${d}>${d}</option>`)}</select></label>`}
-        <span class="pic-d-actions">${s.provider && html`<button type="button" class="btn-text" onClick=${() => another(s)}>+ עוד ${s.kind === 'card' ? 'כרטיס' : 'חשבון'}</button>`}
-          ${s.kind === 'card' && html`<button type="button" class="btn-text" style="color:var(--danger)" onClick=${() => remove(s)}>להסיר</button>`}</span>
-      </li>`)}</ul>`}
-    <button type="button" class="btn" onClick=${onDone} disabled=${!sources.length}>${sources.length ? 'סיימתי (' + sources.length + ')' : 'בחרו לפחות אחד'}</button>
+  const day = (k, p, label, field, value, empty) => html`<label class="pic-day">${label}<select aria-label=${label + ' ' + p.name} value=${value || ''} onChange=${(e) => set(k, p, { [field]: Number(e.currentTarget.value) || null })}>${empty && html`<option value="">${empty}</option>`}${DAYS.map((d) => html`<option value=${d}>${d}</option>`)}</select>${k === 'card' ? ' בחודש' : ''}</label>`;
+  const row = (k, p, title) => {
+    const list = of(k, p.key);
+    const n = list.length;
+    return html`<li key=${k + p.key} class="pic-q">
+      <${Logo} provider=${p.key} size="s" />
+      <span class="pic-q-t"><b>${title || p.name}</b>
+        ${k === 'card' ? day(k, p, 'החיוב ב-', 'billing_day', (list[0] || {}).billingDay || 10) : day(k, p, 'המשכורת נכנסת ב-', 'salary_day', (list[0] || {}).salaryDay, 'לא יודע')}</span>
+      <span class="pic-step" role="group" aria-label=${'כמה ' + (k === 'card' ? 'כרטיסים' : 'חשבונות') + ' של ' + (title || p.name)}>
+        <button type="button" aria-label="פחות" disabled=${!n || busy === k + p.key} onClick=${() => less(k, p)}>−</button><b class="num" aria-live="polite">${n}</b>
+        <button type="button" aria-label="עוד אחד" disabled=${n >= 9 || busy === k + p.key} onClick=${() => add(k, p)}>+</button></span>
+    </li>`;
+  };
+  const chosen = PROVIDERS.filter((p) => p.kind === kind && of(kind, p.key).length);
+  const bankCards = banks.filter((p) => of('card', p.key).length);
+  const summary = [...banks.map((p) => ['bank', p, p.name]), ...PROVIDERS.filter((p) => p.kind === 'card' && of('card', p.key).length).map((p) => ['card', p, p.name]), ...bankCards.map((p) => ['card', p, 'אשראי ' + p.name])];
+  return html`<div class="pic-picker">
+    <div class="pic-main">
+      <span class="pic-stepno">שלב ${kind === 'bank' ? 1 : 2} מתוך 2</span>
+      <h3 class="pic-title">${kind === 'bank' ? 'באיזה בנק החשבון שלכם?' : 'ואילו כרטיסי אשראי?'}</h3>
+      <p class="muted pic-sub">${kind === 'bank' ? 'בוחרים פעם אחת, גם את החשבונות של בן או בת הזוג. מכאן נדע בכל חודש מה חסר, ונזכיר לכם בזמן.' : 'לחברה עם כמה כרטיסים מספיק פירוט אחד בחודש לכולם.'}</p>
+      <div class="pic-grid">${PROVIDERS.filter((p) => p.kind === kind).map(tile)}</div>
+      ${chosen.length > 0 && html`<ul class="pic-qs">${chosen.map((p) => row(kind, p))}</ul>`}
+      ${kind === 'card' && banks.length > 0 && html`<h4 class="pic-h">כרטיסים שהבנק עצמו הנפיק</h4>
+        <p class="muted pic-sub" style="margin:0 2px 4px">יש כרטיסים שהפירוט שלהם נמצא באתר של הבנק. כמה כאלה יש לכם?</p>
+        <ul class="pic-qs pic-bankcards">${banks.map((p) => row('card', p, 'כרטיסים של ' + p.name))}</ul>`}
+      ${kind === 'bank' && html`<p class="pic-safe"><${Icon} name="lock" size=${15} />לא נבקש מכם סיסמה. את הפירוט מורידים בעצמכם מהאתר הרשמי, ומעלים לכאן.</p>`}
+    </div>
+    <aside class="pic-chosen">
+      <b class="pic-chosen-h">מה בחרתם</b>
+      ${summary.length ? html`<ul>${summary.map(([k, p, t]) => { const n = of(k, p.key).length; return html`<li key=${k + p.key}><${Logo} provider=${p.key} size="s" /><span>${t}<small class="muted">${n === 1 ? (k === 'card' ? 'כרטיס אחד' : 'חשבון אחד') : n + (k === 'card' ? ' כרטיסים' : ' חשבונות')}</small></span></li>`; })}</ul>`
+        : html`<span class="muted" style="font-size:13.5px">עוד לא נבחר כלום. לחצו על הלוגו של הבנק.</span>`}
+      ${kind === 'bank' ? html`<button type="button" class="btn" onClick=${() => onStep('card')}>המשך</button>`
+        : html`<button type="button" class="btn" onClick=${onDone} disabled=${!all.length}>${all.length ? 'סיימתי' : 'בחרו לפחות אחד'}</button>
+          <button type="button" class="btn-text" onClick=${() => onStep('bank')}>חזרה לבנקים</button>`}
+    </aside>
   </div>`;
 }
 
 export function PictureSheet({ data, onClose, onUpload }) {
   const files = useSourceFiles(data.hid, data.txs.length);
   const t = files ? tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: data.txs }) : null;
-  const [edit, setEdit] = useState(() => !(data.accounts.length + data.cards.length));
+  // false, or the step of the picker: 'bank' then 'card'.
+  const [edit, setEdit] = useState(() => (data.accounts.length + data.cards.length ? false : 'bank'));
   useEffect(() => { track('picture_open'); }, []);
   if (!t) return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}><span class="muted">טוען…</span><//>`;
-  if (edit) return html`<${Sheet} title="איפה הכסף שלכם?" onClose=${onClose}><${Picker} data=${data} onDone=${() => setEdit(false)} /><//>`;
+  if (edit) return html`<${Sheet} title="הבנקים והכרטיסים שלכם" onClose=${onClose}><${Picker} data=${data} step=${edit} onStep=${setEdit} onDone=${() => setEdit(false)} /><//>`;
   const full = t.tasks.length === 0;
+  const now = t.months[t.months.length - 1];
+  const line = (r) => {
+    const x = r.source;
+    const p = providerOf(x.provider);
+    const st = statusFor(t, r);
+    const sub = x.kind === 'card'
+      ? (x.count > 1 ? x.count + ' כרטיסים' : 'כרטיס אחד') + ' · חיוב ' + (x.billingDay || 10) + '.' + Number((st.key || now).slice(5))
+      : 'חשבון אחד · ' + monthName(st.key || now);
+    const due = st.status === 'missing' || st.status === 'partial';
+    return html`<li key=${x.id} class=${'pic-task is-' + st.status}>
+      <${SiteLogo} source=${x} />
+      <span class="pic-task-t"><b>${nameOf(x)}</b><small class="muted">${sub}${st.status === 'partial' ? ' · הקובץ לא שלם' : ''}</small>
+        ${due && html`<small class="faint">${howTo(x.kind, x.provider)}</small>`}
+        ${due && p && html`<a class="btn pic-site" href=${p.url} target="_blank" rel="noopener noreferrer">לאתר של ${p.name} <span aria-hidden="true">↗</span></a>`}</span>
+      <span class="pic-task-a">${due ? html`<button type="button" class="btn" onClick=${() => onUpload(x)}><${Icon} name="upload" size=${16} />להעלות</button>`
+        : st.status === 'ok' ? html`<span class="pic-chip ok">✓ הועלה</span>` : html`<span class="pic-chip">עוד לא</span>`}</span>
+    </li>`;
+  };
+  const group = (k, title) => { const rows = t.rows.filter((r) => r.source.kind === k); return rows.length > 0 && html`<h3 class="pic-h">${title}</h3><ul class="pic-tasks">${rows.map(line)}</ul>`; };
   return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}>
     <div class="stack pic">
+      <div class="pic-now">
       <div class=${'card pic-hero' + (full ? ' is-full' : '')}>
         <${Ring} pct=${t.ring.pct} label="הפירוטים שצריך עכשיו: " />
-        <div><b class="pic-hero-t">${full ? 'התמונה מלאה!' : t.tasks.length === 1 ? 'עוד פירוט אחד!' : 'חסרים ' + t.tasks.length + ' פירוטים'}</b>
-          <span class="muted">${t.ring.done} מתוך ${t.ring.total} הפירוטים שצריך עכשיו הועלו.${full ? ' עכשיו כל המספרים מדויקים.' : ' בלי כולם, חלק מההוצאות לא נספרות.'}</span>
+        <div><b class="pic-hero-t">${full ? 'כל הפירוטים הועלו' : t.tasks.length === 1 ? 'נשאר פירוט אחד' : 'נשארו ' + t.tasks.length + ' פירוטים'}</b>
+          <span class="muted">${full ? 'התמונה מלאה, וכל המספרים מדויקים.' : 'פירוט אחד לכל חברה, וזה הכול. ' + t.ring.done + ' מתוך ' + t.ring.total + ' כבר הועלו.'}</span>
           ${t.streak > 1 && html`<span class="pic-streak">${t.streak} חודשים ברצף עם תמונה מלאה</span>`}</div>
       </div>
-      ${t.tasks.length > 0 && html`<ul class="pic-tasks">${t.tasks.map((x) => { const p = providerOf(x.source.provider); return html`<li key=${x.source.id} class=${'card pic-task is-' + x.status}>
-        <${SiteLogo} source=${x.source} />
-        <span class="pic-task-t"><b>${x.title}</b><small class="muted">${x.note}</small><small class="faint">${howTo(x.source.kind)}</small></span>
-        <span class="pic-task-a">${p && html`<a class="btn btn-ghost" href=${p.url} target="_blank" rel="noopener noreferrer">לאתר של ${p.name} <span aria-hidden="true">↗</span></a>`}
-          <button type="button" class="btn" onClick=${() => onUpload(x.source)}><${Icon} name="upload" size=${16} />להעלות</button></span>
-      </li>`; })}</ul>`}
+      ${group('bank', 'חשבון בנק')}
+      ${group('card', 'כרטיסי אשראי')}
+      <button type="button" class="btn-text pic-edit" onClick=${() => setEdit('bank')}>עריכת בנקים וכרטיסים</button>
+      </div>
       <div class="card pic-history">
-        <div class="pic-h-row"><h3 class="pic-h" style="margin:0">6 החודשים האחרונים</h3><button type="button" class="btn-text" onClick=${() => setEdit(true)}>עריכת בנקים וכרטיסים</button></div>
+        <div class="pic-h-row"><h3 class="pic-h" style="margin:0">6 החודשים האחרונים</h3></div>
         <div class="pic-table" role="table" aria-label="פירוטים לפי חודש">
           <div class="pic-tr pic-th" role="row"><span role="columnheader"><span class="sr-only">חשבון</span></span>${t.months.map((k) => html`<span role="columnheader" key=${k}>${monthShort(k)}</span>`)}</div>
           ${t.rows.map((r) => html`<div class="pic-tr" role="row" key=${r.source.id}>
-            <span role="rowheader" class="pic-src"><${SiteLogo} source=${r.source} /><small>${r.source.kind === 'card' && r.source.last4 ? r.source.last4 : r.source.kind === 'bank' ? 'עו״ש' : ''}</small></span>
+            <span role="rowheader" class="pic-src"><${SiteLogo} source=${r.source} /><small>${r.source.kind === 'bank' ? 'עו״ש' : r.source.count > 1 ? r.source.count + ' כרטיסים' : r.source.last4 || ''}</small></span>
             ${r.months.map((m, i) => html`<span role="cell" key=${m.key}>${m.status === 'missing' || m.status === 'partial'
-              ? html`<button type="button" class=${'pic-dot is-' + m.status} style=${'--i:' + i} title=${STATUS[m.status] + ': ' + monthName(m.key) + ' · להעלות'} aria-label=${r.source.name + ', ' + monthName(m.key) + ': ' + STATUS[m.status] + '. להעלות'} onClick=${() => onUpload(r.source)}>${m.status === 'partial' ? '!' : '+'}</button>`
-              : html`<span class=${'pic-dot is-' + m.status} style=${'--i:' + i} title=${STATUS[m.status] + ': ' + monthName(m.key)} aria-label=${r.source.name + ', ' + monthName(m.key) + ': ' + STATUS[m.status]}>${m.status === 'ok' ? '✓' : ''}</span>`}</span>`)}
+              ? html`<button type="button" class=${'pic-dot is-' + m.status} style=${'--i:' + i} title=${STATUS[m.status] + ': ' + monthName(m.key) + ' · להעלות'} aria-label=${nameOf(r.source) + ', ' + monthName(m.key) + ': ' + STATUS[m.status] + '. להעלות'} onClick=${() => onUpload(r.source)}>${m.status === 'partial' ? '!' : '+'}</button>`
+              : html`<span class=${'pic-dot is-' + m.status} style=${'--i:' + i} title=${STATUS[m.status] + ': ' + monthName(m.key)} aria-label=${nameOf(r.source) + ', ' + monthName(m.key) + ': ' + STATUS[m.status]}>${m.status === 'ok' ? '✓' : ''}</span>`}</span>`)}
           </div>`)}
         </div>
         <div class="pic-legend"><span><i class="pic-dot is-ok"></i>הועלה</span><span><i class="pic-dot is-missing"></i>חסר</span><span><i class="pic-dot is-partial"></i>חלקי</span><span><i class="pic-dot is-waiting"></i>עוד לא הגיע הזמן</span></div>
-        <p class="faint" style="font-size:12px;line-height:1.5;margin:6px 0 0">לחיצה על לוגו פותחת את האתר הרשמי בחלון חדש, כדי להוריד משם את הפירוט. כרטיס נספר לפי חודש החיוב; חשבון בנק לפי החודש הקלנדרי.</p>
+        <p class="faint" style="font-size:12px;line-height:1.5;margin:6px 0 0">לחיצה על לוגו פותחת את האתר הרשמי בחלון חדש, כדי להוריד משם את הפירוט. כרטיס נספר לפי חודש החיוב; חשבון בנק לפי החודש הקלנדרי. הלוגואים שייכים לבעליהם, ואין לנו קשר עסקי איתם.</p>
       </div>
       <div class="card pic-why"><b>למה צריך גם את הבנק וגם את האשראי?</b>
         <span><b>כרטיס האשראי</b> מראה מה קניתם: סופר, דלק, מסעדות.</span>

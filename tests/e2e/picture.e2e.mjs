@@ -25,44 +25,96 @@ async function open(width, setup) {
   return { page, db, errors };
 }
 
-test('first time: choose the bank and card companies by their logos, with the days reminders need', async () => {
+test('first time: banks, then cards (how many of each, and the bank own cards), with the days reminders need', async () => {
   const { page, db, errors } = await open(390, (d) => { d.tables.bank_accounts = []; d.tables.credit_cards = []; d.tables.imports = []; });
   assert.match(await page.locator('.pic-card').textContent(), /איפה הכסף שלכם/);
   await page.click('.pic-card');
   await page.waitForSelector('.pic-picker');
-  assert.equal(await page.locator('.pic-grid').first().locator('.pic-pick').count(), 11);
-  assert.equal(await page.locator('.pic-grid').nth(1).locator('.pic-pick').count(), 5);
+  // Step 1: the banks, Pagi among them.
+  assert.match(await page.locator('.pic-title').textContent(), /באיזה בנק/);
+  assert.equal(await page.locator('.pic-grid .pic-pick').count(), 12);
+  assert.equal(await page.locator('.pic-pick img[alt="פאג״י"]').count(), 1);
   await page.click('.pic-pick:has(img[alt="לאומי"])');
-  await page.click('.pic-pick:has(img[alt="מקס"])');
-  await page.waitForFunction(() => document.querySelectorAll('.pic-pick.on').length === 2);
+  await page.waitForFunction(() => document.querySelectorAll('.pic-pick.on').length === 1);
   assert.deepEqual(db.tables.bank_accounts.map((a) => [a.provider, a.name]), [['leumi', 'לאומי']]);
-  assert.deepEqual(db.tables.credit_cards.map((c) => [c.provider, c.billing_day]), [['max', 10]]);
-  // The same company again: not added twice.
-  await page.click('.pic-pick:has(img[alt="מקס"])');
-  await page.waitForSelector('.toast:has-text("כבר ברשימה")');
-  assert.equal(db.tables.credit_cards.length, 1);
-  // The details for reminders: the card's billing day and digits, the salary day.
-  const card = page.locator('.pic-details li', { hasText: 'מקס' });
-  await page.route('**/rest/v1/credit_cards*', async (r) => { if (r.request().method() === 'PATCH') await new Promise((ok) => setTimeout(ok, 300)); return r.fallback(); });
-  await card.locator('select').selectOption('2');
-  await card.locator('input').fill('4821');
-  await page.waitForTimeout(500);
-  assert.equal(await card.locator('input').inputValue(), '4821', 'a save that returns while typing does not wipe the digits');
-  await card.locator('input').blur();
-  await page.locator('.pic-details li', { hasText: 'לאומי' }).locator('select').selectOption('10');
-  // Each detail is saved on its own; typing is never wiped by another save.
-  for (let i = 0; i < 50 && !(db.tables.credit_cards[0].last4 === '4821' && db.tables.credit_cards[0].billing_day === 2 && db.tables.bank_accounts[0].salary_day === 10); i++) await page.waitForTimeout(100);
-  assert.equal(db.tables.credit_cards[0].billing_day, 2);
-  assert.equal(db.tables.credit_cards[0].last4, '4821');
+  await page.locator('.pic-q', { hasText: 'לאומי' }).locator('select').selectOption('10');
+  for (let i = 0; i < 30 && db.tables.bank_accounts[0].salary_day !== 10; i++) await page.waitForTimeout(100);
   assert.equal(db.tables.bank_accounts[0].salary_day, 10);
-  await page.click('.pic-picker button:has-text("סיימתי")');
+  await page.click('.pic-chosen button:has-text("המשך")');
+  // Step 2: the card companies, and the cards the bank itself issued.
+  await page.waitForSelector('.pic-title:has-text("כרטיסי אשראי")');
+  assert.equal(await page.locator('.pic-grid .pic-pick').count(), 5);
+  await page.click('.pic-pick:has(img[alt="מקס"])');
+  await page.waitForFunction(() => document.querySelectorAll('.pic-pick.on').length === 1);
+  const max = page.locator('.pic-qs:not(.pic-bankcards) .pic-q', { hasText: 'מקס' });
+  await max.locator('button[aria-label="עוד אחד"]').click();
+  await page.waitForFunction(() => document.querySelector('.pic-pick.on .pic-n')?.textContent === '2×');
+  assert.deepEqual(db.tables.credit_cards.map((c) => c.provider), ['max', 'max']);
+  // One billing day for the company: both its cards.
+  await max.locator('select').selectOption('2');
+  for (let i = 0; i < 30 && !db.tables.credit_cards.every((c) => c.billing_day === 2); i++) await page.waitForTimeout(100);
+  assert.ok(db.tables.credit_cards.every((c) => c.billing_day === 2));
+  // A second tap on a company with two cards does not remove them.
+  await page.click('.pic-pick:has(img[alt="מקס"])');
+  await page.waitForSelector('.toast:has-text("לחצו על −")');
+  assert.equal(db.tables.credit_cards.length, 2);
+  await page.locator('.pic-bankcards .pic-q', { hasText: 'לאומי' }).locator('button[aria-label="עוד אחד"]').click();
+  await page.waitForFunction(() => document.querySelectorAll('.pic-chosen li').length === 3);
+  assert.equal(db.tables.credit_cards.filter((c) => c.provider === 'leumi').length, 1);
+  assert.match(await page.locator('.pic-chosen').textContent(), /אשראי לאומי/);
+  await page.click('.pic-chosen button:has-text("סיימתי")');
   await page.waitForSelector('.pic-history');
-  // Nothing uploaded for them yet: a reminder for each, with the site one tap away.
-  assert.equal(await page.locator('.pic-task').count(), 2);
-  const link = page.locator('.pic-task a.btn', { hasText: 'לאתר של לאומי' });
+  // One statement for each: the bank, Max (both cards), and Leumi's own cards.
+  assert.equal(await page.locator('.pic-task').count(), 3);
+  assert.match(await page.locator('.pic-task', { hasText: 'מקס' }).textContent(), /2 כרטיסים/);
+  assert.match(await page.locator('.pic-task', { hasText: 'אשראי לאומי' }).textContent(), /באתר הבנק: כרטיסי אשראי/);
+  const link = page.locator('.pic-task a.btn', { hasText: 'לאתר של לאומי' }).first();
   assert.equal(await link.getAttribute('href'), 'https://www.leumi.co.il/');
   assert.equal(await link.getAttribute('target'), '_blank');
   assert.match(await link.getAttribute('rel'), /noopener/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a file of another company moves there without uploading again, and its lines are saved there', async () => {
+  const { page, db, errors } = await open(1280, (d) => {
+    d.tables.bank_accounts = [{ id: 'a1', household_id: d.hid, name: 'עו״ש', provider: 'leumi', balance: 1 }];
+    d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10 }, { id: 'c2', household_id: d.hid, name: 'כאל', provider: 'cal', billing_day: 10 }];
+    d.tables.imports = [];
+  });
+  await page.click('.pic-card');
+  await page.waitForSelector('.pic-task');
+  await page.click('.pic-task:has-text("מקס") button:has-text("להעלות")');
+  await page.waitForSelector('.sheet:has-text("העלאת פירוט: מקס")');
+  const cal = makeXlsx([['כאל - פירוט עסקאות'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב'], [dd(1, 3), 'מסעדה בדויה', '80.00', '80.00'], ['', 'סה"כ', '', '80.00']]);
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'x.xlsx', mimeType: '', buffer: cal });
+  await page.waitForSelector('.import-move');
+  assert.match(await page.locator('.import-move').textContent(), /פירוט של כאל, לא של מקס/);
+  await page.click('.import-move button:has-text("להעביר לכאל")');
+  await page.waitForSelector('.sheet:has-text("העלאת פירוט: כאל")');
+  // Straight on to its lines, under Cal.
+  await page.waitForSelector('.import-okline');
+  assert.equal(await page.locator('.import-move').count(), 0);
+  assert.match(await page.locator('.import-okline').textContent(), /פירוט כאל/);
+  await page.click('.sheet button:has-text("לשמור")');
+  await page.waitForSelector('.toast:has-text("נשמרו")');
+  const imp = db.tables.imports.find((f) => f.source_id === 'c2');
+  assert.ok(imp, 'the file is kept as Cal\'s');
+  assert.ok(db.tables.transactions.filter((t) => t.import_id === imp.id).every((t) => t.card_id === 'c2'));
+  // A company not in the list yet: added, and the file goes to it.
+  await page.click('.pic-card');
+  await page.waitForSelector('.pic-task');
+  await page.click('.pic-task:has-text("מקס") button:has-text("להעלות")');
+  const isra = makeXlsx([['ישראכרט פירוט חיובים'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב'], [dd(1, 4), 'חנות בדויה', '40.00', '40.00'], ['', 'סה"כ', '', '40.00']]);
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'y.xlsx', mimeType: '', buffer: isra });
+  await page.waitForSelector('.import-move button:has-text("להוסיף את ישראכרט")');
+  await page.click('.import-move button');
+  await page.waitForSelector('.sheet:has-text("העלאת פירוט: ישראכרט")');
+  const added = db.tables.credit_cards.find((c) => c.provider === 'isracard');
+  assert.ok(added);
+  await page.click('.sheet button:has-text("לשמור")');
+  await page.waitForSelector('.toast:has-text("נשמרו")');
+  assert.ok(db.tables.imports.find((f) => f.source_id === added.id));
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -92,8 +144,12 @@ test('the ring and 6 months: what is uploaded, what is missing, and an upload fr
   await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: xlsx });
   await page.waitForSelector('.import-checks');
   const checks = await page.locator('.import-checks li').allTextContents();
+  assert.match(await page.locator('.scan-result h3').textContent(), /הכול תקין/);
   assert.match(checks[0], /זה פירוט של מקס \(כרטיס 4821\)/);
   assert.match(checks.join(' '), /2 תנועות, סה״כ ₪200/);
+  // All fine: on to the lines by itself, under the card.
+  await page.waitForSelector('.import-okline');
+  assert.match(await page.locator('.import-okline').textContent(), /פירוט מקס/);
   await page.click('.sheet button:has-text("לשמור")');
   await page.waitForSelector('.toast:has-text("נשמרו")');
   const imp = db.tables.imports.find((f) => f.source_id === 'c1');
@@ -117,6 +173,11 @@ test('a bank file is kept as the bank account\'s, and a card file chosen for the
   await page.setInputFiles('.sheet input[type="file"]', { name: 'x.xlsx', mimeType: '', buffer: xlsx });
   await page.waitForSelector('.import-checks');
   assert.match(await page.locator('.import-checks li.bad').first().textContent(), /נראה כמו פירוט של כרטיס/);
+  // A problem stops on the check: nothing goes on by itself.
+  assert.match(await page.locator('.scan-result h3').textContent(), /משהו לא מתאים/);
+  await page.waitForTimeout(1600);
+  assert.equal(await page.locator('.import-summary').count(), 0);
+  await page.click('.sheet button:has-text("להמשיך בכל זאת")');
   await page.click('.sheet button:has-text("לשמור")');
   await page.waitForSelector('.toast:has-text("נשמרו")');
   const imp = db.tables.imports.find((f) => f.source_id === 'a1');
@@ -135,5 +196,27 @@ test('a new household with nothing uploaded yet sees the card too', async () => 
   await page.goto(server.base + '/app/#/home');
   await page.waitForSelector('.pic-card');
   assert.match(await page.locator('.pic-card').textContent(), /איפה הכסף שלכם/);
+  await page.close();
+});
+
+test('a company with two cards: a file with only one of them says so, and can be saved anyway', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.bank_accounts = [];
+    d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10, last4: '4821' }, { id: 'c2', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10, last4: '5555' }];
+    d.tables.imports = [];
+  });
+  await page.click('.pic-card');
+  await page.waitForSelector('.pic-task');
+  assert.equal(await page.locator('.pic-task').count(), 1, 'one statement for the company');
+  await page.click('.pic-task button:has-text("להעלות")');
+  const xlsx = makeXlsx([['פירוט עסקאות'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב', '4 ספרות אחרונות'], [dd(1, 3), 'מסעדה בדויה', '80.00', '80.00', '4821'], [dd(1, 5), 'חנות בדויה', '20.00', '20.00', '4821'], ['', 'סה"כ', '', '100.00', '']]);
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'm.xlsx', mimeType: '', buffer: xlsx });
+  await page.waitForSelector('.scan-result');
+  assert.match(await page.locator('.scan-result h3').textContent(), /נמצא כרטיס אחד מתוך 2/);
+  await page.click('.sheet button:has-text("לשמור, ולהעלות את השני")');
+  await page.click('.sheet button:has-text("לשמור")');
+  await page.waitForSelector('.toast:has-text("נשמרו")');
+  assert.ok(db.tables.imports.find((f) => f.source_id === 'c1'));
+  assert.deepEqual(errors, []);
   await page.close();
 });

@@ -8,6 +8,7 @@ import { aiEnabled } from '../lib/settings.js';
 import { splitText, inParts } from '../domain/pdftext.js';
 import { looksLikeJunk } from '../domain/repair.js';
 import { reportError } from '../lib/telemetry.js';
+import { issuerOf } from '../domain/sources.js';
 import { parseCsv, rowsToTransactions, fromAi, importPrompt, categorizePrompt, categorizeText, waitingMerchants, applyAiCategories, prepare, categorizeFromHistory } from '../domain/statement.js';
 
 // Reads a statement file into import items, ready for review.
@@ -76,12 +77,18 @@ export async function readStatement(file, { categories, history, rules = [], tod
   // A table with a card statement's headings (and no balance column) is a
   // card's statement even when its lines do not carry the card's digits.
   let cardTable = false;
+  // The company named in the file's opening lines (which file is it?).
+  let issuer = null;
   if (kind === 'xlsx' || kind === 'xls' || kind === 'csv' || kind === 'text') {
     const rows = await readTable(file, kind);
     onStep('find');
     items = rowsToTransactions(rows);
     const head = rows.slice(0, 15).map((r) => r.join(' ')).join(' ');
     cardTable = /בית ה?עסק|סכום חיוב|פירוט עסקאות/.test(head) && !/יתרה/.test(head);
+    // Only the lines above the first dated one: a merchant is not the issuer.
+    const top = [];
+    for (const r of rows.slice(0, 15)) { const line = r.join(' '); if (/\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/.test(line)) break; top.push(line); }
+    issuer = issuerOf(top.join(' '));
     if (!items.length) {
       // Not a table we recognize: let the AI read the text.
       const text = rows.map((r) => r.join(' | ')).join('\n');
@@ -93,6 +100,8 @@ export async function readStatement(file, { categories, history, rules = [], tod
     const text = await pdfText(await file.arrayBuffer());
     if (!text.trim()) throw new ImportError('לא מצאנו טקסט ב-PDF הזה (אולי זו סריקה). נסו צילום מסך או קובץ אקסל.', 'pdf_scan');
     onStep('find');
+    const at = text.search(/\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/);
+    issuer = issuerOf(text.slice(0, at > 0 ? at : 400));
     via = 'ai';
     items = await aiTextImport(text, categories, today);
   } else {
@@ -131,7 +140,7 @@ export async function readStatement(file, { categories, history, rules = [], tod
   // A card's own statement (most lines carry its last 4 digits) has no bank
   // card-charge lines to leave out.
   const fromCard = cardTable || items.filter((t) => t.card4).length > items.length / 2;
-  return { items: prepare(items, history, { fromCard }), via, fromCard };
+  return { items: prepare(items, history, { fromCard }), via, fromCard, issuer };
 }
 
 // Suggestions for lines already saved without a category: one line per

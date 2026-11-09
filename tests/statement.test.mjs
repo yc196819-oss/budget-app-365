@@ -69,11 +69,22 @@ test('a card statement (title rows, two tables, totals, refunds) becomes clean l
     [46251, 'AMAZON MKTPLACE', '20$', 74.4]
   ];
   assert.deepEqual(rowsToTransactions(rows), [
-    { date: '2026-08-12', description: 'שופרסל דיל ת"א', amount: 245.9, type: 'expense' },
-    { date: '2026-08-13', description: 'פז אילת', amount: 300, type: 'expense' },
-    { date: '2026-08-14', description: 'זיכוי - ZARA', amount: 120, type: 'income' },
-    { date: '2026-08-17', description: 'AMAZON MKTPLACE', amount: 74.4, type: 'expense' }
+    { date: '2026-08-12', description: 'שופרסל דיל ת"א', amount: 245.9, type: 'expense', card4: '1234' },
+    { date: '2026-08-13', description: 'פז אילת', amount: 300, type: 'expense', card4: '1234' },
+    { date: '2026-08-14', description: 'זיכוי - ZARA', amount: 120, type: 'income', card4: '1234' },
+    { date: '2026-08-17', description: 'AMAZON MKTPLACE', amount: 74.4, type: 'expense', card4: '1234' }
   ]);
+});
+
+test('the card of each line: from a title above its table, or from a card column', () => {
+  const titled = rowsToTransactions([
+    ['כרטיס מספר 1111'], ['תאריך עסקה', 'שם בית העסק', 'סכום חיוב'], ['01/08/2026', 'חנות א', '10'],
+    ['כרטיס מספר 2222'], ['תאריך עסקה', 'שם בית העסק', 'סכום חיוב'], ['02/08/2026', 'חנות ב', '20']
+  ]);
+  assert.deepEqual(titled.map((t) => t.card4), ['1111', '2222']);
+  const column = rowsToTransactions([['תאריך עסקה', 'שם בית העסק', 'סכום חיוב', '4 ספרות אחרונות של כרטיס'], ['01/08/2026', 'חנות א', '10', '3333'], ['02/08/2026', 'חנות ב', '20', '****4444']]);
+  assert.deepEqual(column.map((t) => t.card4), ['3333', '4444']);
+  assert.equal(rowsToTransactions([['תאריך', 'תיאור', 'סכום'], ['01/08/2026', 'x', '5']])[0].card4, undefined);
 });
 
 test('a bank statement with debit and credit columns', () => {
