@@ -88,7 +88,8 @@ test('planning the next trip: the advisor checks the destination, the local curr
   assert.match(est, /₪2,800–₪4,200/);
   assert.match(est, /120 USD/);
   assert.match(est, /₪444/);
-  assert.match(await page.locator('.sheet').textContent(), /\+70%/);
+  // The comparison with the past trip comes from the trip's own lines, a moment later.
+  await page.waitForFunction(() => /\+70%/.test(document.querySelector('.sheet')?.textContent || ''));
   assert.equal(asked[0].destination, 'ניו יורק');
   assert.equal(asked[0].past.country, 'רומניה');
   assert.ok(asked[0].past.flight_per_person > 0);
