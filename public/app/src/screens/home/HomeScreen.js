@@ -1,5 +1,5 @@
 import { html } from '../../lib/html.js';
-import { Loading } from '../../components/Loading.js';
+import { Splash } from '../../components/Splash.js';
 import { useEffect, useState } from 'preact/hooks';
 import { track } from '../../lib/telemetry.js';
 import { monthPlan, cashNow, upcoming, attention, topCategories } from '../../domain/home.js';
@@ -52,7 +52,7 @@ export function HomeScreen({ data, onAdd, onImport, onLearn, onAsk, userId }) {
     track('first_value');
   }, [hasData, userId]);
 
-  if (data.status === 'loading' || data.status === 'idle') return html`<${Loading} label="טוען…" />`;
+  if (data.status === 'loading' || data.status === 'idle') return html`<${Splash} />`;
   if (data.status === 'error') {
     return html`<div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו לטעון את הנתונים</b><span>${data.error}</span>
       <button type="button" class="btn btn-ghost" onClick=${data.reload}>לנסות שוב</button></div>`;

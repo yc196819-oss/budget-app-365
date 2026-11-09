@@ -1,3 +1,4 @@
+import { Splash } from '../components/Splash.js';
 import { html } from '../lib/html.js';
 import { useRoute } from './useRoute.js';
 import { useSession } from './useSession.js';
@@ -25,7 +26,7 @@ import { PENDING_INVITE, DECLINED_INVITE } from '../data/onboarding.js';
 export function App() {
   const tab = useRoute();
   const session = useSession();
-  if (session.loading) return html`<div class="boot" role="status">טוען…</div>`;
+  if (session.loading) return html`<div class="app-boot"><${Splash} /></div>`;
   if (session.stalled) {
     return html`<main class="login"><div class="card empty" role="alert"><b style="color:var(--text)">החיבור איטי מדי כרגע</b>
       <span>לא הצלחנו לבדוק את הכניסה שלכם. בדקו את האינטרנט ונסו שוב. הנתונים שלכם שמורים.</span>
