@@ -70,6 +70,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   if (!data.txs.length) {
     return html`<div class="stack">
       <${AnswerNotice} userId=${userId} />
+      ${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}
       ${guide}
       <${InstallCard} />
     </div>`;

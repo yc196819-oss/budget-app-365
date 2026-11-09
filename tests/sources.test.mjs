@@ -45,6 +45,11 @@ test('a card month: uploaded, missing, or not charged yet', () => {
   assert.equal(statusOf(max, [{ date_from: '2026-10-10', date_to: '2026-11-08' }], '2026-11', today), 'ok');
   assert.equal(statusOf(max, [], '2026-11', today), 'missing', 'charged on the 10th, today is the 12th');
   assert.equal(statusOf(max, [], '2026-11', new Date(2026, 10, 5)), 'waiting');
+  // Asked for from the day after the charge, when the statement is surely there.
+  assert.equal(statusOf(max, [], '2026-11', new Date(2026, 10, 10)), 'waiting', 'charged today: not yet');
+  assert.equal(statusOf(max, [], '2026-11', new Date(2026, 10, 11)), 'missing', 'the day after');
+  assert.equal(dueMonth(max, new Date(2026, 10, 10)), '2026-10');
+  assert.equal(dueMonth({ kind: 'card', billingDay: 31 }, new Date(2026, 10, 30)), '2026-10', 'the 31st in a 30-day month: the 30th is the charge');
   assert.equal(dueMonth(max, today), '2026-11');
   assert.equal(dueMonth(max, new Date(2026, 10, 5)), '2026-10');
   assert.equal(dueMonth(sourcesOf({ accounts })[0], today), '2026-10');

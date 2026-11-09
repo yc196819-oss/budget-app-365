@@ -100,7 +100,7 @@ export function statusOf(source, files, key, today = new Date()) {
   if (source.kind === 'card') {
     const has = files.some((f) => billingMonth(f.date_to, source.billingDay) === key);
     if (has) return 'ok';
-    if (key === nowKey && today.getDate() < (source.billingDay || 10)) return 'waiting';
+    if (key === nowKey && !pastCharge(source, today)) return 'waiting';
     return key > nowKey ? 'waiting' : 'missing';
   }
   if (key >= nowKey) return 'waiting';
@@ -117,12 +117,20 @@ export function statusOf(source, files, key, today = new Date()) {
   return covered.size ? 'partial' : 'missing';
 }
 
+// A card's statement is asked for from the day after its charge: by then
+// it is surely on the company's site (charged on the 10th: from the 11th).
+// A billing day past the month's end counts as its last day.
+export function pastCharge(source, today = new Date()) {
+  const last = daysIn(today.getFullYear(), today.getMonth());
+  return today.getDate() > Math.min(source.billingDay || 10, last);
+}
+
 // The month whose statement is due now for a source: a card's this month
 // from its billing day on (the month before until then); a bank account's
 // the month that just ended.
 export function dueMonth(source, today = new Date()) {
   const prev = ym(today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear(), (today.getMonth() + 11) % 12);
-  if (source.kind === 'card') return today.getDate() >= (source.billingDay || 10) ? ymOf(today) : prev;
+  if (source.kind === 'card') return pastCharge(source, today) ? ymOf(today) : prev;
   return prev;
 }
 

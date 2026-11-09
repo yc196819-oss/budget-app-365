@@ -121,3 +121,16 @@ test('a bank file is kept as the bank account\'s, and a card file chosen for the
   assert.ok(db.tables.transactions.filter((t) => t.import_id === imp.id).every((t) => t.account_id === 'a1'));
   await page.close();
 });
+
+test('a new household with nothing uploaded yet sees the card too', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  const db = makeFakeDb();
+  db.tables.transactions = [];
+  db.tables.bank_accounts = []; db.tables.credit_cards = []; db.tables.imports = [];
+  await mockSupabase(page, db);
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/home');
+  await page.waitForSelector('.pic-card');
+  assert.match(await page.locator('.pic-card').textContent(), /איפה הכסף שלכם/);
+  await page.close();
+});
