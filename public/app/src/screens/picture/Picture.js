@@ -155,6 +155,8 @@ export function PictureSheet({ data, onClose, onUpload }) {
   if (!t) return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}><span class="muted">טוען…</span><//>`;
   if (edit) return html`<${Sheet} title="הבנקים והכרטיסים שלכם" onClose=${onClose}><${Picker} data=${data} step=${edit} onStep=${setEdit} onDone=${() => setEdit(false)} /><//>`;
   const full = t.tasks.length === 0;
+  // Saved before the companies were chosen, and not recognised by name.
+  const unknown = sourcesOf({ accounts: data.accounts, cards: data.cards }).filter((x) => !x.provider);
   const now = t.months[t.months.length - 1];
   const line = (r) => {
     const x = r.source;
@@ -183,6 +185,13 @@ export function PictureSheet({ data, onClose, onUpload }) {
           <span class="muted">${full ? 'התמונה מלאה, וכל המספרים מדויקים.' : 'פירוט אחד לכל חברה, וזה הכול. ' + t.ring.done + ' מתוך ' + t.ring.total + ' כבר הועלו.'}</span>
           ${t.streak > 1 && html`<span class="pic-streak">${t.streak} חודשים ברצף עם תמונה מלאה</span>`}</div>
       </div>
+      ${unknown.length > 0 && html`<div class="card pic-unknown">
+        <b>לאילו חברות שייכים?</b>
+        <span class="muted">כך נדע מאיזה אתר להוריד, ונציג את הלוגו. מה שלא תבחרו יזוהה לבד מהפירוט הבא שתעלו.</span>
+        <ul>${unknown.map((x) => html`<li key=${x.id}><span class="pic-u-name"><b>${x.name}</b><small class="muted">${x.kind === 'card' ? 'כרטיס אשראי' + (x.last4 ? ' ' + x.last4 : '') : 'חשבון בנק'}</small></span>
+          <select class="input" aria-label=${'החברה של ' + x.name} onChange=${(e) => e.currentTarget.value && saveRow(x.kind === 'card' ? 'credit_cards' : 'bank_accounts', { id: x.id, provider: e.currentTarget.value }).then(() => track('picture_named')).catch(() => showToast('לא נשמר. נסו שוב.'))}>
+            <option value="">בחרו חברה</option>${PROVIDERS.filter((p) => x.kind === 'card' || p.kind === 'bank').map((p) => html`<option value=${p.key}>${x.kind === 'card' && p.kind === 'bank' ? 'כרטיס של בנק ' + p.name : p.name}</option>`)}</select></li>`)}</ul>
+      </div>`}
       ${group('bank', 'חשבון בנק')}
       ${group('card', 'כרטיסי אשראי')}
       <button type="button" class="btn-text pic-edit" onClick=${() => setEdit('bank')}>עריכת בנקים וכרטיסים</button>

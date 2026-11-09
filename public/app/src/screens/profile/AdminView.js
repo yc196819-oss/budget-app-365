@@ -478,6 +478,9 @@ export function AdminView({ onBack }) {
   ];
   const open = sections.find((x) => x.key === section);
   const hi = greeting();
+  // Which version the server runs, and since when: did the update go up?
+  const [ver, setVer] = useState(null);
+  useEffect(() => { fetch('/api/health').then((r) => r.json()).then(setVer).catch(() => setVer(null)); }, []);
   // On a computer and on a phone alike: a main screen (the numbers, what is
   // happening now) with a button for each part, and each part on its own
   // page with a way back. Only up-and-down scrolling, never sideways.
@@ -491,6 +494,7 @@ export function AdminView({ onBack }) {
       ${live && html`<span class="admin-pill" role="status"><span class="admin-dot" aria-hidden="true"></span><b class="num">${live.users}</b> עכשיו</span>`}
     </div>
     ${s === undefined && html`<span class="muted">טוען…</span>`}
+    ${!open && ver && html`<span class="admin-ver faint">גרסת השרת: <b class="num">${ver.version || 'לא ידוע'}</b>${ver.startedAt ? ' · עלה ' + new Date(ver.startedAt).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : ''}</span>`}
     ${s === null && html`<span class="muted">הנתונים לא זמינים כרגע.</span>`}
     ${!open && k && html`
       <${Record} daily=${s.daily} />

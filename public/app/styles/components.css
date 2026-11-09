@@ -1057,6 +1057,12 @@ body.chat-open { overflow: hidden; }
   .pic-chosen-h, .pic-chosen ul, .pic-chosen > .muted { display: none; }
 }
 .pic-edit { justify-self: center; margin-top: 4px; }
+.pic-unknown { display: grid; gap: 8px; border: 1px solid var(--accent-tint); }
+.pic-unknown > .muted { font-size: 13.5px; line-height: 1.5; }
+.pic-unknown ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pic-unknown li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pic-u-name { flex: 1; min-width: 120px; display: grid; }
+.pic-unknown select { width: auto; min-width: 150px; height: 40px; }
 .pic-pick { position: relative; background: #fff; border: 1.5px solid var(--line); border-radius: 16px; padding: 8px; cursor: pointer; transition: border-color .15s ease, box-shadow .2s ease, transform .15s ease; }
 .pic-pick:hover { transform: translateY(-1px); }
 .pic-pick.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
@@ -1191,3 +1197,4 @@ body.chat-open { overflow: hidden; }
 .price-demo-total b { font-size: 18px; }
 .price-teaser-ok { font-size: 14px; font-weight: 800; color: var(--income); }
 .price-teaser-head .nav-tag { position: static; font-size: 12px; padding: 3px 10px; animation: admin-pop .5s var(--spring, ease) both .3s; }
+.admin-ver { font-size: 12px; text-align: center; }

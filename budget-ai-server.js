@@ -831,10 +831,15 @@ async function sendMailWithFallback({ userId, to, subject, html, text, headers }
   throw new Error(errors.length ? errors.join(' | ') : 'No email provider is configured');
 }
 
+// Which version of the code is running, and since when (Render names the
+// commit it deployed): to tell whether an update really went up.
+const STARTED_AT = new Date().toISOString();
 app.get('/api/health', async (_req, res) => {
   const availableAiProviders = getAvailableAiProviders();
   return res.json({
     ok: true,
+    version: String(process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null,
+    startedAt: STARTED_AT,
     aiConfigured: availableAiProviders.length > 0,
     aiProviders: availableAiProviders,
     claudeModel: ANTHROPIC_MODEL,

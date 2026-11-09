@@ -220,3 +220,31 @@ test('a company with two cards: a file with only one of them says so, and can be
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('accounts and cards saved before the companies: named ones get their logo, the rest are asked once or learned from the next file', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.bank_accounts = [{ id: 'a1', household_id: d.hid, name: 'נעמי', balance: 1 }];
+    d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'רמי לוי', billing_day: 10 }, { id: 'c2', household_id: d.hid, name: 'הכרטיס של קובי', billing_day: 10 }];
+    d.tables.imports = [];
+  });
+  await page.click('.pic-card');
+  await page.waitForSelector('.pic-unknown');
+  // Rami Levy's card is Isracard's: its logo, not a question.
+  assert.equal(await page.locator('.pic-task img[alt="ישראכרט"]').count(), 1);
+  assert.equal(await page.locator('.pic-unknown li').count(), 2);
+  await page.locator('.pic-unknown li', { hasText: 'הכרטיס של קובי' }).locator('select').selectOption('cal');
+  for (let i = 0; i < 30 && db.tables.credit_cards[1].provider !== 'cal'; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.credit_cards[1].provider, 'cal');
+  await page.waitForFunction(() => document.querySelectorAll('.pic-unknown li').length === 1);
+  // The bank account learns its bank from the first file confirmed for it.
+  await page.click('.pic-task:has-text("נעמי") button:has-text("להעלות")');
+  const xlsx = makeXlsx([['בנק לאומי - תנועות בחשבון'], [], ['תאריך', 'תיאור', 'חובה', 'זכות', 'יתרה'], [dd(1, 3), 'העברה בדויה', '80.00', '', '1000'], [dd(1, 20), 'משכורת בדויה', '', '500.00', '1420']]);
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'b.xlsx', mimeType: '', buffer: xlsx });
+  await page.waitForSelector('.import-okline');
+  await page.click('.sheet button:has-text("לשמור")');
+  await page.waitForSelector('.toast:has-text("נשמרו")');
+  for (let i = 0; i < 30 && db.tables.bank_accounts[0].provider !== 'leumi'; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.bank_accounts[0].provider, 'leumi');
+  assert.deepEqual(errors, []);
+  await page.close();
+});

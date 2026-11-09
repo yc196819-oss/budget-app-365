@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDERS, guessProvider, sourcesOf, billingMonth, filesOf, statusOf, dueMonth, tracker, reminder, checkFile, issuerOf, companiesOf, otherSource, nameOf, howTo, missingCards } from '../public/app/src/domain/sources.js';
+import { PROVIDERS, guessProvider, sourcesOf, billingMonth, filesOf, statusOf, dueMonth, tracker, reminder, checkFile, issuerOf, companiesOf, otherSource, nameOf, howTo, missingCards, learnProvider } from '../public/app/src/domain/sources.js';
 
 // Made-up household: one bank account, two cards.
 const today = new Date(2026, 10, 12); // 12 Nov 2026
@@ -179,4 +179,16 @@ test('a file with the digits of another card of the same company is fine', () =>
   const items = [{ card4: '5555', include: true, date: '2026-10-20', amount: 10 }];
   assert.ok(!checkFile({ source: two[0], items, sources: two }).some((c) => c.ok === false));
   assert.ok(checkFile({ source: two[0], items: [{ card4: '9999', include: true, date: '2026-10-20', amount: 10 }], sources: two }).some((c) => c.ok === false));
+});
+
+test('cards and accounts saved before: known club cards by name, the rest from their next file', () => {
+  const list = sourcesOf({ accounts: [{ id: 'a', name: 'נעמי' }, { id: 'p', name: 'עו״ש', bank_name: 'פאג"י' }], cards: [{ id: 'r', name: 'רמי לוי' }, { id: 'd', name: 'Dream Card' }, { id: 'x', name: 'הכרטיס של קובי' }] });
+  assert.deepEqual(list.map((x) => x.provider), [null, 'pagi', 'isracard', 'max', null]);
+  assert.ok(list.every((x) => x.saved === false));
+  assert.equal(learnProvider({ source: list[0], issuer: 'leumi' }), 'leumi');
+  assert.equal(learnProvider({ source: list[0], issuer: 'cal' }), null, 'a bank account is not a card company');
+  assert.equal(learnProvider({ source: list[4], issuer: 'cal' }), 'cal');
+  assert.equal(learnProvider({ source: list[4], issuer: 'hapoalim' }), 'hapoalim', 'a card the bank issued');
+  assert.equal(learnProvider({ source: list[4], issuer: null }), null);
+  assert.equal(learnProvider({ source: { ...list[4], saved: true, provider: 'max' }, issuer: 'cal' }), null, 'a chosen company is not changed');
 });
