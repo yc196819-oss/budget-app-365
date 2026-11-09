@@ -81,3 +81,43 @@ test('a test search is started, then checked until done, with the fields the ser
   assert.deepEqual(done.keys, ['chain', 'name', 'barcode', 'price']);
   await assert.rejects(apifyCheck(fake, 'tok', '../x'), /bad run/);
 });
+
+const { catalogRows, fetchInput, SEED, apifyItems } = createRequire(import.meta.url)('../server/prices.js');
+
+test('rows from the price service become one product per barcode and the lowest price per chain', () => {
+  // Made-up rows in the shape the service returns.
+  const rows = [
+    { barcode: '7290000000011', itemName: 'חלב 3% שקית 1 ל', manufacturer: 'מחלבה א', quantity: 1, unitQty: 'ליטר', price: 6.4, chainKey: 'x', chainName: 'רשת א' },
+    { barcode: '7290000000011', itemName: 'חלב שקית 3% 1 ליטר', manufacturer: '---', quantity: 1000, unitQty: 'מיליליטר', price: 6.1, chainKey: 'x', chainName: 'רשת א' },
+    { barcode: '7290000000011', itemName: 'חלב 3% שקית 1 ל', manufacturer: '', price: 6.9, chainKey: 'y', chainName: 'רשת ב' },
+    { barcode: 'abc', itemName: 'בלי ברקוד', price: 3, chainKey: 'x' },
+    { barcode: '7290000000028', itemName: 'מחיר שגוי', price: 0, chainKey: 'x' },
+    { barcode: '7290000000035', itemName: '', price: 4, chainKey: 'x' }
+  ];
+  const { products, offers } = catalogRows(rows, new Date('2026-03-10T12:00:00Z'));
+  assert.equal(products.length, 1);
+  assert.deepEqual(products[0], { barcode: '7290000000011', name: 'חלב 3% שקית 1 ל', names: 'חלב 3% שקית 1 ל | חלב שקית 3% 1 ליטר', maker: 'מחלבה א', qty: 1, unit: 'ליטר', seen_at: '2026-03-10T12:00:00.000Z' });
+  assert.deepEqual(offers.map((o) => [o.chain, o.price]), [['x', 6.1], ['y', 6.9]]);
+  assert.deepEqual(catalogRows(null), { products: [], offers: [] });
+});
+
+test('what is asked of the service: at most 15 cleaned items, no repeats, a size cap', () => {
+  const input = fetchInput(['חלב', ' חלב ', '<b>ביצים</b>', 'x', ...Array.from({ length: 30 }, (_, i) => 'מוצר ' + i)]);
+  assert.equal(input.productQueries.length, 15);
+  assert.deepEqual(input.productQueries.slice(0, 2), ['חלב', 'bביצים/b']);
+  assert.equal(input.mode, 'compareProducts');
+  assert.equal(input.oneStorePerChain, true);
+  assert.ok(input.maxItems <= 2000);
+  assert.equal(fetchInput(['', 'a']), null);
+  assert.ok(SEED.length >= 60 && SEED.every((q) => /[א-ת]/.test(q)));
+});
+
+test('a finished run gives all its rows; a running one none', async () => {
+  const fake = async (url) => ({ ok: true, json: async () => (url.includes('/actor-runs/') ? { data: url.includes('run2') ? { status: 'RUNNING' } : { status: 'SUCCEEDED', defaultDatasetId: 'ds1', usageTotalUsd: 0.02 } } : [{ barcode: '1' }, { barcode: '2' }]) });
+  const done = await apifyItems(fake, 't', 'run1abc');
+  assert.equal(done.done, true);
+  assert.equal(done.items.length, 2);
+  assert.equal(done.cost, 0.02);
+  assert.equal((await apifyItems(fake, 't', 'run2abc')).done, false);
+  await assert.rejects(apifyItems(fake, 't', '../x'));
+});
