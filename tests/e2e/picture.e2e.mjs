@@ -63,15 +63,24 @@ test('first time: banks, then cards (how many of each, and the bank own cards), 
   assert.equal(db.tables.credit_cards.filter((c) => c.provider === 'leumi').length, 1);
   assert.match(await page.locator('.pic-chosen').textContent(), /אשראי לאומי/);
   await page.click('.pic-chosen button:has-text("סיימתי")');
-  await page.waitForSelector('.pic-history');
+  await page.waitForSelector('.pic-tiles');
   // One statement for each: the bank, Max (both cards), and Leumi's own cards.
   assert.equal(await page.locator('.pic-task').count(), 3);
   assert.match(await page.locator('.pic-task', { hasText: 'מקס' }).textContent(), /2 כרטיסים/);
-  assert.match(await page.locator('.pic-task', { hasText: 'אשראי לאומי' }).textContent(), /באתר הבנק: כרטיסי אשראי/);
-  const link = page.locator('.pic-task a.btn', { hasText: 'לאתר של לאומי' }).first();
+  // A phone shows the month on one screen: no scrolling.
+  assert.ok(await page.evaluate(() => { const b = document.querySelector('.sheet'); return b.scrollHeight <= b.clientHeight + 2; }), 'the month fits the screen');
+  // A tile opens how to get its statement, with the site.
+  await page.locator('.pic-task', { hasText: 'אשראי לאומי' }).locator('.pic-tile-main').click();
+  assert.match(await page.locator('.pic-focus').textContent(), /באתר הבנק: כרטיסי אשראי/);
+  const link = page.locator('.pic-focus a.btn', { hasText: 'לאתר של לאומי' });
   assert.equal(await link.getAttribute('href'), 'https://www.leumi.co.il/');
   assert.equal(await link.getAttribute('target'), '_blank');
   assert.match(await link.getAttribute('rel'), /noopener/);
+  // The 6 months are a tap away.
+  await page.click('.pic-focus button[aria-label="סגירה"]');
+  await page.click('.pic-hist-btn');
+  await page.waitForSelector('.pic-history .pic-tr');
+  assert.equal(await page.locator('.pic-tiles').isVisible(), false);
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -231,6 +240,7 @@ test('accounts and cards saved before the companies: named ones get their logo, 
   await page.waitForSelector('.pic-unknown');
   // Rami Levy's card is Isracard's: its logo, not a question.
   assert.equal(await page.locator('.pic-task img[alt="ישראכרט"]').count(), 1);
+  assert.match(await page.locator('.pic-task:has(img[alt="ישראכרט"])').textContent(), /רמי לוי/, 'the card\'s own name stays');
   assert.equal(await page.locator('.pic-unknown li').count(), 2);
   await page.locator('.pic-unknown li', { hasText: 'הכרטיס של קובי' }).locator('select').selectOption('cal');
   for (let i = 0; i < 30 && db.tables.credit_cards[1].provider !== 'cal'; i++) await page.waitForTimeout(100);

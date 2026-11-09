@@ -151,6 +151,10 @@ export function PictureSheet({ data, onClose, onUpload }) {
   const t = files ? tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: data.txs }) : null;
   // false, or the step of the picker: 'bank' then 'card'.
   const [edit, setEdit] = useState(() => (data.accounts.length + data.cards.length ? false : 'bank'));
+  // On a phone: the tiles, or the last 6 months instead of them. A tile
+  // tapped opens how to get its statement.
+  const [view, setView] = useState('now');
+  const [focus, setFocus] = useState(null);
   useEffect(() => { track('picture_open'); }, []);
   if (!t) return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}><span class="muted">טוען…</span><//>`;
   if (edit) return html`<${Sheet} title="הבנקים והכרטיסים שלכם" onClose=${onClose}><${Picker} data=${data} step=${edit} onStep=${setEdit} onDone=${() => setEdit(false)} /><//>`;
@@ -158,46 +162,44 @@ export function PictureSheet({ data, onClose, onUpload }) {
   // Saved before the companies were chosen, and not recognised by name.
   const unknown = sourcesOf({ accounts: data.accounts, cards: data.cards }).filter((x) => !x.provider);
   const now = t.months[t.months.length - 1];
-  const line = (r) => {
+  const info = (r) => {
     const x = r.source;
-    const p = providerOf(x.provider);
     const st = statusFor(t, r);
     const sub = x.kind === 'card'
-      ? (x.count > 1 ? x.count + ' כרטיסים' : 'כרטיס אחד') + ' · חיוב ' + (x.billingDay || 10) + '.' + Number((st.key || now).slice(5))
-      : 'חשבון אחד · ' + monthName(st.key || now);
-    const due = st.status === 'missing' || st.status === 'partial';
-    return html`<li key=${x.id} class=${'pic-task is-' + st.status}>
-      <${SiteLogo} source=${x} />
-      <span class="pic-task-t"><b>${nameOf(x)}</b><small class="muted">${sub}${st.status === 'partial' ? ' · הקובץ לא שלם' : ''}</small>
-        ${due && html`<small class="faint">${howTo(x.kind, x.provider)}</small>`}
-        ${due && p && html`<a class="btn pic-site" href=${p.url} target="_blank" rel="noopener noreferrer">לאתר של ${p.name} <span aria-hidden="true">↗</span></a>`}</span>
-      <span class="pic-task-a">${due ? html`<button type="button" class="btn" onClick=${() => onUpload(x)}><${Icon} name="upload" size=${16} />להעלות</button>`
-        : st.status === 'ok' ? html`<span class="pic-chip ok">✓ הועלה</span>` : html`<span class="pic-chip">עוד לא</span>`}</span>
+      ? (x.count > 1 ? x.count + ' כרטיסים · ' : '') + 'חיוב ' + (x.billingDay || 10) + '.' + Number((st.key || now).slice(5))
+      : monthName(st.key || now);
+    // The card's own name too, when it says more than the company (רמי לוי).
+    const own = x.count === 1 && x.name && !x.name.includes((providerOf(x.provider) || {}).name || x.name) && x.name !== nameOf(x) ? x.name + ' · ' : '';
+    return { x, st, sub: own + sub, due: st.status === 'missing' || st.status === 'partial' };
+  };
+  // A tile for each bank account and card company: its logo, its month, and
+  // whether the statement is in. Everything on one screen, no scrolling.
+  const tile = (r) => {
+    const { x, st, sub, due } = info(r);
+    const p = providerOf(x.provider);
+    return html`<li key=${x.id} class=${'pic-task pic-tile is-' + st.status}>
+      <button type="button" class="pic-tile-main" aria-label=${nameOf(x) + ': ' + (due ? 'חסר. איך מורידים ומעלים' : st.status === 'ok' ? 'הועלה' : 'עוד לא הגיע הזמן')} onClick=${() => setFocus(x.id)}>
+        ${p ? html`<${Logo} provider=${p.key} size="t" />` : html`<${Logo} name=${x.name} size="t" />`}
+        <b>${nameOf(x)}</b><small class="muted">${sub}${st.status === 'partial' ? ' · לא שלם' : ''}</small></button>
+      ${due ? html`<button type="button" class="pic-tile-up" onClick=${() => onUpload(x)}><${Icon} name="upload" size=${14} />להעלות</button>`
+        : st.status === 'ok' ? html`<span class="pic-tile-ok" aria-hidden="true">✓</span>` : html`<span class="pic-tile-wait">עוד לא</span>`}
     </li>`;
   };
-  const group = (k, title) => { const rows = t.rows.filter((r) => r.source.kind === k); return rows.length > 0 && html`<h3 class="pic-h">${title}</h3><ul class="pic-tasks">${rows.map(line)}</ul>`; };
-  return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}>
-    <div class="stack pic">
-      <div class="pic-now">
-      <div class=${'card pic-hero' + (full ? ' is-full' : '')}>
-        <${Ring} pct=${t.ring.pct} label="הפירוטים שצריך עכשיו: " />
-        <div><b class="pic-hero-t">${full ? 'כל הפירוטים הועלו' : t.tasks.length === 1 ? 'נשאר פירוט אחד' : 'נשארו ' + t.tasks.length + ' פירוטים'}</b>
-          <span class="muted">${full ? 'התמונה מלאה, וכל המספרים מדויקים.' : 'פירוט אחד לכל חברה, וזה הכול. ' + t.ring.done + ' מתוך ' + t.ring.total + ' כבר הועלו.'}</span>
-          ${t.streak > 1 && html`<span class="pic-streak">${t.streak} חודשים ברצף עם תמונה מלאה</span>`}</div>
-      </div>
-      ${unknown.length > 0 && html`<div class="card pic-unknown">
-        <b>לאילו חברות שייכים?</b>
-        <span class="muted">כך נדע מאיזה אתר להוריד, ונציג את הלוגו. מה שלא תבחרו יזוהה לבד מהפירוט הבא שתעלו.</span>
-        <ul>${unknown.map((x) => html`<li key=${x.id}><span class="pic-u-name"><b>${x.name}</b><small class="muted">${x.kind === 'card' ? 'כרטיס אשראי' + (x.last4 ? ' ' + x.last4 : '') : 'חשבון בנק'}</small></span>
-          <select class="input" aria-label=${'החברה של ' + x.name} onChange=${(e) => e.currentTarget.value && saveRow(x.kind === 'card' ? 'credit_cards' : 'bank_accounts', { id: x.id, provider: e.currentTarget.value }).then(() => track('picture_named')).catch(() => showToast('לא נשמר. נסו שוב.'))}>
-            <option value="">בחרו חברה</option>${PROVIDERS.filter((p) => x.kind === 'card' || p.kind === 'bank').map((p) => html`<option value=${p.key}>${x.kind === 'card' && p.kind === 'bank' ? 'כרטיס של בנק ' + p.name : p.name}</option>`)}</select></li>`)}</ul>
-      </div>`}
-      ${group('bank', 'חשבון בנק')}
-      ${group('card', 'כרטיסי אשראי')}
-      <button type="button" class="btn-text pic-edit" onClick=${() => setEdit('bank')}>עריכת בנקים וכרטיסים</button>
-      </div>
-      <div class="card pic-history">
-        <div class="pic-h-row"><h3 class="pic-h" style="margin:0">6 החודשים האחרונים</h3></div>
+  const rows = [...t.rows.filter((r) => r.source.kind === 'bank'), ...t.rows.filter((r) => r.source.kind === 'card')];
+  const sel = focus && rows.find((r) => r.source.id === focus);
+  const panel = sel && (() => {
+    const { x, st, sub, due } = info(sel);
+    const p = providerOf(x.provider);
+    return html`<div class="pic-focus" role="dialog" aria-label=${nameOf(x)}>
+      <div class="pic-focus-head">${p && html`<${Logo} provider=${p.key} size="s" />`}<span><b>${nameOf(x)}</b><small class="muted">${sub}</small></span>
+        <button type="button" class="icon-btn" aria-label="סגירה" onClick=${() => setFocus(null)}><${Icon} name="x" size=${16} /></button></div>
+      ${due ? html`<p class="pic-focus-how">${howTo(x.kind, x.provider)}</p>` : html`<p class="pic-focus-how muted">${st.status === 'ok' ? 'הפירוט של החודש כבר כאן. תודה!' : 'הפירוט של החודש עוד לא זמין. נזכיר לכם ביום שאחרי החיוב.'}</p>`}
+      <div class="pic-focus-acts">${p && html`<a class="btn btn-ghost" href=${p.url} target="_blank" rel="noopener noreferrer">לאתר של ${p.name} <span aria-hidden="true">↗</span></a>`}
+        <button type="button" class="btn" onClick=${() => { setFocus(null); onUpload(x); }}><${Icon} name="upload" size=${16} />להעלות פירוט</button></div>
+    </div>`;
+  })();
+  const history = html`<div class="card pic-history">
+        <div class="pic-h-row"><h3 class="pic-h" style="margin:0">6 החודשים האחרונים</h3>${view === 'history' && html`<button type="button" class="btn-text" onClick=${() => setView('now')}>→ חזרה</button>`}</div>
         <div class="pic-table" role="table" aria-label="פירוטים לפי חודש">
           <div class="pic-tr pic-th" role="row"><span role="columnheader"><span class="sr-only">חשבון</span></span>${t.months.map((k) => html`<span role="columnheader" key=${k}>${monthShort(k)}</span>`)}</div>
           ${t.rows.map((r) => html`<div class="pic-tr" role="row" key=${r.source.id}>
@@ -208,12 +210,30 @@ export function PictureSheet({ data, onClose, onUpload }) {
           </div>`)}
         </div>
         <div class="pic-legend"><span><i class="pic-dot is-ok"></i>הועלה</span><span><i class="pic-dot is-missing"></i>חסר</span><span><i class="pic-dot is-partial"></i>חלקי</span><span><i class="pic-dot is-waiting"></i>עוד לא הגיע הזמן</span></div>
-        <p class="faint" style="font-size:12px;line-height:1.5;margin:6px 0 0">לחיצה על לוגו פותחת את האתר הרשמי בחלון חדש, כדי להוריד משם את הפירוט. כרטיס נספר לפי חודש החיוב; חשבון בנק לפי החודש הקלנדרי. הלוגואים שייכים לבעליהם, ואין לנו קשר עסקי איתם.</p>
+        <p class="faint" style="font-size:12px;line-height:1.5;margin:6px 0 0">כרטיס נספר לפי חודש החיוב; חשבון בנק לפי החודש הקלנדרי. חיוב הכרטיס שמופיע בבנק לא נספר פעמיים. הלוגואים שייכים לבעליהם, ואין לנו קשר עסקי איתם.</p>
+      </div>`;
+  return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}>
+    <div class=${'pic' + (view === 'history' ? ' pic-only-history' : '')}>
+      <div class="pic-now">
+      <div class=${'pic-hero' + (full ? ' is-full' : '')}>
+        <${Ring} pct=${t.ring.pct} size=${76} label="הפירוטים שצריך עכשיו: " />
+        <div><b class="pic-hero-t">${full ? 'כל הפירוטים הועלו' : t.tasks.length === 1 ? 'נשאר פירוט אחד' : 'נשארו ' + t.tasks.length + ' פירוטים'}</b>
+          <span class="muted">${full ? 'התמונה מלאה, וכל המספרים מדויקים.' : 'פירוט אחד לכל חברה. ' + t.ring.done + ' מתוך ' + t.ring.total + ' כבר הועלו.'}</span>
+          ${t.streak > 1 && html`<span class="pic-streak">${t.streak} חודשים ברצף עם תמונה מלאה</span>`}</div>
       </div>
-      <div class="card pic-why"><b>למה צריך גם את הבנק וגם את האשראי?</b>
-        <span><b>כרטיס האשראי</b> מראה מה קניתם: סופר, דלק, מסעדות.</span>
-        <span><b>חשבון הבנק</b> מראה משכורת והכנסות, הוראות קבע, שכירות, ארנונה, גן, צ׳קים ומשיכות מזומן.</span>
-        <span class="muted">חיוב הכרטיס שמופיע בבנק לא נספר פעמיים: הקניות נספרות מפירוט הכרטיס.</span></div>
+      ${unknown.length > 0 && html`<div class="pic-unknown">
+        <b>לאילו חברות שייכים?</b>
+        <ul>${unknown.map((x) => html`<li key=${x.id}><span class="pic-u-name"><b>${x.name}</b><small class="muted">${x.kind === 'card' ? 'כרטיס אשראי' + (x.last4 ? ' ' + x.last4 : '') : 'חשבון בנק'}</small></span>
+          <select class="input" aria-label=${'החברה של ' + x.name} onChange=${(e) => e.currentTarget.value && saveRow(x.kind === 'card' ? 'credit_cards' : 'bank_accounts', { id: x.id, provider: e.currentTarget.value }).then(() => track('picture_named')).catch(() => showToast('לא נשמר. נסו שוב.'))}>
+            <option value="">בחרו חברה</option>${PROVIDERS.filter((p) => x.kind === 'card' || p.kind === 'bank').map((p) => html`<option value=${p.key}>${x.kind === 'card' && p.kind === 'bank' ? 'כרטיס של בנק ' + p.name : p.name}</option>`)}</select></li>`)}</ul>
+        <small class="muted">מה שלא תבחרו יזוהה לבד מהפירוט הבא שתעלו.</small>
+      </div>`}
+      <ul class="pic-tiles">${rows.map(tile)}</ul>
+      <div class="pic-links"><button type="button" class="btn-text" onClick=${() => setEdit('bank')}>עריכת בנקים וכרטיסים</button>
+        <button type="button" class="btn-text pic-hist-btn" onClick=${() => setView('history')}>6 החודשים האחרונים</button></div>
+      ${panel}
+      </div>
+      ${history}
     </div>
   <//>`;
 }
