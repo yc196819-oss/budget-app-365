@@ -118,6 +118,15 @@ export function nameOf(s) {
   return s.kind === 'card' && p.kind === 'bank' ? 'אשראי ' + p.name : p.name;
 }
 
+// The same, in three short steps (for the sheet that opens on a company).
+export function howSteps(kind, provider = null) {
+  const p = providerOf(provider);
+  const site = p ? 'נכנסים לאתר של ' + p.name : 'נכנסים לאתר הרשמי';
+  if (kind === 'card' && p && p.kind === 'bank') return [site, 'כרטיסי אשראי ← פירוט חיובים', 'בוחרים את חודש החיוב ← ייצוא לאקסל'];
+  if (kind === 'card') return [site, 'פירוט עסקאות ← בוחרים את חודש החיוב', 'ייצוא לאקסל (או שמירה כ-PDF)'];
+  return [site, 'עובר ושב ← תנועות בחשבון', 'בוחרים את החודש ← ייצוא לאקסל'];
+}
+
 const pad = (n) => String(n).padStart(2, '0');
 const ym = (y, m) => y + '-' + pad(m + 1); // m is 0-based
 const ymOf = (d) => ym(d.getFullYear(), d.getMonth());
