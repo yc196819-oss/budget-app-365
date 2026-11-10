@@ -15,7 +15,22 @@ const CERBERUS = [
   { key: 'fresh-market', name: 'פרש מרקט', user: 'freshmarket' },
   { key: 'stop-market', name: 'סטופ מרקט', user: 'Stop_Market' },
   { key: 'politzer', name: 'פוליצר', user: 'politzer' },
-  { key: 'salach-dabach', name: 'סאלח דבאח', user: 'SalachD' }
+  { key: 'salach-dabach', name: 'סאלח דבאח', user: 'SalachD' },
+  { key: 'dor-alon', name: 'דור אלון', user: 'doralon' }
+];
+// Chains on the other shared price site (binaprojects): one address each,
+// and the chain's number.
+const BINA = [
+  { key: 'shefa-birkat-hashem', name: 'שפע ברכת השם', host: 'shefabirkathashem', id: '7290058134977' },
+  { key: 'maayan-2000', name: 'מעיין 2000', host: 'maayan2000', id: '7290058159628' },
+  { key: 'mishnat-yosef', name: 'משנת יוסף', host: 'ktshivuk', id: '7290058289400' },
+  { key: 'king-store', name: 'קינג סטור', host: 'kingstore', id: '7290058108879' },
+  { key: 'zol-vebegadol', name: 'זול ובגדול', host: 'zolvebegadol', id: '7290058173198' },
+  { key: 'super-sapir', name: 'סופר ספיר', host: 'supersapir', id: '7290058156016' },
+  { key: 'shuk-hair', name: 'שוק העיר', host: 'shuk-hayir', id: '7290058148776' },
+  { key: 'bareket', name: 'ברקת', host: 'superbareket', id: '7290875100001' },
+  { key: 'city-market', name: 'סיטי מרקט', host: 'citymarketkiryatgat', id: '7290058288526' },
+  { key: 'good-pharm', name: 'גוד פארם', host: 'goodpharm', id: '7290058197699' }
 ];
 const CERB = 'https://url.publishedprices.co.il';
 const SHUF = 'https://prices.shufersal.co.il';
@@ -90,10 +105,36 @@ async function cerberus(fetchFn, chain) {
   return parsePriceFile(gunzip(Buffer.from(await r.arrayBuffer())), chain);
 }
 
-// Every chain we can reach: its rows, or why not (one failing chain never
-// stops the others).
+// The other shared site: the chain's list of full price files, the newest
+// (by the date and time in the name), then the file's real address on the
+// chain's own site, then the file.
+const binaStamp = (n) => (n.match(/-(\d{8})-?(\d{4,6})\./) || []).slice(1).join('');
+async function bina(fetchFn, chain) {
+  const base = 'https://' + chain.host + '.binaprojects.com';
+  const query = new URLSearchParams({ _: chain.id, wReshet: 'הכל', WFileType: '4', WDate: '', WStore: '' });
+  const list = JSON.parse((await getBuf(fetchFn, base + '/MainIO_Hok.aspx?' + query)).toString('utf8') || '[]');
+  const files = (Array.isArray(list) ? list : []).map((f) => String((f && f.FileNm) || '')).filter((n) => /^PriceFull[\w.-]+$/i.test(n));
+  if (!files.length) throw new Error('no files');
+  const newest = files.sort((a, b) => binaStamp(b).localeCompare(binaStamp(a)));
+  // The list does not say how big a branch is: a small one (a few dozen
+  // products) is passed over for the next, up to three branches.
+  let best = [];
+  for (const name of newest.slice(0, 3)) {
+    const link = JSON.parse((await getBuf(fetchFn, base + '/Download.aspx?FileNm=' + encodeURIComponent(name))).toString('utf8') || '[]');
+    const url = String((Array.isArray(link) && link[0] && link[0].SPath) || '');
+    if (url.toLowerCase().indexOf(base.toLowerCase() + '/') !== 0) throw new Error('no file link');
+    const rows = parsePriceFile(gunzip(await getBuf(fetchFn, url)), chain);
+    if (rows.length > best.length) best = rows;
+    if (best.length >= 500) break;
+  }
+  return best;
+}
+
+// Every chain we can reach, in order: its rows, or why not (one failing
+// chain never stops the others).
+const CHAINS = [{ key: 'shufersal', name: 'שופרסל' }, ...CERBERUS, ...BINA];
 async function allChains(fetchFn, { only = null } = {}) {
-  const jobs = [{ key: 'shufersal', name: 'שופרסל', run: () => shufersal(fetchFn) }, ...CERBERUS.map((c) => ({ ...c, run: () => cerberus(fetchFn, c) }))]
+  const jobs = [{ key: 'shufersal', name: 'שופרסל', run: () => shufersal(fetchFn) }, ...CERBERUS.map((c) => ({ ...c, run: () => cerberus(fetchFn, c) })), ...BINA.map((c) => ({ ...c, run: () => bina(fetchFn, c) }))]
     .filter((j) => !only || only.includes(j.key));
   const out = [];
   for (const j of jobs) {
@@ -102,4 +143,4 @@ async function allChains(fetchFn, { only = null } = {}) {
   return out;
 }
 
-module.exports = { parsePriceFile, shufersal, cerberus, allChains, CERBERUS };
+module.exports = { parsePriceFile, shufersal, cerberus, bina, allChains, CERBERUS, BINA, CHAINS };

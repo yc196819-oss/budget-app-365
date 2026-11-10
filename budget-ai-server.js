@@ -2021,9 +2021,9 @@ const pricefiles = require('./server/pricefiles');
 // The free load: each chain's own full price file (the transparency law),
 // one chain at a time (one file in memory at a time), saved by barcode.
 async function runFreeLoad() {
-  Object.assign(seedJob, { running: true, part: 0, parts: 1 + pricefiles.CERBERUS.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null, free: true, chainsDone: [] });
+  Object.assign(seedJob, { running: true, part: 0, parts: pricefiles.CHAINS.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null, free: true, chainsDone: [] });
   try {
-    const keys = ['shufersal', ...pricefiles.CERBERUS.map((c) => c.key)];
+    const keys = pricefiles.CHAINS.map((c) => c.key);
     const rows = [];
     for (const key of keys) {
       seedJob.part++;
