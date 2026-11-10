@@ -2,15 +2,26 @@
 
 import { isoDate, parseDate, monthShare } from './money.js';
 
-// First day of each holiday (Gregorian). The holidays that cost a family
-// noticeably more than a regular month.
-const HOLIDAY_DATES = {
-  pesach: ['2025-04-13', '2026-04-02', '2027-04-22', '2028-04-11', '2029-03-31'],
-  shavuot: ['2025-06-02', '2026-05-22', '2027-06-11', '2028-05-31', '2029-05-20'],
-  roshHashana: ['2025-09-23', '2026-09-12', '2027-10-02', '2028-09-21', '2029-09-10'],
-  sukkot: ['2025-10-07', '2026-09-26', '2027-10-16', '2028-10-05', '2029-09-24'],
-  chanukah: ['2025-12-15', '2026-12-05', '2027-12-25', '2028-12-13', '2029-12-02']
-};
+// The holidays that cost a family noticeably more than a regular month, by
+// their Hebrew date (first day). Their Gregorian dates come from the Hebrew
+// calendar built into every browser and into Node, for any year.
+const HEBREW_DAYS = { pesach: ['Nisan', 15], shavuot: ['Sivan', 6], roshHashana: ['Tishri', 1], sukkot: ['Tishri', 15], chanukah: ['Kislev', 25] };
+let hebFormat = null;
+const yearCache = new Map();
+// { key: 'YYYY-MM-DD' } for one Gregorian year.
+export function holidayDates(year) {
+  if (yearCache.has(year)) return yearCache.get(year);
+  hebFormat = hebFormat || new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const out = {};
+  for (let t = Date.UTC(year, 0, 1); t < Date.UTC(year + 1, 0, 1); t += 86400000) {
+    const parts = hebFormat.formatToParts(new Date(t));
+    const month = (parts.find((p) => p.type === 'month') || {}).value;
+    const day = Number((parts.find((p) => p.type === 'day') || {}).value);
+    for (const [key, [m, d]] of Object.entries(HEBREW_DAYS)) if (month === m && day === d) out[key] = new Date(t).toISOString().slice(0, 10);
+  }
+  yearCache.set(year, out);
+  return out;
+}
 
 export const HOLIDAYS = {
   pesach: { name: 'פסח', items: [['food', 'אוכל ואירוח לחג', 1200, true], ['clean', 'ניקיון וכלים', 300, true], ['clothes', 'בגדים לחג', 600, true], ['trips', 'טיולים בחול המועד', 800, true], ['gifts', 'מתנות', 300, false]] },
@@ -28,8 +39,8 @@ export function holidaysBetween(from, to) {
   const a = isoDate(from);
   const b = isoDate(to);
   const out = [];
-  for (const [key, dates] of Object.entries(HOLIDAY_DATES)) {
-    for (const date of dates) if (date >= a && date <= b) out.push({ key, name: HOLIDAYS[key].name, date });
+  for (let y = Number(a.slice(0, 4)); y <= Number(b.slice(0, 4)); y++) {
+    for (const [key, date] of Object.entries(holidayDates(y))) if (date >= a && date <= b) out.push({ key, name: HOLIDAYS[key].name, date });
   }
   return out.sort((x, y) => (x.date < y.date ? -1 : 1));
 }
@@ -41,7 +52,8 @@ export function nextHoliday(today, days = 21) {
 }
 
 export function previousOccurrence(key, date) {
-  return [...HOLIDAY_DATES[key]].reverse().find((d) => d < date) || null;
+  const y = Number(String(date).slice(0, 4));
+  return [y, y - 1].map((x) => holidayDates(x)[key]).find((d) => d && d < date) || null;
 }
 
 // How much more than a regular month the holiday's month cost last time:
