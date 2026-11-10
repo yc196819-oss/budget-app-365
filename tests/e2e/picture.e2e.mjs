@@ -63,14 +63,14 @@ test('first time: banks, then cards (how many of each, and the bank own cards), 
   assert.equal(db.tables.credit_cards.filter((c) => c.provider === 'leumi').length, 1);
   assert.match(await page.locator('.pic-chosen').textContent(), /אשראי לאומי/);
   await page.click('.pic-chosen button:has-text("סיימתי")');
-  await page.waitForSelector('.pic-tiles');
+  await page.waitForSelector('.pic-list');
   // One statement for each: the bank, Max (both cards), and Leumi's own cards.
   assert.equal(await page.locator('.pic-task').count(), 3);
   assert.match(await page.locator('.pic-task', { hasText: 'מקס' }).textContent(), /2 כרטיסים/);
   // A phone shows the month on one screen: no scrolling.
   assert.ok(await page.evaluate(() => { const b = document.querySelector('.sheet'); return b.scrollHeight <= b.clientHeight + 2; }), 'the month fits the screen');
   // A tile opens how to get its statement, with the site.
-  await page.locator('.pic-task', { hasText: 'אשראי לאומי' }).locator('.pic-tile-main').click();
+  await page.locator('.pic-task', { hasText: 'אשראי לאומי' }).locator('.pic-item-main').click();
   assert.match(await page.locator('.pic-focus').textContent(), /באתר הבנק: כרטיסי אשראי/);
   const link = page.locator('.pic-focus a.btn', { hasText: 'לאתר של לאומי' });
   assert.equal(await link.getAttribute('href'), 'https://www.leumi.co.il/');
@@ -80,7 +80,7 @@ test('first time: banks, then cards (how many of each, and the bank own cards), 
   await page.click('.pic-focus button[aria-label="סגירה"]');
   await page.click('.pic-hist-btn');
   await page.waitForSelector('.pic-history .pic-tr');
-  assert.equal(await page.locator('.pic-tiles').isVisible(), false);
+  assert.equal(await page.locator('.pic-list').first().isVisible(), false);
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -93,7 +93,8 @@ test('a file of another company moves there without uploading again, and its lin
   });
   await page.click('.pic-card');
   await page.waitForSelector('.pic-task');
-  await page.click('.pic-task:has-text("מקס") button:has-text("להעלות")');
+  await page.click('.pic-task:has-text("מקס") .pic-item-main');
+  await page.click('.pic-focus button:has-text("להעלות את הקובץ")');
   await page.waitForSelector('.sheet:has-text("העלאת פירוט: מקס")');
   const cal = makeXlsx([['כאל - פירוט עסקאות'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב'], [dd(1, 3), 'מסעדה בדויה', '80.00', '80.00'], ['', 'סה"כ', '', '80.00']]);
   await page.setInputFiles('.sheet input[type="file"]', { name: 'x.xlsx', mimeType: '', buffer: cal });
@@ -113,7 +114,8 @@ test('a file of another company moves there without uploading again, and its lin
   // A company not in the list yet: added, and the file goes to it.
   await page.click('.pic-card');
   await page.waitForSelector('.pic-task');
-  await page.click('.pic-task:has-text("מקס") button:has-text("להעלות")');
+  await page.click('.pic-task:has-text("מקס") .pic-item-main');
+  await page.click('.pic-focus button:has-text("להעלות את הקובץ")');
   const isra = makeXlsx([['ישראכרט פירוט חיובים'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב'], [dd(1, 4), 'חנות בדויה', '40.00', '40.00'], ['', 'סה"כ', '', '40.00']]);
   await page.setInputFiles('.sheet input[type="file"]', { name: 'y.xlsx', mimeType: '', buffer: isra });
   await page.waitForSelector('.import-move button:has-text("להוסיף את ישראכרט")');
@@ -138,7 +140,7 @@ test('the ring and 6 months: what is uploaded, what is missing, and an upload fr
   assert.match(await page.locator('.pic-card').textContent(), /50%.*חסר פירוט אחד/);
   await page.click('.pic-card');
   await page.waitForSelector('.pic-history');
-  assert.equal(await page.locator('.pic-hero .pic-ring b').textContent(), '50%');
+  assert.equal(await page.locator('.pic-ring2 b').textContent(), '1/2');
   assert.equal(await page.locator('.pic-tr').count(), 3, 'a header and two accounts');
   const bank = page.locator('.pic-tr').nth(1);
   assert.equal(await bank.locator('.pic-dot.is-ok').count(), 1);
@@ -177,7 +179,8 @@ test('a bank file is kept as the bank account\'s, and a card file chosen for the
   });
   await page.click('.pic-card');
   await page.waitForSelector('.pic-task');
-  await page.click('.pic-task button:has-text("להעלות")');
+  await page.click('.pic-task .pic-item-main');
+  await page.click('.pic-focus button:has-text("להעלות את הקובץ")');
   const xlsx = makeXlsx([['פירוט עסקאות לכרטיס 4821'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב'], [dd(1, 3), 'מסעדה בדויה', '80.00', '80.00'], ['', 'סה"כ', '', '80.00']]);
   await page.setInputFiles('.sheet input[type="file"]', { name: 'x.xlsx', mimeType: '', buffer: xlsx });
   await page.waitForSelector('.import-checks');
@@ -217,7 +220,8 @@ test('a company with two cards: a file with only one of them says so, and can be
   await page.click('.pic-card');
   await page.waitForSelector('.pic-task');
   assert.equal(await page.locator('.pic-task').count(), 1, 'one statement for the company');
-  await page.click('.pic-task button:has-text("להעלות")');
+  await page.click('.pic-task .pic-item-main');
+  await page.click('.pic-focus button:has-text("להעלות את הקובץ")');
   const xlsx = makeXlsx([['פירוט עסקאות'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב', '4 ספרות אחרונות'], [dd(1, 3), 'מסעדה בדויה', '80.00', '80.00', '4821'], [dd(1, 5), 'חנות בדויה', '20.00', '20.00', '4821'], ['', 'סה"כ', '', '100.00', '']]);
   await page.setInputFiles('.sheet input[type="file"]', { name: 'm.xlsx', mimeType: '', buffer: xlsx });
   await page.waitForSelector('.scan-result');
@@ -247,7 +251,8 @@ test('accounts and cards saved before the companies: named ones get their logo, 
   assert.equal(db.tables.credit_cards[1].provider, 'cal');
   await page.waitForFunction(() => document.querySelectorAll('.pic-unknown li').length === 1);
   // The bank account learns its bank from the first file confirmed for it.
-  await page.click('.pic-task:has-text("נעמי") button:has-text("להעלות")');
+  await page.click('.pic-task:has-text("נעמי") .pic-item-main');
+  await page.click('.pic-focus button:has-text("להעלות את הקובץ")');
   const xlsx = makeXlsx([['בנק לאומי - תנועות בחשבון'], [], ['תאריך', 'תיאור', 'חובה', 'זכות', 'יתרה'], [dd(1, 3), 'העברה בדויה', '80.00', '', '1000'], [dd(1, 20), 'משכורת בדויה', '', '500.00', '1420']]);
   await page.setInputFiles('.sheet input[type="file"]', { name: 'b.xlsx', mimeType: '', buffer: xlsx });
   await page.waitForSelector('.import-okline');

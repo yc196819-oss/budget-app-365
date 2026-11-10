@@ -197,6 +197,8 @@ test('prices: the household picks a kashrut level once, then every item gets the
   await page.click('.shop-prices-cta button');
   // First the kashrut question, saved for the household.
   await page.click('.price-pref-btn:has-text("מהדרין")');
+  // The save goes out on the click; wait for it to land before checking.
+  for (let i = 0; i < 50 && !db.tables.price_prefs.length; i++) await page.waitForTimeout(100);
   assert.equal(db.tables.price_prefs[0].kosher, 'mehadrin');
   await page.waitForSelector('.price-item');
   assert.deepEqual(calls.search[0], ['חלב 3%', 'ביצים', 'קפה'], 'the whole list in one search');
@@ -207,6 +209,7 @@ test('prices: the household picks a kashrut level once, then every item gets the
   const eggs = page.locator('.price-item', { hasText: 'ביצים' }).first();
   assert.match(await eggs.textContent(), /בחרו מוצר/);
   await eggs.locator('.price-vote .chip:has-text("כשר למהדרין")').click();
+  for (let i = 0; i < 50 && !db.tables.kosher_votes.length; i++) await page.waitForTimeout(100);
   assert.deepEqual(db.tables.kosher_votes.map((v) => [v.barcode, v.level]), [['2001', 'mehadrin']]);
   await page.waitForSelector('.price-item.is-auto:has-text("ביצים L 12")');
   // Coffee was not in our catalog: asked of the service once, then found.
