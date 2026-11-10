@@ -450,7 +450,7 @@ test('emails to users: one per step, read before sending, a test to yourself, an
   await more.locator('summary').click();
   assert.match(await more.textContent(), /טיפ קטן שיעשה את התקציב/);
   // The email itself, with its design.
-  await more.frameLocator('iframe.mail-preview').locator('a:has-text("להוסיף עוד פירוט")').waitFor();
+  await more.frameLocator('iframe.mail-preview').locator('a:has-text("להשלים את התמונה")').waitFor();
   assert.ok(await more.frameLocator('iframe.mail-preview').locator('img[src$="/wallet-192.png"]').count());
   // A test that fails says why, in the row, and stays there.
   await more.locator('button:has-text("ניסיון אליי")').click();
