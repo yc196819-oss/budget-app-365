@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminAsk, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach, priceService, priceSample, priceRun } from '../../data/account.js';
+import { adminStats, adminLive, adminAsk, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach } from '../../data/account.js';
 import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
@@ -90,52 +90,6 @@ function PriceReachCard() {
   </div>`;
 }
 
-// The outside price service: first what it is and costs, then one small run
-// to see real rows (chain, store, product, price, when updated).
-function PriceServiceCard() {
-  const [about, setAbout] = useState(null);
-  const [sample, setSample] = useState(null);
-  const [busy, setBusy] = useState('');
-  const [err, setErr] = useState('');
-  const run = async (key, fn, set) => { setBusy(key); setErr(''); try { set(await fn()); } catch (e) { setErr(e.message || 'הבדיקה נכשלה'); } setBusy(''); };
-  const [wait, setWait] = useState(0);
-  // Start the run, then check every 5 seconds (up to 5 minutes) until it ends.
-  const runSample = async () => {
-    setSample(null); setWait(0);
-    const start = await priceSample();
-    for (let i = 0; i < 60; i++) {
-      await new Promise((r) => setTimeout(r, 5000));
-      const r = await priceRun(start.runId);
-      setWait(r.seconds || (i + 1) * 5);
-      if (r.done) {
-        if (r.status !== 'SUCCEEDED') throw new Error('ההרצה הסתיימה בלי תוצאות (' + r.status + ')');
-        return { ...r, input: start.input };
-      }
-    }
-    throw new Error('ההרצה לוקחת יותר מ-5 דקות. אפשר לנסות שוב מאוחר יותר.');
-  };
-  const p = about && about.pricing;
-  return html`<div class="card stack admin-price-service"><b>מחירי סופר: השירות החיצוני (Apify)</b>
-    <span class="muted" style="font-size:13px;line-height:1.55">שלב 1: מה השירות מבקש ומה הוא עולה (בחינם). שלב 2: הרצה קטנה אחת (חלב 3%, סניף אחד מכל רשת, עד 15 תוצאות) כדי לראות מחירים אמיתיים. ההרצה משתמשת בקצת מהקרדיט החודשי.</span>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => run('a', priceService, setAbout)}>${busy === 'a' ? 'בודק…' : '1. מה השירות'}</button>
-      <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!busy} onClick=${() => run('s', runSample, setSample)}>${busy === 's' ? 'מריץ… ' + (wait ? wait + ' שניות' : '') : '2. הרצה קטנה'}</button>
-    </div>
-    ${err && html`<span role="status" style="font-size:13px;color:var(--danger)">${err}</span>`}
-    ${about && html`<div role="status" class="stack" style="gap:4px;font-size:13px">
-      <span><b>${about.title}</b>${about.modified ? ' · עודכן ' + String(about.modified).slice(0, 10) : ''}</span>
-      ${about.description && html`<span class="muted">${about.description}</span>`}
-      <span>מחיר: ${p ? (p.model || '') + (p.perUnit != null ? ' · $' + p.perUnit + ' ל-' + (p.unit || 'יחידה') : '') + (p.events ? ' · ' + JSON.stringify(p.events).slice(0, 160) : '') : 'לא צוין'}</span>
-      ${about.fields.length > 0 && html`<span class="faint">שדות שהוא מקבל:</span>${about.fields.map((f) => html`<span key=${f.key} dir="auto"><bdi>${f.key}</bdi>${f.title ? ' – ' + f.title : ''}${f.example !== undefined ? ' (למשל ' + JSON.stringify(f.example).slice(0, 60) + ')' : ''}</span>`)}`}
-    </div>`}
-    ${sample && html`<div role="status" class="stack" style="gap:4px;font-size:13px">
-      <span>${sample.count} תוצאות ב-${sample.seconds} שניות${sample.cost != null ? ' · עלה $' + Number(sample.cost).toFixed(3) : ''}${sample.input && sample.input.productQueries ? ' · חיפוש: ' + sample.input.productQueries.join(', ') : ''}</span>
-      <span class="faint" dir="auto">שדות: ${sample.keys.join(', ')}</span>
-      <div style="overflow-x:auto"><table class="admin-table" dir="auto"><thead><tr>${sample.keys.slice(0, 8).map((k) => html`<th key=${k}>${k}</th>`)}</tr></thead>
-        <tbody>${sample.rows.map((r, i) => html`<tr key=${i}>${sample.keys.slice(0, 8).map((k) => html`<td key=${k}>${r[k] ?? ''}</td>`)}</tr>`)}</tbody></table></div>
-    </div>`}
-  </div>`;
-}
 
 // The catalog, loaded on the server part by part (what most families buy,
 // then what families looked for and did not find). It goes on when this
@@ -156,7 +110,7 @@ function SeedCard() {
   }, []);
   const start = async () => { setErr(''); try { setSt(await loadStart()); } catch (e) { setErr(e.message || 'לא התחיל.'); } };
   return html`<div class="card stack price-seed"><b>קטלוג המוצרים שלנו</b>
-    <span class="muted" style="font-size:13px;line-height:1.55">משפחות מקבלות מחירים מיד, מתוך הקטלוג הזה. מה שחיפשו ולא היה בו נרשם, ונטען בטעינה הבאה. הטעינה רצה בשרת: אפשר לסגור את המסך. כל חלק עולה כמה סנטים מהקרדיט של Apify.</span>
+    <span class="muted" style="font-size:13px;line-height:1.55">משפחות מקבלות מחירים מיד, מתוך הקטלוג הזה. המחירים נטענים בחינם מהקבצים הרשמיים של הרשתות (חוק שקיפות המחירים), ומתעדכנים לבד כל לילה. הטעינה רצה בשרת: אפשר לסגור את המסך.</span>
     ${st && html`<div class="price-seed-stats" role="status">
       <span><b class="num">${st.products}</b><small class="muted">מוצרים</small></span>
       <span><b class="num">${st.offers}</b><small class="muted">מחירים</small></span>
@@ -164,12 +118,12 @@ function SeedCard() {
       <span><b class="num">${st.wanted}</b><small class="muted">חיפשו ולא נמצאו</small></span>
     </div>`}
     ${st && st.running && html`<div class="price-seed-run"><span class="price-seed-bar"><i style=${'width:' + Math.round(((st.part - 0.5) / Math.max(1, st.parts)) * 100) + '%'}></i></span>
-      <span role="status">טוען חלק ${st.part} מתוך ${st.parts}… נוספו עד עכשיו ${st.added} מוצרים</span></div>`}
+      <span role="status">${st.free ? 'טוען רשת ' + st.part + ' מתוך ' + st.parts : 'טוען חלק ' + st.part + ' מתוך ' + st.parts}… נשמרו עד עכשיו ${st.added.toLocaleString('he-IL')} מוצרים</span></div>`}
     ${st && !st.running && st.endedAt && html`<span class="muted" style="font-size:13px">הטעינה האחרונה הסתיימה: נוספו ${st.added} מוצרים${st.cost ? ' · עלות $' + Number(st.cost).toFixed(2) : ''}.</span>`}
     ${st && st.error && html`<span role="alert" style="color:var(--danger)">${st.error}</span>`}
     ${err && html`<span role="alert" style="color:var(--danger)">${err}</span>`}
-    ${st && !st.running && st.estimate != null && html`<span class="muted" style="font-size:13px">טעינה מלאה: כל מוצר נבדק ב-${st.mainChains || 10} הרשתות הגדולות, כדי להשוות את אותו מוצר בדיוק. עלות משוערת: עד $${Number(st.estimate).toFixed(2)}.</span>`}
-    ${!(st && st.running) && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${start}>${st && st.products ? 'לעדכן ולהשלים את הקטלוג' : 'לטעון את הקטלוג הראשון'}</button>`}
+    ${st && st.chainsDone && st.chainsDone.length > 0 && html`<ul class="price-seed-chains">${st.chainsDone.map((c) => html`<li key=${c.key} class=${c.error ? 'bad' : 'ok'}><span>${c.error ? '✕' : '✓'} ${c.name}</span><small class="muted">${c.error ? 'לא נטען' : c.count.toLocaleString('he-IL') + ' מוצרים'}</small></li>`)}</ul>`}
+    ${!(st && st.running) && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${start}>${st && st.products ? 'לעדכן מחירים מהרשתות עכשיו (חינם)' : 'לטעון מחירים מהרשתות (חינם)'}</button>`}
   </div>`;
 }
 
@@ -478,7 +432,7 @@ export function AdminView({ onBack }) {
       </div>`)}
     </div>`}
     ${back && html`<${MonthlyMailCard} />`}` },
-    { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים, אישור כשרות, והשירות החיצוני', body: () => html`${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceServiceCard} />`}${back && html`<${PriceReachCard} />`}` },
+    { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים מהרשתות, ואישור כשרות', body: () => html`${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceReachCard} />`}` },
     { key: 'system', icon: 'wrench', title: 'מצב המערכת', sub: s ? 'תקלות השבוע: ' + s.errors.week : 'תקלות ומה שבור', body: () => html`${s && html`
       <div class="card stack"><b>תקלות השבוע: <span class="num">${s.errors.week}</span></b>
         ${s.errors.top.map((e) => html`<div style="font-size:13px"><b class="num">${e.count}×</b> ${e.message}<div class="faint" style="font-size:11px">${e.path || ''}</div></div>`)}</div>`}` }

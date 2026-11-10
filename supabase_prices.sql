@@ -97,3 +97,18 @@ create table if not exists public.price_wanted (
 );
 alter table public.price_wanted enable row level security;
 -- No policies: only the server (service role) reads and writes it.
+
+-- Applied 2026-11-10 (price_search_trgm): the catalog now holds every
+-- chain's full price file (tens of thousands of products), so the search by
+-- words uses a trigram index, and prices are found by barcode quickly.
+create extension if not exists pg_trgm with schema extensions;
+create index if not exists price_products_names_trgm on public.price_products using gin ((lower(names || ' ' || name)) extensions.gin_trgm_ops);
+create index if not exists price_offers_barcode on public.price_offers (barcode);
+
+-- Every night at about 04:30 Israel time, today's prices from the chains'
+-- own files (free). The server checks the cron secret.
+-- select cron.schedule('prices-nightly', '30 1 * * *', $$
+--   select net.http_post(url := 'https://budget-web-u0iy.onrender.com/api/cron/prices',
+--     headers := jsonb_build_object('Content-Type','application/json','x-cron-secret',(select value from public.app_secrets where key='cron_secret')),
+--     body := '{}'::jsonb, timeout_milliseconds := 30000);
+-- $$);

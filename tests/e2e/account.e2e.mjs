@@ -499,42 +499,18 @@ test('emails to users: when the server cannot email people yet, the dashboard sa
   await page.close();
 });
 
-test('owner: the outside price service, what it takes and costs, then one small run with real rows', async () => {
-  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
-  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
-  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
-  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
-  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
+test('owner: prices come from the chains\' own files; the paid service is not offered', async () => {
+  const { page } = await open({ email: 'budgetapp2852@gmail.com' });
+  for (const p of ['stats', 'live', 'feedback', 'reengage']) await page.route('**/api/admin/' + p, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: p === 'stats' ? JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) : p === 'live' ? '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' : p === 'feedback' ? '{"items":[]}' : '{"count":0,"preview":null}' }));
+  await page.route('**/api/admin/kosher**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"products":0,"confirmed":0,"waiting":[]}' }));
   await page.route('**/api/admin/prices/load', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"running":false,"products":0,"offers":0,"chains":0,"wanted":0}' }));
-  await page.route('**/api/admin/prices/service', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ title: 'Israeli Supermarket Prices', description: 'Official price files', modified: '2026-10-01', pricing: { model: 'PAY_PER_EVENT', perUnit: null, unit: '', events: null }, fields: [{ key: 'query', title: 'Product', type: 'string', example: 'חלב' }], example: { query: 'חלב' } }) }));
-  let ran = null;
-  let checks = 0;
-  await page.route('**/api/admin/prices/sample', (r) => { ran = JSON.parse(r.request().postData() || '{}'); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ input: { productQueries: ['חלב 3%'] }, runId: 'run1abcdef', status: 'RUNNING' }) }); });
-  await page.route('**/api/admin/prices/sample/run1abcdef', (r) => { checks++; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(checks < 2 ? { status: 'RUNNING', done: false, seconds: 5 } : { status: 'SUCCEEDED', done: true, seconds: 12, cost: 0.012, count: 2, keys: ['chain', 'store', 'item', 'price', 'updated'], rows: [{ chain: 'שופרסל', store: 'דיזנגוף', item: 'חלב 3%', price: '6.9', updated: '2026-11-08' }, { chain: 'רמי לוי', store: 'תלפיות', item: 'חלב 3%', price: '6.5', updated: '2026-11-08' }] }) }); });
-  await page.clock.install();
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
-  await page.click('.admin-hub-btn:has-text("מחירי סופר")');
-  const card = page.locator('.admin-price-service');
-  await card.waitFor();
-  await card.locator('button:has-text("1. מה השירות")').click();
-  await card.locator('text=Israeli Supermarket Prices').waitFor();
-  assert.match(await card.textContent(), /PAY_PER_EVENT/);
-  assert.match(await card.textContent(), /query – Product \(למשל "חלב"\)/);
-  await card.locator('button:has-text("2. הרצה קטנה")').click();
-  // Checked every 5 seconds until the run is done.
-  await page.clock.runFor(5100);
-  await page.clock.runFor(5100);
-  await card.locator('table').waitFor();
-  assert.deepEqual(ran, {}, 'the server picks the test search');
-  assert.equal(checks, 2);
-  assert.match(await card.textContent(), /2 תוצאות ב-12 שניות · עלה \$0\.012 · חיפוש: חלב 3%/);
-  assert.equal(await card.locator('tbody tr').count(), 2);
-  assert.match(await card.locator('tbody').textContent(), /רמי לוי.*6\.5/s);
-  assert.deepEqual(errors, []);
+  await page.locator('.admin-hub-btn:has-text("מחירי סופר")').click();
+  await page.locator('.price-seed').waitFor();
+  assert.doesNotMatch(await page.locator('.admin-stats').textContent(), /Apify/);
   await page.close();
 });
-
 
 test('owner on a phone: the main screen has the numbers and a button for each part; each opens its own page', async () => {
   const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
@@ -679,10 +655,10 @@ test('owner: the catalog loads on the server; the card shows the numbers from th
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
   await page.route('**/api/admin/kosher**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"products":0,"confirmed":0,"waiting":[]}' }));
   await page.route('**/api/admin/prices/**', (r) => r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"no key"}' }));
-  let state = { running: false, part: 0, parts: 0, added: 0, cost: 0, error: null, endedAt: null, products: 120, offers: 131, chains: 19, wanted: 3, estimate: 5.98, mainChains: 10 };
+  let state = { running: false, part: 0, parts: 0, added: 0, cost: 0, error: null, endedAt: null, products: 120, offers: 131, chains: 19, wanted: 3, chainsDone: [{ key: 'shufersal', name: 'שופרסל', count: 7500 }, { key: 'keshet', name: 'קשת טעמים', count: 0, error: 'HTTP 403' }] };
   let started = 0;
   await page.route('**/api/admin/prices/load', (r) => {
-    if (r.request().method() === 'POST') { started++; state = { ...state, running: true, part: 1, parts: 7 }; }
+    if (r.request().method() === 'POST') { started++; state = { ...state, running: true, free: true, part: 1, parts: 7 }; }
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state) });
   });
   await page.click('button[aria-label="פרופיל והגדרות"]');
@@ -691,9 +667,11 @@ test('owner: the catalog loads on the server; the card shows the numbers from th
   const c = page.locator('.price-seed');
   await c.locator('.price-seed-stats').waitFor();
   assert.match(await c.textContent(), /120\s*מוצרים.*131\s*מחירים.*19\s*רשתות.*3\s*חיפשו ולא נמצאו/);
-  assert.match(await c.textContent(), /10 הרשתות הגדולות.*עד \$5\.98/);
-  await c.locator('button:has-text("לעדכן ולהשלים את הקטלוג")').click();
-  await c.locator('text=טוען חלק 1 מתוך 7').waitFor();
+  assert.match(await c.locator('.price-seed-chains li.ok').textContent(), /שופרסל.*7,500 מוצרים/);
+  assert.match(await c.locator('.price-seed-chains li.bad').textContent(), /קשת טעמים.*לא נטען/);
+  assert.match(await c.textContent(), /בחינם מהקבצים הרשמיים/);
+  await c.locator('button:has-text("לעדכן מחירים מהרשתות עכשיו (חינם)")').click();
+  await c.locator('text=טוען רשת 1 מתוך 7').waitFor();
   assert.equal(started, 1);
   assert.equal(await c.locator('button:has-text("לעדכן")').count(), 0, 'no second start while it runs');
   assert.match(await c.textContent(), /אפשר לסגור את המסך/);

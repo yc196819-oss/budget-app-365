@@ -174,3 +174,19 @@ test('deleting a transaction: only real ones, never pre-checked; the same memory
   assert.equal(items[0].on, false, 'the person ticks it');
   assert.match(describeItem(items[0]), /למחוק תנועה אחת: קופת הדר ₪450 \(01\.10\)/);
 });
+
+test('something that already happened is recorded as a transaction: today or the day said, never twice, never in the future', () => {
+  const txs = [{ id: 't1', type: 'income', amount: 4580, description: 'משכורת דנה', tx_date: '2026-09-29' }];
+  const d = { ...data, txs };
+  const [inc] = normalizeItems([{ kind: 'tx_add', type: 'income', amount: '4,580', description: 'משכורת יוסי', date: null }], d);
+  assert.deepEqual({ ...inc, key: undefined, on: undefined }, { kind: 'tx_add', type: 'income', amount: 4580, description: 'משכורת יוסי', date: '2026-10-01', category_id: null, category: null, key: undefined, on: undefined });
+  assert.ok(isValid(inc));
+  // An expense, in its category; a date in the future becomes today.
+  const [exp] = normalizeItems([{ kind: 'tx_add', type: 'expense', amount: 625, description: 'לימודים', date: '2026-12-01', category: 'רכב' }], d);
+  assert.equal(exp.date, '2026-10-01');
+  assert.equal(exp.category_id, 'car');
+  // Already there (same amount, a shared word, a few days apart): nothing.
+  assert.deepEqual(normalizeItems([{ kind: 'tx_add', type: 'income', amount: 4580, description: 'משכורת דנה', date: '2026-10-01' }], d), []);
+  // No amount or no words: nothing.
+  assert.deepEqual(normalizeItems([{ kind: 'tx_add', type: 'expense', amount: 0, description: 'x' }], d), []);
+});

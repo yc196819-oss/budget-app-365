@@ -1073,7 +1073,7 @@ const ADVISOR_STYLE = `מספרים: העתק כל סכום בדיוק כמו ש
 חשבון: כשמבקשים ממך לחשב, כתוב את החישוב בשורות קצרות, כל שורה בצורה "א + ב − ג = תוצאה", עם כל המספרים, ובדוק כל תוצאה לפני שאתה כותב אותה.
 אל תחזור על עצה שכבר נתת בשיחה, אלא אם יש בה משהו חדש. אם ההודעה לא ברורה (מילה משובשת, מספרים שסותרים זה את זה), שאל שאלה אחת קצרה במקום לנחש.
 התחזית (comingMonths) היא אותו חישוב שמופיע באפליקציה בתוכניות ← "החודשים הקרובים". על חודשים קדימה ועל כמה יישאר, השתמש רק במספרים ממנה (net, endBalance) ואל תבנה תחזית משלך. כשאתה מזכיר מספר ממנה, אמור ממה הוא מורכב לפי השורות (lines). אם המשתמש סיפר משהו שעוד לא מופיע בה, אמור שהמספר יתעדכן אחרי שהאפליקציה תשמור את מה שסיפר, ותן את ההשפעה כחישוב שורה לשורה.
-עדכונים: האפליקציה מעדכנת לבד את היתרות בחשבונות, ההכנסה הצפויה של כל אחד, יעדים, תקציבים, הלוואות, ותשלומים קבועים או בתשלומים למספר ידוע של חודשים (הם נכנסים לתחזית), מתוך מה שמספרים לך, אלא אם ביקשו לא לעדכן. אל תבקש להזין ביד או "דרך ה-+" משהו שכבר סיפרו לך, ואל תטען שמשהו מופיע במערכת אם הוא לא בנתונים.
+עדכונים: האפליקציה מעדכנת לבד את היתרות בחשבונות, ההכנסה הצפויה של כל אחד, יעדים, תקציבים, הלוואות, תשלומים קבועים או בתשלומים למספר ידוע של חודשים (הם נכנסים לתחזית), וגם רושמת לבד הכנסה שכבר נכנסה או הוצאה שכבר ירדה ("המשכורת נכנסה", "הלימודים ירדו"), מתוך מה שמספרים לך, אלא אם ביקשו לא לעדכן. במקרה כזה כתוב בקצרה שזה נרשם (יופיע מתחת לתשובה עם אפשרות ביטול). אל תבקש להזין ביד או "דרך ה-+" משהו שכבר סיפרו לך, ואל תטען שמשהו מופיע במערכת אם הוא לא בנתונים.
 מחיקת תנועות: כשהמשתמש מבקש למחוק תנועה שגויה, אמור שהאפליקציה תציג מתחת לשיחה את התנועות למחיקה לאישור שלו (ומה שנמחק אפשר לשחזר 30 יום). אל תאמר שאינך יכול.
 טעויות בנתונים: אל תטען שיש טעות, כפילות או חיוב כפול בלי לראות אותו בתנועות עצמן. ב-topMerchants, total3Months הוא סך כל החיובים ב-3 החודשים (charges חיובים, ואם eachCharge מופיע כל חיוב הוא בסכום הזה), לא סכום של חיוב אחד.`;
 // How the app works (screens, buttons, what can and cannot be done), from
@@ -2017,6 +2017,31 @@ async function runAndWait(input) {
   seedJob.cost += Number(r.cost) || 0;
   return r.done ? r : { status: 'TIMED-OUT', items: [] };
 }
+const pricefiles = require('./server/pricefiles');
+// The free load: each chain's own full price file (the transparency law),
+// one chain at a time (one file in memory at a time), saved by barcode.
+async function runFreeLoad() {
+  Object.assign(seedJob, { running: true, part: 0, parts: 1 + pricefiles.CERBERUS.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null, free: true, chainsDone: [] });
+  try {
+    const keys = ['shufersal', ...pricefiles.CERBERUS.map((c) => c.key)];
+    for (const key of keys) {
+      seedJob.part++;
+      const [r] = await pricefiles.allChains(fetch, { only: [key] });
+      let saved = { products: 0 };
+      if (r.rows.length) saved = await saveCatalog(r.rows);
+      seedJob.added += saved.products;
+      seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error: r.error || null });
+    }
+    // Prices of a chain that left (or a product it stopped selling) older
+    // than two weeks are not shown as today's price.
+    await supabaseAdmin.from('price_offers').delete().lt('seen_at', new Date(Date.now() - 14 * 86400000).toISOString());
+  } catch (err) {
+    seedJob.error = String(err.message || err).slice(0, 200);
+    console.error('free price load failed:', seedJob.error);
+  }
+  seedJob.running = false;
+  seedJob.endedAt = new Date().toISOString();
+}
 async function runSeed() {
   const wanted = await supabaseAdmin.from('price_wanted').select('query').order('asked', { ascending: false }).limit(60).then((r) => (r.data || []).map((x) => x.query), () => []);
   const list = [...new Set([...prices.SEED, ...wanted])];
@@ -2056,20 +2081,39 @@ async function seedState() {
     supabaseAdmin.from('price_wanted').select('query', { count: 'exact', head: true }),
     supabaseAdmin.from('price_offers').select('chain').limit(5000)
   ]);
-  const chains = new Set(((multi && multi.data) || []).map((r) => r.chain)).size;
+  const done = (seedJob.chainsDone || []).filter((c) => c.count > 0).length;
+  const chains = done || new Set(((multi && multi.data) || []).map((r) => r.chain)).size;
   const names = prices.SEED.length + Math.min(60, wanted || 0);
   return { ...seedJob, products: products || 0, offers: offers || 0, chains, wanted: wanted || 0, estimate: prices.loadCost(names), mainChains: prices.MAIN_CHAINS.length };
 }
 app.post('/api/admin/prices/load', requireAuth, async (req, res) => {
   try {
     if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
-    if (!APIFY_TOKEN) return res.status(503).json({ error: 'המפתח של Apify לא מוגדר בשרת (APIFY_TOKEN).' });
     if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
-    if (!seedJob.running) runSeed();
+    // Free by default: the chains' own files. The paid service only when
+    // the owner asks for it by name (and its key is set).
+    const paid = req.body && req.body.paid === true;
+    if (paid && !APIFY_TOKEN) return res.status(503).json({ error: 'המפתח של Apify לא מוגדר בשרת (APIFY_TOKEN).' });
+    if (!seedJob.running) (paid ? runSeed() : runFreeLoad());
     return res.json(await seedState());
   } catch (err) {
     console.error('price load failed:', err.message);
     return res.status(502).json({ error: String(err.message).slice(0, 200) });
+  }
+});
+// Every night (pg_cron job "prices-nightly"): today's prices from the chains.
+app.post('/api/cron/prices', async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const given = String(req.headers['x-cron-secret'] || '');
+    const { data: sec } = await supabaseAdmin.from('app_secrets').select('value').eq('key', 'cron_secret').maybeSingle();
+    const expected = sec && sec.value ? String(sec.value) : '';
+    const a = Buffer.from(given), b = Buffer.from(expected);
+    if (!expected || a.length !== b.length || !require('crypto').timingSafeEqual(a, b)) return res.status(401).json({ error: 'unauthorized' });
+    if (!seedJob.running) runFreeLoad();
+    return res.json({ started: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'failed' });
   }
 });
 app.get('/api/admin/prices/load', requireAuth, async (req, res) => {

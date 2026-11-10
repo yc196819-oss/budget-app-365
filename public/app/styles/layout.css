@@ -196,3 +196,14 @@ kbd { font-family: inherit; font-size: 11px; font-weight: 800; padding: 1px 6px;
   .shell.float-open .ask-fab { display: none; }
   .adv-modes { font-size: 14px; color: var(--muted); }
 }
+
+/* A sheet's title and close button stay put while its content scrolls. */
+.sheet-head { position: sticky; top: -10px; z-index: 3; background: var(--bg); margin: -10px -18px 0; padding: 10px 18px 6px; }
+.sheet-full .sheet-head { top: calc(-1 * max(14px, env(safe-area-inset-top))); }
+/* The advisor: one scroll only, the conversation's. The title, the tabs and
+   the box to write in never move. */
+.sheet:has(.adv) { overflow: hidden; height: 88vh; height: 88dvh; }
+.sheet:has(.adv) > .adv { flex: 1 1 auto; min-height: 0; }
+.sheet:has(.adv) .adv > * { flex-shrink: 0; }
+.sheet:has(.adv) .adv-log { flex: 1 1 auto; flex-shrink: 1; min-height: 0; max-height: none; overscroll-behavior: contain; }
+@media (min-width: 768px) { .sheet:has(.adv) { height: auto; max-height: 90vh; } .sheet:has(.adv) .adv-log { max-height: 60vh; } }

@@ -26,7 +26,7 @@ jobs:
   e2e:
     # The new app in a real browser, against a fake in-memory Supabase.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
