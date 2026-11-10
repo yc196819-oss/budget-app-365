@@ -63,6 +63,14 @@ test('a holiday plan is saved as a dated goal and replaces the estimate in the f
   await page.close();
 });
 
+test('holidays come from the Hebrew calendar: Pesach 2030 shows, though no date was ever written for it', async () => {
+  const { page, errors } = await open(new Date(2030, 3, 1, 10));
+  const card = page.locator('.plan-card', { hasText: 'פסח' });
+  assert.match(await card.textContent(), /פסח מתחיל בעוד 17 ימים/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('the quarterly check-in: from home, saved as dated goals, then it goes away', async () => {
   const { page, db } = await open(JAN5, '#/home');
   const card = page.locator('.plan-card', { hasText: 'בדיקה רבעונית' });

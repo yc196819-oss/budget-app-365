@@ -200,3 +200,13 @@ test('the second shared price site: the newest full price file, a small branch p
   assert.equal(new Set(CHAINS.map((c) => c.key)).size, CHAINS.length);
   assert.ok(BINA.some((c) => c.name === 'שפע ברכת השם'));
 });
+
+test('a chain with a password is loaded only when its password is in the server settings, never from the code', () => {
+  const { CERBERUS, CHAINS } = createRequire(import.meta.url)('../server/pricefiles.js');
+  const locked = CERBERUS.filter((c) => c.passEnv);
+  assert.deepEqual(locked.map((c) => c.key), ['yellow', 'super-yuda']);
+  for (const c of locked) {
+    assert.equal(c.pass, undefined, 'no password written in the code');
+    assert.equal(CHAINS.some((x) => x.key === c.key), !!process.env[c.passEnv]);
+  }
+});

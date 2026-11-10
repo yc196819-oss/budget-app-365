@@ -16,7 +16,12 @@ const CERBERUS = [
   { key: 'stop-market', name: 'סטופ מרקט', user: 'Stop_Market' },
   { key: 'politzer', name: 'פוליצר', user: 'politzer' },
   { key: 'salach-dabach', name: 'סאלח דבאח', user: 'SalachD' },
-  { key: 'dor-alon', name: 'דור אלון', user: 'doralon' }
+  { key: 'dor-alon', name: 'דור אלון', user: 'doralon' },
+  // These two have a password (published with the name on the government's
+  // list of price sites). It is kept in the server's settings, not here; a
+  // chain without its password is simply not loaded.
+  { key: 'yellow', name: 'יילו', user: 'Paz_bo', passEnv: 'PRICE_PASS_YELLOW' },
+  { key: 'super-yuda', name: 'סופר יודה', user: 'yuda_ho', passEnv: 'PRICE_PASS_SUPER_YUDA', dir: '/Yuda' }
 ];
 // Chains on the other shared price site (binaprojects): one address each,
 // and the chain's number.
@@ -92,15 +97,15 @@ async function cerberus(fetchFn, chain) {
   const token = (html) => (html.match(/name="csrftoken" content="([^"]+)"/) || [])[1] || '';
   const t1 = token(await (await call('/login')).text());
   const form = (o) => new URLSearchParams(o).toString();
-  const login = await call('/login/user', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form({ r: '', username: chain.user, password: '', Submit: 'Sign in', csrftoken: t1 }) });
+  const login = await call('/login/user', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form({ r: '', username: chain.user, password: (chain.passEnv && process.env[chain.passEnv]) || '', Submit: 'Sign in', csrftoken: t1 }) });
   if (!/\/file/.test(login.headers.get('location') || '')) throw new Error('login refused');
   const t2 = token(await (await call('/file')).text());
-  const dir = await call('/file/json/dir', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form({ sEcho: '1', iColumns: '5', iDisplayStart: '0', iDisplayLength: '100000', sSearch: 'PriceFull', cd: '/', csrftoken: t2 }) });
+  const dir = await call('/file/json/dir', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form({ sEcho: '1', iColumns: '5', iDisplayStart: '0', iDisplayLength: '100000', sSearch: 'PriceFull', cd: chain.dir || '/', csrftoken: t2 }) });
   const list = ((await dir.json().catch(() => ({}))).aaData || []).filter((f) => /^PriceFull/i.test(f.fname || ''));
   if (!list.length) throw new Error('no files');
   const day = list.map((f) => String(f.time || '').slice(0, 10)).sort().pop();
   const best = list.filter((f) => String(f.time || '').slice(0, 10) === day).sort((a, b) => (b.size || 0) - (a.size || 0))[0];
-  const r = await call('/file/d/' + encodeURIComponent(best.fname));
+  const r = await call('/file/d' + (chain.dir || '') + '/' + encodeURIComponent(best.fname));
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return parsePriceFile(gunzip(Buffer.from(await r.arrayBuffer())), chain);
 }
@@ -132,9 +137,10 @@ async function bina(fetchFn, chain) {
 
 // Every chain we can reach, in order: its rows, or why not (one failing
 // chain never stops the others).
-const CHAINS = [{ key: 'shufersal', name: 'שופרסל' }, ...CERBERUS, ...BINA];
+const ready = (c) => !c.passEnv || !!process.env[c.passEnv];
+const CHAINS = [{ key: 'shufersal', name: 'שופרסל' }, ...CERBERUS, ...BINA].filter(ready);
 async function allChains(fetchFn, { only = null } = {}) {
-  const jobs = [{ key: 'shufersal', name: 'שופרסל', run: () => shufersal(fetchFn) }, ...CERBERUS.map((c) => ({ ...c, run: () => cerberus(fetchFn, c) })), ...BINA.map((c) => ({ ...c, run: () => bina(fetchFn, c) }))]
+  const jobs = [{ key: 'shufersal', name: 'שופרסל', run: () => shufersal(fetchFn) }, ...CERBERUS.filter(ready).map((c) => ({ ...c, run: () => cerberus(fetchFn, c) })), ...BINA.map((c) => ({ ...c, run: () => bina(fetchFn, c) }))]
     .filter((j) => !only || only.includes(j.key));
   const out = [];
   for (const j of jobs) {
