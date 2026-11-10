@@ -81,8 +81,8 @@ test('a list of 200 items gets all its choices at once, quickly', () => {
 test('the list at each chain: cheapest first, and what each chain is missing', () => {
   const choices = [choose('חלב 3%', [milkA], 'any'), choose('חלב 3%', [milkB], 'any')];
   const b = basket(choices, () => 2);
-  assert.deepEqual(b[0], { chain: 'x', name: 'רשת א', total: 24.2, missing: 0 });
-  assert.deepEqual(b[1], { chain: 'y', name: 'רשת ב', total: 13.8, missing: 1 });
+  assert.deepEqual(b[0], { chain: 'x', name: 'רשת א', store: null, total: 24.2, missing: 0 });
+  assert.deepEqual(b[1], { chain: 'y', name: 'רשת ב', store: null, total: 13.8, missing: 1 });
   assert.equal(count('×3'), 3);
   assert.equal(count('2 ק"ג'), 1);
 });

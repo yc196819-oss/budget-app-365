@@ -48,3 +48,14 @@ test('the family\'s certifiers decide what is chosen by itself; non-food needs n
   // The old levels still work.
   assert.ok(allowed(p('6', 'חלב', 5, { owner: 'mehadrin' }), 'mehadrin'));
 });
+
+test('with the family\'s area: only the chains with a branch near it, and the branch shows with the total', async () => {
+  const { nearby, basket, choose } = await import('../public/app/src/domain/prices.js');
+  const milk = { barcode: '1', name: 'חלב 3%', qty: 1, unit: 'ליטר', kosher: {}, offers: [{ chain: 'x', chain_name: 'רשת א', price: 6.4, store: 'סניף בדוי', local: true }, { chain: 'y', chain_name: 'רשת ב', price: 5.9, local: false }] };
+  const cat = { 'חלב 3%': [milk] };
+  assert.equal(nearby(cat, false), cat, 'no area: everything, as before');
+  const near = nearby(cat, true);
+  assert.deepEqual(near['חלב 3%'][0].offers.map((o) => o.chain), ['x'], 'the far chain is left out');
+  const b = basket([choose('חלב 3%', near['חלב 3%'], 'any')]);
+  assert.deepEqual(b, [{ chain: 'x', name: 'רשת א', store: 'סניף בדוי', total: 6.4, missing: 0 }]);
+});

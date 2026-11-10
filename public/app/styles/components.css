@@ -1333,3 +1333,12 @@ body.chat-open { overflow: hidden; }
 .kosher-free { background: var(--surface-2); color: var(--muted); }
 .kosher-all { display: flex; gap: 8px; align-items: center; font-size: 13.5px; font-weight: 700; cursor: pointer; }
 .kosher-all input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* the family's area */
+.price-area-field { display: grid; gap: 4px; font-weight: 700; font-size: 14px; }
+.price-area-list { list-style: none; margin: -4px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.price-area-list button { width: 100%; text-align: start; border: 0; border-top: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; padding: 10px 12px; cursor: pointer; }
+.price-area-list li:first-child button { border-top: 0; }
+.price-area-list button:hover, .price-area-list button:focus-visible { background: var(--surface-2); }
+.price-area b { font-size: 13.5px; }
+.price-chain-store { font-size: 11.5px; }
