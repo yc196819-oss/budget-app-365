@@ -1936,6 +1936,14 @@ function takePriceRun(hid) {
   priceDay.all++;
   return true;
 }
+// What families looked for and the catalog lacked, counted.
+async function wantPrices(queries) {
+  if (!queries.length) return;
+  const { data } = await supabaseAdmin.from('price_wanted').select('query,asked').in('query', queries);
+  const had = new Map((data || []).map((r) => [r.query, r.asked]));
+  const at = new Date().toISOString();
+  await supabaseAdmin.from('price_wanted').upsert(queries.map((query) => ({ query, asked: (had.get(query) || 0) + 1, last_at: at })), { onConflict: 'query' });
+}
 async function saveCatalog(items) {
   const { products, offers } = prices.catalogRows(items);
   for (let i = 0; i < products.length; i += 500) {
@@ -1956,6 +1964,13 @@ app.post('/api/prices/fetch', requireAuth, async (req, res) => {
     if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
     // While the catalog grows ("בקרוב" for everyone else), only the owner searches.
     if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
+    // Families never wait for the price service: what our catalog does not
+    // have yet is written down, and the owner's next load brings it in.
+    if (!(await isAdmin(req.authUserId))) {
+      const want = prices.fetchInput(req.body.queries, { max: 30 });
+      if (want) await wantPrices(want.productQueries).catch((e) => console.error('price wanted failed:', e.message));
+      return res.json({ runId: null, asked: 0, queued: want ? want.productQueries.length : 0 });
+    }
     const week = Date.now() - 7 * 86400000;
     const fresh = (Array.isArray(req.body.queries) ? req.body.queries : []).filter((q) => !(priceAsked.get(String(q).trim()) > week));
     const input = prices.fetchInput(fresh);
@@ -1986,8 +2001,71 @@ app.get('/api/prices/fetch/:runId', requireAuth, async (req, res) => {
   }
 });
 
-// The owner: load a first catalog (what most families buy), and confirm
-// products' kashrut (the owner's word counts as confirmed).
+// The owner: load the catalog on the server, part by part (what most
+// families buy, then what families looked for and did not find). It goes on
+// when the owner closes the screen; the screen shows where it is.
+const seedJob = { running: false, part: 0, parts: 0, added: 0, cost: 0, error: null, startedAt: null, endedAt: null };
+async function runSeed() {
+  const wanted = await supabaseAdmin.from('price_wanted').select('query').order('asked', { ascending: false }).limit(60).then((r) => (r.data || []).map((x) => x.query), () => []);
+  const list = [...new Set([...prices.SEED, ...wanted])];
+  const parts = [];
+  for (let i = 0; i < list.length; i += 20) parts.push(list.slice(i, i + 20));
+  Object.assign(seedJob, { running: true, part: 0, parts: parts.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null });
+  try {
+    for (let i = 0; i < parts.length; i++) {
+      seedJob.part = i + 1;
+      const run = await prices.apifyStart(fetch, APIFY_TOKEN, prices.fetchInput(parts[i], { max: 20 }), { seconds: 900 });
+      let r = { done: false };
+      for (let t = 0; t < 100 && !r.done; t++) {
+        await new Promise((ok) => setTimeout(ok, 10000));
+        r = await prices.apifyItems(fetch, APIFY_TOKEN, run.runId).catch(() => ({ done: false }));
+      }
+      seedJob.cost += Number(r.cost) || 0;
+      if (r.status === 'SUCCEEDED') {
+        const saved = await saveCatalog(r.items);
+        seedJob.added += saved.products;
+        const got = parts[i].filter((q) => wanted.includes(q));
+        if (got.length) await supabaseAdmin.from('price_wanted').delete().in('query', got);
+      }
+    }
+  } catch (err) {
+    seedJob.error = String(err.message || err).slice(0, 200);
+    console.error('price seed job failed:', seedJob.error);
+  }
+  seedJob.running = false;
+  seedJob.endedAt = new Date().toISOString();
+}
+async function seedState() {
+  const [{ count: products }, { count: offers }, { count: wanted }, multi] = await Promise.all([
+    supabaseAdmin.from('price_products').select('barcode', { count: 'exact', head: true }),
+    supabaseAdmin.from('price_offers').select('barcode', { count: 'exact', head: true }),
+    supabaseAdmin.from('price_wanted').select('query', { count: 'exact', head: true }),
+    supabaseAdmin.from('price_offers').select('chain').limit(5000)
+  ]);
+  const chains = new Set(((multi && multi.data) || []).map((r) => r.chain)).size;
+  return { ...seedJob, products: products || 0, offers: offers || 0, chains, wanted: wanted || 0 };
+}
+app.post('/api/admin/prices/load', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!APIFY_TOKEN) return res.status(503).json({ error: 'המפתח של Apify לא מוגדר בשרת (APIFY_TOKEN).' });
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    if (!seedJob.running) runSeed();
+    return res.json(await seedState());
+  } catch (err) {
+    console.error('price load failed:', err.message);
+    return res.status(502).json({ error: String(err.message).slice(0, 200) });
+  }
+});
+app.get('/api/admin/prices/load', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    return res.json(await seedState());
+  } catch (err) {
+    return res.status(500).json({ error: 'failed' });
+  }
+});
 const seedRuns = new Map();
 app.post('/api/admin/prices/seed', requireAuth, async (req, res) => {
   try {

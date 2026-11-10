@@ -505,6 +505,7 @@ test('owner: the outside price service, what it takes and costs, then one small 
   await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
   await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
+  await page.route('**/api/admin/prices/load', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"running":false,"products":0,"offers":0,"chains":0,"wanted":0}' }));
   await page.route('**/api/admin/prices/service', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ title: 'Israeli Supermarket Prices', description: 'Official price files', modified: '2026-10-01', pricing: { model: 'PAY_PER_EVENT', perUnit: null, unit: '', events: null }, fields: [{ key: 'query', title: 'Product', type: 'string', example: 'חלב' }], example: { query: 'חלב' } }) }));
   let ran = null;
   let checks = 0;
@@ -666,6 +667,35 @@ test('owner: confirming kashrut, one by one or every product that says "מהדר
   await k.locator('.kosher-bar button:has-text("כשר")').first().click();
   await page.waitForFunction(() => /אין מוצרים שמחכים/.test(document.querySelector('.kosher-admin')?.textContent || ''));
   assert.equal(confirmed[1].barcodes[0], '1002');
+  assert.deepEqual(errors.filter((e) => !/503/.test(e)), []);
+  await page.close();
+});
+
+test('owner: the catalog loads on the server; the card shows the numbers from the database and goes on while closed', async () => {
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
+  await page.route('**/api/admin/kosher**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"products":0,"confirmed":0,"waiting":[]}' }));
+  await page.route('**/api/admin/prices/**', (r) => r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"no key"}' }));
+  let state = { running: false, part: 0, parts: 0, added: 0, cost: 0, error: null, endedAt: null, products: 120, offers: 131, chains: 19, wanted: 3 };
+  let started = 0;
+  await page.route('**/api/admin/prices/load', (r) => {
+    if (r.request().method() === 'POST') { started++; state = { ...state, running: true, part: 1, parts: 7 }; }
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state) });
+  });
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  await page.locator('.admin-hub-btn:has-text("מחירי סופר")').click();
+  const c = page.locator('.price-seed');
+  await c.locator('.price-seed-stats').waitFor();
+  assert.match(await c.textContent(), /120\s*מוצרים.*131\s*מחירים.*19\s*רשתות.*3\s*חיפשו ולא נמצאו/);
+  await c.locator('button:has-text("לעדכן ולהשלים את הקטלוג")').click();
+  await c.locator('text=טוען חלק 1 מתוך 7').waitFor();
+  assert.equal(started, 1);
+  assert.equal(await c.locator('button:has-text("לעדכן")').count(), 0, 'no second start while it runs');
+  assert.match(await c.textContent(), /אפשר לסגור את המסך/);
   assert.deepEqual(errors.filter((e) => !/503/.test(e)), []);
   await page.close();
 });

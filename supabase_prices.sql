@@ -86,3 +86,14 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.price_search(text[]) from public, anon;
 grant execute on function public.price_search(text[]) to authenticated;
+
+-- What families looked for and our catalog did not have yet: the owner's
+-- next load picks these up (families never wait for the price service).
+create table if not exists public.price_wanted (
+  query text primary key,
+  asked integer not null default 1,
+  first_at timestamptz not null default now(),
+  last_at timestamptz not null default now()
+);
+alter table public.price_wanted enable row level security;
+-- No policies: only the server (service role) reads and writes it.
