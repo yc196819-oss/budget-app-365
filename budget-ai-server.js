@@ -2005,6 +2005,18 @@ app.get('/api/prices/fetch/:runId', requireAuth, async (req, res) => {
 // families buy, then what families looked for and did not find). It goes on
 // when the owner closes the screen; the screen shows where it is.
 const seedJob = { running: false, part: 0, parts: 0, added: 0, cost: 0, error: null, startedAt: null, endedAt: null };
+// One run of the price service, waited on (up to about 16 minutes).
+async function runAndWait(input) {
+  if (!input) return { status: 'EMPTY', items: [] };
+  const run = await prices.apifyStart(fetch, APIFY_TOKEN, input, { seconds: 900 });
+  let r = { done: false };
+  for (let t = 0; t < 100 && !r.done; t++) {
+    await new Promise((ok) => setTimeout(ok, 10000));
+    r = await prices.apifyItems(fetch, APIFY_TOKEN, run.runId).catch(() => ({ done: false }));
+  }
+  seedJob.cost += Number(r.cost) || 0;
+  return r.done ? r : { status: 'TIMED-OUT', items: [] };
+}
 async function runSeed() {
   const wanted = await supabaseAdmin.from('price_wanted').select('query').order('asked', { ascending: false }).limit(60).then((r) => (r.data || []).map((x) => x.query), () => []);
   const list = [...new Set([...prices.SEED, ...wanted])];
@@ -2014,15 +2026,17 @@ async function runSeed() {
   try {
     for (let i = 0; i < parts.length; i++) {
       seedJob.part = i + 1;
-      const run = await prices.apifyStart(fetch, APIFY_TOKEN, prices.fetchInput(parts[i], { max: 20 }), { seconds: 900 });
-      let r = { done: false };
-      for (let t = 0; t < 100 && !r.done; t++) {
-        await new Promise((ok) => setTimeout(ok, 10000));
-        r = await prices.apifyItems(fetch, APIFY_TOKEN, run.runId).catch(() => ({ done: false }));
+      // Step 1: the leading products for each name; step 2: those exact
+      // barcodes at the main chains, so one product is compared everywhere.
+      const foundItems = [];
+      const codes = [];
+      for (let j = 0; j < parts[i].length; j += 5) {
+        const runs = await Promise.all(parts[i].slice(j, j + 5).map((q) => runAndWait(prices.findInput(q)).catch(() => ({ status: 'FAILED', items: [] }))));
+        for (const f of runs) if (f.status === 'SUCCEEDED') { foundItems.push(...f.items); codes.push(...prices.leadBarcodes(f.items, 1)); }
       }
-      seedJob.cost += Number(r.cost) || 0;
-      if (r.status === 'SUCCEEDED') {
-        const saved = await saveCatalog(r.items);
+      const r = codes.length ? await runAndWait(prices.compareInput(codes)) : { status: 'EMPTY', items: [] };
+      if (r.status === 'SUCCEEDED' || foundItems.length) {
+        const saved = await saveCatalog([...foundItems, ...(r.items || [])]);
         seedJob.added += saved.products;
         const got = parts[i].filter((q) => wanted.includes(q));
         if (got.length) await supabaseAdmin.from('price_wanted').delete().in('query', got);
@@ -2043,7 +2057,8 @@ async function seedState() {
     supabaseAdmin.from('price_offers').select('chain').limit(5000)
   ]);
   const chains = new Set(((multi && multi.data) || []).map((r) => r.chain)).size;
-  return { ...seedJob, products: products || 0, offers: offers || 0, chains, wanted: wanted || 0 };
+  const names = prices.SEED.length + Math.min(60, wanted || 0);
+  return { ...seedJob, products: products || 0, offers: offers || 0, chains, wanted: wanted || 0, estimate: prices.loadCost(names), mainChains: prices.MAIN_CHAINS.length };
 }
 app.post('/api/admin/prices/load', requireAuth, async (req, res) => {
   try {

@@ -121,3 +121,23 @@ test('a finished run gives all its rows; a running one none', async () => {
   assert.equal((await apifyItems(fake, 't', 'run2abc')).done, false);
   await assert.rejects(apifyItems(fake, 't', '../x'));
 });
+
+test('the catalog load: one name a run at two chains, then the leading barcodes at the main chains, with a cost estimate', async () => {
+  const p = (await import('module')).createRequire(import.meta.url)('../server/prices.js');
+  const f = p.findInput('חלב 3%');
+  assert.deepEqual(f.productQueries, ['חלב 3%']);
+  assert.deepEqual(f.chains, ['shufersal', 'rami-levy']);
+  assert.equal(f.maxRowsPerChain, 3, 'the cap covers one name only');
+  assert.equal(p.findInput('<>'), null);
+  // Found at both chains first, then the rest; at most 3 for one name.
+  const items = [{ barcode: '1111', chainKey: 'shufersal' }, { barcode: '2222', chainKey: 'shufersal' }, { barcode: '2222', chainKey: 'rami-levy' }, { barcode: '3333', chainKey: 'shufersal' }, { barcode: '4444', chainKey: 'shufersal' }, { barcode: 'x', chainKey: 'shufersal' }];
+  assert.deepEqual(p.leadBarcodes(items, 1), ['2222', '1111', '3333']);
+  const c = p.compareInput(['2222', '1111', '2222', 'bad']);
+  assert.deepEqual(c.barcodes, ['2222', '1111']);
+  assert.equal(c.chains.length, p.MAIN_CHAINS.length);
+  assert.equal(c.maxRowsPerChain, 2);
+  assert.equal(c.maxItems, 2 * p.MAIN_CHAINS.length);
+  assert.equal(p.compareInput([]), null);
+  // 83 names, 3 each, at 2 + 10 chains, $0.002 a row: at most about $6.
+  assert.ok(p.loadCost(83) <= 6 && p.loadCost(83) > 5);
+});
