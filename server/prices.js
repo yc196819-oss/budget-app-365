@@ -171,7 +171,7 @@ function catalogRows(items, now = new Date()) {
   const products = [];
   const offers = [];
   for (const [barcode, p] of byCode) {
-    const names = [...p.names.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length).map(([n]) => n);
+    const names = [...p.names.keys()].sort((a, b) => b.length - a.length);
     products.push({ barcode, name: names[0], names: names.join(' | ').slice(0, 1000), maker: p.maker || null, qty: p.qty, unit: p.unit || null, seen_at: at });
     for (const [chain, o] of p.offers) offers.push({ barcode, chain, chain_name: o.chain_name, price: Math.round(o.price * 100) / 100, seen_at: at });
   }

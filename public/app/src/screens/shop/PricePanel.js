@@ -2,7 +2,8 @@ import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { PREFS, LEVEL_NAMES, chooseAll, basket, bestPrice, levelOf, size, sizeText, count, kosherHint } from '../../domain/prices.js';
-import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct } from '../../data/prices.js';
+import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages } from '../../data/prices.js';
+import { aisleOf } from '../../domain/shopping.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
 
@@ -23,10 +24,19 @@ function Kosher({ p }) {
   return html`<span class="kosher kosher-unknown">כשרות לא אושרה עדיין${hint ? ' (בשם כתוב "' + (hint === 'mehadrin' ? 'מהדרין' : 'כשר') + '")' : ''}</span>`;
 }
 
+// The product's photo (from the open product database), or the sign of its
+// department when it has none.
+const SIGN = { produce: '🥬', bakery: '🍞', dairy: '🥛', meat: '🍗', dry: '🥫', frozen: '🧊', drinks: '🥤', clean: '🧽', care: '🧴', baby: '🍼', other: '🛒' };
+let IMAGES = {};
+function Photo({ p }) {
+  const url = IMAGES[p.barcode];
+  return url ? html`<span class="price-img"><img src=${url} alt="" loading="lazy" /></span>` : html`<span class="price-img sign" aria-hidden="true">${SIGN[aisleOf(p.name)] || SIGN.other}</span>`;
+}
+
 function Product({ p, children }) {
   const b = bestPrice(p);
   const sz = sizeText(size(p.qty, p.unit));
-  return html`<div class="price-prod">
+  return html`<div class="price-prod"><${Photo} p=${p} />
     <span class="price-prod-t"><b>${p.name}</b><small class="muted">${[p.maker, sz].filter(Boolean).join(' · ')}</small><${Kosher} p=${p} /></span>
     ${b && html`<span class="price-prod-p"><b class="num">${fmt(b.price)}</b><small class="muted">${b.chainName}</small></span>`}
     ${children}
@@ -70,6 +80,14 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
       if (alive.current) { setLooking(0); await search(); }
     } catch (e) { if (alive.current) { setLooking(0); showToast(e.message || 'לא הצלחנו לחפש מחירים חדשים.'); } }
   };
+  // Photos for what is on screen, once the catalog answered.
+  const [, setShown] = useState(0);
+  useEffect(() => {
+    if (!catalog) return;
+    const codes = [...new Set(Object.values(catalog).flatMap((list) => (list || []).slice(0, 6).map((p) => p.barcode)))].filter((c) => !(c in IMAGES)).slice(0, 60);
+    if (!codes.length) return;
+    productImages(codes).then((r) => { IMAGES = { ...IMAGES, ...Object.fromEntries(codes.map((c) => [c, ''])), ...(r.images || {}) }; if (alive.current) setShown((n) => n + 1); }).catch(() => {});
+  }, [catalog]);
   const key = names.join('|');
   useEffect(() => { if (!pref) return; search().then((c) => c && lookUp(c)); }, [pref, key]);
 

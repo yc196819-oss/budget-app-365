@@ -96,9 +96,18 @@ test('rows from the price service become one product per barcode and the lowest 
   ];
   const { products, offers } = catalogRows(rows, new Date('2026-03-10T12:00:00Z'));
   assert.equal(products.length, 1);
-  assert.deepEqual(products[0], { barcode: '7290000000011', name: 'חלב 3% שקית 1 ל', names: 'חלב 3% שקית 1 ל | חלב שקית 3% 1 ליטר', maker: 'מחלבה א', qty: 1, unit: 'ליטר', seen_at: '2026-03-10T12:00:00.000Z' });
+  assert.deepEqual(products[0], { barcode: '7290000000011', name: 'חלב שקית 3% 1 ליטר', names: 'חלב שקית 3% 1 ליטר | חלב 3% שקית 1 ל', maker: 'מחלבה א', qty: 1, unit: 'ליטר', seen_at: '2026-03-10T12:00:00.000Z' });
   assert.deepEqual(offers.map((o) => [o.chain, o.price]), [['x', 6.1], ['y', 6.9]]);
   assert.deepEqual(catalogRows(null), { products: [], offers: [] });
+});
+
+test('a chain that cuts names short does not win: the longest name is the product name', () => {
+  const rows = [
+    { barcode: '7290000000042', itemName: 'יוגורט פירות מוצק', price: 5, chainKey: 'x' },
+    { barcode: '7290000000042', itemName: 'יוגורט פירות מוצק', price: 5.2, chainKey: 'y' },
+    { barcode: '7290000000042', itemName: 'יוגורט פירות מוצק 3% 150 גרם', price: 5.5, chainKey: 'z' }
+  ];
+  assert.equal(catalogRows(rows).products[0].name, 'יוגורט פירות מוצק 3% 150 גרם');
 });
 
 test('what is asked of the service: at most 15 cleaned items, no repeats, a size cap', () => {

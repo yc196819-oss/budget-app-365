@@ -112,3 +112,8 @@ create index if not exists price_offers_barcode on public.price_offers (barcode)
 --     headers := jsonb_build_object('Content-Type','application/json','x-cron-secret',(select value from public.app_secrets where key='cron_secret')),
 --     body := '{}'::jsonb, timeout_milliseconds := 30000);
 -- $$);
+
+-- Applied 2026-11-10 (price_products_images): a product's photo from Open
+-- Food Facts (an open product database), by barcode, and when it was last
+-- looked up (at most once a month).
+alter table public.price_products add column if not exists image_url text, add column if not exists image_checked_at timestamptz;
