@@ -2116,13 +2116,15 @@ app.post('/api/prices/area', requireAuth, async (req, res) => {
     const at = area.place(String((req.body && req.body.city_code) || ''));
     if (!at) return res.status(400).json({ error: 'לא מצאנו את היישוב. נסו לבחור מהרשימה.' });
     const hood = String((req.body && req.body.hood) || '').replace(/\s+/g, ' ').trim().slice(0, 60) || null;
+    // How far the family goes to shop: 5 to 50 km, in steps of 5.
+    const maxKm = Math.min(50, Math.max(5, Math.round((Number(req.body && req.body.max_km) || 25) / 5) * 5));
     const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
-    const near = area.nearestStores(stores || [], { code: at.code, hood });
-    await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: at.code, city: at.name, hood, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+    const near = area.nearestStores(stores || [], { code: at.code, hood }, { maxKm });
+    await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: at.code, city: at.name, hood, max_km: maxKm, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
     await supabaseAdmin.from('household_stores').delete().eq('household_id', hid);
     if (near.length) await supabaseAdmin.from('household_stores').insert(near.map((n) => ({ household_id: hid, chain: n.chain, store_id: n.store_id, chain_name: n.chain_name, name: n.name, address: n.address, city: n.city, km: n.km, kind: n.kind })));
     loadLocal(null, near).catch((e) => console.error('local prices failed:', e.message));
-    return res.json({ area: { city_code: at.code, city: at.name, hood }, stores: near });
+    return res.json({ area: { city_code: at.code, city: at.name, hood, max_km: maxKm }, stores: near });
   } catch (err) {
     console.error('price area failed:', err.message);
     return res.status(500).json({ error: 'לא נשמר. נסו שוב.' });

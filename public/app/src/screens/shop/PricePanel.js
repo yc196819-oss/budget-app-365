@@ -74,6 +74,7 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel }) {
   const [q, setQ] = useState(initial ? initial.city : '');
   const [place, setPlace] = useState(initial ? { code: initial.city_code, name: initial.city } : null);
   const [hood, setHood] = useState((initial && initial.hood) || '');
+  const [maxKm, setMaxKm] = useState((initial && initial.max_km) || 25);
   const [list, setList] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -86,7 +87,7 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel }) {
   const save = async () => {
     if (!place) return;
     setBusy(true); setErr('');
-    try { const r = await setArea(hid, place.code, hood.trim()); onDone({ ...r.area, stores: r.stores || [] }); } catch (e) { setErr(e.message || 'לא נשמר. נסו שוב.'); }
+    try { const r = await setArea(hid, place.code, hood.trim(), maxKm); onDone({ ...r.area, stores: r.stores || [] }); } catch (e) { setErr(e.message || 'לא נשמר. נסו שוב.'); }
     setBusy(false);
   };
   return html`<div class="stack price-area-pick">
@@ -95,6 +96,9 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel }) {
     <label class="price-area-field"><span>יישוב</span><input class="input" value=${q} placeholder="למשל: בית שמש" autocomplete="off" aria-label="יישוב" onInput=${(e) => { setQ(e.currentTarget.value); setPlace(null); }} /></label>
     ${list.length > 0 && html`<ul class="price-area-list" role="listbox" aria-label="יישובים">${list.map((p) => html`<li key=${p.code}><button type="button" role="option" onClick=${() => { setPlace(p); setQ(p.name); setList([]); }}>${p.name}</button></li>`)}</ul>`}
     ${place && html`<label class="price-area-field"><span>שכונה <small class="muted">(לא חובה, עוזר לדייק)</small></span><input class="input" value=${hood} maxLength="60" placeholder="למשל: רמת בית שמש א׳" aria-label="שכונה" onInput=${(e) => setHood(e.currentTarget.value)} /></label>`}
+    ${place && html`<label class="price-area-field"><span>עד כמה רחוק אתם מוכנים לנסוע לקנות? <b class="num">${maxKm} ק"מ</b></span>
+      <input type="range" class="price-km" min="5" max="50" step="5" value=${maxKm} aria-label="מרחק מהבית בקילומטרים" aria-valuetext=${maxKm + ' קילומטר'} onInput=${(e) => setMaxKm(Number(e.currentTarget.value))} />
+      <span class="price-km-scale" aria-hidden="true"><small>5</small><small>25</small><small>50 ק"מ</small></span></label>`}
     ${err && html`<span role="alert" class="price-warn">${err}</span>`}
     <div class="price-cert-actions"><button type="button" class="btn btn-primary" style="width:auto" disabled=${!place || busy} onClick=${save}>${busy ? 'מחפשים סניפים…' : 'למצוא סניפים קרובים'}</button>
       ${onSkip && html`<button type="button" class="btn-text" onClick=${onSkip}>לא עכשיו</button>`}
@@ -191,7 +195,7 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
 
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
   const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
-    : area ? html`<div class="price-pref price-area"><span class="muted">📍</span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><span class="muted">· מחירים מ-${area.stores.length} סניפים קרובים</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לשנות</button></div>`
+    : area ? html`<div class="price-pref price-area"><span class="muted">📍</span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><span class="muted">· ${area.stores.length === 1 ? 'סניף אחד' : area.stores.length + ' סניפים'} עד ${area.max_km || 25} ק"מ</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לשנות</button></div>`
       : html`<div class="price-pref price-area"><span class="muted">מחירים כלליים, לא לפי האזור שלכם.</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לבחור אזור</button></div>`;
 
   if (pref === undefined || area === undefined) return html`<section class="card stack price-panel">${head}<span class="muted">רגע…</span></section>`;

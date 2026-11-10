@@ -1342,3 +1342,5 @@ body.chat-open { overflow: hidden; }
 .price-area-list button:hover, .price-area-list button:focus-visible { background: var(--surface-2); }
 .price-area b { font-size: 13.5px; }
 .price-chain-store { font-size: 11.5px; }
+.price-km { width: 100%; accent-color: var(--accent); }
+.price-km-scale { display: flex; justify-content: space-between; color: var(--faint); font-weight: 600; }

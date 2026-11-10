@@ -48,12 +48,12 @@ export async function voteKosher(hid, barcode, cert) {
 // Where the family lives, and the branch found near it at each chain.
 export async function getArea(hid) {
   const [{ data: a }, { data: s }] = await Promise.all([
-    sb.from('household_area').select('city_code,city,hood').eq('household_id', hid).maybeSingle(),
+    sb.from('household_area').select('city_code,city,hood,max_km').eq('household_id', hid).maybeSingle(),
     sb.from('household_stores').select('chain,chain_name,store_id,name,address,city,km,kind').eq('household_id', hid)
   ]);
   return a ? { ...a, stores: s || [] } : null;
 }
-export const setArea = (hid, city_code, hood) => api('/api/prices/area', { method: 'POST', body: { hid, city_code, hood } });
+export const setArea = (hid, city_code, hood, max_km = 25) => api('/api/prices/area', { method: 'POST', body: { hid, city_code, hood, max_km } });
 export const findPlaces = (q) => api('/api/prices/places?q=' + encodeURIComponent(q));
 // The product picked for a line on the list.
 export async function pickProduct(itemId, barcode) {

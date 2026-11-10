@@ -282,9 +282,9 @@ test('prices: the family says only where it lives; the nearest branch at every c
   await page.route('**/api/prices/area', (r) => {
     const b = JSON.parse(r.request().postData());
     asked.push(b);
-    db.tables.household_area = [{ household_id: b.hid, city_code: b.city_code, city: 'בית שמש', hood: b.hood }];
+    db.tables.household_area = [{ household_id: b.hid, city_code: b.city_code, city: 'בית שמש', hood: b.hood, max_km: b.max_km }];
     db.tables.household_stores = [{ household_id: b.hid, chain: 'x', chain_name: 'רשת א', store_id: '7', name: 'סניף נחל דולב', city: 'בית שמש', km: 0, kind: 'hood' }];
-    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ area: { city_code: b.city_code, city: 'בית שמש', hood: b.hood }, stores: db.tables.household_stores }) });
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ area: { city_code: b.city_code, city: 'בית שמש', hood: b.hood, max_km: b.max_km }, stores: db.tables.household_stores }) });
   });
   await page.click('.shop-prices-cta button');
   const pick = page.locator('.price-area-pick');
@@ -293,9 +293,14 @@ test('prices: the family says only where it lives; the nearest branch at every c
   await pick.locator('input[aria-label="יישוב"]').fill('בית ש');
   await pick.locator('.price-area-list button:has-text("בית שמש")').click();
   await pick.locator('input[aria-label="שכונה"]').fill('רמת בית שמש א');
+  // How far they go: 25 km unless they say, in steps of 5.
+  assert.match(await pick.textContent(), /25 ק"מ/);
+  await pick.locator('input.price-km').fill('10');
+  assert.match(await pick.textContent(), /10 ק"מ/);
   await pick.locator('button:has-text("למצוא סניפים קרובים")').click();
   await page.waitForSelector('.price-area:has-text("רמת בית שמש א, בית שמש")');
-  assert.deepEqual(asked, [{ hid: db.hid, city_code: '2610', hood: 'רמת בית שמש א' }]);
+  assert.match(await page.locator('.price-area').textContent(), /סניף אחד עד 10 ק"מ/);
+  assert.deepEqual(asked, [{ hid: db.hid, city_code: '2610', hood: 'רמת בית שמש א', max_km: 10 }]);
   // Only the chain with a branch near them, at that branch's price, with its name.
   const chains = page.locator('.price-chain');
   await page.waitForSelector('.price-chain.best:has-text("₪6.00")');

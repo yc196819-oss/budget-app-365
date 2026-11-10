@@ -173,6 +173,7 @@ create table if not exists public.household_area (
   city_code text not null check (city_code ~ '^[0-9]{1,6}$'),
   city text not null,
   hood text check (hood is null or length(hood) <= 60),
+  max_km integer not null default 25 check (max_km between 5 and 50),
   updated_at timestamptz not null default now()
 );
 create table if not exists public.household_stores (
