@@ -1309,3 +1309,8 @@ body.chat-open { overflow: hidden; }
 .price-seed-run { display: grid; gap: 6px; font-size: 14px; }
 .price-seed-bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .price-seed-bar i { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
+
+.price-seed-chains { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.price-seed-chains li { display: flex; justify-content: space-between; gap: 8px; background: var(--surface-2); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+.price-seed-chains li.ok span { color: var(--income); }
+.price-seed-chains li.bad span { color: var(--danger); }

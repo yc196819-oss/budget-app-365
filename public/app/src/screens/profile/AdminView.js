@@ -156,7 +156,7 @@ function SeedCard() {
   }, []);
   const start = async () => { setErr(''); try { setSt(await loadStart()); } catch (e) { setErr(e.message || 'לא התחיל.'); } };
   return html`<div class="card stack price-seed"><b>קטלוג המוצרים שלנו</b>
-    <span class="muted" style="font-size:13px;line-height:1.55">משפחות מקבלות מחירים מיד, מתוך הקטלוג הזה. מה שחיפשו ולא היה בו נרשם, ונטען בטעינה הבאה. הטעינה רצה בשרת: אפשר לסגור את המסך. כל חלק עולה כמה סנטים מהקרדיט של Apify.</span>
+    <span class="muted" style="font-size:13px;line-height:1.55">משפחות מקבלות מחירים מיד, מתוך הקטלוג הזה. המחירים נטענים בחינם מהקבצים הרשמיים של הרשתות (חוק שקיפות המחירים), ומתעדכנים לבד כל לילה. הטעינה רצה בשרת: אפשר לסגור את המסך.</span>
     ${st && html`<div class="price-seed-stats" role="status">
       <span><b class="num">${st.products}</b><small class="muted">מוצרים</small></span>
       <span><b class="num">${st.offers}</b><small class="muted">מחירים</small></span>
@@ -164,12 +164,12 @@ function SeedCard() {
       <span><b class="num">${st.wanted}</b><small class="muted">חיפשו ולא נמצאו</small></span>
     </div>`}
     ${st && st.running && html`<div class="price-seed-run"><span class="price-seed-bar"><i style=${'width:' + Math.round(((st.part - 0.5) / Math.max(1, st.parts)) * 100) + '%'}></i></span>
-      <span role="status">טוען חלק ${st.part} מתוך ${st.parts}… נוספו עד עכשיו ${st.added} מוצרים</span></div>`}
+      <span role="status">${st.free ? 'טוען רשת ' + st.part + ' מתוך ' + st.parts : 'טוען חלק ' + st.part + ' מתוך ' + st.parts}… נשמרו עד עכשיו ${st.added.toLocaleString('he-IL')} מוצרים</span></div>`}
     ${st && !st.running && st.endedAt && html`<span class="muted" style="font-size:13px">הטעינה האחרונה הסתיימה: נוספו ${st.added} מוצרים${st.cost ? ' · עלות $' + Number(st.cost).toFixed(2) : ''}.</span>`}
     ${st && st.error && html`<span role="alert" style="color:var(--danger)">${st.error}</span>`}
     ${err && html`<span role="alert" style="color:var(--danger)">${err}</span>`}
-    ${st && !st.running && st.estimate != null && html`<span class="muted" style="font-size:13px">טעינה מלאה: כל מוצר נבדק ב-${st.mainChains || 10} הרשתות הגדולות, כדי להשוות את אותו מוצר בדיוק. עלות משוערת: עד $${Number(st.estimate).toFixed(2)}.</span>`}
-    ${!(st && st.running) && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${start}>${st && st.products ? 'לעדכן ולהשלים את הקטלוג' : 'לטעון את הקטלוג הראשון'}</button>`}
+    ${st && st.chainsDone && st.chainsDone.length > 0 && html`<ul class="price-seed-chains">${st.chainsDone.map((c) => html`<li key=${c.key} class=${c.error ? 'bad' : 'ok'}><span>${c.error ? '✕' : '✓'} ${c.name}</span><small class="muted">${c.error ? 'לא נטען' : c.count.toLocaleString('he-IL') + ' מוצרים'}</small></li>`)}</ul>`}
+    ${!(st && st.running) && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${start}>${st && st.products ? 'לעדכן מחירים מהרשתות עכשיו (חינם)' : 'לטעון מחירים מהרשתות (חינם)'}</button>`}
   </div>`;
 }
 

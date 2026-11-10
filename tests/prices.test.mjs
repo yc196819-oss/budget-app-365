@@ -141,3 +141,23 @@ test('the catalog load: one name a run at two chains, then the leading barcodes 
   // 83 names, 3 each, at 2 + 10 chains, $0.002 a row: at most about $6.
   assert.ok(p.loadCost(83) <= 6 && p.loadCost(83) > 5);
 });
+
+test('a chain\'s own price file: real barcodes only, with name, maker, size and price', async () => {
+  const { parsePriceFile } = createRequire(import.meta.url)('../server/pricefiles.js');
+  const xml = `<Root><ChainID>1</ChainID><Items>
+    <Item><ItemCode>7290000000017</ItemCode><ItemName>חלב בדוי 3% 1 ליטר</ItemName><ManufactureName>מחלבה בדויה</ManufactureName><Quantity>1.00</Quantity><UnitOfMeasure>ליטר</UnitOfMeasure><ItemPrice>6.90</ItemPrice></Item>
+    <Item><ItemCode>123</ItemCode><ItemName>קוד פנימי</ItemName><ItemPrice>5</ItemPrice></Item>
+    <Item><ItemCode>7290000000024</ItemCode><ItemName>חטיף &quot;בדוי&quot;</ItemName><ManufactureName>יצרן</ManufactureName><Quantity>1.32</Quantity><UnitQty>לא ידוע</UnitQty><ItemPrice>0</ItemPrice></Item>
+    <Item><ItemCode>7290000000031</ItemCode><ItemName>ביצים &amp; עוד</ItemName><Quantity>12</Quantity><UnitQty>לא ידוע</UnitQty><ItemPrice>14.90</ItemPrice></Item>
+  </Items></Root>`;
+  const rows = parsePriceFile(xml, { key: 'x', name: 'רשת בדויה' });
+  assert.deepEqual(rows.map((r) => r.barcode), ['7290000000017', '7290000000031'], 'no short codes, no zero prices');
+  assert.deepEqual(rows[0], { barcode: '7290000000017', itemName: 'חלב בדוי 3% 1 ליטר', manufacturer: 'מחלבה בדויה', quantity: 1, unitQty: 'ליטר', price: 6.9, chainKey: 'x', chainName: 'רשת בדויה' });
+  assert.equal(rows[1].itemName, 'ביצים & עוד');
+  assert.equal(rows[1].unitQty, '', '"לא ידוע" is no unit');
+  // Into the catalog: one product, its price at this chain.
+  const { catalogRows } = createRequire(import.meta.url)('../server/prices.js');
+  const c = catalogRows(rows);
+  assert.equal(c.products.length, 2);
+  assert.deepEqual(c.offers.map((o) => [o.barcode, o.chain, o.price]), [['7290000000017', 'x', 6.9], ['7290000000031', 'x', 14.9]]);
+});
