@@ -43,6 +43,7 @@ export async function pickProduct(itemId, barcode) {
 }
 
 // The owner: a first catalog, and products waiting for a kashrut word.
+export const productImages = (barcodes) => api('/api/prices/images', { method: 'POST', body: { barcodes } });
 export const loadStart = () => api('/api/admin/prices/load', { method: 'POST', body: {} });
 export const loadState = () => api('/api/admin/prices/load');
 export const seedStart = (part) => api('/api/admin/prices/seed', { method: 'POST', body: { part } });

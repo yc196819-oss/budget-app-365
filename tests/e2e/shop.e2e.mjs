@@ -178,6 +178,8 @@ async function priceRoutes(page, { found = {}, db } = {}) {
     }));
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) });
   });
+  // No photos unless a test gives some.
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
   await page.route('**/api/prices/fetch', (r) => { calls.fetch.push(JSON.parse(r.request().postData())); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"runId":"run123abc","asked":1}' }); });
   await page.route('**/api/prices/fetch/run123abc', (r) => { Object.assign(cat, found); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"done":true,"status":"SUCCEEDED","products":1,"offers":2}' }); });
   return { calls, cat };
@@ -218,6 +220,37 @@ test('prices: the household picks a kashrut level once, then every item gets the
   // The whole list at each chain, cheapest first (milk counted twice).
   const best = await page.locator('.price-chain.best').textContent();
   assert.match(best, /הכי זול₪48\.30רשת א/);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('prices: a product shows its photo from the open product database, or the sign of its department', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [
+      { id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null },
+      { id: 's2', household_id: d.hid, name: 'ביצים', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:01:00Z', cleared_at: null }
+    ];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+  }, OWNER);
+  await priceRoutes(page);
+  const asked = [];
+  // A 1x1 picture stands in for the database's photo.
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await page.route('https://images.openfoodfacts.org/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+  await page.route('**/api/prices/images', (r) => {
+    asked.push(JSON.parse(r.request().postData()).barcodes);
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ images: { 1002: 'https://images.openfoodfacts.org/images/products/1002/front.200.jpg' } }) });
+  });
+  await page.click('.shop-prices-cta button');
+  const milk = page.locator('.price-item', { hasText: 'חלב 3%' }).first();
+  await milk.locator('.price-img img').waitFor();
+  assert.match(await milk.locator('.price-img img').getAttribute('src'), /^https:\/\/images\.openfoodfacts\.org\//);
+  // Eggs have no photo: the dairy sign instead.
+  const eggs = page.locator('.price-item', { hasText: 'ביצים' }).first();
+  assert.equal((await eggs.locator('.price-img.sign').first().textContent()).trim(), '🥛');
+  // Asked once, for what is on screen.
+  assert.equal(asked.length, 1);
+  assert.deepEqual([...asked[0]].sort(), ['1001', '1002', '2001']);
   await page.close();
   assert.deepEqual(errors, []);
 });

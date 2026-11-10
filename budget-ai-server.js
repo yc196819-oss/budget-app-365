@@ -123,7 +123,7 @@ const NEW_APP_CSP = [
   ("script-src 'self' " + inlineScriptHash(path.join(NEW_APP_DIR, 'index.html'), 'importmap')).trim(),
   "style-src 'self'",
   "font-src 'self'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://images.openfoodfacts.org",
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
   "manifest-src 'self'",
   "object-src 'none'",
@@ -2024,14 +2024,15 @@ async function runFreeLoad() {
   Object.assign(seedJob, { running: true, part: 0, parts: 1 + pricefiles.CERBERUS.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null, free: true, chainsDone: [] });
   try {
     const keys = ['shufersal', ...pricefiles.CERBERUS.map((c) => c.key)];
+    const rows = [];
     for (const key of keys) {
       seedJob.part++;
       const [r] = await pricefiles.allChains(fetch, { only: [key] });
-      let saved = { products: 0 };
-      if (r.rows.length) saved = await saveCatalog(r.rows);
-      seedJob.added += saved.products;
+      for (const x of r.rows) rows.push(x);
+      seedJob.added += r.count;
       seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error: r.error || null });
     }
+    if (rows.length) await saveCatalog(rows);
     // Prices of a chain that left (or a product it stopped selling) older
     // than two weeks are not shown as today's price.
     await supabaseAdmin.from('price_offers').delete().lt('seen_at', new Date(Date.now() - 14 * 86400000).toISOString());
@@ -2099,6 +2100,43 @@ app.post('/api/admin/prices/load', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('price load failed:', err.message);
     return res.status(502).json({ error: String(err.message).slice(0, 200) });
+  }
+});
+// Product photos from Open Food Facts (an open database, free to use), by
+// barcode: asked once a month at most for each product, kept in the
+// catalog. Up to 12 new lookups a call; the rest come next time.
+app.post('/api/prices/images', requireAuth, async (req, res) => {
+  try {
+    // Photos are extra: without the database, simply none.
+    if (!supabaseAdmin) return res.json({ images: {} });
+    const codes = [...new Set((Array.isArray(req.body && req.body.barcodes) ? req.body.barcodes : []).map(String).filter((c) => /^[0-9]{8,14}$/.test(c)))].slice(0, 60);
+    if (!codes.length) return res.json({ images: {} });
+    const { data } = await supabaseAdmin.from('price_products').select('barcode,image_url,image_checked_at').in('barcode', codes);
+    const out = {};
+    const month = Date.now() - 30 * 86400000;
+    const ask = [];
+    for (const p of data || []) {
+      if (p.image_url) out[p.barcode] = p.image_url;
+      else if (!p.image_checked_at || new Date(p.image_checked_at).getTime() < month) ask.push(p.barcode);
+    }
+    const found = await Promise.all(ask.slice(0, 12).map(async (code) => {
+      try {
+        const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + code + '.json?fields=image_front_small_url', { headers: { 'user-agent': 'BudgetApp/1.0 (household budget app, Israel)' }, signal: AbortSignal.timeout(6000) });
+        const j = await r.json().catch(() => ({}));
+        const url = String((j.product && j.product.image_front_small_url) || '');
+        return { code, url: /^https:\/\/images\.openfoodfacts\.org\//.test(url) ? url : '' };
+      } catch (_e) { return null; }
+    }));
+    const at = new Date().toISOString();
+    for (const f of found) {
+      if (!f) continue;
+      if (f.url) out[f.code] = f.url;
+      await supabaseAdmin.from('price_products').update({ image_url: f.url || null, image_checked_at: at }).eq('barcode', f.code);
+    }
+    return res.json({ images: out });
+  } catch (err) {
+    console.error('price images failed:', err.message);
+    return res.json({ images: {} });
   }
 });
 // Every night (pg_cron job "prices-nightly"): today's prices from the chains.
