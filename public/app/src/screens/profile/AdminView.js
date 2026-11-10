@@ -168,6 +168,7 @@ function SeedCard() {
     ${st && !st.running && st.endedAt && html`<span class="muted" style="font-size:13px">הטעינה האחרונה הסתיימה: נוספו ${st.added} מוצרים${st.cost ? ' · עלות $' + Number(st.cost).toFixed(2) : ''}.</span>`}
     ${st && st.error && html`<span role="alert" style="color:var(--danger)">${st.error}</span>`}
     ${err && html`<span role="alert" style="color:var(--danger)">${err}</span>`}
+    ${st && !st.running && st.estimate != null && html`<span class="muted" style="font-size:13px">טעינה מלאה: כל מוצר נבדק ב-${st.mainChains || 10} הרשתות הגדולות, כדי להשוות את אותו מוצר בדיוק. עלות משוערת: עד $${Number(st.estimate).toFixed(2)}.</span>`}
     ${!(st && st.running) && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${start}>${st && st.products ? 'לעדכן ולהשלים את הקטלוג' : 'לטעון את הקטלוג הראשון'}</button>`}
   </div>`;
 }

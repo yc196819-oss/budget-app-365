@@ -194,6 +194,43 @@ function fetchInput(queries, { max = 15 } = {}) {
   return { mode: 'compareProducts', productQueries: list, oneStorePerChain: true, includeImages: false, maxRowsPerChain: 8, maxItems: Math.min(2000, list.length * 120) };
 }
 
+// The catalog is loaded in two steps, so the same product is compared at
+// every chain: first the leading products for each name (at two big
+// chains), then those exact barcodes at the main chains. The service caps
+// rows per chain for a whole run (not per product), so each cap is sized to
+// the run. It charges per row: about $1.5 for 20 names.
+const MAIN_CHAINS = String(process.env.PRICE_CHAINS || 'shufersal,rami-levy,carrefour,yochananof,osher-ad,victory,hazi-hinam,tiv-taam,machsanei-hashuk,king-store').split(',').map((x) => x.trim()).filter(Boolean);
+const PER_NAME = 3;
+// One name a run: the service's cap on rows per chain covers the whole
+// run, so a broad first name would otherwise use it all up.
+function findInput(query) {
+  const base = fetchInput([query], { max: 1 });
+  if (!base) return null;
+  return { mode: 'compareProducts', productQueries: base.productQueries, chains: ['shufersal', 'rami-levy'], oneStorePerChain: true, includeImages: false, maxRowsPerChain: PER_NAME, maxItems: PER_NAME * 2 };
+}
+// The leading barcodes from the first step: found at both chains first,
+// then the rest, at most PER_NAME for each name asked.
+function leadBarcodes(items, names) {
+  const seen = new Map();
+  for (const x of items || []) {
+    const code = String((x && (x.barcode ?? x.itemCode)) || '').replace(/\D/g, '');
+    if (!/^[0-9]{4,20}$/.test(code)) continue;
+    const chain = String(x.chainKey || x.chainId || x.chainName || '');
+    const c = seen.get(code) || new Set();
+    c.add(chain);
+    seen.set(code, c);
+  }
+  return [...seen.entries()].sort((a, b) => b[1].size - a[1].size).map(([code]) => code).slice(0, Math.max(1, names) * PER_NAME);
+}
+function compareInput(barcodes) {
+  const list = [...new Set((barcodes || []).filter((c) => /^[0-9]{4,20}$/.test(c)))].slice(0, 100);
+  if (!list.length) return null;
+  return { mode: 'compareProducts', barcodes: list, chains: MAIN_CHAINS, oneStorePerChain: true, includeImages: false, maxRowsPerChain: list.length, maxItems: list.length * MAIN_CHAINS.length };
+}
+const ROW_USD = 0.002;
+// What a load of these names will cost, at most (both steps).
+function loadCost(names) { return Math.round(names * PER_NAME * (2 + MAIN_CHAINS.length) * ROW_USD * 100) / 100; }
+
 // A first catalog for the owner to load once: what most families buy.
 const SEED = ['חלב 3%', 'חלב 1%', 'ביצים', 'לחם אחיד', 'לחם פרוס', 'חלה', 'פיתות', 'קוטג', 'גבינה לבנה', 'גבינה צהובה', 'יוגורט', 'שמנת חמוצה', 'שמנת מתוקה', 'חמאה', 'לבן', 'מעדן', 'שוקו',
   'אורז', 'פסטה', 'ספגטי', 'קמח', 'סוכר', 'מלח', 'שמן קנולה', 'שמן זית', 'טחינה', 'חומוס', 'עדשים', 'קוסקוס', 'פתיתים', 'קורנפלקס', 'שיבולת שועל', 'קפה', 'תה', 'דבש', 'ריבה', 'ממרח שוקולד',
@@ -209,6 +246,11 @@ const OWNER_VOTE = '00000000-0000-0000-0000-000000000000';
 module.exports.catalogRows = catalogRows;
 module.exports.fetchInput = fetchInput;
 module.exports.SEED = SEED;
+module.exports.findInput = findInput;
+module.exports.leadBarcodes = leadBarcodes;
+module.exports.compareInput = compareInput;
+module.exports.loadCost = loadCost;
+module.exports.MAIN_CHAINS = MAIN_CHAINS;
 module.exports.OWNER_VOTE = OWNER_VOTE;
 module.exports.apifyItems = apifyItems;
 

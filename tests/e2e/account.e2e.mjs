@@ -679,7 +679,7 @@ test('owner: the catalog loads on the server; the card shows the numbers from th
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
   await page.route('**/api/admin/kosher**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"products":0,"confirmed":0,"waiting":[]}' }));
   await page.route('**/api/admin/prices/**', (r) => r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"no key"}' }));
-  let state = { running: false, part: 0, parts: 0, added: 0, cost: 0, error: null, endedAt: null, products: 120, offers: 131, chains: 19, wanted: 3 };
+  let state = { running: false, part: 0, parts: 0, added: 0, cost: 0, error: null, endedAt: null, products: 120, offers: 131, chains: 19, wanted: 3, estimate: 5.98, mainChains: 10 };
   let started = 0;
   await page.route('**/api/admin/prices/load', (r) => {
     if (r.request().method() === 'POST') { started++; state = { ...state, running: true, part: 1, parts: 7 }; }
@@ -691,6 +691,7 @@ test('owner: the catalog loads on the server; the card shows the numbers from th
   const c = page.locator('.price-seed');
   await c.locator('.price-seed-stats').waitFor();
   assert.match(await c.textContent(), /120\s*מוצרים.*131\s*מחירים.*19\s*רשתות.*3\s*חיפשו ולא נמצאו/);
+  assert.match(await c.textContent(), /10 הרשתות הגדולות.*עד \$5\.98/);
   await c.locator('button:has-text("לעדכן ולהשלים את הקטלוג")').click();
   await c.locator('text=טוען חלק 1 מתוך 7').waitFor();
   assert.equal(started, 1);
