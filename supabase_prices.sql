@@ -117,3 +117,37 @@ create index if not exists price_offers_barcode on public.price_offers (barcode)
 -- Food Facts (an open product database), by barcode, and when it was last
 -- looked up (at most once a month).
 alter table public.price_products add column if not exists image_url text, add column if not exists image_checked_at timestamptz;
+
+-- Applied 2026-11-10 (kosher_certs): which kashrut exactly. A family's vote
+-- can name the certifier written on the package; a household picks the
+-- certifiers it relies on; the open product database may name one too.
+-- price_search returns them as owner_cert, certs (totals), open, mine_cert.
+alter table public.kosher_votes add column if not exists cert text check (cert is null or length(cert) between 2 and 40);
+alter table public.price_prefs add column if not exists certs text[] not null default '{}' check (cardinality(certs) <= 20);
+alter table public.price_products add column if not exists kosher_cert text check (kosher_cert is null or length(kosher_cert) between 2 and 40);
+create or replace function public.price_search(p_queries text[])
+returns table (q int, barcode text, name text, names text, maker text, qty numeric, unit text, offers jsonb, kosher jsonb)
+language sql stable security definer set search_path = public as $$
+  with qs as (
+    select i::int as q, array_remove(regexp_split_to_array(lower(regexp_replace(t, '[״"׳''`,.()\-+/\\*]', ' ', 'g')), '\s+'), '') as w
+    from unnest(p_queries[1:300]) with ordinality as x(t, i)
+  ), hits as (
+    select qs.q, p.*, row_number() over (partition by qs.q order by length(p.name)) as rn
+    from qs join public.price_products p
+      on cardinality(qs.w) > 0
+     and lower(p.names || ' ' || p.name) like all (select '%' || x || '%' from unnest(qs.w) x)
+  )
+  select h.q, h.barcode, h.name, h.names, h.maker, h.qty, h.unit,
+    coalesce((select jsonb_agg(jsonb_build_object('chain', o.chain, 'chain_name', o.chain_name, 'price', o.price, 'seen_at', o.seen_at)) from public.price_offers o where o.barcode = h.barcode), '[]'::jsonb),
+    jsonb_build_object(
+      'owner', (select v.level from public.kosher_votes v where v.barcode = h.barcode and v.by_owner limit 1),
+      'owner_cert', (select v.cert from public.kosher_votes v where v.barcode = h.barcode and v.by_owner limit 1),
+      'votes', coalesce((select jsonb_object_agg(level, n) from (select v.level, count(*) n from public.kosher_votes v where v.barcode = h.barcode and not v.by_owner group by v.level) z), '{}'::jsonb),
+      'certs', coalesce((select jsonb_object_agg(cert, n) from (select v.cert, count(*) n from public.kosher_votes v where v.barcode = h.barcode and not v.by_owner and v.cert is not null group by v.cert) z), '{}'::jsonb),
+      'open', h.kosher_cert,
+      'mine', (select v.level from public.kosher_votes v where v.barcode = h.barcode and v.household_id in (select public.my_households()) and not v.by_owner limit 1),
+      'mine_cert', (select v.cert from public.kosher_votes v where v.barcode = h.barcode and v.household_id in (select public.my_households()) and not v.by_owner limit 1))
+  from hits h where h.rn <= 40;
+$$;
+revoke all on function public.price_search(text[]) from public, anon;
+grant execute on function public.price_search(text[]) to authenticated;

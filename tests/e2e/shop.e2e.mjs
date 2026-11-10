@@ -155,11 +155,11 @@ const OWNER = 'budgetapp2852@gmail.com';
 // Made-up products and prices for the price comparison.
 const CATALOG = {
   'חלב 3%': [
-    { barcode: '1001', name: 'חלב 3% בשקית', names: 'חלב 3% בשקית', maker: 'מחלבה א', qty: 1, unit: 'ליטר', offers: [{ chain: 'x', chain_name: 'רשת א', price: 6.2 }, { chain: 'y', chain_name: 'רשת ב', price: 6.6 }], kosher: { owner: null, votes: { mehadrin: 3 }, mine: null } },
-    { barcode: '1002', name: 'חלב 3% קרטון', names: 'חלב 3% קרטון', maker: 'מחלבה ב', qty: 1, unit: 'ליטר', offers: [{ chain: 'y', chain_name: 'רשת ב', price: 5.5 }], kosher: { owner: null, votes: {}, mine: null } }
+    { barcode: '1001', name: 'חלב 3% בשקית', names: 'חלב 3% בשקית', maker: 'מחלבה א', qty: 1, unit: 'ליטר', offers: [{ chain: 'x', chain_name: 'רשת א', price: 6.2 }, { chain: 'y', chain_name: 'רשת ב', price: 6.6 }], kosher: { certs: { 'בד"ץ העדה החרדית': 3 } } },
+    { barcode: '1002', name: 'חלב 3% קרטון', names: 'חלב 3% קרטון', maker: 'מחלבה ב', qty: 1, unit: 'ליטר', offers: [{ chain: 'y', chain_name: 'רשת ב', price: 5.5 }], kosher: { open: 'רבנות' } }
   ],
   'ביצים': [
-    { barcode: '2001', name: 'ביצים L 12', names: 'ביצים L 12', maker: 'משק', qty: 12, unit: 'יחידות', offers: [{ chain: 'x', chain_name: 'רשת א', price: 14.9 }, { chain: 'y', chain_name: 'רשת ב', price: 13.9 }], kosher: { owner: null, votes: {}, mine: null } }
+    { barcode: '2001', name: 'ביצים L 12', names: 'ביצים L 12', maker: 'משק', qty: 12, unit: 'יחידות', offers: [{ chain: 'x', chain_name: 'רשת א', price: 14.9 }, { chain: 'y', chain_name: 'רשת ב', price: 13.9 }], kosher: {} }
   ]
 };
 async function priceRoutes(page, { found = {}, db } = {}) {
@@ -169,12 +169,12 @@ async function priceRoutes(page, { found = {}, db } = {}) {
     const qs = JSON.parse(r.request().postData()).p_queries;
     calls.search.push(qs);
     const rows = [];
-    // The household's own kashrut votes count, as in the database.
+    // The household's own marks count, as in the database.
     const mine = (code) => ((db && db.tables.kosher_votes) || []).filter((v) => v.barcode === code);
     qs.forEach((q, i) => (cat[q] || []).forEach((p) => {
-      const votes = { ...p.kosher.votes };
-      mine(p.barcode).forEach((v) => { votes[v.level] = (votes[v.level] || 0) + 1; });
-      rows.push({ q: i + 1, ...p, kosher: { ...p.kosher, votes, mine: mine(p.barcode)[0]?.level || null } });
+      const certs = { ...(p.kosher.certs || {}) };
+      mine(p.barcode).forEach((v) => { certs[v.cert] = (certs[v.cert] || 0) + 1; });
+      rows.push({ q: i + 1, ...p, kosher: { ...p.kosher, certs, mine_cert: mine(p.barcode)[0]?.cert || null } });
     }));
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) });
   });
@@ -185,7 +185,7 @@ async function priceRoutes(page, { found = {}, db } = {}) {
   return { calls, cat };
 }
 
-test('prices: the household picks a kashrut level once, then every item gets the cheapest product at that level', async () => {
+test('prices: the household picks the certifiers it relies on once, then every item gets the cheapest product with one of them', async () => {
   const { page, db, errors } = await open(1280, (d) => {
     d.tables.shopping_items = [
       { id: 's1', household_id: d.hid, name: 'חלב 3%', qty: '×2', aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null },
@@ -195,24 +195,30 @@ test('prices: the household picks a kashrut level once, then every item gets the
     d.tables.price_prefs = [];
     d.tables.kosher_votes = [];
   }, OWNER);
-  const { calls } = await priceRoutes(page, { db, found: { 'קפה': [{ barcode: '3001', name: 'קפה נמס 200 גרם', names: 'קפה נמס 200 גרם', maker: 'קלייה', qty: 200, unit: 'גרם', offers: [{ chain: 'x', chain_name: 'רשת א', price: 21 }], kosher: { owner: 'mehadrin', votes: {}, mine: null } }] } });
+  const { calls } = await priceRoutes(page, { db, found: { 'קפה': [{ barcode: '3001', name: 'קפה נמס 200 גרם', names: 'קפה נמס 200 גרם', maker: 'קלייה', qty: 200, unit: 'גרם', offers: [{ chain: 'x', chain_name: 'רשת א', price: 21 }], kosher: { owner_cert: 'הרב לנדא' } }] } });
   await page.click('.shop-prices-cta button');
-  // First the kashrut question, saved for the household.
-  await page.click('.price-pref-btn:has-text("מהדרין")');
+  // First the kashrut question: which certifiers, several at once, saved for the household.
+  const picker = page.locator('.price-certs');
+  assert.equal(await picker.locator('button:has-text("לשמור")').isDisabled(), true, 'nothing picked yet');
+  await picker.locator('.chip', { hasText: 'העדה החרדית' }).click();
+  await picker.locator('.chip:has-text("הרב לנדא")').click();
+  await picker.locator('button:has-text("לשמור (2)")').click();
   // The save goes out on the click; wait for it to land before checking.
   for (let i = 0; i < 50 && !db.tables.price_prefs.length; i++) await page.waitForTimeout(100);
+  assert.deepEqual(db.tables.price_prefs[0].certs, ['בד"ץ העדה החרדית', 'הרב לנדא']);
   assert.equal(db.tables.price_prefs[0].kosher, 'mehadrin');
   await page.waitForSelector('.price-item');
   assert.deepEqual(calls.search[0], ['חלב 3%', 'ביצים', 'קפה'], 'the whole list in one search');
-  // Milk: the confirmed one, though the other is cheaper.
+  assert.match(await page.locator('.price-pref').textContent(), /בד"ץ העדה החרדית · הרב לנדא/);
+  // Milk: the one with their certifier, though the other (another certifier) is cheaper.
   const milk = page.locator('.price-item', { hasText: 'חלב 3%' }).first();
-  assert.match(await milk.textContent(), /נבחר אוטומטית.*חלב 3% בשקית.*כשר למהדרין · אישרו 3 משפחות.*₪6\.20/);
-  // Eggs: nothing confirmed, so the household chooses or confirms.
+  assert.match(await milk.textContent(), /נבחר אוטומטית.*חלב 3% בשקית.*✓ בד"ץ העדה החרדית · מתאים לכם.*סימנו 3 משפחות.*₪6\.20/);
+  // Eggs: the certifier is not known, so the household chooses or marks what the package says.
   const eggs = page.locator('.price-item', { hasText: 'ביצים' }).first();
-  assert.match(await eggs.textContent(), /בחרו מוצר/);
-  await eggs.locator('.price-vote .chip:has-text("כשר למהדרין")').click();
+  assert.match(await eggs.textContent(), /בחרו מוצר.*כשרות לא ידועה/);
+  await eggs.locator('.price-vote .chip:has-text("הרב לנדא")').click();
   for (let i = 0; i < 50 && !db.tables.kosher_votes.length; i++) await page.waitForTimeout(100);
-  assert.deepEqual(db.tables.kosher_votes.map((v) => [v.barcode, v.level]), [['2001', 'mehadrin']]);
+  assert.deepEqual(db.tables.kosher_votes.map((v) => [v.barcode, v.cert, v.level]), [['2001', 'הרב לנדא', 'mehadrin']]);
   await page.waitForSelector('.price-item.is-auto:has-text("ביצים L 12")');
   // Coffee was not in our catalog: asked of the service once, then found.
   assert.deepEqual(calls.fetch[0].queries, ['קפה']);

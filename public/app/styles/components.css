@@ -1319,3 +1319,17 @@ body.chat-open { overflow: hidden; }
 .price-img { width: 46px; height: 46px; border-radius: 12px; background: #fff; flex: none; display: grid; place-items: center; overflow: hidden; }
 .price-img img { width: 100%; height: 100%; object-fit: contain; }
 .price-img.sign { background: var(--surface-2); font-size: 22px; }
+
+/* which kashrut exactly */
+.price-cert-chips, .price-vote { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.price-vote > small { flex-basis: 100%; }
+.price-cert-chips .chip[aria-pressed="true"]::before { content: '✓'; }
+.chip-no { color: var(--danger); }
+.price-cert-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.price-pref-certs { font-size: 13.5px; }
+.kosher small { font-weight: 600; opacity: .85; }
+.kosher-fits { background: var(--income-tint); color: var(--income); }
+.kosher-other { background: var(--surface-2); color: var(--muted); }
+.kosher-free { background: var(--surface-2); color: var(--muted); }
+.kosher-all { display: flex; gap: 8px; align-items: center; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.kosher-all input { width: 18px; height: 18px; accent-color: var(--accent); }

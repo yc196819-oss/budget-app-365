@@ -26,6 +26,50 @@ export function kosherHint(name) {
   return h ? h.level : null;
 }
 
+// ── which kashrut exactly: the certifier written on the package ──
+// A family picks the certifiers it relies on; a product's certifier comes
+// from the owner, from families who marked what the package says, or from
+// the open product database. The most specific names are first, so
+// "רבנות ... מהדרין" is not read as plain "רבנות".
+export const NOT_KOSHER = 'לא כשר';
+export const CERTS = [
+  { name: 'בד"ץ העדה החרדית', level: 'mehadrin', re: /עדה\s*החרדית|העדה החרדית|badatz.?eda|edah/i },
+  { name: 'בד"ץ בית יוסף', level: 'mehadrin', re: /בית\s*יוסף|beit.?yosef/i },
+  { name: 'הרב לנדא', level: 'mehadrin', re: /לנדא|landau|landa\b/i },
+  { name: 'בד"ץ חתם סופר', level: 'mehadrin', re: /חתם\s*סופר|chatam.?sofer/i },
+  { name: 'בד"ץ בעלז', level: 'mehadrin', re: /בעלז|belz/i },
+  { name: 'הרב רובין', level: 'mehadrin', re: /רובין|rubin/i },
+  { name: 'שארית ישראל', level: 'mehadrin', re: /שארית\s*ישראל|sheerit/i },
+  { name: 'בד"ץ אגודת ישראל', level: 'mehadrin', re: /אגודת\s*ישראל|agudat/i },
+  { name: 'בד"ץ יורה דעה', level: 'mehadrin', re: /יורה\s*דעה|מחפוד|yoreh.?deah|machpud/i },
+  { name: 'רבנות מהדרין', level: 'mehadrin', re: /רבנות.{0,30}מהדרין|מהדרין.{0,30}רבנות|rabbanut.{0,20}mehadrin|mehadrin.{0,20}rabbanut/i },
+  { name: 'רבנות', level: 'regular', re: /רבנות|rabbanut|rabbinate/i }
+];
+const CERT_NAMES = new Set(CERTS.map((c) => c.name));
+export const isCert = (name) => CERT_NAMES.has(name) || name === NOT_KOSHER;
+export const certLevel = (name) => (name === NOT_KOSHER ? 'none' : (CERTS.find((c) => c.name === name) || { level: 'mehadrin' }).level);
+// The certifier a text speaks of (a package label, a product name), if any.
+export function certFromText(text) {
+  const t = String(text || '');
+  const c = CERTS.find((x) => x.re.test(t));
+  return c ? c.name : null;
+}
+// Products that are not food need no kashrut (cleaning, hygiene).
+const NONFOOD = /שמפו|מרכך שיער|סבון|אקונומיקה|נוזל כלים|אבקת כביסה|ג'?ל כביסה|מרכך כביסה|ספוג|נייר טואלט|מגבונים|טישו|חיתול|מברשת שיניים|דאודורנט|קרם גוף|קרם ידיים|שקיות אשפה|נייר אפייה|נייר כסף|מטהר אוויר|מסקרה|ליפסטיק|תחבושות|סכיני גילוח|ניקוי|מנקה|כלים חד/;
+export const nonFood = (product) => NONFOOD.test(String((product && product.name) || ''));
+// The product's certifier and who said so: the owner first, then what most
+// families marked (at least one), then the open product database.
+export function certOf(product) {
+  const k = (product && product.kosher) || {};
+  if (k.owner_cert && isCert(k.owner_cert)) return { cert: k.owner_cert, by: 'owner', n: 0 };
+  const certs = k.certs || {};
+  let top = null;
+  for (const [c, n] of Object.entries(certs)) if (isCert(c) && n > 0 && (!top || n > certs[top])) top = c;
+  if (top) return { cert: top, by: 'families', n: certs[top] };
+  if (k.open && isCert(k.open)) return { cert: k.open, by: 'open', n: 0 };
+  return null;
+}
+
 // ── sizes: "1 ליטר", "1000 מיליליטר", "500 גרם" → one unit to compare by ──
 const UNITS = [
   { re: /^(מיליליטר|מ"?ל|מ״ל|מל|ml)$/i, unit: 'l', mul: 0.001 },
@@ -97,8 +141,16 @@ export function levelOf(product) {
   return top ? { level: top, by: 'families', votes } : null;
 }
 // Allowed for this household's preference: only a confirmed level counts.
+// A household's preference is either a list of certifiers it relies on, or
+// (from before) a level.
 export function allowed(product, pref) {
   if (!pref || pref === 'any') return true;
+  if (Array.isArray(pref)) {
+    if (!pref.length) return true;
+    if (nonFood(product)) return true;
+    const c = certOf(product);
+    return !!c && c.cert !== NOT_KOSHER && pref.includes(c.cert);
+  }
   const l = levelOf(product);
   return !!l && rank(l.level) >= rank(pref);
 }

@@ -170,3 +170,33 @@ test('a chain\'s own price file: real barcodes only, with name, maker, size and 
   assert.equal(c.products.length, 2);
   assert.deepEqual(c.offers.map((o) => [o.barcode, o.chain, o.price]), [['7290000000017', 'x', 6.9], ['7290000000031', 'x', 14.9]]);
 });
+
+test('the second shared price site: the newest full price file, a small branch passed over, links only on the chain\'s own site', async () => {
+  const { bina, BINA, CHAINS } = createRequire(import.meta.url)('../server/pricefiles.js');
+  const zlib = await import('node:zlib');
+  const item = (code, price) => `<Item><ItemCode>${code}</ItemCode><ItemName>מוצר בדוי ${code}</ItemName><ItemPrice>${price}</ItemPrice></Item>`;
+  const big = '<Root><Items>' + Array.from({ length: 600 }, (_, i) => item(7290000100000 + i, 5)).join('') + '</Items></Root>';
+  const small = '<Root><Items>' + item(7290000200001, 3) + '</Items></Root>';
+  const chain = { key: 'test', name: 'רשת בדויה', host: 'example', id: '7290000000000' };
+  const base = 'https://example.binaprojects.com';
+  const asked = [];
+  const site = (link = (n) => base + '/Download/' + n) => async (url) => {
+    asked.push(url);
+    const body = (s) => ({ ok: true, status: 200, arrayBuffer: async () => Buffer.from(s) });
+    if (url.startsWith(base + '/MainIO_Hok.aspx?')) return body(JSON.stringify([{ FileNm: 'Promo7290000000000-001-20261110-0500.gz' }, { FileNm: 'PriceFull7290000000000-000-001-20261109-050000.GZ' }, { FileNm: 'PriceFull7290000000000-000-002-20261110-050000.GZ' }, { FileNm: 'PriceFull7290000000000-000-003-20261110-040000.GZ' }]));
+    if (url.startsWith(base + '/Download.aspx?FileNm=')) return body(JSON.stringify([{ SPath: link(decodeURIComponent(url.split('=')[1])) }]));
+    if (url.includes('-002-')) return body(zlib.gzipSync(small));
+    if (url.includes('-003-')) return body(zlib.gzipSync(big));
+    return { ok: false, status: 404, arrayBuffer: async () => Buffer.from('') };
+  };
+  const rows = await bina(site(), chain);
+  assert.equal(rows.length, 600, 'the small newest branch is passed over for the next');
+  assert.ok(asked[0].includes('_=7290000000000') && asked[0].includes('WFileType=4'));
+  assert.ok(asked.some((u) => u.endsWith('-002-20261110-050000.GZ')), 'the newest first');
+  assert.equal(rows[0].chainName, 'רשת בדויה');
+  // A link to anywhere else is not followed.
+  await assert.rejects(bina(site((n) => 'https://elsewhere.example/' + n), chain), /no file link/);
+  // Every chain has its own key; the free load goes over all of them.
+  assert.equal(new Set(CHAINS.map((c) => c.key)).size, CHAINS.length);
+  assert.ok(BINA.some((c) => c.name === 'שפע ברכת השם'));
+});

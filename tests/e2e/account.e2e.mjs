@@ -611,14 +611,14 @@ test('owner on a phone: what is happening now on the main screen, and the questi
   await page.close();
 });
 
-test('owner: confirming kashrut, one by one or every product that says "מהדרין" at once', async () => {
+test('owner: which kashrut exactly: what families buy first, a whole product line at once', async () => {
   const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
   await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
   await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
   await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
   await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"count":0,"preview":null}' }));
   await page.route('**/api/admin/prices/**', (r) => r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"no key"}' }));
-  let waiting = [{ barcode: '1001', name: 'חלב 3% מהדרין', maker: 'מחלבה א', qty: 1, unit: 'ליטר' }, { barcode: '1002', name: 'גבינה לבנה 5%', maker: null, qty: 250, unit: 'גרם' }];
+  let waiting = [{ barcode: '1001', name: 'חלב 3% בד"ץ בית יוסף', maker: 'מחלבה א', qty: 1, unit: 'ליטר', fam: 4 }, { barcode: '1002', name: 'גבינה לבנה 5%', maker: null, qty: 250, unit: 'גרם', kosher_cert: 'רבנות' }, { barcode: '1003', name: 'גבינה צהובה', maker: null, qty: 200, unit: 'גרם' }];
   const confirmed = [];
   await page.route('**/api/admin/kosher**', (r) => {
     if (r.request().method() === 'POST') {
@@ -627,7 +627,7 @@ test('owner: confirming kashrut, one by one or every product that says "מהדר
       waiting = waiting.filter((p) => !b.barcodes.includes(p.barcode));
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, count: b.barcodes.length }) });
     }
-    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ products: 2, confirmed: confirmed.length, waiting }) });
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ products: 3, confirmed: confirmed.length, waiting }) });
   });
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
@@ -635,14 +635,23 @@ test('owner: confirming kashrut, one by one or every product that says "מהדר
   const k = page.locator('.kosher-admin');
   await k.locator('button:has-text("להציג מוצרים")').click();
   await k.locator('.kosher-list li').first().waitFor();
-  assert.match(await k.textContent(), /250 גרם/);
-  await k.locator('button:has-text("שכתוב בשמם")').click();
-  await page.waitForFunction(() => document.querySelectorAll('.kosher-admin .kosher-list li').length === 1);
-  assert.deepEqual(confirmed[0], { barcodes: ['1001'], level: 'mehadrin' });
-  await k.locator('.kosher-list input[type=checkbox]').check();
-  await k.locator('.kosher-bar button:has-text("כשר")').first().click();
+  const first = await k.locator('.kosher-list li').first().textContent();
+  assert.match(first, /4 משפחות קונות/);
+  assert.match(first, /בשם: בד"ץ בית יוסף/, 'what the name says, as a hint');
+  assert.match(await k.locator('.kosher-list li').nth(1).textContent(), /250 גרם.*במאגר: רבנות/);
+  // One product: pick it, say which certifier.
+  await k.locator('.kosher-list li').first().locator('input[type=checkbox]').check();
+  assert.equal(await k.locator('.kosher-bar button').isDisabled(), true, 'which certifier first');
+  await k.locator('.kosher-bar select').selectOption('בד"ץ בית יוסף');
+  await k.locator('.kosher-bar button:has-text("לסמן 1")').click();
+  await page.waitForFunction(() => document.querySelectorAll('.kosher-admin .kosher-list li').length === 2);
+  assert.deepEqual(confirmed[0], { barcodes: ['1001'], cert: 'בד"ץ בית יוסף' });
+  // A whole line at once: all on the list.
+  await k.locator('.kosher-all input').check();
+  await k.locator('.kosher-bar select').selectOption('רבנות');
+  await k.locator('.kosher-bar button:has-text("לסמן 2")').click();
   await page.waitForFunction(() => /אין מוצרים שמחכים/.test(document.querySelector('.kosher-admin')?.textContent || ''));
-  assert.equal(confirmed[1].barcodes[0], '1002');
+  assert.deepEqual(confirmed[1], { barcodes: ['1002', '1003'], cert: 'רבנות' });
   assert.deepEqual(errors.filter((e) => !/503/.test(e)), []);
   await page.close();
 });

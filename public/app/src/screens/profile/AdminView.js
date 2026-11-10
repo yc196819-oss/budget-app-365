@@ -7,7 +7,7 @@ import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
 import { greeting, ago, areas, record } from '../../domain/admin.js';
 import { loadStart, loadState, kosherList, kosherConfirm } from '../../data/prices.js';
-import { kosherHint, LEVEL_NAMES, size, sizeText } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, certFromText, size, sizeText } from '../../domain/prices.js';
 
 const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', shop: 'קניות', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
 const NAMES = { app_open: 'פתיחות', tx_add: 'הוספת תנועה', import_done: 'ייבוא', advisor_ask: 'שאלות ליועץ', advisor_talk: 'שיחה קולית', decision_open: 'החלטה חדשה', decision_message: 'הודעות ביחד', trip_plan: 'תכנון טיול', news_open: 'חדשות', lesson_done: 'שיעור', shortcut: 'קיצור דרך', export: 'ייצוא', restore: 'שחזור', import_fail: 'ייבוא שנכשל', guide_step: 'צעד במסלול התחלה', guide_skip: 'דילוג במסלול', learn_auto: 'עדכון אוטומטי מהיועץ', learn_undo: 'ביטול עדכון של היועץ', onboard_0: 'הרשמה: מסך פתיחה', onboard_1: 'הרשמה: מי אתם', onboard_2: 'הרשמה: מה רלוונטי', onboard_3: 'הרשמה: כרטיסים', onboard_4: 'הרשמה: הכנסה', onboard_5: 'הרשמה: פרטיות', onboard_done: 'הרשמה הושלמה' };
@@ -127,31 +127,36 @@ function SeedCard() {
   </div>`;
 }
 
-// Products waiting for a kashrut word. The owner's word counts as confirmed;
-// names that say "מהדרין" are marked so a whole group can be confirmed at once.
+// Which kashrut exactly, from the owner: what families put on their lists
+// first, or a search for a whole product line ("טרה מהדרין") marked at once.
+// The owner's word counts as confirmed.
+const CERT_OPTIONS = [...CERTS.map((c) => c.name), NOT_KOSHER];
 function KosherCard() {
   const [d, setD] = useState(false);
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(() => new Set());
+  const [cert, setCert] = useState('');
   const load = (text = q) => kosherList(text).then((x) => { setD(x); setSel(new Set()); }).catch(() => setD(null));
-  const confirm = async (codes, level) => {
-    if (!codes.length) return;
-    try { await kosherConfirm(codes, level); showToast('נשמר: ' + codes.length + ' מוצרים, ' + LEVEL_NAMES[level]); load(); } catch (err) { showToast(err.message || 'לא נשמר.'); }
+  const confirm = async (codes, c) => {
+    if (!codes.length || !c) return;
+    try { await kosherConfirm(codes, c); showToast('נשמר: ' + codes.length + ' מוצרים, ' + c); load(); } catch (err) { showToast(err.message || 'לא נשמר.'); }
   };
   // Opened on request, so the dashboard does not ask for it every time.
-  if (d === false) return html`<div class="card stack kosher-admin"><b>אישור כשרות</b><span class="muted" style="font-size:13px">מוצרים בקטלוג שעוד לא אישרתם את הכשרות שלהם.</span><button type="button" class="btn btn-ghost" style="width:auto" onClick=${() => { setD(undefined); load(''); }}>להציג מוצרים שמחכים לאישור</button></div>`;
+  if (d === false) return html`<div class="card stack kosher-admin"><b>איזו כשרות</b><span class="muted" style="font-size:13px">מוצרים שמשפחות קונות ועוד לא ידוע מה הכשרות שלהם, או קו מוצרים שלם בלחיצה.</span><button type="button" class="btn btn-ghost" style="width:auto" onClick=${() => { setD(undefined); load(''); }}>להציג מוצרים שמחכים</button></div>`;
   if (d === undefined) return html`<div class="card"><span class="muted">טוען…</span></div>`;
   if (d === null) return html`<div class="card"><span class="muted">רשימת הכשרות לא זמינה כרגע.</span></div>`;
-  const hinted = d.waiting.filter((p) => kosherHint(p.name) === 'mehadrin').map((p) => p.barcode);
-  const toggle = (c) => setSel((s) => { const n = new Set(s); n.has(c) ? n.delete(c) : n.add(c); return n; });
-  return html`<div class="card stack kosher-admin"><b>אישור כשרות</b>
-    <span class="muted" style="font-size:13px;line-height:1.55">${d.products} מוצרים בקטלוג · ${d.confirmed} אושרו על ידיכם. מוצר שלא אושר לא נבחר לבד למשפחה שביקשה כשרות. האישור שלכם נחשב מאושר.</span>
-    <form style="display:flex;gap:8px" onSubmit=${(e) => { e.preventDefault(); load(q); }}><input class="input" value=${q} placeholder="לחפש: חלב, תנובה…" aria-label="חיפוש מוצר" onInput=${(e) => setQ(e.currentTarget.value)} style="flex:1;min-width:0" /><button class="btn btn-ghost" style="width:auto">לחפש</button></form>
-    ${hinted.length > 0 && html`<button type="button" class="btn btn-ghost" onClick=${() => confirm(hinted, 'mehadrin')}>לאשר כמהדרין את ${hinted.length} שכתוב בשמם "מהדרין"</button>`}
-    ${d.waiting.length === 0 ? html`<span class="muted">אין מוצרים שמחכים.</span>` : html`<ul class="kosher-list">${d.waiting.map((p) => html`<li key=${p.barcode}>
-      <label><input type="checkbox" checked=${sel.has(p.barcode)} onChange=${() => toggle(p.barcode)} /><span><b>${p.name}</b><small class="muted">${[p.maker, sizeText(size(p.qty, p.unit)), p.barcode].filter(Boolean).join(' · ')}</small></span></label>
-      ${kosherHint(p.name) && html`<span class="kosher kosher-unknown">בשם: ${kosherHint(p.name) === 'mehadrin' ? 'מהדרין' : 'כשר'}</span>`}</li>`)}</ul>`}
-    ${sel.size > 0 && html`<div class="kosher-bar">${['mehadrin', 'regular', 'none'].map((l) => html`<button type="button" class="btn btn-ghost" key=${l} style="width:auto" onClick=${() => confirm([...sel], l)}>${LEVEL_NAMES[l]} (${sel.size})</button>`)}</div>`}
+  const toggle = (c) => setSel((x) => { const n = new Set(x); n.has(c) ? n.delete(c) : n.add(c); return n; });
+  const all = d.waiting.length > 0 && sel.size === d.waiting.length;
+  return html`<div class="card stack kosher-admin"><b>איזו כשרות</b>
+    <span class="muted" style="font-size:13px;line-height:1.55">${d.products.toLocaleString('he-IL')} מוצרים בקטלוג · ${d.confirmed.toLocaleString('he-IL')} סימנתם. משפחה שבחרה כשרויות מקבלת לבד רק מוצר שהכשרות שלו ידועה ומתאימה לה. מה שתסמנו נחשב מאושר.</span>
+    <form style="display:flex;gap:8px" onSubmit=${(e) => { e.preventDefault(); load(q); }}><input class="input" value=${q} placeholder="קו מוצרים: למשל טרה מהדרין" aria-label="חיפוש מוצר" onInput=${(e) => setQ(e.currentTarget.value)} style="flex:1;min-width:0" /><button class="btn btn-ghost" style="width:auto">לחפש</button></form>
+    ${d.waiting.length === 0 ? html`<span class="muted">אין מוצרים שמחכים.</span>` : html`
+      <label class="kosher-all"><input type="checkbox" checked=${all} onChange=${() => setSel(all ? new Set() : new Set(d.waiting.map((p) => p.barcode)))} /> לסמן את כל ${d.waiting.length} המוצרים ברשימה</label>
+      <ul class="kosher-list">${d.waiting.map((p) => html`<li key=${p.barcode}>
+      <label><input type="checkbox" checked=${sel.has(p.barcode)} onChange=${() => toggle(p.barcode)} /><span><b>${p.name}</b><small class="muted">${[p.fam ? p.fam + (p.fam === 1 ? ' משפחה קונה' : ' משפחות קונות') : '', p.maker, sizeText(size(p.qty, p.unit)), p.barcode].filter(Boolean).join(' · ')}</small></span></label>
+      ${(p.kosher_cert || certFromText(p.name)) && html`<span class="kosher kosher-unknown">${p.kosher_cert ? 'במאגר: ' + p.kosher_cert : 'בשם: ' + certFromText(p.name)}</span>`}</li>`)}</ul>`}
+    ${sel.size > 0 && html`<div class="kosher-bar"><select class="input" aria-label="איזו כשרות" value=${cert} onChange=${(e) => setCert(e.currentTarget.value)} style="flex:1;min-width:0"><option value="">איזו כשרות כתובה על האריזה?</option>${CERT_OPTIONS.map((c) => html`<option key=${c} value=${c}>${c}</option>`)}</select>
+      <button type="button" class="btn btn-primary" style="width:auto" disabled=${!cert} onClick=${() => confirm([...sel], cert)}>לסמן ${sel.size}</button></div>`}
   </div>`;
 }
 
