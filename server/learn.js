@@ -3,7 +3,7 @@
 // The app checks every item again against the household's data, then
 // applies it and shows it with undo (or asks first, if the person chose so).
 
-const KINDS = ['memory', 'goal', 'goal_update', 'budget', 'balance', 'loan', 'installment', 'income', 'tx_delete'];
+const KINDS = ['memory', 'goal', 'goal_update', 'budget', 'balance', 'loan', 'installment', 'income', 'tx_delete', 'tx_add'];
 
 function convoText(messages) {
   return (Array.isArray(messages) ? messages : [])
@@ -25,6 +25,7 @@ function learnPrompt(context, today) {
 - loan: הלוואה או חוב חדשים. {"kind":"loan","direction":"iowe|tome","counterparty":"...","amount":0}
 - installment: קנייה בתשלומים, וגם תשלום קבוע למספר ידוע של חודשים (למשל "החוג 1,380 ל-3 החודשים הקרובים": total_amount = 1380×3, payments_count = 3, first_payment = תאריך החיוב הבא). {"kind":"installment","description":"...","total_amount":0,"payments_count":0,"first_payment":"YYYY-MM-DD"} — מה שנשמר כך לא נשמר גם כ-memory.
 - tx_delete: רק כשהמשתמש עצמו ביקש במפורש למחוק תנועות מסוימות (טעות, כפילות), לעולם לא כי היועץ חשד בטעות. פריט אחד לכל סוג תנועה, לפי מה שהמשתמש אמר (האפליקציה מוצאת את התנועות עצמן ומציגה אותן לאישור; אם אין כזו, לא יקרה כלום): {"kind":"tx_delete","match":"חלק משם בית העסק כפי שהמשתמש כתב","amount":0,"date":"YYYY-MM-DD או null","reason":"קצר"}. המחיקה תוצג לאישור, לא תתבצע לבד.
+- tx_add: הכנסה או הוצאה שכבר קרתה בפועל, כשהמשתמש מספר עליה ("המשכורת נכנסה", "שילמתי 300 לחשמל", "הלימודים כבר ירדו"). לא תשלום עתידי (זה installment או memory), ולא משהו שהמשתמש רק שואל עליו. {"kind":"tx_add","type":"income|expense","amount":0,"description":"תיאור קצר כמו בדף הבנק, למשל משכורת קובי","date":"YYYY-MM-DD או null להיום","category":"שם קטגוריה מהרשימה, להוצאה בלבד, או null"} — אם התנועה כבר מופיעה בנתונים (אותו סכום באותם ימים), אל תציע אותה.
 - income: הכנסה חודשית נטו צפויה של אחד מבני הבית או של מקור אחד (למשל משכורת של אחד מהם). {"kind":"income","label":"משכורת <שם>","amount":0} — שורה אחת לכל אדם או מקור; אם יש כבר שורה שלו ברשימת income, השתמש באותו label. לעולם אל תכתוב סכום של אדם אחד כאילו הוא ההכנסה של כל משק הבית.
 - balance: גם כשמספרים על העברה בין חשבונות או חיוב שירד, עדכן את היתרה החדשה של כל חשבון שהשתנה (לפי היתרה הקודמת ברשימה ומה שסופר).
 אם בהודעה האחרונה כתוב לא לעדכן (למשל "אל תעדכן", "לא לעדכן", "רק שאלה"), החזר רשימה ריקה.

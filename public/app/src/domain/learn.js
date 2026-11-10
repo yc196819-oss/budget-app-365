@@ -173,6 +173,25 @@ function normalizeOne(raw, data) {
       return { kind: 'tx_delete', match: clean(raw.match || raw.description, 40), amount, date, reason: clean(raw.reason, 80),
         txs: txs.map((t) => ({ id: t.id, tx_date: t.tx_date, description: t.description, amount: Number(t.amount), type: t.type })) };
     }
+    case 'tx_add': {
+      // Something that already happened ("the salary came in", "the
+      // tuition was charged"): one transaction, today or on the day said,
+      // never in the future, and not when it is already there (same amount
+      // within 4 days and a shared word, or the same amount the same day).
+      const amount = money(raw.amount);
+      const type = raw.type === 'income' ? 'income' : 'expense';
+      const description = clean(raw.description, 60);
+      if (!(amount > 0) || description.length < 2) return null;
+      let date = normDate(raw.date) || today;
+      if (date > today) date = today;
+      const near = (d) => Math.abs((new Date(String(d).slice(0, 10)) - new Date(date)) / 86400000) <= 4;
+      const words = wordsOf(description);
+      const dupe = (data.txs || []).some((t) => t.type === type && Math.abs(Number(t.amount) - amount) < 0.5 && near(t.tx_date)
+        && (String(t.tx_date).slice(0, 10) === date || wordsOf(t.description).some((w) => words.includes(w))));
+      if (dupe) return null;
+      const cat = type === 'expense' && raw.category ? findCategory(categories, raw.category) : null;
+      return { kind: 'tx_add', type, amount, description, date, category_id: cat ? cat.id : null, category: cat ? cat.name : null };
+    }
     case 'income': {
       // One person's (or one source's) expected monthly income: it changes
       // that line only, never the household's other incomes.
@@ -198,7 +217,7 @@ export function normalizeItems(raw, data) {
   for (const r of Array.isArray(raw) ? raw : []) {
     const item = normalizeOne(r, data);
     if (!item) continue;
-    const id = item.kind + ':' + norm(item.text || item.name || item.category || item.account || item.counterparty || item.description || item.match || '') + (item.kind === 'tx_delete' ? ':' + item.amount + ':' + (item.date || '') : '');
+    const id = item.kind + ':' + norm(item.text || item.name || item.category || item.account || item.counterparty || item.description || item.match || '') + (item.kind === 'tx_delete' || item.kind === 'tx_add' ? ':' + item.amount + ':' + (item.date || '') : '');
     if (seen.has(id)) continue;
     seen.add(id);
     // A deletion is never pre-checked: the person ticks it.
@@ -219,6 +238,7 @@ export function isValid(item) {
     case 'loan': return !!clean(item.counterparty) && item.amount > 0;
     case 'installment': return !!clean(item.description) && item.total_amount > 0 && item.payments_count >= 2;
     case 'income': return item.amount > 0;
+    case 'tx_add': return item.amount > 0 && !!clean(item.description);
     case 'tx_delete': return Array.isArray(item.txs) && item.txs.length > 0;
     default: return false;
   }
@@ -233,7 +253,8 @@ export const KIND_LABEL = {
   loan: { icon: '🤝', label: 'הלוואה' },
   installment: { icon: '💳', label: 'תשלומים' },
   income: { icon: '💼', label: 'הכנסה חודשית' },
-  tx_delete: { icon: '🗑', label: 'מחיקת תנועות' }
+  tx_delete: { icon: '🗑', label: 'מחיקת תנועות' },
+  tx_add: { icon: '➕', label: 'תנועה שנרשמה' }
 };
 
 // The person said something worth saving since `from` (an index into the
@@ -268,6 +289,7 @@ export function describeItem(item) {
     case 'loan': return (item.direction === 'tome' ? 'חייבים לכם: ' : 'אתם חייבים ל') + item.counterparty + ' ' + ils(item.amount);
     case 'installment': return 'עסקה בתשלומים: ' + item.description + ' · ' + item.payments_count + ' × ' + ils(item.total_amount / item.payments_count);
     case 'tx_delete': return 'למחוק ' + (item.txs.length === 1 ? 'תנועה אחת' : item.txs.length + ' תנועות') + ': ' + item.txs.map((t) => t.description + ' ' + ils(t.amount) + ' (' + String(t.tx_date).slice(5, 10).split('-').reverse().join('.') + ')').join(', ');
+    case 'tx_add': return (item.type === 'income' ? 'נרשמה הכנסה: ' : 'נרשמה הוצאה: ') + item.description + ' ' + ils(item.amount) + ' (' + item.date.slice(5, 10).split('-').reverse().join('.') + ')' + (item.category ? ' · ' + item.category : '');
     case 'income': return 'הכנסה צפויה · ' + (item.label || 'משק הבית') + ': ' + ils(item.amount) + (item.before ? ' (היה ' + ils(item.before) + ')' : ' (חדש)');
     default: return '';
   }

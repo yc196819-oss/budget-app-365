@@ -211,3 +211,46 @@ test('asked to delete a wrong transaction: the advisor shows exactly which ones,
   assert.ok(!db.tables.transactions.some((t) => t.id === sonol.id));
   await page.close();
 });
+
+test('told that a salary came in, the advisor records it by itself (with undo), and the window does not move while the conversation scrolls', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const db = setup(makeFakeDb());
+  db.tables.advisor_messages.push(...Array.from({ length: 14 }, (_, i) => ({ id: 'x' + i, conversation_id: 'c1', household_id: 'h1', author_id: 'u1', role: i % 2 ? 'ai' : 'user', text: 'הודעה ארוכה מספר ' + i + ' '.repeat(3) + 'כדי שהשיחה תגלול. '.repeat(6), created_at: '2026-09-03T10:0' + (i % 10) + ':10Z' })));
+  const before = db.tables.transactions.length;
+  await mockSupabase(page, db);
+  await page.route('**/api/ai/learn-from-chat', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [
+    { kind: 'tx_add', type: 'income', amount: 4580, description: 'משכורת יוסי', date: null }
+  ] }) }));
+  await page.route('**/api/ai/advice-chat-stream', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: {"delta":"רשמתי את המשכורת."}\n\ndata: {"done":true}\n\n' }));
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/home');
+  await page.waitForSelector('.hero');
+  await page.click('.ask-fab');
+  await page.locator('.adv .row', { hasText: 'תכנון לשנה הבאה' }).click();
+  await page.waitForSelector('.adv-msg');
+  // Only the conversation scrolls: the sheet's title and close button stay.
+  const head = async () => (await page.locator('.sheet-head').boundingBox()).y;
+  const y0 = await head();
+  await page.locator('.adv-log').hover();
+  await page.mouse.wheel(0, -3000);
+  await page.mouse.wheel(0, 3000);
+  await page.mouse.wheel(0, 3000);
+  await page.waitForTimeout(300);
+  assert.equal(await head(), y0, 'the title did not move');
+  assert.equal(await page.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollHeight - s.clientHeight; }) <= 1, true, 'the sheet itself does not scroll');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'המשכורת של יוסי נכנסה היום, 4,580');
+  await page.click('.adv-compose button[type="submit"]');
+  const note = page.locator('.learn-auto');
+  await note.waitFor();
+  assert.match(await note.textContent(), /נרשמה הכנסה: משכורת יוסי ₪?4,580/);
+  for (let i = 0; i < 30 && db.tables.transactions.length === before; i++) await page.waitForTimeout(100);
+  const added = db.tables.transactions.find((t) => t.description === 'משכורת יוסי');
+  assert.ok(added);
+  assert.equal(added.type, 'income');
+  assert.equal(Number(added.amount), 4580);
+  // Undo takes it out again.
+  await note.locator('button:has-text("ביטול")').click();
+  await note.locator('text=בוטל').waitFor();
+  assert.ok(!db.tables.transactions.some((t) => t.id === added.id));
+  await page.close();
+});
