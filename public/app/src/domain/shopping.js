@@ -136,3 +136,40 @@ export function perWeek(left, today = new Date()) {
   const daysLeft = end - today.getDate() + 1;
   return Math.floor(left / Math.max(1, daysLeft / 7));
 }
+
+// A week's basics for a household, by how many live there: [name, how many a
+// week for each person, the unit, the least worth buying]. Kept short, the
+// things nearly every home runs out of.
+const BASICS = [
+  ['חלב 3%', 1, 'ליטר', 2], ['ביצים', 3, 'ביצים', 12], ['לחם', 0.5, 'כיכרות', 1], ['קוטג׳', 0.5, 'גביעים', 1],
+  ['גבינה לבנה', 0.34, 'גביעים', 1], ['יוגורט', 2, 'גביעים', 2], ['עגבניות', 0.5, 'ק״ג', 1], ['מלפפונים', 0.5, 'ק״ג', 1],
+  ['בננות', 0.4, 'ק״ג', 1], ['תפוחים', 0.4, 'ק״ג', 1], ['בצל', 0.2, 'ק״ג', 1], ['תפוחי אדמה', 0.4, 'ק״ג', 1],
+  ['חזה עוף', 0.35, 'ק״ג', 0.5], ['אורז', 0.15, 'ק״ג', 1], ['פסטה', 0.25, 'חבילות', 1], ['נייר טואלט', 0.25, 'חבילות', 1]
+];
+const UNIT_STEP = { 'ק״ג': 0.5, 'ביצים': 12 };
+function amount(perPerson, people, unit, least) {
+  const step = UNIT_STEP[unit] || 1;
+  const n = Math.max(least, Math.ceil((perPerson * people) / step) * step);
+  if (unit === 'ביצים') return n / 12 === 1 ? 'תבנית' : '×' + n / 12 + ' תבניות';
+  return unit === 'ק״ג' ? n + ' ק״ג' : '×' + n;
+}
+
+// The advisor's list for the week: first what this home buys again and
+// again, then the basics, each sized for the number of people; nothing that
+// is already on the list. Every line says why it is there; all can be edited.
+export function suggestList({ items = [], people = 2 } = {}) {
+  const p = Math.max(1, Math.min(20, Math.round(Number(people) || 2)));
+  const out = [];
+  const seen = new Set();
+  const take = (name, qty, why) => {
+    const k = key(name);
+    if (seen.has(k) || onList(items, name)) return;
+    // "חלב" from the usual list covers "חלב 3%" from the basics, and back.
+    for (const s of seen) if (s.split(' ')[0] === k.split(' ')[0]) return;
+    seen.add(k);
+    out.push({ name: norm(name), qty, aisle: aisleOf(name), why });
+  };
+  for (const name of usual(items, 10)) take(name, null, 'קונים בדרך כלל');
+  for (const [name, per, unit, least] of BASICS) take(name, amount(per, p, unit, least), 'לפי ' + (p === 1 ? 'נפש אחת' : p + ' נפשות'));
+  return out;
+}

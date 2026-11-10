@@ -12,6 +12,7 @@ import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
 import { go } from '../../lib/go.js';
 import { PricePanel, PriceTeaser } from './PricePanel.js';
+import { AdvisorList } from './AdvisorList.js';
 
 // The food budget of this month, from the goals tab: the category named
 // food (אוכל / מזון) or the one holding the supermarket.
@@ -57,6 +58,7 @@ export function ShopScreen({ data, owner = false }) {
   const input = useRef(null);
   const [intro, setIntro] = useState(() => !readLocal(INTRO_KEY, ''));
   const [prices, setPrices] = useState(false);
+  const [advisor, setAdvisor] = useState(false);
   const closeIntro = () => { writeLocal(INTRO_KEY, '1'); setIntro(false); };
   useEffect(() => { if (data.hid) getArea(data.hid).then((a) => setAreaText(a)).catch(() => setAreaText('')); }, [data.hid]);
 
@@ -135,6 +137,8 @@ export function ShopScreen({ data, owner = false }) {
         ${canListen() && html`<button type="button" class=${'icon-btn shop-mic' + (listening ? ' on' : '')} aria-label="להוסיף בקול" onClick=${voice}><${Icon} name="mic" size=${19} /></button>`}
         <button type="submit" class="btn" disabled=${busy || !text.trim()}>להוסיף</button>
       </form>
+      ${owner && html`<button type="button" class="card adv-cta" onClick=${() => { setAdvisor(true); track('shop_advisor_open'); }}><span class="adv-spark" aria-hidden="true"><${Icon} name="spark" size=${18} /></span><span><b>היועץ ממליץ: רשימה לשבוע</b><small class="muted">לפי מה שאתם קונים בדרך כלל ומספר הנפשות בבית. עורכים ומוסיפים בלחיצה.</small></span><span aria-hidden="true">‹</span></button>`}
+      ${owner && advisor && html`<${AdvisorList} items=${items} people=${data.people} onClose=${() => setAdvisor(false)} onAdd=${(list) => add(list, 'advisor').then(() => track('shop_advisor_add'))} />`}
       ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}
       ${groups.map((g) => html`<div class="shop-group" key=${g.aisle}>

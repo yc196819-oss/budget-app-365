@@ -256,3 +256,43 @@ test('prices for everyone else: a "coming soon" preview with sample products, an
   await page.close();
   assert.deepEqual(errors, []);
 });
+
+test('the advisor\'s week (the owner first): what the home buys again and the basics for the people at home, edited, then on the list', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.households = [{ id: d.hid, shop_area: null, people: 4 }];
+    d.tables.shopping_items = [
+      { id: 'o1', household_id: d.hid, name: 'במבה', qty: null, aisle: 'dry', done: true, created_at: '2026-11-01T08:00:00Z', cleared_at: '2026-11-01T10:00:00Z' },
+      { id: 's1', household_id: d.hid, name: 'עגבניות', qty: null, aisle: 'produce', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }
+    ];
+  }, OWNER);
+  await page.click('.adv-cta');
+  await page.waitForSelector('.adv-rows li');
+  const first = await page.locator('.adv-rows li').first().textContent();
+  assert.match(first, /במבה.*קונים בדרך כלל/);
+  assert.equal(await page.locator('.adv-rows li', { hasText: 'עגבניות' }).count(), 0, 'already on the list');
+  assert.equal(await page.locator('.adv-rows li', { hasText: 'לחם' }).locator('.adv-qty').inputValue(), '×2');
+  // Six at home: bigger amounts.
+  await page.click('.adv-people button[aria-label="עוד אחד"]');
+  await page.click('.adv-people button[aria-label="עוד אחד"]');
+  assert.equal(await page.locator('.adv-rows li', { hasText: 'לחם' }).locator('.adv-qty').inputValue(), '×3');
+  // Not the paper this week; more milk.
+  await page.locator('.adv-rows li', { hasText: 'נייר טואלט' }).locator('input[type="checkbox"]').uncheck();
+  await page.locator('.adv-rows li', { hasText: 'חלב 3%' }).locator('.adv-qty').fill('×8');
+  const n = await page.locator('.adv-rows input[type="checkbox"]:checked').count();
+  await page.click(`.adv-list button:has-text("להוסיף לרשימה (${n})")`);
+  for (let i = 0; i < 50 && db.tables.shopping_items.length < 2 + n; i++) await page.waitForTimeout(100);
+  const added = db.tables.shopping_items.slice(2);
+  assert.equal(added.length, n);
+  assert.ok(!added.some((x) => x.name === 'נייר טואלט'));
+  assert.equal(added.find((x) => x.name === 'חלב 3%').qty, '×8');
+  assert.equal(added.find((x) => x.name === 'חזה עוף').aisle, 'meat');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('people who are not the owner do not see the advisor\'s week yet', async () => {
+  const { page } = await open(390);
+  await page.waitForSelector('.shop-add');
+  assert.equal(await page.locator('.adv-cta').count(), 0);
+  await page.close();
+});
