@@ -318,7 +318,9 @@ function feedbackPatch(body) {
 //   start: signed up, never opened a household
 //   first: opened a household, never uploaded a statement
 //   more:  uploaded, but less than 6 months of statements
-const CAMPAIGNS = ['start', 'first', 'more'];
+//   picture: has a household, less than 6 months: what is new (completing
+//            the picture, step by step), even after an earlier email
+const CAMPAIGNS = ['start', 'first', 'more', 'picture'];
 // At most one email a week from us to a person, whatever its kind. Not
 // counted: what the person asked for (the monthly summary they turned on,
 // an answer to their request, sign-in codes, sign-up and password emails,
@@ -342,6 +344,7 @@ function campaignList(campaign, { users = [], members = [], spans = [], sent = [
     if (campaign === 'start') return !inHousehold;
     if (campaign === 'first') return inHousehold && s.n === 0;
     if (campaign === 'more') return inHousehold && s.n > 0 && s.months < 6;
+    if (campaign === 'picture') return inHousehold && s.months < 6;
     return false;
   });
 }
@@ -366,31 +369,45 @@ const TIP_MONTHS = '• להעלות פירוט של 3 עד 6 החודשים ה�
 const TIP_CARDS = '• להעלות מכל כרטיסי האשראי: אם יש יותר מכרטיס אחד, כדאי להעלות את הפירוט של כולם, אחרת התמונה חלקית.';
 const TIP_CASH = '• משלמים גם במזומן? אפשר להוסיף ידנית את ההוצאות העיקריות של כל חודש, לפי הערכה שלך (למשל שוק, דלק, דמי כיס).';
 const WHERE = 'ברוב חברות האשראי מורידים את הפירוט (PDF או אקסל) מהאתר או מהאפליקציה שלהן, ומעלים אותו ב"ייבוא". אפשר להעלות כמה קבצים, אחד אחרי השני.';
+// What is new: completing the picture, made simple.
+const EASY = 'חדש ופשוט: בעמוד הבית יש כרטיס "השלמת התמונה". בוחרים פעם אחת את הבנק ואת כרטיסי האשראי שלכם (לפי הלוגו), ורואים בדיוק איזה פירוט חסר ולאיזה חודש. ליד כל אחד יש הסבר קצר, צעד אחר צעד, איך מורידים אותו מהאתר של הבנק או של חברת האשראי.';
+const NOSTATE = 'אין כוח לפירוטים עכשיו? אפשר להתחיל גם בלי: כותבים בערך כמה נכנס וכמה יוצא בחודש, ומוסיפים פירוטים אחר כך.';
 const MAILS = {
   start: {
     title: 'נרשמו ולא פתחו משק בית',
     subject: 'בוא נראה יחד לאן הכסף שלך הולך',
-    body: ['שמחנו לראות שנרשמת ל"התקציב שלנו".', 'האפליקציה מראה בכל רגע כמה נשאר להוציא החודש, לאן הכסף הולך ומה צפוי בחודשים הקרובים, ויש בה יועץ חכם שעונה על שאלות על הכסף שלך.', 'כדי להתחיל: נכנסים, עונים על שתי שאלות (לוקח 10 שניות), ומעלים פירוט אשראי של 6 החודשים האחרונים, מכל הכרטיסים. ' + WHY, WHERE],
+    body: ['שמחנו לראות שנרשמת ל"התקציב שלנו".', 'האפליקציה מראה בכל רגע כמה נשאר להוציא החודש, לאן הכסף הולך ומה צפוי בחודשים הקרובים, ויש בה יועץ חכם שעונה על שאלות על הכסף שלך.', 'כדי להתחיל: נכנסים, עונים על שתי שאלות (לוקח 10 שניות), ומעלים פירוט אשראי של 6 החודשים האחרונים, מכל הכרטיסים. ' + WHY, 'ואין צורך לנחש איך: האפליקציה מראה לכל בנק ולכל חברת אשראי, צעד אחר צעד, איך מורידים את הפירוט.', NOSTATE],
     button: 'לפתוח את התקציב שלי'
   },
   first: {
     title: 'פתחו משק בית ולא העלו פירוט',
     subject: 'הצעד שיפתח לך את התמונה המלאה',
-    body: ['ראינו שפתחת משק בית ב"התקציב שלנו". כל הכבוד!', 'הצעד הבא הוא זה שמפעיל את הכל: להעלות פירוט אשראי. המערכת קוראת וממיינת לבד, ותוך דקה רואים לאן הלך הכסף. כמה טיפים:', TIP_MONTHS, TIP_CARDS, TIP_CASH, WHERE],
-    button: 'להעלות פירוט'
+    body: ['ראינו שפתחת משק בית ב"התקציב שלנו". כל הכבוד!', 'הצעד הבא הוא זה שמפעיל את הכל: להעלות פירוט אשראי. המערכת קוראת וממיינת לבד, ותוך דקה רואים לאן הלך הכסף.', EASY, 'כמה טיפים:', TIP_MONTHS, TIP_CARDS, TIP_CASH, NOSTATE],
+    button: 'להשלים את הפירוטים',
+    action: 'picture'
   },
   more: {
     title: 'העלו פירוט, פחות מ-6 חודשים',
     subject: '3 טיפים שיעשו את התקציב שלך מדויק באמת',
-    body: ['ראינו שכבר העלית פירוט ל"התקציב שלנו". מעולה!', 'כדי שהמערכת והיועץ יוכלו לעזור לך באמת, הם צריכים לראות את התמונה המלאה. שלושה טיפים:', TIP_MONTHS.replace('להעלות פירוט של 3 עד 6 החודשים האחרונים', 'להוסיף עוד חודשים אחורה, כך שיהיו בסך הכל 3 עד 6 חודשים'), TIP_CARDS, TIP_CASH, WHERE],
-    button: 'להוסיף עוד פירוט'
+    body: ['ראינו שכבר העלית פירוט ל"התקציב שלנו". מעולה!', 'כדי שהמערכת והיועץ יוכלו לעזור לך באמת, הם צריכים לראות את התמונה המלאה.', EASY, 'שלושה טיפים:', TIP_MONTHS.replace('להעלות פירוט של 3 עד 6 החודשים האחרונים', 'להוסיף עוד חודשים אחורה, כך שיהיו בסך הכל 3 עד 6 חודשים'), TIP_CARDS, TIP_CASH],
+    button: 'להשלים את התמונה',
+    action: 'picture'
+  },
+  picture: {
+    title: 'חדש: השלמת התמונה (למי שהתחיל, פחות מ-6 חודשים)',
+    subject: 'חדש: להשלים את הפירוטים בקלות, צעד אחר צעד',
+    body: ['רצינו לספר לך על משהו חדש ב"התקציב שלנו": עשינו את השלמת הפירוטים הרבה יותר פשוטה.', '• בוחרים פעם אחת את הבנק ואת כרטיסי האשראי שלכם, לפי הלוגו. לא צריך להקליד כלום.', '• רואים בדיוק איזה פירוט חסר ולאיזה חודש, ומה כבר הועלה.', '• ליד כל פירוט שחסר יש הסבר קצר, צעד אחר צעד, איך מורידים אותו מהאתר של הבנק או של חברת האשראי.', '• מעלים את הקובץ כמו שהוא (PDF או אקסל), והמערכת קוראת וממיינת לבד.', 'וכל חודש נזכיר לך בעדינות מה חסר, כדי שהתמונה תישאר מלאה והיועץ יוכל לעזור באמת.', NOSTATE],
+    button: 'להשלים את התמונה',
+    action: 'picture'
   }
 };
 function campaignMail(campaign, link, unsubLink) {
   const m = MAILS[campaign];
   if (!m) return null;
+  // The button opens the right place in the app (e.g. completing the picture).
+  const go = m.action ? String(link).replace(/\/?$/, '/') + '?action=' + m.action : link;
   const sign = 'אם משהו לא עבד או לא היה ברור, אפשר פשוט לענות למייל הזה. אנחנו קוראים כל תשובה.';
-  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + link + '\n\n' + sign + '\nצוות התקציב שלנו\n\n' + (unsubLink ? 'לא רוצה לקבל עוד מיילים כאלה? להסרה: ' + unsubLink : 'לא רוצה לקבל עוד מיילים? תענה "הסר".');
+  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + go + '\n\n' + sign + '\nצוות התקציב שלנו\n\n' + (unsubLink ? 'לא רוצה לקבל עוד מיילים כאלה? להסרה: ' + unsubLink : 'לא רוצה לקבל עוד מיילים? תענה "הסר".');
   let body = '';
   let list = [];
   const P = 'margin:0 0 14px;font-size:16px;line-height:1.65;color:#2B2118';
@@ -416,7 +433,7 @@ function campaignMail(campaign, link, unsubLink) {
     + '<tr><td style="background:#FFFFFF;border-radius:18px;padding:28px 26px;box-shadow:0 1px 3px rgba(0,0,0,.06)">'
     + '<p style="margin:0 0 14px;font-size:20px;font-weight:bold;color:#2B2118">היי,</p>' + body
     + '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 22px"><tr><td style="background:#92490A;border-radius:12px">'
-    + '<a href="' + link + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none">' + m.button + '</a></td></tr></table>'
+    + '<a href="' + go + '" style="display:inline-block;padding:14px 26px;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none">' + m.button + '</a></td></tr></table>'
     + '<p style="margin:0;font-size:15px;line-height:1.6;color:#5B4B3D">' + sign + '</p>'
     + '<p style="margin:10px 0 0;font-size:15px;font-weight:bold;color:#2B2118">צוות התקציב שלנו</p></td></tr>'
     + '<tr><td style="padding:16px 8px 0;font-size:13px;line-height:1.7;color:#8A7B6E;text-align:center">קיבלת את המייל כי נרשמת ל"התקציב שלנו".<br>לא רוצה לקבל עוד מיילים כאלה? ' + (unsubLink ? '<a href="' + escHtml(unsubLink) + '" style="color:#92490A;font-weight:bold;text-decoration:underline">להסרה לחץ כאן</a>' : 'תענה "הסר".') + '</td></tr>'
