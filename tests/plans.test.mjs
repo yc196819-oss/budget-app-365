@@ -21,7 +21,7 @@ test('nextHoliday within three weeks, with days to go', () => {
 
 test('previous occurrence and goal name', () => {
   assert.equal(previousOccurrence('sukkot', '2026-09-26'), '2025-10-07');
-  assert.equal(previousOccurrence('sukkot', '2025-10-07'), null);
+  assert.equal(previousOccurrence('sukkot', '2025-10-07'), '2024-10-17', 'years before the old table too');
   assert.equal(holidayGoalName({ key: 'pesach', date: '2027-04-22' }), 'פסח 2027');
   assert.ok(defaultHolidayItems('sukkot').some((i) => i.name === 'ארבעת המינים' && i.on));
 });
