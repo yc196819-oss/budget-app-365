@@ -39,6 +39,9 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
   const [catalog, setCatalog] = useState(null);
   const [err, setErr] = useState('');
   const [looking, setLooking] = useState(0);
+  // Items not in the catalog yet, written down for the next load (families
+  // never wait for the price service).
+  const [queued, setQueued] = useState(false);
   const [openId, setOpenId] = useState(null);
   const [voteId, setVoteId] = useState(null);
   const alive = useRef(true);
@@ -56,6 +59,7 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
     if (!missing.length) return;
     try {
       const r = await fetchPrices(hid, missing);
+      if (r.queued) setQueued(true);
       if (!r.runId) return;
       setLooking(r.asked);
       for (let i = 0; i < 48 && alive.current; i++) {
@@ -124,7 +128,7 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
     <ul class="price-list">
       ${choices.map((c) => { const item = open.find((i) => i.id === c.id); const expanded = openId === c.id; return html`<li key=${c.id} class=${'price-item is-' + c.status}>
         <div class="price-item-head"><b>${item.name}</b>${item.qty && html`<span class="shop-qty">${item.qty}</span>`}
-          <span class="price-state">${c.status === 'auto' ? 'נבחר אוטומטית' : c.status === 'chosen' ? 'בחרתם' : c.status === 'unsure' ? 'בחרו מוצר' : looking ? 'מחפשים…' : 'לא נמצא מחיר'}</span></div>
+          <span class="price-state">${c.status === 'auto' ? 'נבחר אוטומטית' : c.status === 'chosen' ? 'בחרתם' : c.status === 'unsure' ? 'בחרו מוצר' : looking ? 'מחפשים…' : queued ? 'עוד לא בקטלוג: נוסיף בקרוב' : 'לא נמצא מחיר'}</span></div>
         ${c.pick && html`<${Product} p=${c.pick} />`}
         ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל הכשרות שלהם עוד לא אושרה ל"${PREFS.find((x) => x.key === pref).label}". בחרו מוצר או אשרו את הכשרות שלו:</span>`}
         ${c.options.length > 0 && (c.status === 'unsure' || expanded) && html`<ul class="price-opts">${c.options.map((p) => html`<li key=${p.barcode}><${Product} p=${p}>

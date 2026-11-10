@@ -6,7 +6,7 @@ import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
 import { greeting, ago, areas, record } from '../../domain/admin.js';
-import { seedStart, seedStatus, kosherList, kosherConfirm } from '../../data/prices.js';
+import { loadStart, loadState, kosherList, kosherConfirm } from '../../data/prices.js';
 import { kosherHint, LEVEL_NAMES, size, sizeText } from '../../domain/prices.js';
 
 const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', shop: 'קניות', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
@@ -137,32 +137,38 @@ function PriceServiceCard() {
   </div>`;
 }
 
-// The first catalog: what most families buy, loaded part by part (20
-// products a run). After that the catalog grows by itself from searches.
+// The catalog, loaded on the server part by part (what most families buy,
+// then what families looked for and did not find). It goes on when this
+// screen is closed; the card shows where it is, from the database itself.
 function SeedCard() {
   const [st, setSt] = useState(null);
-  const run = async () => {
-    let added = 0, cost = 0;
-    for (let part = 0; part < 10; part++) {
-      let r;
-      try { r = await seedStart(part); } catch (err) { setSt({ error: err.message || 'לא התחיל.' }); return; }
-      if (!r.runId) break;
-      setSt({ part: part + 1, parts: r.parts, added, cost, running: true });
-      for (let i = 0; i < 120; i++) {
-        await new Promise((ok) => setTimeout(ok, 5000));
-        const c = await seedStatus(r.runId).catch(() => null);
-        if (c && c.done) { added += c.products || 0; cost += Number(c.cost) || 0; break; }
-      }
-      if (part + 1 >= r.parts) break;
-    }
-    setSt({ done: true, added, cost });
-  };
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    let on = true;
+    const tick = async () => {
+      const x = await loadState().catch(() => null);
+      if (!on) return;
+      if (x) setSt(x);
+      setTimeout(() => { if (on) tick(); }, x && x.running ? 5000 : 30000);
+    };
+    tick();
+    return () => { on = false; };
+  }, []);
+  const start = async () => { setErr(''); try { setSt(await loadStart()); } catch (e) { setErr(e.message || 'לא התחיל.'); } };
   return html`<div class="card stack price-seed"><b>קטלוג המוצרים שלנו</b>
-    <span class="muted" style="font-size:13px;line-height:1.55">טעינה ראשונה של המוצרים שרוב המשפחות קונות (כ-90 סוגים, בכל הרשתות). אחרי זה הקטלוג גדל לבד מכל חיפוש. כל ריצה עולה כמה סנטים מהקרדיט של Apify.</span>
-    ${!st && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${run}>לטעון את הקטלוג הראשון</button>`}
-    ${st && st.running && html`<span role="status">טוען חלק ${st.part} מתוך ${st.parts}… (עד עכשיו ${st.added} מוצרים)</span>`}
-    ${st && st.done && html`<span role="status">נטענו ${st.added} מוצרים${st.cost ? ' · עלות $' + st.cost.toFixed(2) : ''}.</span>`}
+    <span class="muted" style="font-size:13px;line-height:1.55">משפחות מקבלות מחירים מיד, מתוך הקטלוג הזה. מה שחיפשו ולא היה בו נרשם, ונטען בטעינה הבאה. הטעינה רצה בשרת: אפשר לסגור את המסך. כל חלק עולה כמה סנטים מהקרדיט של Apify.</span>
+    ${st && html`<div class="price-seed-stats" role="status">
+      <span><b class="num">${st.products}</b><small class="muted">מוצרים</small></span>
+      <span><b class="num">${st.offers}</b><small class="muted">מחירים</small></span>
+      <span><b class="num">${st.chains}</b><small class="muted">רשתות</small></span>
+      <span><b class="num">${st.wanted}</b><small class="muted">חיפשו ולא נמצאו</small></span>
+    </div>`}
+    ${st && st.running && html`<div class="price-seed-run"><span class="price-seed-bar"><i style=${'width:' + Math.round(((st.part - 0.5) / Math.max(1, st.parts)) * 100) + '%'}></i></span>
+      <span role="status">טוען חלק ${st.part} מתוך ${st.parts}… נוספו עד עכשיו ${st.added} מוצרים</span></div>`}
+    ${st && !st.running && st.endedAt && html`<span class="muted" style="font-size:13px">הטעינה האחרונה הסתיימה: נוספו ${st.added} מוצרים${st.cost ? ' · עלות $' + Number(st.cost).toFixed(2) : ''}.</span>`}
     ${st && st.error && html`<span role="alert" style="color:var(--danger)">${st.error}</span>`}
+    ${err && html`<span role="alert" style="color:var(--danger)">${err}</span>`}
+    ${!(st && st.running) && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${start}>${st && st.products ? 'לעדכן ולהשלים את הקטלוג' : 'לטעון את הקטלוג הראשון'}</button>`}
   </div>`;
 }
 

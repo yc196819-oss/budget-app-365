@@ -43,6 +43,8 @@ export async function pickProduct(itemId, barcode) {
 }
 
 // The owner: a first catalog, and products waiting for a kashrut word.
+export const loadStart = () => api('/api/admin/prices/load', { method: 'POST', body: {} });
+export const loadState = () => api('/api/admin/prices/load');
 export const seedStart = (part) => api('/api/admin/prices/seed', { method: 'POST', body: { part } });
 export const seedStatus = (runId) => api('/api/admin/prices/seed/' + encodeURIComponent(runId));
 export const kosherList = (q = '') => api('/api/admin/kosher' + (q ? '?q=' + encodeURIComponent(q) : ''));
