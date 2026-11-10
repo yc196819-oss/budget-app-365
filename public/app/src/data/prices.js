@@ -1,5 +1,6 @@
 import { sb } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
+import { certLevel, isCert } from '../domain/prices.js';
 
 // Prices for the shopping list: matched in our own catalog first (one call
 // for the whole list), and only what is missing is asked of the price
@@ -23,17 +24,25 @@ export async function searchPrices(names) {
 export const fetchPrices = (hid, queries) => api('/api/prices/fetch', { method: 'POST', body: { hid, queries } });
 export const fetchStatus = (runId) => api('/api/prices/fetch/' + encodeURIComponent(runId));
 
+// The household's kashrut: the certifiers it relies on (a list), "any" for
+// no preference, or null when not chosen yet (a level from before asks again).
 export async function getKosherPref(hid) {
-  const { data } = await sb.from('price_prefs').select('kosher').eq('household_id', hid).maybeSingle();
-  return (data && data.kosher) || null;
+  const { data } = await sb.from('price_prefs').select('kosher,certs').eq('household_id', hid).maybeSingle();
+  if (!data) return null;
+  const certs = (data.certs || []).filter(isCert);
+  if (certs.length) return certs;
+  return data.kosher === 'any' ? 'any' : null;
 }
-export async function setKosherPref(hid, kosher) {
-  const { error } = await sb.from('price_prefs').upsert({ household_id: hid, kosher, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+export async function setKosherPref(hid, pref) {
+  const certs = Array.isArray(pref) ? pref.filter(isCert) : [];
+  const kosher = !certs.length ? 'any' : certs.every((c) => certLevel(c) === 'regular') ? 'regular' : 'mehadrin';
+  const { error } = await sb.from('price_prefs').upsert({ household_id: hid, kosher, certs, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
   if (error) throw error;
 }
-// This household's word on a product's kashrut (one per household).
-export async function voteKosher(hid, barcode, level) {
-  const { error } = await sb.from('kosher_votes').upsert({ household_id: hid, barcode, level }, { onConflict: 'barcode,household_id' });
+// This household's word on a product: the certifier its package shows (one
+// per household).
+export async function voteKosher(hid, barcode, cert) {
+  const { error } = await sb.from('kosher_votes').upsert({ household_id: hid, barcode, cert, level: certLevel(cert) }, { onConflict: 'barcode,household_id' });
   if (error) throw error;
 }
 // The product picked for a line on the list.
@@ -49,4 +58,4 @@ export const loadState = () => api('/api/admin/prices/load');
 export const seedStart = (part) => api('/api/admin/prices/seed', { method: 'POST', body: { part } });
 export const seedStatus = (runId) => api('/api/admin/prices/seed/' + encodeURIComponent(runId));
 export const kosherList = (q = '') => api('/api/admin/kosher' + (q ? '?q=' + encodeURIComponent(q) : ''));
-export const kosherConfirm = (barcodes, level) => api('/api/admin/kosher', { method: 'POST', body: { barcodes, level } });
+export const kosherConfirm = (barcodes, cert) => api('/api/admin/kosher', { method: 'POST', body: { barcodes, cert } });

@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { PREFS, LEVEL_NAMES, chooseAll, basket, bestPrice, levelOf, size, sizeText, count, kosherHint } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, bestPrice, certOf, certFromText, nonFood, size, sizeText, count } from '../../domain/prices.js';
 import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages } from '../../data/prices.js';
 import { aisleOf } from '../../domain/shopping.js';
 import { showToast } from '../../lib/toast.js';
@@ -14,14 +14,38 @@ import { track } from '../../lib/telemetry.js';
 
 const fmt = (n) => '₪' + (Math.round(n * 100) / 100).toFixed(2);
 
+// Which kashrut the product has, and whether it is one this family relies on.
+const CERT_NAMES = [...CERTS.map((c) => c.name), NOT_KOSHER];
+let MINE = [];
 function Kosher({ p }) {
-  const l = levelOf(p);
-  if (l) {
-    const who = l.by === 'owner' ? 'אושר על ידינו' : 'אישרו ' + (l.votes[l.level] || 0) + ' משפחות';
-    return html`<span class=${'kosher kosher-' + l.level}>${LEVEL_NAMES[l.level]} · ${who}</span>`;
+  if (nonFood(p)) return html`<span class="kosher kosher-free">לא צריך כשרות</span>`;
+  const c = certOf(p);
+  if (c) {
+    const who = c.by === 'owner' ? 'אושר על ידינו' : c.by === 'open' ? 'מהמאגר הפתוח' : 'סימנו ' + c.n + (c.n === 1 ? ' משפחה' : ' משפחות');
+    if (c.cert === NOT_KOSHER) return html`<span class="kosher kosher-none">לא כשר · ${who}</span>`;
+    const fits = MINE.includes(c.cert);
+    return html`<span class=${'kosher ' + (fits ? 'kosher-fits' : 'kosher-other')}>${fits ? '✓ ' : ''}${c.cert}${fits ? ' · מתאים לכם' : ' · לא ברשימה שלכם'} <small>(${who})</small></span>`;
   }
-  const hint = kosherHint(p.name);
-  return html`<span class="kosher kosher-unknown">כשרות לא אושרה עדיין${hint ? ' (בשם כתוב "' + (hint === 'mehadrin' ? 'מהדרין' : 'כשר') + '")' : ''}</span>`;
+  const hint = certFromText(p.name);
+  return html`<span class="kosher kosher-unknown">כשרות לא ידועה${hint ? ' (בשם כתוב: ' + hint + ')' : ''}</span>`;
+}
+// "What does the package say?": one tap, and it helps every family.
+function Mark({ p, onVote, label = 'מה כתוב על האריזה?' }) {
+  const mine = p.kosher && p.kosher.mine_cert;
+  return html`<span class="price-vote"><small class="muted">${mine ? 'סימנתם: ' + mine + '. לשנות:' : label}</small>${CERT_NAMES.map((c) => html`<button type="button" class=${'chip' + (c === NOT_KOSHER ? ' chip-no' : '')} key=${c} aria-pressed=${mine === c} onClick=${() => onVote(p, c)}>${c}</button>`)}</span>`;
+}
+// The certifiers the family relies on: several can be picked.
+function CertPicker({ initial, onSave, onAny, onCancel }) {
+  const [sel, setSel] = useState(() => new Set(Array.isArray(initial) ? initial : []));
+  const flip = (c) => setSel((s) => { const n = new Set(s); n.has(c) ? n.delete(c) : n.add(c); return n; });
+  return html`<div class="stack price-certs">
+    <b>על איזו כשרות אתם סומכים?</b>
+    <span class="muted" style="line-height:1.55">אפשר לסמן כמה. לכל מוצר ברשימה ייבחר לבד הזול ביותר באחת מהן. מוצר שהכשרות שלו לא ידועה לא ייבחר לבד: תראו אותו, ותוכלו לסמן מה כתוב על האריזה.</span>
+    <div class="price-cert-chips" role="group" aria-label="כשרויות">${CERTS.map((c) => html`<button type="button" class="chip" key=${c.name} aria-pressed=${sel.has(c.name)} onClick=${() => flip(c.name)}>${c.name}</button>`)}</div>
+    <div class="price-cert-actions"><button type="button" class="btn btn-primary" style="width:auto" disabled=${!sel.size} onClick=${() => onSave(CERTS.map((c) => c.name).filter((c) => sel.has(c)))}>לשמור${sel.size ? ' (' + sel.size + ')' : ''}</button>
+      <button type="button" class="btn-text" onClick=${onAny}>בלי העדפה: הכי זול</button>
+      ${onCancel && html`<button type="button" class="btn-text" onClick=${onCancel}>ביטול</button>`}</div>
+  </div>`;
 }
 
 // The product's photo (from the open product database), or the sign of its
@@ -54,6 +78,7 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
   const [queued, setQueued] = useState(false);
   const [openId, setOpenId] = useState(null);
   const [voteId, setVoteId] = useState(null);
+  const [editPref, setEditPref] = useState(false);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => { getKosherPref(hid).then((k) => setPref(k)).catch(() => setPref(null)); }, [hid]);
@@ -93,6 +118,7 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
 
   const choosePref = async (k) => {
     setPref(k);
+    setEditPref(false);
     try { await setKosherPref(hid, k); } catch (_e) { showToast('ההעדפה לא נשמרה. נסו שוב.'); }
   };
   const pick = async (item, p) => {
@@ -101,31 +127,28 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
     track('price_pick');
     try { await pickProduct(item.id, p.barcode); } catch (_e) { showToast('הבחירה לא נשמרה. נסו שוב.'); }
   };
-  const vote = async (p, level) => {
+  const vote = async (p, cert) => {
+    setVoteId(null);
     try {
-      await voteKosher(hid, p.barcode, level);
+      await voteKosher(hid, p.barcode, cert);
       const k = p.kosher || {};
-      const votes = { ...(k.votes || {}) };
-      if (k.mine) votes[k.mine] = Math.max(0, (votes[k.mine] || 1) - 1);
-      votes[level] = (votes[level] || 0) + 1;
-      setCatalog((c) => Object.fromEntries(Object.entries(c).map(([n, list]) => [n, list.map((x) => (x.barcode === p.barcode ? { ...x, kosher: { ...k, votes, mine: level } } : x))])));
-      showToast('תודה! זה עוזר לכל המשפחות.');
+      const certs = { ...(k.certs || {}) };
+      if (k.mine_cert) certs[k.mine_cert] = Math.max(0, (certs[k.mine_cert] || 1) - 1);
+      certs[cert] = (certs[cert] || 0) + 1;
+      setCatalog((c) => Object.fromEntries(Object.entries(c).map(([n, list]) => [n, list.map((x) => (x.barcode === p.barcode ? { ...x, kosher: { ...k, certs, mine_cert: cert } } : x))])));
+      showToast('תודה! נרשם: ' + cert + '. זה עוזר לכל המשפחות.');
     } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
   };
+  MINE = Array.isArray(pref) ? pref : [];
 
   const head = html`<div class="price-head"><b class="price-title"><${Icon} name="cart" size=${18} />כמה הרשימה תעלה</b>
     <button type="button" class="icon-btn" aria-label="לסגור את השוואת המחירים" onClick=${onClose}><${Icon} name="x" size=${16} /></button></div>`;
-  const prefRow = html`<div class="price-pref"><span class="muted">כשרות:</span>
-    <span class="seg" role="group" aria-label="רמת כשרות">${PREFS.map((x) => html`<button type="button" key=${x.key} aria-pressed=${pref === x.key} title=${x.note} onClick=${() => choosePref(x.key)}>${x.label}</button>`)}</span></div>`;
+  const prefRow = editPref ? html`<${CertPicker} initial=${pref} onSave=${choosePref} onAny=${() => choosePref('any')} onCancel=${() => setEditPref(false)} />`
+    : html`<div class="price-pref"><span class="muted">כשרות:</span><b class="price-pref-certs">${Array.isArray(pref) ? pref.join(' · ') : 'בלי העדפה'}</b>
+      <button type="button" class="btn-text" onClick=${() => setEditPref(true)}>לשנות</button></div>`;
 
   if (pref === undefined) return html`<section class="card stack price-panel">${head}<span class="muted">רגע…</span></section>`;
-  if (!pref) {
-    return html`<section class="card stack price-panel">${head}
-      <b>איזו כשרות אתם רוצים?</b>
-      <span class="muted" style="line-height:1.55">המערכת תבחר לכל מוצר ברשימה את הזול ביותר ברמה הזאת. מוצר שהכשרות שלו עוד לא אושרה לא ייבחר לבד, אלא יסומן לכם לבחירה.</span>
-      <div class="price-pref-pick">${PREFS.map((x) => html`<button type="button" class="card price-pref-btn" key=${x.key} onClick=${() => choosePref(x.key)}><b>${x.label}</b><small class="muted">${x.note}</small></button>`)}</div>
-    </section>`;
-  }
+  if (!pref) return html`<section class="card stack price-panel">${head}<${CertPicker} onSave=${choosePref} onAny=${() => choosePref('any')} /></section>`;
   if (!open.length) return html`<section class="card stack price-panel">${head}${prefRow}<span class="muted">אין מה להשוות: הרשימה ריקה או שהכול כבר נקנה.</span></section>`;
   if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
 
@@ -148,18 +171,18 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
         <div class="price-item-head"><b>${item.name}</b>${item.qty && html`<span class="shop-qty">${item.qty}</span>`}
           <span class="price-state">${c.status === 'auto' ? 'נבחר אוטומטית' : c.status === 'chosen' ? 'בחרתם' : c.status === 'unsure' ? 'בחרו מוצר' : looking ? 'מחפשים…' : queued ? 'עוד לא בקטלוג: נוסיף בקרוב' : 'לא נמצא מחיר'}</span></div>
         ${c.pick && html`<${Product} p=${c.pick} />`}
-        ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל הכשרות שלהם עוד לא אושרה ל"${PREFS.find((x) => x.key === pref).label}". בחרו מוצר או אשרו את הכשרות שלו:</span>`}
+        ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל לא ידוע שהכשרות שלהם היא מהרשימה שלכם. בחרו מוצר, או סמנו מה כתוב על האריזה:</span>`}
         ${c.options.length > 0 && (c.status === 'unsure' || expanded) && html`<ul class="price-opts">${c.options.map((p) => html`<li key=${p.barcode}><${Product} p=${p}>
           <button type="button" class="btn btn-ghost price-pick" onClick=${() => pick(item, p)}>לבחור</button></${Product}>
-          ${!levelOf(p) && html`<span class="price-vote"><small class="muted">יודעים מה הכשרות?</small>${['mehadrin', 'regular', 'none'].map((l) => html`<button type="button" class="chip" key=${l} onClick=${() => vote(p, l)}>${LEVEL_NAMES[l]}</button>`)}</span>`}</li>`)}</ul>`}
+          ${!certOf(p) && !nonFood(p) && html`<${Mark} p=${p} onVote=${vote} />`}</li>`)}</ul>`}
         ${c.pick && html`<span class="price-actions">
           ${c.options.length > 1 && html`<button type="button" class="btn-text" aria-expanded=${expanded} onClick=${() => setOpenId(expanded ? null : c.id)}>${expanded ? 'לסגור' : 'להחליף מוצר (' + (c.options.length - 1) + ')'}</button>`}
-          ${levelOf(c.pick) && voteId !== c.id ? html`<button type="button" class="btn-text price-vote-open" onClick=${() => setVoteId(c.id)}>${c.pick.kosher && c.pick.kosher.mine ? 'אישרתם: ' + LEVEL_NAMES[c.pick.kosher.mine] + ' · לשנות' : 'הכשרות לא נכונה?'}</button>`
-            : html`<span class="price-vote"><small class="muted">${c.pick.kosher && c.pick.kosher.mine ? 'אישרתם: ' + LEVEL_NAMES[c.pick.kosher.mine] + '. לשנות:' : 'מה הכשרות של המוצר?'}</small>${['mehadrin', 'regular', 'none'].map((l) => html`<button type="button" class="chip" key=${l} aria-pressed=${!!(c.pick.kosher && c.pick.kosher.mine === l)} onClick=${() => { setVoteId(null); vote(c.pick, l); }}>${LEVEL_NAMES[l]}</button>`)}</span>`}
+          ${!nonFood(c.pick) && (voteId === c.id ? html`<${Mark} p=${c.pick} onVote=${vote} />`
+            : html`<button type="button" class="btn-text price-vote-open" onClick=${() => setVoteId(c.id)}>${c.pick.kosher && c.pick.kosher.mine_cert ? 'סימנתם: ' + c.pick.kosher.mine_cert + ' · לשנות' : certOf(c.pick) ? 'הכשרות לא נכונה?' : 'לסמן כשרות'}</button>`)}
         </span>`}
       </li>`; })}
     </ul>
-    <p class="faint price-note">המחירים מהקבצים הרשמיים שהרשתות מפרסמות, מסניף אחד בכל רשת. בסניף שלכם המחיר יכול להיות מעט שונה. הכשרות לפי אישור של משפחות ושלנו, ולכן תמיד כדאי לבדוק את החותמת על המוצר.</p>
+    <p class="faint price-note">המחירים מהקבצים הרשמיים שהרשתות מפרסמות, מסניף אחד בכל רשת. בסניף שלכם המחיר יכול להיות מעט שונה. הכשרות לפי מה שמשפחות סימנו, המאגר הפתוח ואישור שלנו, ולכן תמיד כדאי לבדוק את החותמת על המוצר.</p>
   </section>`;
 }
 

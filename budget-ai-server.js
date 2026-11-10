@@ -2104,7 +2104,8 @@ app.post('/api/admin/prices/load', requireAuth, async (req, res) => {
 });
 // Product photos from Open Food Facts (an open database, free to use), by
 // barcode: asked once a month at most for each product, kept in the
-// catalog. Up to 12 new lookups a call; the rest come next time.
+// catalog, with the kashrut certifier its labels name, when they name one.
+// Up to 12 new lookups a call; the rest come next time.
 app.post('/api/prices/images', requireAuth, async (req, res) => {
   try {
     // Photos are extra: without the database, simply none.
@@ -2121,17 +2122,18 @@ app.post('/api/prices/images', requireAuth, async (req, res) => {
     }
     const found = await Promise.all(ask.slice(0, 12).map(async (code) => {
       try {
-        const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + code + '.json?fields=image_front_small_url', { headers: { 'user-agent': 'BudgetApp/1.0 (household budget app, Israel)' }, signal: AbortSignal.timeout(6000) });
+        const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + code + '.json?fields=image_front_small_url,labels,labels_tags', { headers: { 'user-agent': 'BudgetApp/1.0 (household budget app, Israel)' }, signal: AbortSignal.timeout(6000) });
         const j = await r.json().catch(() => ({}));
         const url = String((j.product && j.product.image_front_small_url) || '');
-        return { code, url: /^https:\/\/images\.openfoodfacts\.org\//.test(url) ? url : '' };
+        const labels = [String((j.product && j.product.labels) || ''), ...((j.product && Array.isArray(j.product.labels_tags)) ? j.product.labels_tags : [])].join(' ').slice(0, 2000);
+        return { code, url: /^https:\/\/images\.openfoodfacts\.org\//.test(url) ? url : '', cert: (priceDomain && priceDomain.certFromText(labels)) || null };
       } catch (_e) { return null; }
     }));
     const at = new Date().toISOString();
     for (const f of found) {
       if (!f) continue;
       if (f.url) out[f.code] = f.url;
-      await supabaseAdmin.from('price_products').update({ image_url: f.url || null, image_checked_at: at }).eq('barcode', f.code);
+      await supabaseAdmin.from('price_products').update({ image_url: f.url || null, image_checked_at: at, ...(f.cert ? { kosher_cert: f.cert } : {}) }).eq('barcode', f.code);
     }
     return res.json({ images: out });
   } catch (err) {
@@ -2196,6 +2198,13 @@ app.get('/api/admin/prices/seed/:runId', requireAuth, async (req, res) => {
     return res.status(502).json({ error: String(err.message).slice(0, 200) });
   }
 });
+// The certifiers' list and how to read a label, shared with the app.
+let priceDomain = null;
+import(require('url').pathToFileURL(path.join(__dirname, 'public/app/src/domain/prices.js')).href)
+  .then((m) => { priceDomain = m; })
+  .catch((err) => console.error('Price rules not loaded:', err.message));
+// Products waiting for the owner's word: what families put on their lists
+// first (most families first), then the newest in the catalog.
 app.get('/api/admin/kosher', requireAuth, async (req, res) => {
   try {
     if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
@@ -2205,10 +2214,19 @@ app.get('/api/admin/kosher', requireAuth, async (req, res) => {
     ]);
     const done = new Set((owned || []).map((x) => x.barcode));
     const q = String(req.query.q || '').trim().slice(0, 40);
-    let rows = supabaseAdmin.from('price_products').select('barcode,name,maker,qty,unit').order('seen_at', { ascending: false }).limit(400);
+    const fam = new Map();
+    if (!q) {
+      const { data: picked } = await supabaseAdmin.from('shopping_items').select('barcode,household_id').not('barcode', 'is', null).limit(5000);
+      for (const r of picked || []) if (!done.has(r.barcode)) { const s = fam.get(r.barcode) || new Set(); s.add(r.household_id); fam.set(r.barcode, s); }
+    }
+    const top = [...fam.entries()].sort((a, b) => b[1].size - a[1].size).slice(0, 60).map(([c]) => c);
+    const { data: bought } = top.length ? await supabaseAdmin.from('price_products').select('barcode,name,maker,qty,unit,kosher_cert').in('barcode', top) : { data: [] };
+    let rows = supabaseAdmin.from('price_products').select('barcode,name,maker,qty,unit,kosher_cert').order('seen_at', { ascending: false }).limit(q ? 200 : 400);
     if (q) rows = rows.ilike('names', '%' + q.replace(/[%_,()]/g, ' ') + '%');
     const { data } = await rows;
-    const waiting = (data || []).filter((p) => !done.has(p.barcode)).slice(0, 60);
+    const first = (bought || []).map((p) => ({ ...p, fam: fam.get(p.barcode).size })).sort((a, b) => b.fam - a.fam);
+    const seen = new Set(first.map((p) => p.barcode));
+    const waiting = [...first, ...(data || []).filter((p) => !done.has(p.barcode) && !seen.has(p.barcode))].slice(0, q ? 200 : 60);
     return res.json({ products: products || 0, confirmed: done.size, waiting });
   } catch (err) {
     console.error('kosher list failed:', err.message);
@@ -2218,10 +2236,11 @@ app.get('/api/admin/kosher', requireAuth, async (req, res) => {
 app.post('/api/admin/kosher', requireAuth, async (req, res) => {
   try {
     if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
-    const level = String((req.body && req.body.level) || '');
+    const cert = String((req.body && req.body.cert) || '');
     const codes = (Array.isArray(req.body && req.body.barcodes) ? req.body.barcodes : []).map(String).filter((c) => /^[0-9]{4,20}$/.test(c)).slice(0, 200);
-    if (!['none', 'regular', 'mehadrin'].includes(level) || !codes.length) return res.status(400).json({ error: 'bad request' });
-    const { error } = await supabaseAdmin.from('kosher_votes').upsert(codes.map((barcode) => ({ barcode, household_id: prices.OWNER_VOTE, level, by_owner: true })), { onConflict: 'barcode,household_id' });
+    if (!priceDomain || !priceDomain.isCert(cert) || !codes.length) return res.status(400).json({ error: 'bad request' });
+    const level = priceDomain.certLevel(cert);
+    const { error } = await supabaseAdmin.from('kosher_votes').upsert(codes.map((barcode) => ({ barcode, household_id: prices.OWNER_VOTE, level, cert, by_owner: true })), { onConflict: 'barcode,household_id' });
     if (error) throw error;
     return res.json({ ok: true, count: codes.length });
   } catch (err) {
