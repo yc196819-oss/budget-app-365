@@ -1907,6 +1907,13 @@ app.post('/api/admin/prices/sample', requireAuth, async (req, res) => {
 app.get('/api/admin/prices/sample/:runId', requireAuth, async (req, res) => {
   try {
     if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!APIFY_TOKEN) return res.status(503).json({ error: 'המפתח של Apify לא מוגדר בשרת (APIFY_TOKEN).' });
+    return res.json(await prices.apifyCheck(fetch, APIFY_TOKEN, req.params.runId));
+  } catch (err) {
+    console.error('price service check failed:', err.message);
+    return res.status(502).json({ error: String(err.message).slice(0, 200) });
+  }
+});
 
 // ═══ prices for families: our catalog first, the service only for what is missing ═══
 // A search is matched in our own catalog (price_search in the database, from
@@ -2045,13 +2052,6 @@ app.post('/api/admin/kosher', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('kosher confirm failed:', err.message);
     return res.status(500).json({ error: 'לא נשמר.' });
-  }
-});
-    if (!APIFY_TOKEN) return res.status(503).json({ error: 'המפתח של Apify לא מוגדר בשרת (APIFY_TOKEN).' });
-    return res.json(await prices.apifyCheck(fetch, APIFY_TOKEN, req.params.runId));
-  } catch (err) {
-    console.error('price service check failed:', err.message);
-    return res.status(502).json({ error: String(err.message).slice(0, 200) });
   }
 });
 // The owner's evening summary email (pg_cron job "owner-daily-digest").

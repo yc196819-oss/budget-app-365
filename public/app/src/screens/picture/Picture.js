@@ -156,6 +156,7 @@ export function PictureSheet({ data, onClose, onUpload }) {
   // tapped opens how to get its statement.
   const [view, setView] = useState('now');
   const [focus, setFocus] = useState(null);
+  const [closing, setClosing] = useState(false);
   useEffect(() => { track('picture_open'); }, []);
   if (!t) return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}><span class="muted">טוען…</span><//>`;
   if (edit) return html`<${Sheet} title="הבנקים והכרטיסים שלכם" onClose=${onClose}><${Picker} data=${data} step=${edit} onStep=${setEdit} onDone=${() => setEdit(false)} /><//>`;
@@ -176,14 +177,14 @@ export function PictureSheet({ data, onClose, onUpload }) {
   // A row for each bank account and card company, as in a settings list:
   // its logo, its month, and a pill (להעלות / הועלה). A tap opens how to
   // get the statement, in three steps, with the site and the upload.
-  const item = (r) => {
+  const item = (r, idx = 0) => {
     const { x, st, sub, due } = info(r);
     const p = providerOf(x.provider);
     return html`<li key=${x.id} class=${'pic-task pic-item is-' + st.status}>
-      <button type="button" class="pic-item-main" onClick=${() => setFocus(x.id)} aria-label=${nameOf(x) + ': ' + (due ? 'חסר' : st.status === 'ok' ? 'הועלה' : 'עוד לא הגיע הזמן')}>
+      <button type="button" class="pic-item-main" style=${'--i:' + idx} onClick=${() => setFocus(x.id)} aria-label=${nameOf(x) + ': ' + (due ? 'חסר' : st.status === 'ok' ? 'הועלה' : 'עוד לא הגיע הזמן')}>
         ${p ? html`<${Logo} provider=${p.key} size="s" />` : html`<span class="logo-chip logo-s logo-blank" aria-hidden="true"><${Icon} name=${x.kind === 'card' ? 'money' : 'assets'} size=${18} /></span>`}
         <span class="pic-item-t"><b>${nameOf(x)}</b><small>${sub}${st.status === 'partial' ? ' · הקובץ לא שלם' : ''}</small></span>
-        ${due ? html`<span class="pic-pill todo">להעלות</span>` : st.status === 'ok' ? html`<span class="pic-pill ok">הועלה</span>` : html`<span class="pic-pill">עוד לא</span>`}
+        ${!p ? html`<span class="pic-pill pick">${x.kind === 'card' ? 'איזו חברה?' : 'איזה בנק?'}</span>` : due ? html`<span class="pic-pill todo">להעלות</span>` : st.status === 'ok' ? html`<span class="pic-pill ok">הועלה</span>` : html`<span class="pic-pill">עוד לא</span>`}
         <span class="pic-chev" aria-hidden="true">‹</span>
       </button>
     </li>`;
@@ -196,13 +197,30 @@ export function PictureSheet({ data, onClose, onUpload }) {
     const { x, st, sub, due } = info(sel);
     const p = providerOf(x.provider);
     const when = x.kind === 'card' ? 'החיוב של ' + (x.billingDay || 10) + '.' + Number((st.key || now).slice(5)) : 'עובר ושב, ' + monthName(st.key || now);
-    return html`<div class="pic-veil" onClick=${(e) => { if (e.target === e.currentTarget) setFocus(null); }}>
+    const close = () => { setClosing(true); setTimeout(() => { setClosing(false); setFocus(null); }, 220); };
+    const choose = (key) => saveRow(x.kind === 'card' ? 'credit_cards' : 'bank_accounts', { id: x.id, provider: key })
+      .then(() => { track('picture_named'); showToast('נשמר: ' + nameOf({ ...x, provider: key })); })
+      .catch(() => showToast('לא נשמר. נסו שוב.'));
+    if (!p) {
+      const banks = PROVIDERS.filter((q) => q.kind === 'bank');
+      const cos = PROVIDERS.filter((q) => q.kind === 'card');
+      const grid = (list, label) => html`<div class="pic-pickgrid">${list.map((q) => html`<button type="button" key=${q.key} class="pic-pickone" aria-label=${label ? label + ' ' + q.name : q.name} onClick=${() => choose(q.key)}><${Logo} provider=${q.key} size="m" /></button>`)}</div>`;
+      return html`<div class=${'pic-veil' + (closing ? ' out' : '')} onClick=${(e) => { if (e.target === e.currentTarget) close(); }}>
+        <div class="pic-focus" role="dialog" aria-label=${x.name}>
+          <div class="pic-focus-head"><span class="logo-chip logo-m logo-blank" aria-hidden="true"><${Icon} name=${x.kind === 'card' ? 'money' : 'assets'} size=${20} /></span><span><h3>${x.name}</h3><small class="muted">${x.kind === 'card' ? 'של איזו חברה הכרטיס?' : 'באיזה בנק החשבון?'} לחיצה אחת, ונציג את הלוגו ואת הדרך להוריד את הפירוט.</small></span>
+            <button type="button" class="icon-btn" aria-label="סגירה" onClick=${close}><${Icon} name="x" size=${16} /></button></div>
+          ${x.kind === 'card' ? html`${grid(cos)}<p class="pic-group" style="margin:4px 2px 0">או כרטיס שהבנק הנפיק</p>${grid(banks, 'כרטיס של בנק')}` : grid(banks)}
+          <button type="button" class="btn btn-ghost" onClick=${() => { setFocus(null); onUpload(x); }}><${Icon} name="upload" size=${16} />להעלות את הקובץ, ולזהות לבד</button>
+          <p class="pic-safe"><${Icon} name="spark" size=${14} />לא בטוחים? מעלים את הפירוט, ונזהה את החברה מתוכו.</p>
+        </div></div>`;
+    }
+    return html`<div class=${'pic-veil' + (closing ? ' out' : '')} onClick=${(e) => { if (e.target === e.currentTarget) close(); }}>
       <div class="pic-focus" role="dialog" aria-label=${nameOf(x)}>
         <div class="pic-focus-head">${p ? html`<${Logo} provider=${p.key} size="m" />` : null}<span><h3>הפירוט של ${nameOf(x)}</h3><small class="muted">${when}${x.count > 1 ? ' · ' + x.count + ' כרטיסים, פירוט אחד' : ''}</small></span>
-          <button type="button" class="icon-btn" aria-label="סגירה" onClick=${() => setFocus(null)}><${Icon} name="x" size=${16} /></button></div>
+          <button type="button" class="icon-btn" aria-label="סגירה" onClick=${close}><${Icon} name="x" size=${16} /></button></div>
         ${st.status === 'ok' ? html`<p class="pic-focus-ok">הפירוט של החודש כבר כאן. אפשר להעלות שוב אם משהו חסר.</p>`
           : st.status === 'waiting' ? html`<p class="muted pic-focus-ok">הפירוט של החודש עוד לא זמין. נזכיר לכם ביום שאחרי החיוב.</p>` : null}
-        <ol class="pic-how">${howSteps(x.kind, x.provider).map((h, i) => html`<li key=${i}>${h}</li>`)}</ol>
+        <ol class="pic-how">${howSteps(x.kind, x.provider).map((h, i) => html`<li key=${i} style=${'--i:' + i}>${h}</li>`)}</ol>
         <span class="sr-only">${howTo(x.kind, x.provider)}</span>
         <div class="pic-focus-acts">
           <button type="button" class="btn" onClick=${() => { setFocus(null); onUpload(x); }}><${Icon} name="upload" size=${16} />להעלות את הקובץ</button>
@@ -237,15 +255,9 @@ export function PictureSheet({ data, onClose, onUpload }) {
           <p class="muted">${full ? 'כל המספרים של החודש מדויקים.' : 'פירוט אחד לכל חברה, וזה הכול.'}</p>
           ${t.streak > 1 && html`<span class="pic-streak">${t.streak} חודשים ברצף עם תמונה מלאה</span>`}</div>
       </div>
-      ${unknown.length > 0 && html`<div class="pic-unknown">
-        <b>לאילו חברות שייכים?</b>
-        <ul>${unknown.map((x) => html`<li key=${x.id}><span class="pic-u-name"><b>${x.name}</b><small class="muted">${x.kind === 'card' ? 'כרטיס אשראי' + (x.last4 ? ' ' + x.last4 : '') : 'חשבון בנק'}</small></span>
-          <select class="input" aria-label=${'החברה של ' + x.name} onChange=${(e) => e.currentTarget.value && saveRow(x.kind === 'card' ? 'credit_cards' : 'bank_accounts', { id: x.id, provider: e.currentTarget.value }).then(() => track('picture_named')).catch(() => showToast('לא נשמר. נסו שוב.'))}>
-            <option value="">בחרו חברה</option>${PROVIDERS.filter((p) => x.kind === 'card' || p.kind === 'bank').map((p) => html`<option value=${p.key}>${x.kind === 'card' && p.kind === 'bank' ? 'כרטיס של בנק ' + p.name : p.name}</option>`)}</select></li>`)}</ul>
-        <small class="muted">מה שלא תבחרו יזוהה לבד מהפירוט הבא שתעלו.</small>
-      </div>`}
-      ${banks.length > 0 && html`<p class="pic-group">חשבון בנק</p><ul class="pic-list">${banks.map(item)}</ul>`}
-      ${cards.length > 0 && html`<p class="pic-group">כרטיסי אשראי</p><ul class="pic-list">${cards.map(item)}</ul>`}
+      ${unknown.length > 0 && html`<p class="pic-hint">${unknown.length === 1 ? 'לשורה אחת עוד אין לוגו' : 'ל-' + unknown.length + ' שורות עוד אין לוגו'}: לחצו עליה ובחרו את החברה.</p>`}
+      ${banks.length > 0 && html`<p class="pic-group">חשבון בנק</p><ul class="pic-list">${banks.map((r, i) => item(r, i))}</ul>`}
+      ${cards.length > 0 && html`<p class="pic-group">כרטיסי אשראי</p><ul class="pic-list">${cards.map((r, i) => item(r, banks.length + i))}</ul>`}
       <div class="pic-links"><button type="button" class="btn-text" onClick=${() => setEdit('bank')}>עריכת בנקים וכרטיסים</button>
         <button type="button" class="btn-text pic-hist-btn" onClick=${() => setView('history')}>6 החודשים האחרונים</button></div>
       </div>

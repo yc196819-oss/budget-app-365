@@ -241,15 +241,19 @@ test('accounts and cards saved before the companies: named ones get their logo, 
     d.tables.imports = [];
   });
   await page.click('.pic-card');
-  await page.waitForSelector('.pic-unknown');
+  await page.waitForSelector('.pic-hint');
   // Rami Levy's card is Isracard's: its logo, not a question.
   assert.equal(await page.locator('.pic-task img[alt="ישראכרט"]').count(), 1);
   assert.match(await page.locator('.pic-task:has(img[alt="ישראכרט"])').textContent(), /רמי לוי/, 'the card\'s own name stays');
-  assert.equal(await page.locator('.pic-unknown li').count(), 2);
-  await page.locator('.pic-unknown li', { hasText: 'הכרטיס של קובי' }).locator('select').selectOption('cal');
+  assert.equal(await page.locator('.pic-pill.pick').count(), 2);
+  // A row with no company: one tap on its row, one on the company's logo.
+  await page.click('.pic-task:has-text("הכרטיס של קובי") .pic-item-main');
+  await page.click('.pic-focus .pic-pickone[aria-label="כאל"]');
   for (let i = 0; i < 30 && db.tables.credit_cards[1].provider !== 'cal'; i++) await page.waitForTimeout(100);
   assert.equal(db.tables.credit_cards[1].provider, 'cal');
-  await page.waitForFunction(() => document.querySelectorAll('.pic-unknown li').length === 1);
+  await page.waitForFunction(() => document.querySelectorAll('.pic-pill.pick').length === 1);
+  await page.click('.pic-focus button[aria-label="סגירה"]');
+  await page.waitForFunction(() => !document.querySelector('.pic-veil'));
   // The bank account learns its bank from the first file confirmed for it.
   await page.click('.pic-task:has-text("נעמי") .pic-item-main');
   await page.click('.pic-focus button:has-text("להעלות את הקובץ")');

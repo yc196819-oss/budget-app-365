@@ -69,3 +69,26 @@ test('how much per week keeps the food budget until the month ends', () => {
   assert.equal(perWeek(0, new Date(2026, 10, 8)), 0);
   assert.equal(perWeek(-50, new Date(2026, 10, 8)), 0);
 });
+
+test('the advisor\'s week: what the home buys again first, then the basics sized by the people, nothing twice', async () => {
+  const { suggestList } = await import('../public/app/src/domain/shopping.js');
+  const items = [
+    { name: 'במבה', done: true, cleared_at: '2026-11-01T10:00:00Z' }, { name: 'במבה', done: true, cleared_at: '2026-11-08T10:00:00Z' },
+    { name: 'חלב', done: true, cleared_at: '2026-11-08T10:00:00Z' },
+    { name: 'עגבניות', done: false, cleared_at: null }
+  ];
+  const four = suggestList({ items, people: 4 });
+  assert.equal(four[0].name, 'במבה');
+  assert.equal(four[0].why, 'קונים בדרך כלל');
+  assert.ok(!four.some((x) => x.name === 'עגבניות'), 'already on the list');
+  assert.ok(!four.some((x) => x.name === 'חלב 3%'), 'milk is already there from the usual list');
+  assert.equal(four.find((x) => x.name === 'ביצים').qty, 'תבנית');
+  assert.equal(four.find((x) => x.name === 'מלפפונים').qty, '2 ק״ג');
+  assert.equal(four.find((x) => x.name === 'לחם').qty, '×2');
+  assert.equal(four.find((x) => x.name === 'לחם').why, 'לפי 4 נפשות');
+  const six = suggestList({ items: [], people: 6 });
+  assert.equal(six.find((x) => x.name === 'ביצים').qty, '×2 תבניות');
+  assert.equal(six.find((x) => x.name === 'חלב 3%').qty, '×6');
+  assert.equal(suggestList({ people: 1 }).find((x) => x.name === 'חלב 3%').why, 'לפי נפש אחת');
+  assert.equal(suggestList({ people: 1 }).find((x) => x.name === 'חזה עוף').aisle, 'meat');
+});
