@@ -214,7 +214,9 @@ test('the preview of an email: its design, framed only by the app itself, with n
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.match(html, /wallet-192\.png/);
-  assert.match(html, /להוסיף עוד פירוט/);
+  assert.match(html, /להשלים את התמונה/);
+  assert.match(html, /href="[^"]*\/app\/\?action=picture"/, 'the button opens completing the picture');
+  assert.equal((await fetch(BASE + '/mail-preview/picture')).status, 200);
   assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
   assert.match(res.headers.get('content-security-policy'), /default-src 'none'/);
   assert.match(res.headers.get('content-security-policy'), /frame-ancestors 'self'/);

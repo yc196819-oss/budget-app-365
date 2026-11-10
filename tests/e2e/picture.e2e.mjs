@@ -267,3 +267,16 @@ test('accounts and cards saved before the companies: named ones get their logo, 
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('the link in our emails opens completing the picture at once, and leaves the address clean', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  const db = makeFakeDb();
+  const errors = collectErrors(page);
+  await mockSupabase(page, db);
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/?action=picture#/home');
+  await page.waitForSelector('.sheet:has-text("השלמת התמונה")');
+  assert.doesNotMatch(page.url(), /action=/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

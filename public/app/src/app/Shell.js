@@ -131,7 +131,8 @@ export function Shell({ tab, session }) {
   };
   // Came from a friend's link: counted once, now that this person is signed in.
   useEffect(() => { claimRef(session.user && session.user.user_metadata && session.user.user_metadata.ref); }, []);
-  // Home-screen shortcuts (manifest): /app/?action=add|voice|ask|talk opens
+  // Home-screen shortcuts (manifest) and links in our emails:
+  // /app/?action=add|voice|ask|talk|picture opens
   // that action at once; the parameter is taken off the address.
   useEffect(() => {
     const target = new URLSearchParams(location.search).get('go');
@@ -145,7 +146,7 @@ export function Shell({ tab, session }) {
     history.replaceState(null, '', location.pathname + location.hash);
     track('shortcut');
     if (!session.household) return;
-    if (action === 'add' || action === 'voice' || action === 'talk') setOverlay(action);
+    if (action === 'add' || action === 'voice' || action === 'talk' || action === 'picture') setOverlay(action);
     else if (action === 'ask') {
       if (railOn) setTimeout(() => document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus(), 300);
       else openAdvisor();

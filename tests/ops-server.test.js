@@ -211,6 +211,29 @@ test('each email goes to the people at its step of getting started, once each', 
   assert.equal(campaignMail('nope', 'x'), null);
 });
 
+test('the email about what is new: to everyone with a household and less than 6 months, even after an earlier email, once', () => {
+  const now = new Date('2026-11-20T12:00:00Z');
+  const u = (id) => ({ id, email: id + '@x.com', email_confirmed_at: '2026-10-01', created_at: '2026-10-01T10:00:00Z' });
+  const args = {
+    now, owners: [],
+    users: [u('none'), u('empty'), u('few'), u('lots'), u('again'), u('got')],
+    members: [{ user_id: 'empty', household_id: 'h1' }, { user_id: 'few', household_id: 'h2' }, { user_id: 'lots', household_id: 'h3' }, { user_id: 'again', household_id: 'h2' }, { user_id: 'got', household_id: 'h2' }],
+    spans: [{ household_id: 'h2', n: '40', months: '2' }, { household_id: 'h3', n: '500', months: '12' }],
+    sent: [{ user_id: 'again', campaign: 'more', sent_at: '2026-10-01T10:00:00Z' }, { user_id: 'got', campaign: 'picture', sent_at: '2026-10-01T10:00:00Z' }]
+  };
+  assert.deepEqual(campaignList('picture', args).map((x) => x.id), ['empty', 'few', 'again']);
+  const m = campaignMail('picture', 'https://app.example/app/');
+  assert.match(m.subject, /חדש/);
+  assert.match(m.text, /צעד אחר צעד/);
+  assert.match(m.text, /לפי הלוגו/);
+  assert.match(m.text, /להשלים את התמונה: https:\/\/app\.example\/app\/\?action=picture/);
+  assert.match(m.html, /src="https:\/\/app\.example\/wallet-192\.png"/, 'the logo stays on the site address');
+  // The earlier emails tell of it too, and open the same place.
+  assert.match(campaignMail('first', 'https://app.example/app/').text, /השלמת התמונה/);
+  assert.match(campaignMail('start', 'https://app.example/app/').text, /צעד אחר צעד/);
+  assert.match(campaignMail('start', 'https://app.example/app/').text, /https:\/\/app\.example\/app\/(\n|$)/, 'no household yet: the plain link');
+});
+
 test('mail is ready with Brevo or a Resend sender of your own; not with SMTP (blocked on Render free) or Resend\'s test address', () => {
   assert.equal(mailReady({}).ready, false);
   assert.equal(mailReady({ smtp: true }).ready, false);
