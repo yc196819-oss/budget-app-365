@@ -34,3 +34,25 @@ test('falls back to worksheet files when the workbook lists none', async () => {
 test('a file that is not a zip is rejected', async () => {
   await assert.rejects(readXlsx(new TextEncoder().encode('hello world, not a zip at all').buffer), /zip/);
 });
+
+test('files whose tags carry a prefix (<x:row>, as some bank systems write them) are read, not taken for empty', async () => {
+  const buf = makeZip({
+    '_rels/.rels': '<?xml version="1.0"?><Relationships><Relationship Id="r1" Type="officeDocument" Target="/xl/workbook.xml"/></Relationships>',
+    'xl/workbook.xml': '<?xml version="1.0"?><x:workbook xmlns:x="main" xmlns:r="r"><x:sheets><x:sheet name="עסקאות" sheetId="1" r:id="rId1"/></x:sheets></x:workbook>',
+    'xl/_rels/workbook.xml.rels': '<?xml version="1.0"?><Relationships><Relationship Id="rId1" Type="worksheet" Target="/xl/worksheets/sheet1.xml"/></Relationships>',
+    'xl/sharedStrings.xml': '<?xml version="1.0"?><x:sst xmlns:x="main"><x:si><x:t>שם בית העסק</x:t></x:si><x:si><x:t>שופרסל דיל</x:t></x:si></x:sst>',
+    'xl/worksheets/sheet1.xml': '<?xml version="1.0"?><x:worksheet xmlns:x="main"><x:sheetData><x:row r="1"><x:c r="A1" t="s"><x:v>0</x:v></x:c></x:row><x:row r="2"><x:c r="A2" t="s"><x:v>1</x:v></x:c><x:c r="B2"><x:v>245.9</x:v></x:c></x:row></x:sheetData></x:worksheet>'
+  });
+  const sheets = await readXlsx(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length));
+  assert.equal(sheets[0].name, 'עסקאות');
+  assert.deepEqual(sheets[0].rows, [['שם בית העסק'], ['שופרסל דיל', 245.9]]);
+});
+
+test('a shared strings file named with other letter case is found too', async () => {
+  const buf = makeZip({
+    'xl/SharedStrings.xml': '<sst><si><t>חלב</t></si></sst>',
+    'xl/worksheets/sheet1.xml': '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row></sheetData></worksheet>'
+  });
+  const sheets = await readXlsx(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length));
+  assert.deepEqual(sheets[0].rows, [['חלב']]);
+});

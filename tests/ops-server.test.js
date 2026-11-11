@@ -591,3 +591,15 @@ test('the owner\'s email history: who got what, whether it went, who clicked aft
   assert.deepEqual(h.stopped.map((s) => [s.code, s.at]), [['#u2', '2026-11-03T08:00:00Z']]);
   assert.deepEqual(h.byCampaign.first, { title: h.rows[1].title, sent: 1, failed: 1, clicked: 0 });
 });
+
+test('"fixed, upload again": only to whoever had an Excel statement read as empty, once', () => {
+  const { campaignList, campaignMail } = require('../server/ops');
+  const now = new Date('2026-11-20T12:00:00Z');
+  const u = (id) => ({ id, email: id + '@example.test', email_confirmed_at: '2026-10-01', created_at: '2026-10-01T10:00:00Z' });
+  const args = { now, owners: [], users: [u('a'), u('b'), u('c')], members: [{ user_id: 'a', household_id: 'h1' }, { user_id: 'b', household_id: 'h2' }], failed: ['a', 'c'], sent: [{ user_id: 'c', campaign: 'fixed', sent_at: '2026-11-12T10:00:00Z' }] };
+  assert.deepEqual(campaignList('fixed', args).map((x) => x.id), ['a']);
+  const m = campaignMail('fixed', 'https://app.example/app/');
+  assert.match(m.subject, /תיקנו/);
+  assert.match(m.text, /תקלה אצלנו, לא בקובץ שלך/);
+  assert.match(m.html, /href="https:\/\/app\.example\/app\/\?action=import&m=fixed"/);
+});

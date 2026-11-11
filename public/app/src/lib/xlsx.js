@@ -103,17 +103,29 @@ export function parseSheet(xml, strings) {
   return rows;
 }
 
+// Some systems (many banks' among them) write every tag with a prefix:
+// <x:row>, <x:c>, <x:v>. The prefix is taken off, so they read as usual.
+const plain = (xml) => String(xml || '').replace(/<(\/?)[A-Za-z][\w.-]*:(?=[A-Za-z])/g, '<$1');
+
 export async function readXlsx(arrayBuffer) {
   const buf = new Uint8Array(arrayBuffer);
   const entries = zipEntries(buf);
+  // A file's name inside, whatever its letter case or a leading "/".
+  const lower = new Map([...entries.keys()].map((k) => [k.toLowerCase(), k]));
+  const keyOf = (name) => (entries.has(name) ? name : lower.get(String(name).replace(/^\//, '').toLowerCase()) || null);
   const text = async (name) => {
-    const e = entries.get(name);
-    return e ? new TextDecoder().decode(await readEntry(buf, e)) : '';
+    const k = keyOf(name);
+    return k ? plain(new TextDecoder().decode(await readEntry(buf, entries.get(k)))) : '';
   };
   const strings = parseSharedStrings(await text('xl/sharedStrings.xml'));
+  // The workbook where the package says it is (xl/workbook.xml nearly always).
+  const pkg = await text('_rels/.rels');
+  const wbTarget = ((pkg.match(/<Relationship\b[^>]*officeDocument[^>]*>/) || [''])[0].match(/\bTarget="([^"]+)"/) || [])[1];
+  const wbPath = wbTarget ? wbTarget.replace(/^\//, '') : 'xl/workbook.xml';
+  const wbDir = wbPath.includes('/') ? wbPath.slice(0, wbPath.lastIndexOf('/') + 1) : '';
   // Sheet order and names come from the workbook; file names are the fallback.
-  const workbook = await text('xl/workbook.xml');
-  const rels = await text('xl/_rels/workbook.xml.rels');
+  const workbook = await text(wbPath);
+  const rels = await text(wbDir + '_rels/' + wbPath.slice(wbDir.length) + '.rels');
   const targets = new Map([...rels.matchAll(/<Relationship\b[^>]*>/g)].map((m) => [
     (m[0].match(/\bId="([^"]+)"/) || [])[1],
     (m[0].match(/\bTarget="([^"]+)"/) || [])[1]
@@ -121,13 +133,16 @@ export async function readXlsx(arrayBuffer) {
   let sheets = [...workbook.matchAll(/<sheet\b[^>]*>/g)].map((m) => {
     const name = unescapeXml((m[0].match(/\bname="([^"]*)"/) || [])[1] || '');
     const target = targets.get((m[0].match(/\br:id="([^"]+)"/) || [])[1]) || '';
-    const path = target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '');
+    const path = target.startsWith('/') ? target.slice(1) : wbDir + target.replace(/^\.\//, '');
     return { name, path };
-  }).filter((s) => entries.has(s.path));
+  }).filter((s) => keyOf(s.path));
   if (!sheets.length) {
-    sheets = [...entries.keys()].filter((k) => /^xl\/worksheets\/sheet\d+\.xml$/.test(k)).sort().map((path, i) => ({ name: 'גיליון ' + (i + 1), path }));
+    sheets = [...entries.keys()].filter((k) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(k)).sort().map((path, i) => ({ name: 'גיליון ' + (i + 1), path }));
   }
   const out = [];
   for (const s of sheets.slice(0, MAX_SHEETS)) out.push({ name: s.name, rows: parseSheet(await text(s.path), strings) });
+  // The names of the parts inside (never their content): if a file still
+  // reads as empty, they tell which kind of file it was.
+  out.parts = [...entries.keys()].slice(0, 30);
   return out;
 }

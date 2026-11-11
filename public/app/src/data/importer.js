@@ -40,11 +40,15 @@ async function readTable(file, kind) {
   // .xls files that are really .xlsx, HTML or text.
   const zip = bytes[0] === 0x50 && bytes[1] === 0x4b;
   if (kind === 'xlsx' || (kind === 'xls' && zip)) {
+    let sheets;
     try {
-      return (await readXlsx(bytes.buffer)).flatMap((s) => s.rows);
+      sheets = await readXlsx(bytes.buffer);
     } catch (_err) {
       throw new ImportError('לא הצלחנו לפתוח את קובץ האקסל. נסו להוריד אותו שוב, או להעלות PDF.', 'excel');
     }
+    const rows = sheets.flatMap((s) => s.rows);
+    if (!rows.some((r) => r.some((c) => String(c ?? '').trim()))) reportError(new Error('xlsx read as empty: ' + (sheets.parts || []).join(',')), 'import:xlsx-parts');
+    return rows;
   }
   if (isBinaryXls(bytes)) {
     try {
