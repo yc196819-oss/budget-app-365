@@ -4,6 +4,8 @@
 // The only events kept: what someone did, never what they wrote or how much.
 const EVENTS = ['app_open', 'tx_add', 'import_done', 'advisor_ask', 'advisor_talk', 'decision_open', 'decision_message', 'trip_plan', 'news_open', 'lesson_done', 'shortcut', 'export', 'restore', 'import_fail', 'guide_step', 'guide_skip', 'learn_auto', 'learn_undo', 'onboard_0', 'onboard_1', 'onboard_2', 'onboard_3', 'onboard_4', 'onboard_5', 'onboard_done', 'share', 'share_joined', 'howto', 'repair_shown', 'repair_fix', 'repair_skip',
   // Where an upload stops: opened, which kind of file, why it failed (a fixed word), left at which step.
+  // A click on an email's button (which email it was).
+  ...['start', 'first', 'more', 'picture', 'nudge', 'monthly'].map((c) => 'mail_click_' + c),
   'import_open', 'import_file_xlsx', 'import_file_xls', 'import_file_csv', 'import_file_pdf', 'import_file_image', 'import_file_other',
   ...['ai_off', 'excel', 'password', 'xls', 'type', 'empty', 'pdf_scan', 'image_big', 'no_rows', 'junk', 'other'].map((c) => 'import_fail_' + c),
   ...['pick', 'work', 'review', 'error'].map((s) => 'import_abandon_' + s),
@@ -320,7 +322,10 @@ function feedbackPatch(body) {
 //   more:  uploaded, but less than 6 months of statements
 //   picture: has a household, less than 6 months: what is new (completing
 //            the picture, step by step), even after an earlier email
-const CAMPAIGNS = ['start', 'first', 'more', 'picture'];
+//   nudge: came in and opened a household 3+ days ago, uploaded nothing:
+//          a short, personal note with a picture of the upload, even after
+//          an earlier email
+const CAMPAIGNS = ['start', 'first', 'more', 'picture', 'nudge'];
 // At most one email a week from us to a person, whatever its kind. Not
 // counted: what the person asked for (the monthly summary they turned on,
 // an answer to their request, sign-in codes, sign-up and password emails,
@@ -345,6 +350,7 @@ function campaignList(campaign, { users = [], members = [], spans = [], sent = [
     if (campaign === 'first') return inHousehold && s.n === 0;
     if (campaign === 'more') return inHousehold && s.n > 0 && s.months < 6;
     if (campaign === 'picture') return inHousehold && s.months < 6;
+    if (campaign === 'nudge') return inHousehold && s.n === 0 && now.getTime() - new Date(u.created_at).getTime() >= 3 * DAY;
     return false;
   });
 }
@@ -393,6 +399,14 @@ const MAILS = {
     button: 'להשלים את התמונה',
     action: 'picture'
   },
+  nudge: {
+    title: 'נכנסו ולא העלו פירוט (מכתב אישי עם תמונה)',
+    subject: 'דקה אחת, והתמונה שלך מוכנה',
+    body: ['ראיתי שפתחת את "התקציב שלנו", ועוד לא העלית פירוט. זה בסדר גמור, רוב האנשים נתקעים בדיוק כאן.', 'רציתי להראות לך כמה זה קצר: מורידים את פירוט כרטיס האשראי מהאתר של החברה (PDF או אקסל), מעלים אותו, ותוך דקה כל התנועות כבר ממוינות לבד. ככה זה נראה:', '[img]', '• לא צריך להקליד כלום, ולא צריך לסדר את הקובץ.', '• אם משהו כבר במערכת, הוא לא נכנס פעמיים.', '• האפליקציה מראה לכל בנק ולכל חברת אשראי, צעד אחר צעד, איך מורידים את הפירוט.', NOSTATE],
+    button: 'להעלות פירוט עכשיו',
+    action: 'import',
+    image: { src: '/mail/upload-sorted.png', alt: 'פירוט אשראי אחרי ההעלאה: כל התנועות ממוינות לקטגוריות', w: 280 }
+  },
   picture: {
     title: 'חדש: השלמת התמונה (למי שהתחיל, פחות מ-6 חודשים)',
     subject: 'חדש: להשלים את הפירוטים בקלות, צעד אחר צעד',
@@ -405,9 +419,12 @@ function campaignMail(campaign, link, unsubLink) {
   const m = MAILS[campaign];
   if (!m) return null;
   // The button opens the right place in the app (e.g. completing the picture).
-  const go = m.action ? String(link).replace(/\/?$/, '/') + '?action=' + m.action : link;
+  // The button opens the right place, and says which email it came from
+  // (counted as a click, with the person's consent to usage counts).
+  const base = String(link).replace(/\/?$/, '/');
+  const go = base + '?' + (m.action ? 'action=' + m.action + '&' : '') + 'm=' + campaign;
   const sign = 'אם משהו לא עבד או לא היה ברור, אפשר פשוט לענות למייל הזה. אנחנו קוראים כל תשובה.';
-  const text = 'היי,\n' + m.body.join('\n') + '\n\n' + m.button + ': ' + go + '\n\n' + sign + '\nצוות התקציב שלנו\n\n' + (unsubLink ? 'לא רוצה לקבל עוד מיילים כאלה? להסרה: ' + unsubLink : 'לא רוצה לקבל עוד מיילים? תענה "הסר".');
+  const text = 'היי,\n' + m.body.filter((l) => l !== '[img]').join('\n') + '\n\n' + m.button + ': ' + go + '\n\n' + sign + '\nצוות התקציב שלנו\n\n' + (unsubLink ? 'לא רוצה לקבל עוד מיילים כאלה? להסרה: ' + unsubLink : 'לא רוצה לקבל עוד מיילים? תענה "הסר".');
   let body = '';
   let list = [];
   const P = 'margin:0 0 14px;font-size:16px;line-height:1.65;color:#2B2118';
@@ -418,12 +435,17 @@ function campaignMail(campaign, link, unsubLink) {
       + '<tr><td colspan="2" style="height:12px"></td></tr></table>';
     list = [];
   };
+  const origin = String(link).replace(/\/app\/?$/, '');
   for (const line of m.body) {
+    if (line === '[img]') {
+      flush();
+      if (m.image) body += '<p style="margin:0 0 16px;text-align:center"><a href="' + go + '"><img src="' + origin + m.image.src + '" width="' + m.image.w + '" alt="' + m.image.alt + '" style="max-width:100%;height:auto;border:1px solid #E7DCCD;border-radius:16px"></a></p>';
+      continue;
+    }
     if (line.startsWith('• ')) list.push(line.slice(2));
     else { flush(); body += '<p style="' + P + '">' + line + '</p>'; }
   }
   flush();
-  const origin = String(link).replace(/\/app\/?$/, '');
   const html = '<!doctype html><html lang="he" dir="rtl"><body style="margin:0;padding:0;background:#F3EDE6">'
     + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3EDE6"><tr><td align="center" style="padding:24px 12px">'
     + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" dir="rtl" style="max-width:560px;font-family:Arial,Helvetica,sans-serif;text-align:right">'
@@ -439,6 +461,28 @@ function campaignMail(campaign, link, unsubLink) {
     + '<tr><td style="padding:16px 8px 0;font-size:13px;line-height:1.7;color:#8A7B6E;text-align:center">קיבלת את המייל כי נרשמת ל"התקציב שלנו".<br>לא רוצה לקבל עוד מיילים כאלה? ' + (unsubLink ? '<a href="' + escHtml(unsubLink) + '" style="color:#92490A;font-weight:bold;text-decoration:underline">להסרה לחץ כאן</a>' : 'תענה "הסר".') + '</td></tr>'
     + '</table></td></tr></table></body></html>';
   return { subject: m.subject, text, html };
+}
+// The owner's history of our emails: who got which and when, whether it
+// went, whether they clicked its button after it, and who asked to stop.
+// People are shown by first name (or a code) and a masked address. Pure.
+function mailHistory({ sent = [], clicks = [], stops = [], users = [], names = {}, alias = (id) => id.slice(0, 6) }) {
+  const email = new Map(users.map((u) => [u.id, u.email]));
+  const who = (id) => ({ name: names[id] || '', code: alias(id), email: maskEmail(email.get(id) || '') });
+  const clickOf = (r) => {
+    const t = new Date(r.sent_at).getTime();
+    const c = clicks.filter((e) => e.user_id === r.user_id && e.name === 'mail_click_' + r.campaign && new Date(e.at).getTime() >= t).sort((a, b) => (a.at < b.at ? -1 : 1))[0];
+    return c ? c.at : null;
+  };
+  const rows = sent.filter((r) => r.sent_at).map((r) => ({ ...who(r.user_id), campaign: r.campaign, title: MAILS[r.campaign] ? MAILS[r.campaign].title : r.campaign, at: r.sent_at, ok: r.ok !== false, clicked: r.ok !== false ? clickOf(r) : null }))
+    .sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 300);
+  const stopped = stops.map((s) => ({ ...who(s.user_id), at: s.updated_at || null })).sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  const byCampaign = {};
+  for (const r of rows) {
+    const c = byCampaign[r.campaign] || (byCampaign[r.campaign] = { title: r.title, sent: 0, failed: 0, clicked: 0 });
+    if (r.ok) c.sent++; else c.failed++;
+    if (r.clicked) c.clicked++;
+  }
+  return { rows, stopped, byCampaign };
 }
 // Why an email did not go, in words the owner can act on.
 function mailErrorText(err) {
@@ -836,4 +880,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };
+module.exports = { mailHistory, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };

@@ -231,7 +231,7 @@ test('the email about what is new: to everyone with a household and less than 6 
   // The earlier emails tell of it too, and open the same place.
   assert.match(campaignMail('first', 'https://app.example/app/').text, /השלמת התמונה/);
   assert.match(campaignMail('start', 'https://app.example/app/').text, /צעד אחר צעד/);
-  assert.match(campaignMail('start', 'https://app.example/app/').text, /https:\/\/app\.example\/app\/(\n|$)/, 'no household yet: the plain link');
+  assert.match(campaignMail('start', 'https://app.example/app/').text, /https:\/\/app\.example\/app\/\?m=start(\n|$)/, 'no household yet: the app itself, nothing to open');
 });
 
 test('mail is ready with Brevo or a Resend sender of your own; not with SMTP (blocked on Render free) or Resend\'s test address', () => {
@@ -548,4 +548,46 @@ test('where uploads stop: opened, picked, saved; why it failed and where people 
 test('every new event name the app sends is allowed, and nothing free-form', () => {
   for (const n of ['import_open', 'import_file_image', 'import_fail_no_rows', 'import_abandon_review', 'first_value', 'shop_add', 'shop_done', 'shop_reuse']) assert.ok(ops.EVENTS.includes(n), n);
   assert.equal(ops.EVENTS.some((n) => /\s/.test(n)), false);
+});
+
+test('the personal note: to whoever opened a household 3+ days ago and uploaded nothing, with a picture and a button to the upload', () => {
+  const { campaignList, campaignMail } = require('../server/ops');
+  const now = new Date('2026-11-20T12:00:00Z');
+  const u = (id, created) => ({ id, email: id + '@example.test', email_confirmed_at: '2026-10-01', created_at: created });
+  const args = {
+    now, owners: [],
+    users: [u('old', '2026-11-10T10:00:00Z'), u('new', '2026-11-19T10:00:00Z'), u('up', '2026-11-01T10:00:00Z'), u('nohh', '2026-11-01T10:00:00Z')],
+    members: [{ user_id: 'old', household_id: 'h1' }, { user_id: 'new', household_id: 'h2' }, { user_id: 'up', household_id: 'h3' }],
+    spans: [{ household_id: 'h3', n: '30', months: '1' }],
+    sent: [{ user_id: 'old', campaign: 'first', sent_at: '2026-10-20T10:00:00Z' }]
+  };
+  assert.deepEqual(campaignList('nudge', args).map((x) => x.id), ['old'], 'even after the first email; not the new one, not who uploaded, not without a household');
+  const m = campaignMail('nudge', 'https://app.example/app/');
+  assert.match(m.html, /<img src="https:\/\/app\.example\/mail\/upload-sorted\.png"/);
+  assert.match(m.html, /href="https:\/\/app\.example\/app\/\?action=import&m=nudge"/);
+  assert.doesNotMatch(m.text, /\[img\]/);
+  assert.match(campaignMail('start', 'https://app.example/app/').text, /https:\/\/app\.example\/app\/\?m=start/, 'every button says which email it came from');
+});
+
+test('the owner\'s email history: who got what, whether it went, who clicked after it, who asked to stop', () => {
+  const { mailHistory } = require('../server/ops');
+  const h = mailHistory({
+    sent: [
+      { user_id: 'u1', campaign: 'first', sent_at: '2026-11-01T10:00:00Z', ok: true },
+      { user_id: 'u2', campaign: 'first', sent_at: '2026-11-02T10:00:00Z', ok: false },
+      { user_id: 'u1', campaign: 'nudge', sent_at: '2026-11-10T10:00:00Z', ok: true }
+    ],
+    clicks: [
+      { user_id: 'u1', name: 'mail_click_first', at: '2026-10-30T10:00:00Z' },
+      { user_id: 'u1', name: 'mail_click_nudge', at: '2026-11-10T12:00:00Z' }
+    ],
+    stops: [{ user_id: 'u2', updated_at: '2026-11-03T08:00:00Z' }],
+    users: [{ id: 'u1', email: 'dana@example.test' }, { id: 'u2', email: 'yosi@example.test' }],
+    names: { u1: 'דנה' },
+    alias: (id) => '#' + id
+  });
+  assert.deepEqual(h.rows.map((r) => [r.campaign, r.name || r.code, r.ok, !!r.clicked]), [['nudge', 'דנה', true, true], ['first', '#u2', false, false], ['first', 'דנה', true, false]], 'newest first; a click before the email is not its click');
+  assert.equal(h.rows[0].email, 'da***@example.test', 'addresses are masked');
+  assert.deepEqual(h.stopped.map((s) => [s.code, s.at]), [['#u2', '2026-11-03T08:00:00Z']]);
+  assert.deepEqual(h.byCampaign.first, { title: h.rows[1].title, sent: 1, failed: 1, clicked: 0 });
 });

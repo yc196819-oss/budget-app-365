@@ -2469,6 +2469,25 @@ app.get('/api/admin/reengage', requireAuth, async (req, res) => {
     return res.json({ campaigns, stopped: st.stopped, mail: mailStatus() });
   } catch (err) { return res.status(500).json({ error: 'failed' }); }
 });
+// The history of our emails, for the owner: who got which, when, whether
+// it went, whether they clicked it, and who asked to stop.
+app.get('/api/admin/mail/history', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  try {
+    const [{ data: people }, { data: sent }, { data: clicks }, { data: stops }] = await Promise.all([
+      listAllUsers(),
+      allRows(() => supabaseAdmin.from('mail_sent').select('user_id,campaign,sent_at,ok').order('sent_at', { ascending: false })),
+      allRows(() => supabaseAdmin.from('app_events').select('user_id,name,at').like('name', 'mail_click_%').order('at')),
+      allRows(() => supabaseAdmin.from('mail_prefs').select('user_id,updated_at').eq('news', false).order('user_id'))
+    ]);
+    const ids = [...new Set([...(sent || []), ...(stops || [])].map((r) => r.user_id))];
+    const names = await feedbackNames(ids);
+    return res.json(ops.mailHistory({ sent: sent || [], clicks: clicks || [], stops: stops || [], users: (people && people.users) || [], names, alias: (id) => ops.alias(id, ADMIN_SALT) }));
+  } catch (err) {
+    console.error('mail history failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
 app.post('/api/admin/reengage', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   const campaign = ops.CAMPAIGNS.includes(req.body && req.body.campaign) ? req.body.campaign : 'start';
