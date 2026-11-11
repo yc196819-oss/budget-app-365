@@ -2033,6 +2033,9 @@ async function runFreeLoad() {
       seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error: r.error || null });
     }
     if (rows.length) await saveCatalog(rows);
+    // Every chain's branches, then the branches families live near.
+    await saveStores().catch((e) => console.error('stores failed:', e.message));
+    await loadLocal(rows).catch((e) => console.error('local prices failed:', e.message));
     // Prices of a chain that left (or a product it stopped selling) older
     // than two weeks are not shown as today's price.
     await supabaseAdmin.from('price_offers').delete().lt('seen_at', new Date(Date.now() - 14 * 86400000).toISOString());
@@ -2043,6 +2046,90 @@ async function runFreeLoad() {
   seedJob.running = false;
   seedJob.endedAt = new Date().toISOString();
 }
+// ── prices by the family's area ──
+const area = require('./server/area');
+// Every chain's list of branches, kept for finding the branch near a family.
+async function saveStores() {
+  for (const c of pricefiles.CHAINS) {
+    try {
+      const list = await pricefiles.chainStores(fetch, c);
+      const at = new Date().toISOString();
+      const rows = list.map((x) => ({ chain: c.key, chain_name: c.name, store_id: x.store_id, name: x.name, address: x.address, city: x.city, seen_at: at }));
+      for (let i = 0; i < rows.length; i += 500) await supabaseAdmin.from('price_stores').upsert(rows.slice(i, i + 500), { onConflict: 'chain,store_id' });
+    } catch (e) { console.error('stores of ' + c.key + ':', e.message); }
+  }
+}
+// The prices at the branches families live near: kept only where a branch
+// differs from its chain's general price (so the catalog stays small).
+// `rows`: the chains' general prices just loaded, or none (then read).
+const localJob = { running: false, again: false };
+async function loadLocal(rows = null, only = null) {
+  // One at a time; a request while one runs is done right after it (all
+  // families' branches, so none is missed).
+  if (localJob.running) { localJob.again = true; return; }
+  localJob.running = true;
+  try {
+    const { data: wanted } = await supabaseAdmin.from('household_stores').select('chain,store_id').limit(2000);
+    const pairs = [...new Map((wanted || []).filter((w) => !only || only.some((o) => o.chain === w.chain && o.store_id === w.store_id)).map((w) => [w.chain + '|' + w.store_id, w])).values()];
+    const general = new Map();
+    for (const r of rows || []) {
+      const m = general.get(r.chainKey) || new Map();
+      if (!m.has(r.barcode) || r.price < m.get(r.barcode)) m.set(r.barcode, r.price);
+      general.set(r.chainKey, m);
+    }
+    for (const w of pairs) {
+      const chain = pricefiles.CHAINS.find((c) => c.key === w.chain);
+      if (!chain) continue;
+      try {
+        if (!general.has(w.chain)) {
+          const { data } = await allRows(() => supabaseAdmin.from('price_offers').select('barcode,price').eq('chain', w.chain).order('barcode'));
+          general.set(w.chain, new Map((data || []).map((x) => [x.barcode, Number(x.price)])));
+        }
+        const base = general.get(w.chain);
+        const at = new Date().toISOString();
+        const diff = new Map();
+        for (const x of await pricefiles.storePrices(fetch, chain, w.store_id)) {
+          const g = base.get(x.barcode);
+          if (g != null && Math.abs(g - x.price) >= 0.01 && (!diff.has(x.barcode) || x.price < diff.get(x.barcode))) diff.set(x.barcode, x.price);
+        }
+        await supabaseAdmin.from('price_store_offers').delete().eq('chain', w.chain).eq('store_id', w.store_id);
+        const out = [...diff].map(([barcode, price]) => ({ barcode, chain: w.chain, store_id: w.store_id, price: Math.round(price * 100) / 100, seen_at: at }));
+        for (let i = 0; i < out.length; i += 1000) await supabaseAdmin.from('price_store_offers').insert(out.slice(i, i + 1000));
+      } catch (e) { console.error('branch ' + w.chain + '/' + w.store_id + ':', e.message); }
+    }
+  } finally {
+    localJob.running = false;
+    if (localJob.again) { localJob.again = false; loadLocal().catch((e) => console.error('local prices failed:', e.message)); }
+  }
+}
+// Settlements as the family types ("בית ש" → בית שמש, בית שאן…).
+app.get('/api/prices/places', requireAuth, (req, res) => res.json({ places: area.suggest(String(req.query.q || '').slice(0, 40)) }));
+// Where the family lives: a settlement, and a neighborhood if it wants. The
+// branch nearest to it at every chain is found here; their prices come in
+// the background (the family sees the general price until then).
+app.post('/api/prices/area', requireAuth, async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const hid = String((req.body && req.body.hid) || '');
+    if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
+    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
+    const at = area.place(String((req.body && req.body.city_code) || ''));
+    if (!at) return res.status(400).json({ error: 'לא מצאנו את היישוב. נסו לבחור מהרשימה.' });
+    const hood = String((req.body && req.body.hood) || '').replace(/\s+/g, ' ').trim().slice(0, 60) || null;
+    // How far the family goes to shop: 5 to 50 km, in steps of 5.
+    const maxKm = Math.min(50, Math.max(5, Math.round((Number(req.body && req.body.max_km) || 25) / 5) * 5));
+    const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
+    const near = area.nearestStores(stores || [], { code: at.code, hood }, { maxKm });
+    await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: at.code, city: at.name, hood, max_km: maxKm, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+    await supabaseAdmin.from('household_stores').delete().eq('household_id', hid);
+    if (near.length) await supabaseAdmin.from('household_stores').insert(near.map((n) => ({ household_id: hid, chain: n.chain, store_id: n.store_id, chain_name: n.chain_name, name: n.name, address: n.address, city: n.city, km: n.km, kind: n.kind })));
+    loadLocal(null, near).catch((e) => console.error('local prices failed:', e.message));
+    return res.json({ area: { city_code: at.code, city: at.name, hood, max_km: maxKm }, stores: near });
+  } catch (err) {
+    console.error('price area failed:', err.message);
+    return res.status(500).json({ error: 'לא נשמר. נסו שוב.' });
+  }
+});
 async function runSeed() {
   const wanted = await supabaseAdmin.from('price_wanted').select('query').order('asked', { ascending: false }).limit(60).then((r) => (r.data || []).map((x) => x.query), () => []);
   const list = [...new Set([...prices.SEED, ...wanted])];

@@ -181,19 +181,31 @@ export function chooseAll(items, catalog, pref = 'any') {
   return items.map((it) => ({ id: it.id, ...choose(it.name, catalog[it.name] || [], pref, { keep: it.barcode }) }));
 }
 
+// With the family's area set: only the chains with a branch near it, at
+// that branch's price (the server already put it in). A product no branch
+// nearby sells keeps no price.
+export function nearby(catalog, on) {
+  if (!on) return catalog;
+  return Object.fromEntries(Object.entries(catalog || {}).map(([n, list]) => [n, (list || []).map((p) => ({ ...p, offers: (p.offers || []).filter((o) => o.local) }))]));
+}
+
 // What the chosen products cost at each chain, cheapest chain first, with
-// how many of them the chain does not have.
+// how many of them the chain does not have, and the branch when known.
 export function basket(choices, qtyOf = () => 1) {
   const picks = choices.filter((c) => c.pick);
   const chains = new Map();
-  for (const c of picks) for (const o of c.pick.offers || []) if (o.price > 0 && !chains.has(o.chain)) chains.set(o.chain, o.chain_name || o.chain);
+  const stores = new Map();
+  for (const c of picks) for (const o of c.pick.offers || []) {
+    if (o.price > 0 && !chains.has(o.chain)) chains.set(o.chain, o.chain_name || o.chain);
+    if (o.store && !stores.has(o.chain)) stores.set(o.chain, o.store);
+  }
   const rows = [...chains.entries()].map(([chain, name]) => {
     let total = 0, missing = 0;
     for (const c of picks) {
       const o = (c.pick.offers || []).find((x) => x.chain === chain && x.price > 0);
       if (o) total += o.price * qtyOf(c); else missing++;
     }
-    return { chain, name, total: Math.round(total * 100) / 100, missing };
+    return { chain, name, store: stores.get(chain) || null, total: Math.round(total * 100) / 100, missing };
   });
   return rows.sort((a, b) => a.missing - b.missing || a.total - b.total);
 }

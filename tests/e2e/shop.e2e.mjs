@@ -15,6 +15,9 @@ async function open(width = 1280, setup = () => {}, email = null) {
   const db = makeFakeDb(TODAY);
   db.tables.shopping_items = [];
   db.tables.households = [{ id: db.hid, shop_area: null }];
+  // The family's area is set (made-up), so the price tests start at the list.
+  db.tables.household_area = [{ household_id: db.hid, city_code: '2610', city: 'בית שמש', hood: null }];
+  db.tables.household_stores = [];
   setup(db);
   const errors = collectErrors(page);
   await mockSupabase(page, db);
@@ -209,7 +212,7 @@ test('prices: the household picks the certifiers it relies on once, then every i
   assert.equal(db.tables.price_prefs[0].kosher, 'mehadrin');
   await page.waitForSelector('.price-item');
   assert.deepEqual(calls.search[0], ['חלב 3%', 'ביצים', 'קפה'], 'the whole list in one search');
-  assert.match(await page.locator('.price-pref').textContent(), /בד"ץ העדה החרדית · הרב לנדא/);
+  assert.match(await page.locator('.price-pref:not(.price-area)').textContent(), /בד"ץ העדה החרדית · הרב לנדא/);
   // Milk: the one with their certifier, though the other (another certifier) is cheaper.
   const milk = page.locator('.price-item', { hasText: 'חלב 3%' }).first();
   assert.match(await milk.textContent(), /נבחר אוטומטית.*חלב 3% בשקית.*✓ בד"ץ העדה החרדית · מתאים לכם.*סימנו 3 משפחות.*₪6\.20/);
@@ -257,6 +260,67 @@ test('prices: a product shows its photo from the open product database, or the s
   // Asked once, for what is on screen.
   assert.equal(asked.length, 1);
   assert.deepEqual([...asked[0]].sort(), ['1001', '1002', '2001']);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('prices: the family says only where it lives; the nearest branch at every chain is found, and its prices are used', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+    d.tables.household_area = [];
+  }, OWNER);
+  const asked = [];
+  await page.route('**/rest/v1/rpc/price_search', (r) => {
+    // As in the database: with the area set, each chain's offer says whether it is the near branch's.
+    const local = db.tables.household_stores.length > 0;
+    const offers = [{ chain: 'x', chain_name: 'רשת א', price: local ? 6.0 : 6.2, store: local ? 'סניף נחל דולב' : null, local }, { chain: 'y', chain_name: 'רשת ב', price: 5.5, store: null, local: false }];
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ q: 1, barcode: '1001', name: 'חלב 3% בשקית', names: '', maker: 'מחלבה א', qty: 1, unit: 'ליטר', offers, kosher: {} }]) });
+  });
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+  await page.route('**/api/prices/places**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ places: [{ code: '2610', name: 'בית שמש' }, { code: '9200', name: 'בית שאן' }] }) }));
+  await page.route('**/api/prices/area', (r) => {
+    const b = JSON.parse(r.request().postData());
+    asked.push(b);
+    db.tables.household_area = [{ household_id: b.hid, city_code: b.city_code, city: 'בית שמש', hood: b.hood, max_km: b.max_km }];
+    db.tables.household_stores = [{ household_id: b.hid, chain: 'x', chain_name: 'רשת א', store_id: '7', name: 'סניף נחל דולב', city: 'בית שמש', km: 0, kind: 'hood' }];
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ area: { city_code: b.city_code, city: 'בית שמש', hood: b.hood, max_km: b.max_km }, stores: db.tables.household_stores }) });
+  });
+  await page.click('.shop-prices-cta button');
+  const pick = page.locator('.price-area-pick');
+  await pick.waitFor();
+  assert.equal(await pick.locator('.price-chain, .chip').count(), 0, 'no chain or branch to choose');
+  await pick.locator('input[aria-label="יישוב"]').fill('בית ש');
+  await pick.locator('.price-area-list button:has-text("בית שמש")').click();
+  await pick.locator('input[aria-label="שכונה"]').fill('רמת בית שמש א');
+  // How far they go: 25 km unless they say, in steps of 5.
+  assert.match(await pick.textContent(), /25 ק"מ/);
+  await pick.locator('input.price-km').fill('10');
+  assert.match(await pick.textContent(), /10 ק"מ/);
+  await pick.locator('button:has-text("למצוא סניפים קרובים")').click();
+  await page.waitForSelector('.price-area:has-text("רמת בית שמש א, בית שמש")');
+  assert.match(await page.locator('.price-area').textContent(), /סניף אחד עד 10 ק"מ/);
+  assert.deepEqual(asked, [{ hid: db.hid, city_code: '2610', hood: 'רמת בית שמש א', max_km: 10 }]);
+  // Only the chain with a branch near them, at that branch's price, with its name.
+  const chains = page.locator('.price-chain');
+  await page.waitForSelector('.price-chain.best:has-text("₪6.00")');
+  assert.equal(await chains.count(), 1, 'the far chain is not compared');
+  assert.match(await chains.first().textContent(), /רשת א.*סניף נחל דולב/);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('prices: "not now" leaves the general prices, and the area can be chosen later', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+    d.tables.household_area = [];
+  }, OWNER);
+  await priceRoutes(page);
+  await page.click('.shop-prices-cta button');
+  await page.locator('.price-area-pick button:has-text("לא עכשיו")').click();
+  await page.waitForSelector('.price-item');
+  assert.match(await page.locator('.price-area').textContent(), /מחירים כלליים.*לבחור אזור/);
   await page.close();
   assert.deepEqual(errors, []);
 });

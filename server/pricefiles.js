@@ -70,7 +70,14 @@ function parsePriceFile(xml, chain) {
   return out;
 }
 
-const gunzip = (buf) => { try { return zlib.gunzipSync(buf).toString('utf8'); } catch (_e) { return buf.toString('utf8'); } };
+// A file as text: unpacked when packed, and read as UTF-16 when the chain
+// wrote it so (some branch lists are).
+function gunzip(buf) {
+  let b = buf;
+  try { b = zlib.gunzipSync(buf); } catch (_e) { /* not packed */ }
+  if ((b[0] === 0xff && b[1] === 0xfe) || (b.length > 3 && b[1] === 0 && b[3] === 0)) return b.toString('utf16le').replace(/^\uFEFF/, '');
+  return b.toString('utf8').replace(/^\uFEFF/, '');
+}
 async function getBuf(fetchFn, url, opts = {}) {
   const r = await fetchFn(url, { ...opts, headers: { ...UA, ...(opts.headers || {}) } });
   if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -85,6 +92,32 @@ async function shufersal(fetchFn) {
   if (!sizes.length) throw new Error('no files');
   const best = sizes.sort((a, b) => b.size - a.size)[0];
   return parsePriceFile(gunzip(await getBuf(fetchFn, best.url)), { key: 'shufersal', name: 'שופרסל' });
+}
+
+// The shared site: logged in by name; then its files can be listed (by
+// kind) and taken.
+async function cerberusSession(fetchFn, chain) {
+  const jar = new Map();
+  const keep = (r) => { for (const c of (r.headers.getSetCookie ? r.headers.getSetCookie() : [])) { const [kv] = c.split(';'); const i = kv.indexOf('='); jar.set(kv.slice(0, i), kv.slice(i + 1)); } };
+  const cookie = () => [...jar].map(([k, v]) => k + '=' + v).join('; ');
+  const call = async (path, opts = {}) => { const r = await fetchFn(CERB + path, { redirect: 'manual', ...opts, headers: { ...UA, cookie: cookie(), ...(opts.headers || {}) } }); keep(r); return r; };
+  const token = (html) => (html.match(/name="csrftoken" content="([^"]+)"/) || [])[1] || '';
+  const form = (o) => new URLSearchParams(o).toString();
+  const t1 = token(await (await call('/login')).text());
+  const login = await call('/login/user', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form({ r: '', username: chain.user, password: (chain.passEnv && process.env[chain.passEnv]) || '', Submit: 'Sign in', csrftoken: t1 }) });
+  if (!/\/file/.test(login.headers.get('location') || '')) throw new Error('login refused');
+  const t2 = token(await (await call('/file')).text());
+  return {
+    list: async (kind) => {
+      const dir = await call('/file/json/dir', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form({ sEcho: '1', iColumns: '5', iDisplayStart: '0', iDisplayLength: '100000', sSearch: kind, cd: chain.dir || '/', csrftoken: t2 }) });
+      return ((await dir.json().catch(() => ({}))).aaData || []).filter((f) => new RegExp('^' + kind, 'i').test(f.fname || ''));
+    },
+    get: async (fname) => {
+      const r = await call('/file/d' + (chain.dir || '') + '/' + encodeURIComponent(fname));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return gunzip(Buffer.from(await r.arrayBuffer()));
+    }
+  };
 }
 
 // The shared site: log in by name, list the full price files, take the
@@ -149,4 +182,82 @@ async function allChains(fetchFn, { only = null } = {}) {
   return out;
 }
 
-module.exports = { parsePriceFile, shufersal, cerberus, bina, allChains, CERBERUS, BINA, CHAINS };
+// ── branches ──
+// A chain's list of branches (the transparency law's "Stores" file): number,
+// name, address and the settlement's official number (or, at a few chains,
+// its name).
+function parseStores(xml) {
+  const out = [];
+  const re = /<Store>([\s\S]*?)<\/Store>/gi;
+  let m;
+  while ((m = re.exec(xml))) {
+    const it = m[1];
+    const id = tag(it, 'StoreID') || tag(it, 'StoreId');
+    if (!/^\d{1,6}$/.test(id)) continue;
+    out.push({ store_id: String(Number(id)), name: unescape(tag(it, 'StoreName')).slice(0, 80), address: unescape(tag(it, 'Address')).slice(0, 120), city: unescape(tag(it, 'City')).slice(0, 60) });
+  }
+  return out;
+}
+// The branch number inside a price file's name: PriceFull<chain>-<sub>-<branch>-<date>…
+// or PriceFull<chain>-<branch>-<date>….
+function storeOfFile(name) {
+  const parts = String(name).replace(/^PriceFull/i, '').split('-');
+  if (parts.length < 3) return null;
+  const n = parts.length >= 5 ? parts[2] : parts[1];
+  return /^\d{1,6}$/.test(n) ? String(Number(n)) : null;
+}
+const newestOf = (files, stamp) => files.slice().sort((a, b) => stamp(b).localeCompare(stamp(a)))[0] || null;
+const fileStamp = (n) => (String(n).match(/-(\d{8})-?(\d{4,6})/) || []).slice(1).join('');
+
+// One chain's branches, from its newest branch list.
+async function chainStores(fetchFn, chain) {
+  if (chain.key === 'shufersal') {
+    const html = (await getBuf(fetchFn, SHUF + '/FileObject/UpdateCategory?catID=5&storeId=0&page=1')).toString('utf8');
+    const link = (html.match(/href="(https:\/\/pricesprodpublic[^"]+Stores[^"]+)"/) || [])[1];
+    if (!link) throw new Error('no stores file');
+    return parseStores(gunzip(await getBuf(fetchFn, unescape(link))));
+  }
+  if (chain.host) {
+    const base = 'https://' + chain.host + '.binaprojects.com';
+    const list = JSON.parse((await getBuf(fetchFn, base + '/MainIO_Hok.aspx?' + new URLSearchParams({ _: chain.id, wReshet: 'הכל', WFileType: '1', WDate: '', WStore: '' }))).toString('utf8') || '[]');
+    const name = newestOf((Array.isArray(list) ? list : []).map((f) => String((f && f.FileNm) || '')).filter((n) => /^Stores[\w.-]+$/i.test(n)), fileStamp);
+    if (!name) throw new Error('no stores file');
+    return parseStores(gunzip(await binaFile(fetchFn, base, name)));
+  }
+  const site = await cerberusSession(fetchFn, chain);
+  const f = newestOf((await site.list('Stores')).map((x) => x.fname), fileStamp);
+  if (!f) throw new Error('no stores file');
+  return parseStores(await site.get(f));
+}
+// A file on the second shared site: its real address (only on the chain's
+// own address), then the file.
+async function binaFile(fetchFn, base, name) {
+  const link = JSON.parse((await getBuf(fetchFn, base + '/Download.aspx?FileNm=' + encodeURIComponent(name))).toString('utf8') || '[]');
+  const url = String((Array.isArray(link) && link[0] && link[0].SPath) || '');
+  if (url.toLowerCase().indexOf(base.toLowerCase() + '/') !== 0) throw new Error('no file link');
+  return getBuf(fetchFn, url);
+}
+
+// One branch's full price file: the newest of that branch.
+async function storePrices(fetchFn, chain, storeId) {
+  const id = String(Number(storeId));
+  if (chain.key === 'shufersal') {
+    const html = (await getBuf(fetchFn, SHUF + '/FileObject/UpdateCategory?catID=2&storeId=' + encodeURIComponent(id) + '&page=1')).toString('utf8');
+    const link = (html.match(/href="(https:\/\/pricesprodpublic[^"]+PriceFull[^"]+)"/) || [])[1];
+    if (!link) throw new Error('no file for branch');
+    return parsePriceFile(gunzip(await getBuf(fetchFn, unescape(link))), chain);
+  }
+  if (chain.host) {
+    const base = 'https://' + chain.host + '.binaprojects.com';
+    const list = JSON.parse((await getBuf(fetchFn, base + '/MainIO_Hok.aspx?' + new URLSearchParams({ _: chain.id, wReshet: 'הכל', WFileType: '4', WDate: '', WStore: '' }))).toString('utf8') || '[]');
+    const name = newestOf((Array.isArray(list) ? list : []).map((f) => String((f && f.FileNm) || '')).filter((n) => /^PriceFull[\w.-]+$/i.test(n) && storeOfFile(n) === id), fileStamp);
+    if (!name) throw new Error('no file for branch');
+    return parsePriceFile(gunzip(await binaFile(fetchFn, base, name)), chain);
+  }
+  const site = await cerberusSession(fetchFn, chain);
+  const f = newestOf((await site.list('PriceFull')).map((x) => x.fname).filter((n) => storeOfFile(n) === id), fileStamp);
+  if (!f) throw new Error('no file for branch');
+  return parsePriceFile(await site.get(f), chain);
+}
+
+module.exports = { parsePriceFile, parseStores, storeOfFile, shufersal, cerberus, bina, allChains, chainStores, storePrices, CERBERUS, BINA, CHAINS };

@@ -1,8 +1,8 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, bestPrice, certOf, certFromText, nonFood, size, sizeText, count } from '../../domain/prices.js';
-import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages } from '../../data/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeText, count } from '../../domain/prices.js';
+import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces } from '../../data/prices.js';
 import { aisleOf } from '../../domain/shopping.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
@@ -67,6 +67,46 @@ function Product({ p, children }) {
   </div>`;
 }
 
+// Where the family lives: a settlement (chosen from the list as they type)
+// and a neighborhood if they want. No chain, no branch: we find the branch
+// near them at every chain.
+function AreaPicker({ hid, initial, onDone, onSkip, onCancel }) {
+  const [q, setQ] = useState(initial ? initial.city : '');
+  const [place, setPlace] = useState(initial ? { code: initial.city_code, name: initial.city } : null);
+  const [hood, setHood] = useState((initial && initial.hood) || '');
+  const [maxKm, setMaxKm] = useState((initial && initial.max_km) || 25);
+  const [list, setList] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    if (place && place.name === q) { setList([]); return undefined; }
+    if (q.trim().length < 2) { setList([]); return undefined; }
+    const t = setTimeout(() => findPlaces(q.trim()).then((r) => setList(r.places || [])).catch(() => setList([])), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+  const save = async () => {
+    if (!place) return;
+    setBusy(true); setErr('');
+    try { const r = await setArea(hid, place.code, hood.trim(), maxKm); onDone({ ...r.area, stores: r.stores || [] }); } catch (e) { setErr(e.message || 'לא נשמר. נסו שוב.'); }
+    setBusy(false);
+  };
+  return html`<div class="stack price-area-pick">
+    <b>איפה אתם גרים?</b>
+    <span class="muted" style="line-height:1.55">רק יישוב, ושכונה אם רוצים. לא צריך לבחור רשת או סניף: נמצא לבד את הסניף הקרוב אליכם בכל רשת, ונשווה במחירים שלו.</span>
+    <label class="price-area-field"><span>יישוב</span><input class="input" value=${q} placeholder="למשל: בית שמש" autocomplete="off" aria-label="יישוב" onInput=${(e) => { setQ(e.currentTarget.value); setPlace(null); }} /></label>
+    ${list.length > 0 && html`<ul class="price-area-list" role="listbox" aria-label="יישובים">${list.map((p) => html`<li key=${p.code}><button type="button" role="option" onClick=${() => { setPlace(p); setQ(p.name); setList([]); }}>${p.name}</button></li>`)}</ul>`}
+    ${place && html`<label class="price-area-field"><span>שכונה <small class="muted">(לא חובה, עוזר לדייק)</small></span><input class="input" value=${hood} maxLength="60" placeholder="למשל: רמת בית שמש א׳" aria-label="שכונה" onInput=${(e) => setHood(e.currentTarget.value)} /></label>`}
+    ${place && html`<label class="price-area-field"><span>עד כמה רחוק אתם מוכנים לנסוע לקנות? <b class="num">${maxKm} ק"מ</b></span>
+      <input type="range" class="price-km" min="5" max="50" step="5" value=${maxKm} aria-label="מרחק מהבית בקילומטרים" aria-valuetext=${maxKm + ' קילומטר'} onInput=${(e) => setMaxKm(Number(e.currentTarget.value))} />
+      <span class="price-km-scale" aria-hidden="true"><small>5</small><small>25</small><small>50 ק"מ</small></span></label>`}
+    ${err && html`<span role="alert" class="price-warn">${err}</span>`}
+    <div class="price-cert-actions"><button type="button" class="btn btn-primary" style="width:auto" disabled=${!place || busy} onClick=${save}>${busy ? 'מחפשים סניפים…' : 'למצוא סניפים קרובים'}</button>
+      ${onSkip && html`<button type="button" class="btn-text" onClick=${onSkip}>לא עכשיו</button>`}
+      ${onCancel && html`<button type="button" class="btn-text" onClick=${onCancel}>ביטול</button>`}</div>
+    <small class="faint">לא שואלים כתובת מדויקת ולא משתמשים במיקום של הטלפון.</small>
+  </div>`;
+}
+
 export function PricePanel({ hid, items, onClose, onPicked }) {
   const open = items.filter((i) => !i.cleared_at && !i.done);
   const [pref, setPref] = useState(undefined);
@@ -79,6 +119,11 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
   const [openId, setOpenId] = useState(null);
   const [voteId, setVoteId] = useState(null);
   const [editPref, setEditPref] = useState(false);
+  // The family's area: undefined while loading, null when not chosen.
+  const [area, setAreaState] = useState(undefined);
+  const [editArea, setEditArea] = useState(false);
+  const [skipArea, setSkipArea] = useState(false);
+  useEffect(() => { getArea(hid).then((a) => setAreaState(a)).catch(() => setAreaState(null)); }, [hid]);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => { getKosherPref(hid).then((k) => setPref(k)).catch(() => setPref(null)); }, [hid]);
@@ -114,7 +159,8 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
     productImages(codes).then((r) => { IMAGES = { ...IMAGES, ...Object.fromEntries(codes.map((c) => [c, ''])), ...(r.images || {}) }; if (alive.current) setShown((n) => n + 1); }).catch(() => {});
   }, [catalog]);
   const key = names.join('|');
-  useEffect(() => { if (!pref) return; search().then((c) => c && lookUp(c)); }, [pref, key]);
+  const areaKey = area ? area.city_code + ':' + (area.hood || '') : '';
+  useEffect(() => { if (!pref) return; search().then((c) => c && lookUp(c)); }, [pref, key, areaKey]);
 
   const choosePref = async (k) => {
     setPref(k);
@@ -147,22 +193,28 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
     : html`<div class="price-pref"><span class="muted">כשרות:</span><b class="price-pref-certs">${Array.isArray(pref) ? pref.join(' · ') : 'בלי העדפה'}</b>
       <button type="button" class="btn-text" onClick=${() => setEditPref(true)}>לשנות</button></div>`;
 
-  if (pref === undefined) return html`<section class="card stack price-panel">${head}<span class="muted">רגע…</span></section>`;
-  if (!pref) return html`<section class="card stack price-panel">${head}<${CertPicker} onSave=${choosePref} onAny=${() => choosePref('any')} /></section>`;
-  if (!open.length) return html`<section class="card stack price-panel">${head}${prefRow}<span class="muted">אין מה להשוות: הרשימה ריקה או שהכול כבר נקנה.</span></section>`;
-  if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
+  const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
+  const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
+    : area ? html`<div class="price-pref price-area"><span class="muted">📍</span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><span class="muted">· ${area.stores.length === 1 ? 'סניף אחד' : area.stores.length + ' סניפים'} עד ${area.max_km || 25} ק"מ</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לשנות</button></div>`
+      : html`<div class="price-pref price-area"><span class="muted">מחירים כלליים, לא לפי האזור שלכם.</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לבחור אזור</button></div>`;
 
-  const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), catalog, pref);
+  if (pref === undefined || area === undefined) return html`<section class="card stack price-panel">${head}<span class="muted">רגע…</span></section>`;
+  if (!pref) return html`<section class="card stack price-panel">${head}<${CertPicker} onSave=${choosePref} onAny=${() => choosePref('any')} /></section>`;
+  if (!area && !skipArea) return html`<section class="card stack price-panel">${head}<${AreaPicker} hid=${hid} onDone=${areaDone} onSkip=${() => setSkipArea(true)} /></section>`;
+  if (!open.length) return html`<section class="card stack price-panel">${head}${prefRow}${areaRow}<span class="muted">אין מה להשוות: הרשימה ריקה או שהכול כבר נקנה.</span></section>`;
+  if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${areaRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
+
+  const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), nearby(catalog, !!(area && area.stores.length)), pref);
   const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty);
   const chains = basket(choices, qtyOf);
   const priced = choices.filter((c) => c.pick).length;
   const unsure = choices.filter((c) => c.status === 'unsure').length;
   const best = chains[0];
   return html`<section class="card stack price-panel">
-    ${head}${prefRow}
+    ${head}${prefRow}${areaRow}
     ${best && html`<div class="price-chains" aria-label="הרשימה בכל רשת">
       ${chains.slice(0, 4).map((c, i) => html`<div class=${'price-chain' + (i === 0 ? ' best' : '')} key=${c.chain}>
-        <small>${i === 0 ? 'הכי זול' : c.name}</small><b class="num">${fmt(c.total)}</b>${i === 0 && html`<small>${c.name}</small>`}
+        <small>${i === 0 ? 'הכי זול' : c.name}</small><b class="num">${fmt(c.total)}</b>${i === 0 && html`<small>${c.name}</small>`}${c.store && html`<small class="faint price-chain-store">${c.store}</small>`}
         ${c.missing > 0 && html`<small class="faint">חסרים ${c.missing}</small>`}</div>`)}
     </div>`}
     <span class="muted price-count">נמצא מחיר ל-${priced} מתוך ${open.length} מוצרים${unsure ? ' · ' + unsure + ' מחכים לבחירה שלכם' : ''}${looking ? ' · מחפשים עכשיו עוד ' + looking + '…' : ''}</span>
