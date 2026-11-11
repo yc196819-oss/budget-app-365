@@ -132,9 +132,17 @@ export function Shell({ tab, session }) {
   // Came from a friend's link: counted once, now that this person is signed in.
   useEffect(() => { claimRef(session.user && session.user.user_metadata && session.user.user_metadata.ref); }, []);
   // Home-screen shortcuts (manifest) and links in our emails:
-  // /app/?action=add|voice|ask|talk|picture opens
+  // /app/?action=add|voice|ask|talk|picture|import opens
   // that action at once; the parameter is taken off the address.
   useEffect(() => {
+    // Came from a button in one of our emails: counted (which email), and the
+    // mark taken off the address.
+    const fromMail = new URLSearchParams(location.search).get('m');
+    if (fromMail && /^[a-z]{3,12}$/.test(fromMail)) {
+      track('mail_click_' + fromMail);
+      const q = new URLSearchParams(location.search); q.delete('m');
+      history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+    }
     const target = new URLSearchParams(location.search).get('go');
     if (target && GO_TARGETS[target]) {
       history.replaceState(null, '', location.pathname + location.hash);
@@ -147,6 +155,7 @@ export function Shell({ tab, session }) {
     track('shortcut');
     if (!session.household) return;
     if (action === 'add' || action === 'voice' || action === 'talk' || action === 'picture') setOverlay(action);
+    else if (action === 'import') openImport(null);
     else if (action === 'ask') {
       if (railOn) setTimeout(() => document.querySelector('.rail [aria-label="שאלה ליועץ"]')?.focus(), 300);
       else openAdvisor();

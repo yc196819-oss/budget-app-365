@@ -280,3 +280,21 @@ test('the link in our emails opens completing the picture at once, and leaves th
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('the button in the personal email opens the upload at once, and counts as a click on that email', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  const db = makeFakeDb();
+  const errors = collectErrors(page);
+  const sent = [];
+  await mockSupabase(page, db);
+  await page.route('**/api/telemetry', (r) => { sent.push(...((JSON.parse(r.request().postData() || '{}').events) || [])); return r.fulfill({ status: 204, body: '' }); });
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/?action=import&m=nudge#/home');
+  await page.waitForSelector('.sheet:has-text("העלאת פירוט")');
+  assert.doesNotMatch(page.url(), /m=nudge|action=/);
+  // Usage counts are sent a few seconds later, together.
+  for (let i = 0; i < 80 && !sent.includes('mail_click_nudge'); i++) await page.waitForTimeout(100);
+  assert.ok(sent.includes('mail_click_nudge'), 'counted: ' + sent.join(','));
+  assert.deepEqual(errors, []);
+  await page.close();
+});

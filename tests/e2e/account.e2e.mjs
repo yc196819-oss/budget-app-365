@@ -481,6 +481,43 @@ test('emails to users: one per step, read before sending, a test to yourself, an
   await page.close();
 });
 
+test('emails to users: the history of who got which, who clicked, and who asked to stop', async () => {
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: true }, stopped: 1, campaigns: [{ id: 'nudge', title: 'נכנסו ולא העלו פירוט (מכתב אישי עם תמונה)', count: 4, preview: { subject: 'דקה אחת, והתמונה שלך מוכנה', text: 'היי', html: '' } }] }) }));
+  let asked = 0;
+  await page.route('**/api/admin/mail/history', (r) => { asked++; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    rows: [
+      { name: 'דנה', code: '#a1b2c3', email: 'da***@example.test', campaign: 'nudge', title: 'נכנסו ולא העלו פירוט', at: '2026-11-10T10:00:00Z', ok: true, clicked: '2026-11-10T12:30:00Z' },
+      { name: '', code: '#d4e5f6', email: 'yo***@example.test', campaign: 'first', title: 'פתחו משק בית ולא העלו פירוט', at: '2026-11-02T10:00:00Z', ok: false, clicked: null }
+    ],
+    stopped: [{ name: '', code: '#d4e5f6', email: 'yo***@example.test', at: '2026-11-03T08:00:00Z' }],
+    byCampaign: { nudge: { title: 'נכנסו ולא העלו פירוט', sent: 1, failed: 0, clicked: 1 }, first: { title: 'פתחו משק בית ולא העלו פירוט', sent: 0, failed: 1, clicked: 0 } }
+  }) }); });
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  await page.click('.admin-hub-btn:has-text("מיילים")');
+  const card = page.locator('.admin-reengage');
+  await card.waitFor();
+  assert.equal(asked, 0, 'opened on request only');
+  await card.locator('.mh-open').click();
+  const h = card.locator('.mail-history');
+  await h.waitFor();
+  assert.match(await h.locator('.mh-sum').textContent(), /נכנסו ולא העלו פירוט.*נשלח 1 · לחצו 1 \(100%\)/);
+  assert.equal(await h.locator('.mh-list li').count(), 2);
+  assert.match(await h.locator('.mh-list li').first().textContent(), /דנה.*da\*\*\*@example\.test.*נכנסו ולא העלו פירוט.*נשלח.*לחץ/);
+  await h.locator('.chip:has-text("לחצו")').click();
+  assert.equal(await h.locator('.mh-list li').count(), 1);
+  await h.locator('.chip:has-text("נכשלו")').click();
+  assert.match(await h.locator('.mh-list li').first().textContent(), /#d4e5f6.*נכשל/);
+  await h.locator('.chip:has-text("ביקשו הסרה")').click();
+  assert.match(await h.locator('.mh-list li').first().textContent(), /#d4e5f6.*ביקש הסרה · 03\.11/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('emails to users: when the server cannot email people yet, the dashboard says so and only a test can be sent', async () => {
   const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
   await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));

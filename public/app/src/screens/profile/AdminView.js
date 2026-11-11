@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminAsk, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach } from '../../data/account.js';
+import { adminStats, adminLive, adminAsk, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach, mailHistory } from '../../data/account.js';
 import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
@@ -157,6 +157,29 @@ function KosherCard() {
       ${(p.kosher_cert || certFromText(p.name)) && html`<span class="kosher kosher-unknown">${p.kosher_cert ? 'במאגר: ' + p.kosher_cert : 'בשם: ' + certFromText(p.name)}</span>`}</li>`)}</ul>`}
     ${sel.size > 0 && html`<div class="kosher-bar"><select class="input" aria-label="איזו כשרות" value=${cert} onChange=${(e) => setCert(e.currentTarget.value)} style="flex:1;min-width:0"><option value="">איזו כשרות כתובה על האריזה?</option>${CERT_OPTIONS.map((c) => html`<option key=${c} value=${c}>${c}</option>`)}</select>
       <button type="button" class="btn btn-primary" style="width:auto" disabled=${!cert} onClick=${() => confirm([...sel], cert)}>לסמן ${sel.size}</button></div>`}
+  </div>`;
+}
+
+// The history of our emails: who got which and when, whether it went, who
+// clicked its button, and who asked to stop. Opened on request.
+const when = (iso) => { if (!iso) return ''; const d = new Date(iso); return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const personOf = (r) => html`<span class="mh-who"><b><bdi>${r.name || r.code}</bdi></b>${r.email && html`<small class="faint"><bdi>${r.email}</bdi></small>`}</span>`;
+function MailHistory() {
+  const [d, setD] = useState(false);
+  const [show, setShow] = useState('all');
+  if (d === false) return html`<button type="button" class="btn btn-ghost mh-open" style="width:auto" onClick=${() => { setD(undefined); mailHistory().then(setD).catch(() => setD(null)); }}>היסטוריית מיילים: מי קיבל, מי לחץ, מי הסיר</button>`;
+  if (d === undefined) return html`<span class="muted">טוען…</span>`;
+  if (d === null) return html`<span class="muted">ההיסטוריה לא זמינה כרגע.</span>`;
+  const rows = d.rows.filter((r) => show === 'all' || (show === 'clicked' && r.clicked) || (show === 'failed' && !r.ok));
+  const tabs = [['all', 'הכול', d.rows.length], ['clicked', 'לחצו', d.rows.filter((r) => r.clicked).length], ['failed', 'נכשלו', d.rows.filter((r) => !r.ok).length], ['stopped', 'ביקשו הסרה', d.stopped.length]];
+  return html`<div class="stack mail-history">
+    <b style="font-size:14px">היסטוריית מיילים</b>
+    <ul class="mh-sum">${Object.entries(d.byCampaign).map(([id, c]) => html`<li key=${id}><span>${c.title}</span><span class="num">נשלח ${c.sent}${c.sent ? ' · לחצו ' + c.clicked + ' (' + Math.round((c.clicked / c.sent) * 100) + '%)' : ''}${c.failed ? ' · נכשל ' + c.failed : ''}</span></li>`)}</ul>
+    <div class="chips" role="group" aria-label="סינון">${tabs.map(([k, label, n]) => html`<button type="button" class="chip" key=${k} aria-pressed=${show === k} onClick=${() => setShow(k)}>${label} (${n})</button>`)}</div>
+    ${show === 'stopped' ? (d.stopped.length ? html`<ul class="mh-list">${d.stopped.map((r, i) => html`<li key=${i}>${personOf(r)}<span class="mh-tag bad">ביקש הסרה${r.at ? ' · ' + when(r.at) : ''}</span></li>`)}</ul>` : html`<span class="muted">אף אחד לא ביקש הסרה.</span>`)
+      : rows.length ? html`<ul class="mh-list">${rows.map((r, i) => html`<li key=${i}>${personOf(r)}<span class="mh-what"><span>${r.title}</span><small class="faint">${when(r.at)}</small></span>
+        <span class="mh-tags">${r.ok ? html`<span class="mh-tag">נשלח</span>` : html`<span class="mh-tag bad">נכשל</span>`}${r.clicked && html`<span class="mh-tag ok">לחץ · ${when(r.clicked)}</span>`}</span></li>`)}</ul>` : html`<span class="muted">אין מיילים כאן.</span>`}
+    <span class="faint" style="font-size:12px;line-height:1.5">"לחץ" נספר כשהאדם נכנס לאפליקציה מהכפתור שבמייל (רק אצל מי שלא כיבה ספירת שימוש). פתיחת המייל עצמה לא נספרת כאן: רואים אותה ב-Brevo.</span>
   </div>`;
 }
 
@@ -435,6 +458,7 @@ export function AdminView({ onBack }) {
         </div>
         ${jobView(c)}
       </div>`)}
+      <${MailHistory} />
     </div>`}
     ${back && html`<${MonthlyMailCard} />`}` },
     { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים מהרשתות, ואישור כשרות', body: () => html`${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceReachCard} />`}` },

@@ -53,6 +53,8 @@ export async function adminStats() {
 export async function adminReengage() {
   try { return await api('/api/admin/reengage'); } catch (_e) { return null; }
 }
+// Who got which email, when, whether they clicked it, and who asked to stop.
+export const mailHistory = () => api('/api/admin/mail/history');
 export function sendReengage(campaign = 'start', { test = false, limit } = {}) {
   return api('/api/admin/reengage', { method: 'POST', body: { campaign, test, ...(limit ? { limit } : {}) } });
 }
