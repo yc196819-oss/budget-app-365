@@ -734,3 +734,23 @@ test('owner: the catalog loads on the server; the card shows the numbers from th
   assert.deepEqual(errors.filter((e) => !/503/.test(e)), []);
   await page.close();
 });
+
+test('a new household is made without reading it back: people may read only the households they belong to', async () => {
+  const { page, db } = await open({ setup: (d) => { d.tables.households = []; } });
+  const reads = [];
+  page.on('request', (r) => { if (/\/rest\/v1\/households/.test(r.url()) && r.method() === 'GET') reads.push(r.url()); });
+  db.tables.memberships = [];
+  const posted = [];
+  page.on('request', (r) => { if (/\/rest\/v1\/households/.test(r.url()) && r.method() === 'POST') posted.push({ body: JSON.parse(r.postData() || '{}'), accept: r.headers()['accept'] || '', prefer: r.headers()['prefer'] || '' }); });
+  const out = await page.evaluate(async () => {
+    const { createHousehold } = await import('/app/src/data/onboarding.js');
+    return createHousehold({ id: 'u1', email: 'dana@example.test' }, { name: 'דנה', mode: 'solo', cards: [] });
+  });
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body.id, /^[0-9a-f-]{36}$/, 'the id is made on the device');
+  assert.doesNotMatch(posted[0].prefer, /return=representation/, 'and the row is not asked back');
+  assert.equal(out.household_id, posted[0].body.id);
+  assert.ok(db.tables.memberships.some((m) => m.household_id === out.household_id && m.user_id === 'u1' && m.role === 'owner'));
+  assert.deepEqual(reads.filter((u) => !/id=eq\./.test(u)), [], 'no reading of households beyond one\'s own');
+  await page.close();
+});

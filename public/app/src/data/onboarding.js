@@ -34,9 +34,11 @@ export async function createHousehold(user, answers) {
   const existing = await myMembership(user.id);
   if (existing) return existing;
 
-  const { data: hh, error: hhErr } = await sb.from('households')
-    .insert({ name: householdName(answers.name, answers.partner, answers.mode === 'together'), type: 'family' })
-    .select().single();
+  // The id is made here, so the new household is not read back: a person
+  // may read only the households they belong to, and they join it only next.
+  const hh = { id: crypto.randomUUID() };
+  const { error: hhErr } = await sb.from('households')
+    .insert({ id: hh.id, name: householdName(answers.name, answers.partner, answers.mode === 'together'), type: 'family' });
   if (hhErr) throw hhErr;
   const { error: memErr } = await sb.from('memberships')
     .insert({ household_id: hh.id, user_id: user.id, display_name: String(answers.name || '').trim() || user.email.split('@')[0], role: 'owner' });
