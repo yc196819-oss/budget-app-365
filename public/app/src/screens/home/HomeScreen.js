@@ -63,7 +63,9 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   const plan = monthPlan({ txs: data.txs, budgets: data.budgets, today });
   const cash = cashNow(data.accounts, data.cards, data.txs, today);
   const soon = upcoming({ txs: data.txs, cards: data.cards, today });
-  const items = attention({ txs: data.txs, categories: data.categories, budgets: data.budgets, cards: data.cards, today, plan, dupeOk });
+  // "Complete the picture" (its card, or the ✓ at the top) already says which
+  // statement is due: the "card was charged, upload it" notes would repeat it.
+  const items = attention({ txs: data.txs, categories: data.categories, budgets: data.budgets, cards: onPicture ? [] : data.cards, today, plan, dupeOk });
   const top = topCategories(data.txs, data.categories, data.budgets, today);
 
   const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} />`;

@@ -232,3 +232,13 @@ test('not counted twice: another bank file, manual lines, or too little card spe
   // Lines marked as paid by credit count, with or without a file.
   assert.deepEqual(doubleCardCharges([charge, { id: 'c2', type: 'expense', amount: 3000, description: 'סופר', tx_date: '2026-09-02', payment_method: 'credit' }]).map((t) => t.id), ['b1']);
 });
+
+test('attention: "the card was charged, upload its statement" goes once that statement is in', () => {
+  const card = { id: 'c1', name: 'ויזה 4821', billing_day: 10 };
+  const plan = monthPlan({ txs: [], budgets: [], today: TODAY });
+  const kinds = (txs) => attention({ txs, categories: CATS, budgets: [], cards: [card], today: TODAY, plan, limit: 9 }).map((i) => i.kind);
+  assert.ok(kinds([]).includes('bill'), 'charged on 10.10, nothing from September yet');
+  assert.ok(kinds([tx({ amount: 80, tx_date: '2026-09-12', card_id: 'c1', source: 'manual' })]).includes('bill'), 'typed in by hand is not the statement');
+  assert.ok(kinds([tx({ amount: 80, tx_date: '2026-08-12', card_id: 'c1', source: 'import' })]).includes('bill'), 'an older statement is not this one');
+  assert.ok(!kinds([tx({ amount: 80, tx_date: '2026-09-12', card_id: 'c1', source: 'import' })]).includes('bill'), 'September\'s purchases are in');
+});

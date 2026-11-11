@@ -235,7 +235,12 @@ export function attention({ txs, categories, budgets, cards, today, plan, limit 
 
   for (const c of cards) {
     const cyc = cardCycle(c, txs, today);
-    if (cyc.daysSinceLast <= 5) {
+    // The charge pays for the month before it: once that month's purchases
+    // are in from the card's statement, there is nothing to ask for.
+    const [ly, lm] = cyc.last.split('-').map(Number);
+    const from = isoDate(new Date(ly, lm - 2, 1)), to = isoDate(new Date(ly, lm - 1, 0));
+    const uploaded = txs.some((t) => t.card_id === c.id && t.source === 'import' && t.tx_date >= from && t.tx_date <= to);
+    if (cyc.daysSinceLast <= 5 && !uploaded) {
       items.push({ kind: 'bill', tone: 'accent', title: c.name + ' ירד ב-' + dm(cyc.last), detail: 'העלו את הפירוט שלו, כדי שהחודש יראה את כל ההוצאות האמיתיות.', action: { label: 'להעלות פירוט', to: 'import' } });
     }
   }

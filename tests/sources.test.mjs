@@ -192,3 +192,16 @@ test('cards and accounts saved before: known club cards by name, the rest from t
   assert.equal(learnProvider({ source: list[4], issuer: null }), null);
   assert.equal(learnProvider({ source: { ...list[4], saved: true, provider: 'max' }, issuer: 'cal' }), null, 'a chosen company is not changed');
 });
+
+test('the next statement: a card the day after its next charge, a bank account on the 1st of next month', async () => {
+  const { nextDue, upcoming } = await import('../public/app/src/domain/sources.js');
+  const card = { kind: 'card', billingDay: 10 };
+  const iso = (d) => d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  assert.equal(iso(nextDue(card, new Date(2026, 10, 5))), '2026-11-11', 'before the charge: this month\'s');
+  assert.equal(iso(nextDue(card, new Date(2026, 10, 11))), '2026-12-11', 'after it: next month\'s');
+  assert.equal(iso(nextDue({ kind: 'card', billingDay: 31 }, new Date(2026, 11, 31, 12))), '2027-1-1', 'on the charge day itself: from the next day, past the year\'s end');
+  assert.equal(iso(nextDue({ kind: 'card', billingDay: 31 }, new Date(2027, 0, 5))), '2027-2-1', 'a short month: the day after its last day');
+  assert.equal(iso(nextDue({ kind: 'bank' }, new Date(2026, 11, 20))), '2027-1-1');
+  const list = upcoming([{ source: { id: 'b', kind: 'bank' } }, { source: { id: 'c', kind: 'card', billingDay: 2 } }], new Date(2026, 10, 11));
+  assert.deepEqual(list.map((x) => x.source.id), ['b', 'c'], 'the nearest first');
+});
