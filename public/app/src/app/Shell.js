@@ -27,7 +27,7 @@ import { hrefFor } from '../domain/routes.js';
 import { ProfileSheet } from '../screens/profile/ProfileSheet.js';
 import { AddSheet } from '../screens/add/AddSheet.js';
 import { ImportSheet } from '../screens/import/ImportSheet.js';
-import { PictureSheet } from '../screens/picture/Picture.js';
+import { PictureSheet, PictureCheck } from '../screens/picture/Picture.js';
 import { CONFIG } from '../config.js';
 import { LearnSheet } from '../screens/learn/LearnSheet.js';
 import { ToastHost } from '../components/ToastHost.js';
@@ -200,6 +200,7 @@ export function Shell({ tab, session }) {
         <header class="topbar">
           <div class="topbar-title"><small>${dateLabel(new Date())}${data.refreshing && data.status === 'ready' ? html` <span class="refreshing" role="status"><span class="spinner" aria-hidden="true"></span> מתעדכן…</span>` : ''}</small><h1>${title}</h1></div>
           <div class="topbar-actions">
+            ${tab === 'home' && session.household && data.status === 'ready' && html`<${PictureCheck} data=${data} onOpen=${() => setOverlay('picture')} />`}
             <button type="button" class="icon-btn only-mobile" aria-label=${answers > 0 ? 'פרופיל והגדרות, יש תשובה לפנייה שלך' : 'פרופיל והגדרות'} style="position:relative" onClick=${() => { setProfileView('main'); setOverlay('profile'); }}>${profile.initials}${answers > 0 && html`<span class="fb-dot" aria-hidden="true">${answers}</span>`}</button>
           </div>
         </header>

@@ -21,7 +21,7 @@ async function open(width, setup) {
   await page.route('**/api/ai/import', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"transactions":[]}' }));
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/home');
-  await page.waitForSelector('.pic-card');
+  await page.waitForSelector('.pic-card, .pic-check');
   return { page, db, errors };
 }
 
@@ -295,6 +295,50 @@ test('the button in the personal email opens the upload at once, and counts as a
   // Usage counts are sent a few seconds later, together.
   for (let i = 0; i < 80 && !sent.includes('mail_click_nudge'); i++) await page.waitForTimeout(100);
   assert.ok(sent.includes('mail_click_nudge'), 'counted: ' + sent.join(','));
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('everything due is in: the card steps aside, a small ✓ at the top says so and when the next statements come', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.bank_accounts = [{ id: 'a1', household_id: d.hid, name: 'עו״ש', bank_name: 'לאומי', provider: 'leumi', salary_day: 10, balance: 12000 }];
+    d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 1, last4: '4821' }];
+    d.tables.imports = [{ id: 'b1', household_id: d.hid, source_kind: 'bank', source_id: 'a1', date_from: ym(1) + '-01', date_to: ym(1) + '-28' }]
+      .concat([1, 2, 3].map((k) => ({ id: 'k' + k, household_id: d.hid, source_kind: 'card', source_id: 'c1', date_from: ym(k) + '-03', date_to: ym(k) + '-20' })));
+  });
+  await page.waitForSelector('.pic-check');
+  assert.equal(await page.locator('.pic-card').count(), 0, 'no big card when nothing is missing');
+  await page.click('.pic-check');
+  const sheet = page.locator('.sheet');
+  await sheet.locator('.pic-check-title').waitFor();
+  assert.match(await sheet.textContent(), /הכל מעודכן/);
+  assert.equal(await sheet.locator('.pic-next-row').count(), 2, 'the bank account and the card');
+  assert.match(await sheet.locator('.pic-next').textContent(), /מקס.*••4821|עו״ש/);
+  assert.match(await sheet.locator('.pic-next-when').first().textContent(), /^מ-\d{1,2} ב/);
+  await sheet.locator('button:has-text("הבנתי")').click();
+  await page.waitForSelector('.pic-check-title', { state: 'detached' });
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('something missing: no ✓ at the top, the card says what', async () => {
+  const { page } = await open(390, (d) => {
+    d.tables.bank_accounts = [{ id: 'a1', household_id: d.hid, name: 'עו״ש', bank_name: 'לאומי', provider: 'leumi', salary_day: 10, balance: 12000 }];
+    d.tables.imports = [];
+  });
+  await page.waitForSelector('.pic-card');
+  assert.equal(await page.locator('.pic-check').count(), 0);
+  await page.close();
+});
+
+test('a card charged a day ago: said once, by the picture card, not again under "needs attention"', async () => {
+  const { page, errors } = await open(1280, (d) => {
+    d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: Math.max(1, today.getDate() - 1), last4: '4821' }];
+    d.tables.imports = [];
+  });
+  await page.waitForSelector('.pic-card');
+  await page.waitForSelector('.hero');
+  assert.doesNotMatch(await page.locator('.home').textContent(), /ירד ב-/);
   assert.deepEqual(errors, []);
   await page.close();
 });

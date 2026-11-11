@@ -2,7 +2,7 @@ import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
-import { PROVIDERS, providerOf, tracker, monthName, monthShort, howTo, howSteps, sourcesOf, nameOf } from '../../domain/sources.js';
+import { PROVIDERS, providerOf, tracker, upcoming, monthName, monthShort, howTo, howSteps, sourcesOf, nameOf } from '../../domain/sources.js';
 import { listSourceFiles, saveRow, archiveCard, deleteRow } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
@@ -54,12 +54,42 @@ export function PictureCard({ data, onOpen }) {
       <span><b>איפה הכסף שלכם?</b><small class="muted">בחרו את הבנקים והכרטיסים שלכם, ונזכיר לכם בכל חודש להעלות את מה שחסר.</small></span><span aria-hidden="true">‹</span></button>`;
   }
   const missing = t.tasks.length;
+  // When everything is in, the card steps aside: a small ✓ at the top says so.
+  if (!missing) return null;
   return html`<button type="button" class=${'card pic-card' + (missing ? '' : ' is-full')} onClick=${onOpen}>
     <${Ring} pct=${t.ring.pct} size=${64} label="הפירוטים של החודש: " />
     <span><b>${missing ? (missing === 1 ? 'חסר פירוט אחד' : 'חסרים ' + missing + ' פירוטים') : 'כל הפירוטים הועלו'}</b>
       <small class="muted">${missing ? t.tasks[0].title : t.streak > 1 ? t.streak + ' חודשים ברצף עם תמונה מלאה' : 'התמונה של החודש מלאה ומדויקת'}</small>
       <span class="pic-card-logos" aria-hidden="true">${t.rows.filter((r) => r.source.provider).slice(0, 5).map((r) => html`<span key=${r.source.id} class=${'pic-card-logo' + (t.tasks.some((x) => x.source.id === r.source.id) ? '' : ' done')}><${Logo} provider=${r.source.provider} size="s" /></span>`)}</span></span>
     <span aria-hidden="true">‹</span></button>`;
+}
+
+// At the top of the home screen, once every statement due is in: a small
+// green circle with a ✓. Tapping it says all is well, and when each next
+// statement can be uploaded. Nothing shows while something is missing (the
+// card on the home screen says what) or before any account is chosen.
+const dayMonth = (d) => d.getDate() + ' ב' + monthName(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+export function PictureCheck({ data, onOpen }) {
+  const files = useSourceFiles(data.hid, data.txs.length);
+  const [open, setOpen] = useState(false);
+  if (files === null) return null;
+  const t = tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: data.txs });
+  if (!t.sources.length || t.tasks.length) return null;
+  const next = upcoming(t.rows);
+  const last = t.months.filter((k) => t.rows.every((r) => (r.months.find((x) => x.key === k) || {}).status === 'ok')).pop();
+  return html`<button type="button" class="pic-check" aria-label="הפירוטים מעודכנים. מתי הבא?" title="הפירוטים מעודכנים" onClick=${() => { setOpen(true); track('picture_check'); }}><${Icon} name="check" size=${20} stroke=${2.6} /></button>
+    ${open && html`<${Sheet} title="הפירוטים" onClose=${() => setOpen(false)}>
+      <div class="stack pic-check-sheet">
+        <span class="pic-check-big" aria-hidden="true"><${Icon} name="check" size=${32} stroke=${2.8} /></span>
+        <b class="pic-check-title">הכל מעודכן</b>
+        <span class="muted pic-check-sub">${last ? 'כל הפירוטים עד ' + monthName(last) + ' הועלו.' : 'כל הפירוטים שצריך הועלו.'}${t.streak > 1 ? ' התמונה שלכם מלאה, ' + t.streak + ' חודשים ברצף.' : ''}</span>
+        <div class="pic-next"><small>הפירוט הבא שצריך להעלות</small>
+          ${next.map((x) => html`<div class="pic-next-row" key=${x.source.id}><span class="pic-next-who"><${Logo} provider=${x.source.provider} name=${x.source.name} size="s" /><b>${nameOf(x.source)}${x.source.kind !== 'card' ? '' : x.source.last4 ? html` <span class="faint num">••${x.source.last4}</span>` : ''}</b></span><span class="pic-next-when">מ-${dayMonth(x.date)}</span></div>`)}</div>
+        <button type="button" class="btn" onClick=${() => setOpen(false)}>הבנתי</button>
+        ${onOpen && html`<button type="button" class="btn btn-ghost" onClick=${() => { setOpen(false); onOpen(); }}>לכל החשבונות והכרטיסים</button>`}
+        <span class="faint pic-check-note">ביום שפירוט חדש מוכן, העיגול מתחלף בתזכורת עם מה שחסר.</span>
+      </div>
+    <//>`}`;
 }
 
 // Choosing the banks (step 1) and the card companies (step 2): a tile for

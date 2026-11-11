@@ -225,6 +225,20 @@ export function dueMonth(source, today = new Date()) {
   return prev;
 }
 
+// The day the next statement of a source can be uploaded, once everything
+// due now is in: a card's the day after its next charge; a bank account's
+// the 1st of next month (when this month ends).
+export function nextDue(source, today = new Date()) {
+  const y = today.getFullYear(), m = today.getMonth();
+  if (source.kind !== 'card') return new Date(y, m + 1, 1);
+  const on = (yy, mm) => new Date(yy, mm, Math.min(source.billingDay || 10, daysIn(yy, mm)) + 1);
+  return pastCharge(source, today) ? on(y, m + 1) : on(y, m);
+}
+// What comes next for each account and card, the nearest first.
+export function upcoming(rows, today = new Date()) {
+  return rows.map((r) => ({ source: r.source, date: nextDue(r.source, today) })).sort((a, b) => a.date - b.date);
+}
+
 // Everything the screen shows: the last 6 months for every source, the ring
 // (what is due now, how much of it is uploaded) and the reminders.
 export function tracker({ accounts = [], cards = [], imports = [], txs = [] }, today = new Date(), n = 6) {
