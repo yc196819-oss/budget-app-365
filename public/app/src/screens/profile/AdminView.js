@@ -1,7 +1,8 @@
 import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminAsk, adminReengage, sendReengage, testMonthlyMail, sendMonthlyMail, priceReach, mailHistory } from '../../data/account.js';
+import { adminStats, adminLive, adminAsk, adminReengage, testMonthlyMail, sendMonthlyMail, priceReach } from '../../data/account.js';
+import { MailBoard } from './MailBoard.js';
 import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
@@ -160,29 +161,6 @@ function KosherCard() {
   </div>`;
 }
 
-// The history of our emails: who got which and when, whether it went, who
-// clicked its button, and who asked to stop. Opened on request.
-const when = (iso) => { if (!iso) return ''; const d = new Date(iso); return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
-const personOf = (r) => html`<span class="mh-who"><b><bdi>${r.name || r.code}</bdi></b>${r.email && html`<small class="faint"><bdi>${r.email}</bdi></small>`}</span>`;
-function MailHistory() {
-  const [d, setD] = useState(false);
-  const [show, setShow] = useState('all');
-  if (d === false) return html`<button type="button" class="btn btn-ghost mh-open" style="width:auto" onClick=${() => { setD(undefined); mailHistory().then(setD).catch(() => setD(null)); }}>היסטוריית מיילים: מי קיבל, מי לחץ, מי הסיר</button>`;
-  if (d === undefined) return html`<span class="muted">טוען…</span>`;
-  if (d === null) return html`<span class="muted">ההיסטוריה לא זמינה כרגע.</span>`;
-  const rows = d.rows.filter((r) => show === 'all' || (show === 'clicked' && r.clicked) || (show === 'failed' && !r.ok));
-  const tabs = [['all', 'הכול', d.rows.length], ['clicked', 'לחצו', d.rows.filter((r) => r.clicked).length], ['failed', 'נכשלו', d.rows.filter((r) => !r.ok).length], ['stopped', 'ביקשו הסרה', d.stopped.length]];
-  return html`<div class="stack mail-history">
-    <b style="font-size:14px">היסטוריית מיילים</b>
-    <ul class="mh-sum">${Object.entries(d.byCampaign).map(([id, c]) => html`<li key=${id}><span>${c.title}</span><span class="num">נשלח ${c.sent}${c.sent ? ' · לחצו ' + c.clicked + ' (' + Math.round((c.clicked / c.sent) * 100) + '%)' : ''}${c.failed ? ' · נכשל ' + c.failed : ''}</span></li>`)}</ul>
-    <div class="chips" role="group" aria-label="סינון">${tabs.map(([k, label, n]) => html`<button type="button" class="chip" key=${k} aria-pressed=${show === k} onClick=${() => setShow(k)}>${label} (${n})</button>`)}</div>
-    ${show === 'stopped' ? (d.stopped.length ? html`<ul class="mh-list">${d.stopped.map((r, i) => html`<li key=${i}>${personOf(r)}<span class="mh-tag bad">ביקש הסרה${r.at ? ' · ' + when(r.at) : ''}</span></li>`)}</ul>` : html`<span class="muted">אף אחד לא ביקש הסרה.</span>`)
-      : rows.length ? html`<ul class="mh-list">${rows.map((r, i) => html`<li key=${i}>${personOf(r)}<span class="mh-what"><span>${r.title}</span><small class="faint">${when(r.at)}</small></span>
-        <span class="mh-tags">${r.ok ? html`<span class="mh-tag">נשלח</span>` : html`<span class="mh-tag bad">נכשל</span>`}${r.clicked && html`<span class="mh-tag ok">לחץ · ${when(r.clicked)}</span>`}</span></li>`)}</ul>` : html`<span class="muted">אין מיילים כאן.</span>`}
-    <span class="faint" style="font-size:12px;line-height:1.5">"לחץ" נספר כשהאדם נכנס לאפליקציה מהכפתור שבמייל (רק אצל מי שלא כיבה ספירת שימוש). פתיחת המייל עצמה לא נספרת כאן: רואים אותה ב-Brevo.</span>
-  </div>`;
-}
-
 // A number that counts up to its value when it first shows ("$4.24", "15%"
 // keep their sign). Still for whoever asked their device for less motion.
 function CountUp({ value }) {
@@ -334,64 +312,7 @@ export function AdminView({ onBack }) {
     return () => clearInterval(t);
   }, []);
   const [back, setBack] = useState(null);
-  const [backSure, setBackSure] = useState('');
-  const [backBusy, setBackBusy] = useState('');
   useEffect(() => { adminReengage().then(setBack); }, []);
-  // What is happening right now with an email, shown step by step in its row.
-  const [job, setJob] = useState({});
-  const setJ = (id, j) => setJob((all) => ({ ...all, [id]: j && { ...(all[id] || {}), ...j } }));
-  const sendBack = async (c) => {
-    if (backSure !== c.id) { setBackSure(c.id); return; }
-    setBackSure(''); setBackBusy(c.id);
-    const total = c.count;
-    setJ(c.id, { kind: 'send', phase: 'sending', step: 1, total, sent: 0, failed: 0, error: '' });
-    let sent = 0, failed = 0, error = '';
-    try {
-      // One at a time, so the bar shows the real progress.
-      for (let guard = 0; guard < 500; guard++) {
-        const r = await sendReengage(c.id, { limit: 1 });
-        sent += r.sent || 0; failed += r.failed || 0; if (r.error) error = r.error;
-        setJ(c.id, { step: 2, sent, failed, error });
-        if (!r.left || (!r.sent && !r.failed)) break;
-      }
-      setJ(c.id, { phase: failed && !sent ? 'error' : 'done', step: 3 });
-      setBack((bk) => ({ ...bk, campaigns: bk.campaigns.map((x) => (x.id === c.id ? { ...x, count: Math.max(0, x.count - sent - failed) } : x)) }));
-    } catch (err) { setJ(c.id, { phase: 'error', error: err.message || 'השליחה נכשלה. נסו שוב.' }); }
-    setBackBusy('');
-  };
-  const testBack = async (c) => {
-    setBackBusy('t' + c.id);
-    setJ(c.id, { kind: 'test', phase: 'sending', step: 1, error: '' });
-    const t = setTimeout(() => setJ(c.id, { step: 2 }), 700);
-    try {
-      const r = await sendReengage(c.id, { test: true });
-      clearTimeout(t);
-      setJ(c.id, { phase: 'done', step: 3, to: r.to, provider: r.provider || '' });
-    } catch (err) { clearTimeout(t); setJ(c.id, { phase: 'error', error: err.message || 'הניסיון לא נשלח.' }); }
-    setBackBusy('');
-  };
-  const PROVIDER = { resend: 'Resend', smtp: 'Gmail / SMTP', 'google-gmail': 'Gmail' };
-  const jobView = (c) => {
-    const j = job[c.id];
-    if (!j) return null;
-    const active = j.phase === 'sending';
-    const steps = j.kind === 'test'
-      ? ['מכינים את המייל עם העיצוב', 'שולחים לשרת המיילים', 'השרת קיבל את המייל']
-      : ['מכינים את רשימת הנמענים', 'שולחים אחד אחד', 'סיימנו'];
-    const pct = j.kind === 'send' && j.total ? Math.round(((j.sent + j.failed) / j.total) * 100) : 0;
-    return html`<div class=${'mail-job ' + (active ? 'is-active' : j.phase === 'error' ? 'is-error' : 'is-done')} role="status" aria-live="polite">
-      <div class="mail-fly" aria-hidden="true"><span class="mail-env"><${Icon} name="mail" size=${20} /></span><span class="mail-trail"></span></div>
-      <ol class="mail-steps">${steps.map((st, i) => {
-        const n = i + 1;
-        const state = j.phase === 'error' && n >= (j.step || 1) ? 'fail' : n < (j.step || 1) || (n === 3 && j.phase === 'done') ? 'ok' : n === j.step && active ? 'now' : 'wait';
-        return html`<li class=${'st-' + state} key=${n}><span class="st-dot">${state === 'ok' ? '✓' : state === 'fail' ? '✗' : ''}</span>${st}</li>`;
-      })}</ol>
-      ${j.kind === 'send' && html`<div class="mail-bar" aria-hidden="true"><i style=${'width:' + pct + '%'}></i></div>
-        <span class="mail-count">נשלחו <b class="num">${j.sent}</b> מתוך <b class="num">${j.total}</b>${j.failed ? html` · <span style="color:var(--danger)">${j.failed} לא נשלחו</span>` : ''}</span>`}
-      ${j.phase === 'done' && j.kind === 'test' && html`<span class="mail-result">נשלח אל <bdi dir="ltr">${j.to}</bdi>${j.provider ? ' דרך ' + (PROVIDER[j.provider] || j.provider) : ''}. אם לא הגיע תוך כמה דקות, בדקו בספאם.</span>`}
-      ${j.error && html`<span class="mail-result" style="color:var(--danger)">${j.error}</span>`}
-    </div>`;
-  };
   const today = s && s.daily ? s.daily[s.daily.length - 1] : null;
   const f = s && s.funnel;
   const pct = (n) => (f && f.signups ? Math.round((n / f.signups) * 100) + '%' : '');
@@ -440,26 +361,7 @@ export function AdminView({ onBack }) {
       ${s.users && html`<${PeopleCard} users=${s.users} aiCost=${s.aiCost30d} costNote=${costParts(s)} sharing=${s.sharing} />`}
 `}` },
     { key: 'mail', icon: 'mail', title: 'מיילים', sub: 'מיילי עזרה וסיכום חודשי', body: () => html`
-    ${back && back.campaigns && html`<div class="card stack admin-reengage"><b>מיילים למשתמשים</b>
-      <span class="muted" style="font-size:13px;line-height:1.55">כל מייל נשלח לכל אדם פעם אחת בלבד, ורק כשלוחצים כאן פעמיים. קודם כדאי לשלוח ניסיון לעצמכם. בתחתית כל מייל יש "להסרה לחץ כאן", ומי שלחץ עליו לא יקבל יותר אף אחד מהם.</span>
-      <span class="campaign-stopped" style="font-size:13px">ביקשו להפסיק לקבל: <b class="num">${back.stopped || 0}</b></span>
-      <span class="faint" style="font-size:12px;line-height:1.5">"נשלח" אומר שהשרת מסר את המייל ל-Brevo. אם הוא הגיע ונפתח רואים ב-Brevo: Transactional ← Logs.</span>
-      ${back.mail && !back.mail.ready && html`<span class="card mail-not-ready" role="status" style="font-size:13px;line-height:1.55;border:1px solid var(--danger)">השרת עוד לא מוגדר לשלוח מיילים למשתמשים${back.mail.resendTestOnly ? ' (Resend מוגדר רק בכתובת הניסיון שלו, שמגיעה רק אליכם)' : ''}. צריך לחבר את Brevo (חינם): BREVO_API_KEY ו-BREVO_FROM בהגדרות השרת ב-Render.</span>`}
-      ${back.campaigns.map((c) => html`<div class=${'campaign campaign-' + c.id} key=${c.id} style="display:flex;flex-direction:column;gap:6px;padding:8px 0;border-top:1px solid var(--line)">
-        <span style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14px">${c.title}</b><b class="num">${c.count}</b></span>
-        ${c.done && (c.done.sent > 0 || c.done.failed > 0) && html`<span class="campaign-done muted" style="font-size:13px">נשלח ל-${c.done.sent}${c.done.failed ? html` · <span style="color:var(--danger)">נכשל ${c.done.failed}</span>` : ' · לא נכשל אף אחד'}${c.done.last ? ' · אחרון ' + String(c.done.last).slice(5, 10).split('-').reverse().join('.') : ''}</span>`}
-        <details><summary style="cursor:pointer;font-size:13px">איך המייל נראה</summary>
-          <span style="display:block;font-size:13px;margin:6px 0"><span class="faint">נושא:</span> <b>${c.preview.subject}</b></span>
-          <iframe class="mail-preview" src=${'/mail-preview/' + c.id} title=${'המייל: ' + c.preview.subject} sandbox="" loading="lazy" style="width:100%;height:560px;border:0;border-radius:12px;background:#F3EDE6;display:block"></iframe></details>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => testBack(c)}>${backBusy === 't' + c.id ? 'שולח…' : 'ניסיון אליי'}</button>
-          ${c.count > 0 && (!back.mail || back.mail.ready) && html`<button type="button" class=${'btn' + (backSure === c.id ? '' : ' btn-ghost')} style="width:auto;padding:6px 12px" disabled=${!!backBusy} onClick=${() => sendBack(c)}>${backBusy === c.id ? 'שולח…' : backSure === c.id ? 'בטוח? לשלוח עכשיו ל-' + c.count : 'לשלוח ל-' + c.count}</button>`}
-          ${c.count === 0 && html`<span class="faint" style="font-size:12px;align-self:center">אין כרגע למי לשלוח</span>`}
-        </div>
-        ${jobView(c)}
-      </div>`)}
-      <${MailHistory} />
-    </div>`}
+    ${back && back.campaigns && html`<${MailBoard} back=${back} setBack=${setBack} />`}
     ${back && html`<${MonthlyMailCard} />`}` },
     { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים מהרשתות, ואישור כשרות', body: () => html`${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceReachCard} />`}` },
     { key: 'system', icon: 'wrench', title: 'מצב המערכת', sub: s ? 'תקלות השבוע: ' + s.errors.week : 'תקלות ומה שבור', body: () => html`${s && html`

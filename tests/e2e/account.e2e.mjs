@@ -430,8 +430,9 @@ test('emails to users: one per step, read before sending, a test to yourself, an
       left -= 1;
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sent: 1, failed: 0, left }) });
     }
-    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: true }, stopped: 2, campaigns: [
-      { id: 'start', title: 'נרשמו ולא פתחו משק בית', count: 14, preview: mail('נשארו לך 2 דקות להתחיל'), done: { sent: 13, failed: 1, last: '2026-11-04T19:28:00Z' } },
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: true }, stopped: 2,
+      kpis: { month: { sent: 38, failed: 0 }, clicked: 16, went: 38, clickPct: 42, uploaded: 9, people: 21, stopped: 2, stoppedPct: 5 }, campaigns: [
+      { id: 'start', title: 'נרשמו ולא פתחו משק בית', count: 14, preview: mail('נשארו לך 2 דקות להתחיל'), done: { sent: 13, failed: 1, last: '2026-11-04T19:28:00Z', clicked: 5, uploaded: 0 } },
       { id: 'first', title: 'פתחו משק בית ולא העלו פירוט', count: 12, preview: mail('עוד צעד אחד, ורואים לאן הכסף הולך') },
       { id: 'more', title: 'העלו פירוט, פחות מ-6 חודשים', count: 7, preview: mail('טיפ קטן שיעשה את התקציב הרבה יותר מדויק') }
     ] }) });
@@ -443,11 +444,17 @@ test('emails to users: one per step, read before sending, a test to yourself, an
   await card.waitFor();
   assert.equal(await card.locator('.campaign').count(), 3);
   // What already went out, and who asked to stop.
-  assert.match(await card.locator('.campaign-start .campaign-done').textContent(), /נשלח ל-13 · נכשל 1 · אחרון 04\.11/);
+  assert.match(await card.locator('.campaign-start .campaign-done').textContent(), /נשלח ל-13 · לחצו 5 \(38%\) · נכשל 1 · אחרון 04\.11/);
+  // The four numbers on top.
+  assert.match(await card.locator('.mb-kpis').textContent(), /נשלחו החודש\s*38.*לחצו על הכפתור\s*42%.*העלו פירוט אחרי המייל\s*9.*מתוך 21/);
+  // Emails waiting for people, never sent yet, come first and are marked.
+  assert.match(await card.locator('.mb-tabs [aria-selected="true"]').textContent(), /לשלוח\s*3/);
+  assert.match(await card.locator('.campaign').first().getAttribute('class'), /campaign-first is-new/);
   assert.equal(await card.locator('.campaign-more .campaign-done').count(), 0);
-  assert.match(await card.locator('.campaign-stopped').textContent(), /ביקשו להפסיק לקבל: 2/);
+  assert.match(await card.locator('.campaign-stopped').textContent(), /ביקשו הסרה\s*2/);
   const more = card.locator('.campaign-more');
-  await more.locator('summary').click();
+  assert.equal(await more.locator('iframe.mail-preview').count(), 0, 'the email itself opens on request');
+  await more.locator('.mb-peek').click();
   assert.match(await more.textContent(), /טיפ קטן שיעשה את התקציב/);
   // The email itself, with its design.
   await more.frameLocator('iframe.mail-preview').locator('a:has-text("להשלים את התמונה")').waitFor();
@@ -490,11 +497,11 @@ test('emails to users: the history of who got which, who clicked, and who asked 
   let asked = 0;
   await page.route('**/api/admin/mail/history', (r) => { asked++; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
     rows: [
-      { name: 'דנה', code: '#a1b2c3', email: 'da***@example.test', campaign: 'nudge', title: 'נכנסו ולא העלו פירוט', at: '2026-11-10T10:00:00Z', ok: true, clicked: '2026-11-10T12:30:00Z' },
+      { name: 'דנה', code: '#a1b2c3', email: 'da***@example.test', campaign: 'nudge', title: 'נכנסו ולא העלו פירוט', at: '2026-11-10T10:00:00Z', ok: true, clicked: '2026-11-10T12:30:00Z', uploaded: '2026-11-10T12:41:00Z' },
       { name: '', code: '#d4e5f6', email: 'yo***@example.test', campaign: 'first', title: 'פתחו משק בית ולא העלו פירוט', at: '2026-11-02T10:00:00Z', ok: false, clicked: null }
     ],
     stopped: [{ name: '', code: '#d4e5f6', email: 'yo***@example.test', at: '2026-11-03T08:00:00Z' }],
-    byCampaign: { nudge: { title: 'נכנסו ולא העלו פירוט', sent: 1, failed: 0, clicked: 1 }, first: { title: 'פתחו משק בית ולא העלו פירוט', sent: 0, failed: 1, clicked: 0 } }
+    byCampaign: { nudge: { title: 'נכנסו ולא העלו פירוט', sent: 1, failed: 0, clicked: 1, uploaded: 1 }, first: { title: 'פתחו משק בית ולא העלו פירוט', sent: 0, failed: 1, clicked: 0 } }
   }) }); });
   await page.click('button[aria-label="פרופיל והגדרות"]');
   await page.click('text=לוח בעלים');
@@ -507,13 +514,16 @@ test('emails to users: the history of who got which, who clicked, and who asked 
   await h.waitFor();
   assert.match(await h.locator('.mh-sum').textContent(), /נכנסו ולא העלו פירוט.*נשלח 1 · לחצו 1 \(100%\)/);
   assert.equal(await h.locator('.mh-list li').count(), 2);
-  assert.match(await h.locator('.mh-list li').first().textContent(), /דנה.*da\*\*\*@example\.test.*נכנסו ולא העלו פירוט.*נשלח.*לחץ/);
+  assert.match(await h.locator('.mh-list li').first().textContent(), /דנה.*da\*\*\*@example\.test.*נכנסו ולא העלו פירוט.*נשלח.*לחץ 1\d:\d\d.*העלה פירוט ✓/);
   await h.locator('.chip:has-text("לחצו")').click();
+  assert.equal(await h.locator('.mh-list li').count(), 1);
+  await h.locator('.chip:has-text("העלו אחרי")').click();
   assert.equal(await h.locator('.mh-list li').count(), 1);
   await h.locator('.chip:has-text("נכשלו")').click();
   assert.match(await h.locator('.mh-list li').first().textContent(), /#d4e5f6.*נכשל/);
-  await h.locator('.chip:has-text("ביקשו הסרה")').click();
-  assert.match(await h.locator('.mh-list li').first().textContent(), /#d4e5f6.*ביקש הסרה · 03\.11/);
+  await card.locator('.mh-stopped').click();
+  assert.match(await card.locator('.mb-stopped li').first().textContent(), /#d4e5f6.*ביקש הסרה · 03\.11/);
+  assert.equal(asked, 1, 'loaded once for both tabs');
   assert.deepEqual(errors, []);
   await page.close();
 });
