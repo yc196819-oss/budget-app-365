@@ -5,7 +5,7 @@
 const EVENTS = ['app_open', 'tx_add', 'import_done', 'advisor_ask', 'advisor_talk', 'decision_open', 'decision_message', 'trip_plan', 'news_open', 'lesson_done', 'shortcut', 'export', 'restore', 'import_fail', 'guide_step', 'guide_skip', 'learn_auto', 'learn_undo', 'onboard_0', 'onboard_1', 'onboard_2', 'onboard_3', 'onboard_4', 'onboard_5', 'onboard_done', 'share', 'share_joined', 'howto', 'repair_shown', 'repair_fix', 'repair_skip',
   // Where an upload stops: opened, which kind of file, why it failed (a fixed word), left at which step.
   // A click on an email's button (which email it was).
-  ...['start', 'first', 'more', 'picture', 'nudge', 'monthly'].map((c) => 'mail_click_' + c),
+  ...['start', 'first', 'more', 'picture', 'nudge', 'fixed', 'monthly'].map((c) => 'mail_click_' + c),
   'import_open', 'import_file_xlsx', 'import_file_xls', 'import_file_csv', 'import_file_pdf', 'import_file_image', 'import_file_other',
   ...['ai_off', 'excel', 'password', 'xls', 'type', 'empty', 'pdf_scan', 'image_big', 'no_rows', 'junk', 'other'].map((c) => 'import_fail_' + c),
   ...['pick', 'work', 'review', 'error'].map((s) => 'import_abandon_' + s),
@@ -325,7 +325,9 @@ function feedbackPatch(body) {
 //   nudge: came in and opened a household 3+ days ago, uploaded nothing:
 //          a short, personal note with a picture of the upload, even after
 //          an earlier email
-const CAMPAIGNS = ['start', 'first', 'more', 'picture', 'nudge'];
+//   fixed: their Excel statement was read as empty (a fault of ours, fixed
+//          since) and they did not upload after it: "fixed, try again"
+const CAMPAIGNS = ['start', 'first', 'more', 'picture', 'nudge', 'fixed'];
 // At most one email a week from us to a person, whatever its kind. Not
 // counted: what the person asked for (the monthly summary they turned on,
 // an answer to their request, sign-in codes, sign-up and password emails,
@@ -335,7 +337,7 @@ const askedFor = (campaign) => /^monthly-/.test(String(campaign || ''));
 function mailedThisWeek(rows = [], now = new Date()) {
   return rows.some((r) => !askedFor(r.campaign) && r.ok !== false && r.sent_at && now.getTime() - new Date(r.sent_at).getTime() < WEEK);
 }
-function campaignList(campaign, { users = [], members = [], spans = [], sent = [], owners = [], stopped = [], now = new Date() }) {
+function campaignList(campaign, { users = [], members = [], spans = [], sent = [], owners = [], stopped = [], failed = [], now = new Date() }) {
   const off = new Set(stopped);
   for (const u of new Set(sent.map((r) => r.user_id))) if (mailedThisWeek(sent.filter((r) => r.user_id === u), now)) off.add(u);
   const householdOf = new Map(members.map((m) => [m.user_id, m.household_id]));
@@ -350,6 +352,7 @@ function campaignList(campaign, { users = [], members = [], spans = [], sent = [
     if (campaign === 'first') return inHousehold && s.n === 0;
     if (campaign === 'more') return inHousehold && s.n > 0 && s.months < 6;
     if (campaign === 'picture') return inHousehold && s.months < 6;
+    if (campaign === 'fixed') return failed.includes(u.id);
     if (campaign === 'nudge') return inHousehold && s.n === 0 && now.getTime() - new Date(u.created_at).getTime() >= 3 * DAY;
     return false;
   });
@@ -399,10 +402,17 @@ const MAILS = {
     button: 'להשלים את התמונה',
     action: 'picture'
   },
+  fixed: {
+    title: 'קובץ האקסל שלהם נקרא כ"ריק" (תיקנו)',
+    subject: 'תיקנו: אפשר להעלות שוב את קובץ האקסל',
+    body: ['ניסית להעלות ל"התקציב שלנו" פירוט באקסל, וקיבלת הודעה שהקובץ ריק או לא קריא.', 'זו הייתה תקלה אצלנו, לא בקובץ שלך: חלק מקבצי האקסל שבנקים וחברות אשראי מפיקים לא נקראו כמו שצריך. תיקנו את זה, ועכשיו הם נקראים כרגיל.', 'אפשר להעלות שוב בדיוק את אותו קובץ. מה שכבר נשמר לא ייכנס פעמיים.', 'סליחה על הטרחה, ותודה על הסבלנות.'],
+    button: 'להעלות שוב',
+    action: 'import'
+  },
   nudge: {
     title: 'נכנסו ולא העלו פירוט (מכתב אישי עם תמונה)',
     subject: 'דקה אחת, והתמונה שלך מוכנה',
-    body: ['ראיתי שפתחת את "התקציב שלנו", ועוד לא העלית פירוט. זה בסדר גמור, רוב האנשים נתקעים בדיוק כאן.', 'רציתי להראות לך כמה זה קצר: מורידים את פירוט כרטיס האשראי מהאתר של החברה (PDF או אקסל), מעלים אותו, ותוך דקה כל התנועות כבר ממוינות לבד. ככה זה נראה:', '[img]', '• לא צריך להקליד כלום, ולא צריך לסדר את הקובץ.', '• אם משהו כבר במערכת, הוא לא נכנס פעמיים.', '• האפליקציה מראה לכל בנק ולכל חברת אשראי, צעד אחר צעד, איך מורידים את הפירוט.', NOSTATE],
+    body: ['ראינו שפתחת את "התקציב שלנו", ועוד לא העלית פירוט. זה בסדר גמור, רוב האנשים נתקעים בדיוק כאן.', 'רצינו להראות לך כמה זה קצר: מורידים את פירוט כרטיס האשראי מהאתר של החברה (PDF או אקסל), מעלים אותו, ותוך דקה כל התנועות כבר ממוינות לבד. ככה זה נראה:', '[img]', '• לא צריך להקליד כלום, ולא צריך לסדר את הקובץ.', '• אם משהו כבר במערכת, הוא לא נכנס פעמיים.', '• האפליקציה מראה לכל בנק ולכל חברת אשראי, צעד אחר צעד, איך מורידים את הפירוט.', NOSTATE],
     button: 'להעלות פירוט עכשיו',
     action: 'import',
     image: { src: '/mail/upload-sorted.png', alt: 'פירוט אשראי אחרי ההעלאה: כל התנועות ממוינות לקטגוריות', w: 280 }

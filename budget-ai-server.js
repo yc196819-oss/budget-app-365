@@ -2430,21 +2430,29 @@ app.get('/api/admin/live', requireAuth, async (req, res) => {
 
 // ═══ one-time emails from the dashboard (the owner reads, then sends) ═══
 async function campaignData() {
-  const [{ data: people }, { data: members }, { data: spans }, { data: sent }, { data: oldSent }, { data: off }] = await Promise.all([
+  const [{ data: people }, { data: members }, { data: spans }, { data: sent }, { data: oldSent }, { data: off }, { data: emptyFails }, { data: uploads }] = await Promise.all([
     listAllUsers(),
     allRows(() => supabaseAdmin.from('memberships').select('user_id,household_id,created_at').order('created_at', { ascending: true })),
     supabaseAdmin.rpc('ops_tx_span'),
     allRows(() => supabaseAdmin.from('mail_sent').select('user_id,campaign,sent_at,ok').order('sent_at')),
     allRows(() => supabaseAdmin.from('reengage_sent').select('user_id').order('user_id')),
-    allRows(() => supabaseAdmin.from('mail_prefs').select('user_id').eq('news', false).order('user_id'))
+    allRows(() => supabaseAdmin.from('mail_prefs').select('user_id').eq('news', false).order('user_id')),
+    // Excel statements read as empty (a fault of ours, fixed on 11.11), and uploads that went.
+    supabaseAdmin.from('app_errors').select('user_id,at').like('message', 'הקובץ ריק%').like('path', 'import:xls%').not('user_id', 'is', null).limit(500),
+    supabaseAdmin.from('app_events').select('user_id,at').eq('name', 'import_done').gte('at', new Date(Date.now() - 60 * 86400000).toISOString()).limit(5000)
   ]);
+  // Failed that way, and no upload went after it.
+  const lastFail = new Map();
+  for (const f of emptyFails || []) if (!lastFail.has(f.user_id) || f.at > lastFail.get(f.user_id)) lastFail.set(f.user_id, f.at);
+  const failed = [...lastFail].filter(([id, at]) => !(uploads || []).some((u) => u.user_id === id && u.at > at)).map(([id]) => id);
   // A person's first household, as the app opens it.
   const first = new Map();
   for (const m of members || []) if (!first.has(m.user_id)) first.set(m.user_id, m);
   return {
     users: (people && people.users) || [], members: [...first.values()], spans: spans || [],
     sent: [...(sent || []), ...(oldSent || []).map((r) => ({ user_id: r.user_id, campaign: 'start' }))], owners: ADMIN_EMAILS,
-    stopped: (off || []).map((r) => r.user_id)
+    stopped: (off || []).map((r) => r.user_id),
+    failed
   };
 }
 const appLinkOf = (req) => (process.env.PUBLIC_URL || (req.protocol + '://' + req.get('host'))).replace(/\/$/, '') + '/app/';
