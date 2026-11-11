@@ -472,25 +472,69 @@ function campaignMail(campaign, link, unsubLink) {
     + '</table></td></tr></table></body></html>';
   return { subject: m.subject, text, html };
 }
+// What came of each email we sent: when the person clicked its button (an
+// entry to the app from it, after it), and when they uploaded a statement
+// in the two weeks after it (nothing for one that did not go). Pure.
+const UPLOAD_WINDOW = 14 * DAY;
+function mailOutcomes({ sent = [], clicks = [], uploads = [] }) {
+  const byUser = (list) => { const m = new Map(); for (const e of list) { if (!m.has(e.user_id)) m.set(e.user_id, []); m.get(e.user_id).push(e); } return m; };
+  const clicksOf = byUser(clicks);
+  const uploadsOf = byUser(uploads);
+  const firstAfter = (list, t, until, name) => (list || []).filter((e) => (!name || e.name === name) && new Date(e.at).getTime() >= t && new Date(e.at).getTime() <= until).sort((a, b) => (a.at < b.at ? -1 : 1))[0];
+  return sent.filter((r) => r.sent_at).map((r) => {
+    const t = new Date(r.sent_at).getTime();
+    const ok = r.ok !== false;
+    const c = ok ? firstAfter(clicksOf.get(r.user_id), t, Infinity, 'mail_click_' + r.campaign) : null;
+    const u = ok ? firstAfter(uploadsOf.get(r.user_id), t, t + UPLOAD_WINDOW) : null;
+    return { user_id: r.user_id, campaign: r.campaign, at: r.sent_at, ok, clicked: c ? c.at : null, uploaded: u ? u.at : null };
+  });
+}
+// The four numbers at the top of the email board: sent this month, how many
+// clicked, how many uploaded a statement after an email, who asked to stop.
+// People, not emails, for "uploaded" and "stopped". Pure.
+function mailKpis({ sent = [], clicks = [], uploads = [], stopped = [], now = new Date() }) {
+  const out = mailOutcomes({ sent, clicks, uploads }).filter((r) => CAMPAIGNS.includes(r.campaign));
+  const monthStart = israelDay(now).slice(0, 8) + '01';
+  const month = out.filter((r) => israelDay(new Date(r.at)) >= monthStart);
+  const went = out.filter((r) => r.ok);
+  const people = new Set(went.map((r) => r.user_id));
+  const uploaded = new Set(went.filter((r) => r.uploaded).map((r) => r.user_id));
+  const off = stopped.filter((id) => people.has(id)).length;
+  const pct = (n, of) => (of ? Math.round((n / of) * 100) : null);
+  return {
+    month: { sent: month.filter((r) => r.ok).length, failed: month.filter((r) => !r.ok).length },
+    clicked: went.filter((r) => r.clicked).length, went: went.length, clickPct: pct(went.filter((r) => r.clicked).length, went.length),
+    uploaded: uploaded.size, people: people.size,
+    stopped: stopped.length, stoppedPct: pct(off, people.size)
+  };
+}
+// Per email: how many clicked and how many uploaded after it. Pure.
+function campaignResults(args) {
+  const res = {};
+  for (const r of mailOutcomes(args)) {
+    if (!r.ok || !CAMPAIGNS.includes(r.campaign)) continue;
+    const c = res[r.campaign] || (res[r.campaign] = { clicked: 0, uploaded: 0 });
+    if (r.clicked) c.clicked++;
+    if (r.uploaded) c.uploaded++;
+  }
+  return res;
+}
 // The owner's history of our emails: who got which and when, whether it
-// went, whether they clicked its button after it, and who asked to stop.
-// People are shown by first name (or a code) and a masked address. Pure.
-function mailHistory({ sent = [], clicks = [], stops = [], users = [], names = {}, alias = (id) => id.slice(0, 6) }) {
+// went, whether they clicked its button after it, whether they uploaded a
+// statement after it, and who asked to stop. People are shown by first name
+// (or a code) and a masked address. Pure.
+function mailHistory({ sent = [], clicks = [], uploads = [], stops = [], users = [], names = {}, alias = (id) => id.slice(0, 6) }) {
   const email = new Map(users.map((u) => [u.id, u.email]));
   const who = (id) => ({ name: names[id] || '', code: alias(id), email: maskEmail(email.get(id) || '') });
-  const clickOf = (r) => {
-    const t = new Date(r.sent_at).getTime();
-    const c = clicks.filter((e) => e.user_id === r.user_id && e.name === 'mail_click_' + r.campaign && new Date(e.at).getTime() >= t).sort((a, b) => (a.at < b.at ? -1 : 1))[0];
-    return c ? c.at : null;
-  };
-  const rows = sent.filter((r) => r.sent_at).map((r) => ({ ...who(r.user_id), campaign: r.campaign, title: MAILS[r.campaign] ? MAILS[r.campaign].title : r.campaign, at: r.sent_at, ok: r.ok !== false, clicked: r.ok !== false ? clickOf(r) : null }))
+  const rows = mailOutcomes({ sent, clicks, uploads }).map((r) => ({ ...who(r.user_id), campaign: r.campaign, title: MAILS[r.campaign] ? MAILS[r.campaign].title : askedFor(r.campaign) ? 'סיכום חודשי' : r.campaign, at: r.at, ok: r.ok, clicked: r.clicked, uploaded: r.uploaded }))
     .sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 300);
   const stopped = stops.map((s) => ({ ...who(s.user_id), at: s.updated_at || null })).sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
   const byCampaign = {};
   for (const r of rows) {
-    const c = byCampaign[r.campaign] || (byCampaign[r.campaign] = { title: r.title, sent: 0, failed: 0, clicked: 0 });
+    const c = byCampaign[r.campaign] || (byCampaign[r.campaign] = { title: r.title, sent: 0, failed: 0, clicked: 0, uploaded: 0 });
     if (r.ok) c.sent++; else c.failed++;
     if (r.clicked) c.clicked++;
+    if (r.uploaded) c.uploaded++;
   }
   return { rows, stopped, byCampaign };
 }
@@ -508,6 +552,8 @@ function mailErrorText(err) {
 }
 function reengageMail(link) { return campaignMail('start', link); }
 const campaignTitle = (c) => (MAILS[c] ? MAILS[c].title : '');
+// The picture inside an email, if it has one (for its thumbnail on the board).
+const campaignImage = (c) => (MAILS[c] && MAILS[c].image ? MAILS[c].image.src : null);
 
 // Can the server email people? Resend's shared test address only delivers to
 // the Resend account's own email, so it does not count.
@@ -890,4 +936,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { mailHistory, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };
+module.exports = { mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };

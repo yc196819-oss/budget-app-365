@@ -589,7 +589,34 @@ test('the owner\'s email history: who got what, whether it went, who clicked aft
   assert.deepEqual(h.rows.map((r) => [r.campaign, r.name || r.code, r.ok, !!r.clicked]), [['nudge', 'דנה', true, true], ['first', '#u2', false, false], ['first', 'דנה', true, false]], 'newest first; a click before the email is not its click');
   assert.equal(h.rows[0].email, 'da***@example.test', 'addresses are masked');
   assert.deepEqual(h.stopped.map((s) => [s.code, s.at]), [['#u2', '2026-11-03T08:00:00Z']]);
-  assert.deepEqual(h.byCampaign.first, { title: h.rows[1].title, sent: 1, failed: 1, clicked: 0 });
+  assert.deepEqual(h.byCampaign.first, { title: h.rows[1].title, sent: 1, failed: 1, clicked: 0, uploaded: 0 });
+});
+
+test('the email board: who uploaded a statement after an email (within two weeks), and the four numbers', () => {
+  const { mailHistory, mailKpis, campaignResults } = require('../server/ops');
+  const sent = [
+    { user_id: 'u1', campaign: 'nudge', sent_at: '2026-11-02T10:00:00Z', ok: true },
+    { user_id: 'u2', campaign: 'nudge', sent_at: '2026-11-02T10:00:00Z', ok: true },
+    { user_id: 'u3', campaign: 'nudge', sent_at: '2026-11-02T10:00:00Z', ok: false },
+    { user_id: 'u4', campaign: 'first', sent_at: '2026-10-01T10:00:00Z', ok: true },
+    { user_id: 'u1', campaign: 'monthly-2026-10', sent_at: '2026-11-01T06:00:00Z', ok: true }
+  ];
+  const clicks = [{ user_id: 'u1', name: 'mail_click_nudge', at: '2026-11-02T11:00:00Z' }];
+  const uploads = [
+    { user_id: 'u1', at: '2026-11-02T11:05:00Z' },
+    { user_id: 'u2', at: '2026-10-30T10:00:00Z' },
+    { user_id: 'u3', at: '2026-11-03T10:00:00Z' },
+    { user_id: 'u4', at: '2026-10-20T10:00:00Z' }
+  ];
+  const h = mailHistory({ sent, clicks, uploads, users: [], alias: (id) => id });
+  const by = Object.fromEntries(h.rows.filter((r) => r.campaign !== 'monthly-2026-10').map((r) => [r.code, r.uploaded]));
+  assert.deepEqual(by, { u1: '2026-11-02T11:05:00Z', u2: null, u3: null, u4: null }, 'before the email, after two weeks, or an email that did not go: not counted');
+  assert.equal(h.rows.find((r) => r.campaign === 'monthly-2026-10').title, 'סיכום חודשי', 'the monthly summary is listed by name');
+  assert.deepEqual(h.byCampaign.nudge, { title: h.byCampaign.nudge.title, sent: 2, failed: 1, clicked: 1, uploaded: 1 });
+  const k = mailKpis({ sent, clicks, uploads, stopped: ['u2', 'u9'], now: new Date('2026-11-11T10:00:00Z') });
+  assert.deepEqual(k, { month: { sent: 2, failed: 1 }, clicked: 1, went: 3, clickPct: 33, uploaded: 1, people: 3, stopped: 2, stoppedPct: 33 }, 'the monthly summary the person asked for is not counted');
+  assert.deepEqual(campaignResults({ sent, clicks, uploads }), { nudge: { clicked: 1, uploaded: 1 }, first: { clicked: 0, uploaded: 0 } });
+  assert.deepEqual(mailKpis({}), { month: { sent: 0, failed: 0 }, clicked: 0, went: 0, clickPct: null, uploaded: 0, people: 0, stopped: 0, stoppedPct: null });
 });
 
 test('"fixed, upload again": only to whoever had an Excel statement read as empty, once', () => {
