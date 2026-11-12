@@ -28,16 +28,17 @@ async function openFixed(width = 390) {
   await mockSupabase(page, db);
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/home');
-  await page.waitForSelector('.fx-card');
+  await page.waitForSelector('.fxc');
   return { page, db, errors };
 }
 
 test('the fixed costs check: a card with what is worth a look, the check itself, and "not now" until next month', async () => {
   const { page, errors } = await openFixed();
-  const card = page.locator('.fx-card');
-  assert.match(await card.textContent(), /₪494 בחודש על סלולר, מנויים וביטוחים/);
-  assert.match(await card.textContent(), /מצאנו 4 דברים/);
-  await page.click('.fx-open');
+  const card = page.locator('.fxc');
+  assert.match(await card.textContent(), /₪494 בחודש/);
+  assert.match(await card.textContent(), /על סלולר, מנויים וביטוחים · ₪5,928 בשנה/);
+  assert.match(await card.textContent(), /4 דברים ששווה לבדוק/);
+  await page.click('.fxc-hint');
   await page.waitForSelector('.fx-kind');
   const sheet = await page.locator('.fx').textContent();
   assert.match(sheet, /הראל ביטוח בריאות עלה מ-₪138 ל-₪152/);
@@ -45,13 +46,17 @@ test('the fixed costs check: a card with what is worth a look, the check itself,
   assert.match(sheet, /הר הביטוח/);
   assert.equal(await page.locator('.fx a[href="https://harb.cma.gov.il/"]').count(), 1);
   assert.match(sheet, /לא מוכרים ביטוחים/);
+  // "Using both": that question is answered, and not raised again.
+  await page.click('.fx-ins:has-text("סטרימינג") button:has-text("משתמשים בכולם")');
+  assert.equal(await page.locator('.fx-ins:has-text("סטרימינג")').count(), 0);
   await page.click('.sheet button[aria-label="סגירה"]');
-  await page.click('.fx-card button:has-text("לא עכשיו")');
-  assert.equal(await page.locator('.fx-card').count(), 0);
+  assert.match(await page.locator('.fxc').textContent(), /3 דברים ששווה לבדוק/);
+  await page.click('.fxc button:has-text("לא עכשיו")');
+  assert.equal(await page.locator('.fxc').count(), 0);
   await page.reload();
   await page.waitForSelector('.att, .hero, .home');
   await page.waitForTimeout(400);
-  assert.equal(await page.locator('.fx-card').count(), 0, 'set aside for this month');
+  assert.equal(await page.locator('.fxc').count(), 0, 'set aside for this month');
   assert.deepEqual(errors, []);
   await page.close();
 });

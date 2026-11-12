@@ -2041,7 +2041,9 @@ async function runFreeLoad() {
     // and then nothing was saved.
     for (const key of keys) {
       seedJob.part++;
-      const [r] = await pricefiles.allChains(fetch, { only: [key] });
+      let [r] = await pricefiles.allChains(fetch, { only: [key] });
+      // A chain that failed (a site busy for a moment) is asked once more.
+      if (r.error) { await new Promise((ok) => setTimeout(ok, 5000)); [r] = await pricefiles.allChains(fetch, { only: [key] }); }
       let error = r.error || null;
       if (r.rows.length) await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
       seedJob.added += error ? 0 : r.count;

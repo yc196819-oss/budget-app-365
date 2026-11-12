@@ -69,18 +69,18 @@ export function findings(kinds) {
   for (const k of kinds) {
     for (const i of k.items) {
       if (i.before && i.monthly - i.before >= 5 && i.monthly > i.before * 1.03) {
-        out.push({ kind: k.key, type: 'up', chip: i.name + ': עלה', text: i.name + ' עלה מ-₪' + fmt(i.before) + ' ל-₪' + fmt(i.monthly) + ' בחודש. שווה לבדוק אם המחיר השתנה בלי הודעה, או שהסתיימה הנחה.' });
+        out.push({ id: 'up:' + i.name + ':' + i.monthly, kind: k.key, type: 'up', tag: 'עלה לאחרונה', chip: i.name + ': עלה', text: i.name + ' עלה מ-₪' + fmt(i.before) + ' ל-₪' + fmt(i.monthly) + ' בחודש. שווה לבדוק אם המחיר השתנה בלי הודעה, או שהסתיימה הנחה.' });
       }
     }
     if (k.key === 'subs') {
       const streams = k.items.filter((i) => i.stream);
-      if (streams.length >= 2) out.push({ kind: k.key, type: 'streams', chip: streams.length + ' מנויי סטרימינג', text: streams.length + ' שירותי סטרימינג (₪' + fmt(streams.reduce((s, i) => s + i.monthly, 0)) + ' בחודש). אתם משתמשים בכולם?' });
+      if (streams.length >= 2) out.push({ id: 'streams:' + streams.length, kind: k.key, type: 'streams', tag: 'מנוי כפול?', yes: 'משתמשים בכולם', chip: streams.length + ' מנויי סטרימינג', text: streams.length + ' שירותי סטרימינג (₪' + fmt(streams.reduce((s, i) => s + i.monthly, 0)) + ' בחודש). אתם משתמשים בכולם?' });
     }
     if (k.key === 'ins') {
       const health = k.items.filter((i) => i.health && i.company);
-      if (new Set(health.map((i) => i.company)).size >= 2) out.push({ kind: k.key, type: 'health', chip: 'ביטוח בריאות כפול?', text: 'ביטוחי בריאות מכמה חברות. לפעמים זה אותו כיסוי פעמיים. ב"הר הביטוח" (אתר רשות שוק ההון, בחינם) רואים את כל הפוליסות שלכם.', link: { label: 'להר הביטוח', url: 'https://harb.cma.gov.il/' } });
+      if (new Set(health.map((i) => i.company)).size >= 2) out.push({ id: 'health', kind: k.key, type: 'health', tag: 'ביטוח כפול?', chip: 'ביטוח בריאות כפול?', text: 'ביטוחי בריאות מכמה חברות. לפעמים זה אותו כיסוי פעמיים. ב"הר הביטוח" (אתר רשות שוק ההון, בחינם) רואים את כל הפוליסות שלכם.', link: { label: 'להר הביטוח', url: 'https://harb.cma.gov.il/' } });
     }
-    if (k.key === 'cell' && k.total >= 100) out.push({ kind: k.key, type: 'cell', chip: 'סלולר: אולי יקר', text: 'הסלולר עולה ₪' + fmt(k.total) + ' בחודש. כמה קווים יש בחשבון? אם זה קו או שניים, שווה להשוות לחבילות של חברות אחרות.' });
+    if (k.key === 'cell' && k.total >= 100) out.push({ id: 'cell', kind: k.key, type: 'cell', tag: 'שווה להשוות', chip: 'סלולר: אולי יקר', text: 'הסלולר עולה ₪' + fmt(k.total) + ' בחודש. כמה קווים יש בחשבון? אם זה קו או שניים, שווה להשוות לחבילות של חברות אחרות.' });
   }
   return out;
 }

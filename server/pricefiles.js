@@ -90,7 +90,7 @@ function gunzip(buf) {
 }
 async function getBuf(fetchFn, url, opts = {}) {
   const r = await fetchFn(url, { ...opts, headers: { ...UA, ...(opts.headers || {}) } });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (() => { try { return new URL(url).host; } catch (_e) { return ''; } })());
   return Buffer.from(await r.arrayBuffer());
 }
 
@@ -188,7 +188,10 @@ const kb = (v) => { const m = String(v || '').match(/([\d.]+)\s*(KB|MB)?/i); ret
 const isKind = (kind) => (n) => new RegExp('^' + (kind === 'Stores' ? 'Stores(Full)?' : kind) + '\\d', 'i').test(n);
 // Today in Israel, as YYYY-MM-DD (the sites list files by the local day).
 const ilDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(d);
-const text = async (fetchFn, url) => (await getBuf(fetchFn, url)).toString('utf8');
+// These sites serve people's browsers: they are asked as one (some refuse
+// an unknown client).
+const BROWSER = { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36', accept: 'text/html,application/json,*/*', 'accept-language': 'he-IL,he;q=0.9,en;q=0.8' };
+const text = async (fetchFn, url) => (await getBuf(fetchFn, url, { headers: BROWSER })).toString('utf8');
 
 // Victory, Mahsanei HaShuk: one JSON list of every file of the chain.
 async function laibList(fetchFn, chain, kind) {
@@ -251,7 +254,7 @@ async function own(fetchFn, chain) {
   const tries = sized ? list.slice(0, 60).sort((a, b) => b.size - a.size).slice(0, 2) : list.slice(0, 3);
   let best = [];
   for (const f of tries) {
-    const rows = parsePriceFile(gunzip(await getBuf(fetchFn, f.url)), chain);
+    const rows = parsePriceFile(gunzip(await getBuf(fetchFn, f.url, { headers: BROWSER })), chain);
     if (rows.length > best.length) best = rows;
     if (best.length >= 500) break;
   }
@@ -267,7 +270,7 @@ async function allChains(fetchFn, { only = null } = {}) {
     .filter((j) => !only || only.includes(j.key));
   const out = [];
   for (const j of jobs) {
-    try { const rows = await j.run(); out.push({ key: j.key, name: j.name, rows, count: rows.length }); } catch (e) { out.push({ key: j.key, name: j.name, rows: [], count: 0, error: String(e.message || e).slice(0, 80) }); }
+    try { const rows = await j.run(); out.push({ key: j.key, name: j.name, rows, count: rows.length }); } catch (e) { out.push({ key: j.key, name: j.name, rows: [], count: 0, error: (String(e.message || e) + (e.cause && e.cause.code ? ' (' + e.cause.code + ')' : '')).slice(0, 90) }); }
   }
   return out;
 }
@@ -310,7 +313,7 @@ async function chainStores(fetchFn, chain) {
   if (chain.site) {
     const f = (await ownList(fetchFn, chain, 'Stores'))[0];
     if (!f) throw new Error('no stores file');
-    return parseStores(gunzip(await getBuf(fetchFn, f.url)));
+    return parseStores(gunzip(await getBuf(fetchFn, f.url, { headers: BROWSER })));
   }
   if (chain.host) {
     const base = 'https://' + chain.host + '.binaprojects.com';
@@ -346,7 +349,7 @@ async function storePrices(fetchFn, chain, storeId) {
     // Newest first where the site says so; otherwise by the time in the name.
     const f = newestOf((await ownList(fetchFn, chain, 'PriceFull')).filter((x) => storeOfFile(x.name) === id), (x) => fileStamp(x.name));
     if (!f) throw new Error('no file for branch');
-    return parsePriceFile(gunzip(await getBuf(fetchFn, f.url)), chain);
+    return parsePriceFile(gunzip(await getBuf(fetchFn, f.url, { headers: BROWSER })), chain);
   }
   if (chain.host) {
     const base = 'https://' + chain.host + '.binaprojects.com';
