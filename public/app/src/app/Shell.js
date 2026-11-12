@@ -1,6 +1,6 @@
 import { html } from '../lib/html.js';
 import { partnerWord, genderOf } from '../domain/people.js';
-import { track, setScreen } from '../lib/telemetry.js';
+import { track, setScreen, deviceKind } from '../lib/telemetry.js';
 import { Loading } from '../components/Loading.js';
 import { useEffect, useState } from 'preact/hooks';
 import { tabLabel } from '../domain/routes.js';
@@ -162,7 +162,7 @@ export function Shell({ tab, session }) {
     }
   }, []);
   // Opening the app: counted once per launch (who comes back).
-  useEffect(() => { track('app_open'); }, []);
+  useEffect(() => { track('app_open'); track('open_' + deviceKind()); }, []);
   // Desktop shortcuts: N add, U import, / ask the advisor, 1-5 tabs.
   useEffect(() => {
     if (!desktop) return undefined;

@@ -11,3 +11,6 @@ create policy households_select on public.households
 
 revoke execute on function public.reset_household_full() from public, anon, authenticated;
 revoke execute on function public.reset_household_month(integer, integer) from public, anon, authenticated;
+
+-- A leftover from the fix of 7.11 (62 rows, no longer needed; the app never read it).
+drop table if exists public._fix_2026_11_07;

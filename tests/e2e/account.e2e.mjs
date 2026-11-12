@@ -90,6 +90,7 @@ test('the usage switch: on by default, and off stops sending anything from this 
   const { page, sent } = await open();
   await page.waitForTimeout(4500);
   assert.ok(sent.some((b) => b.events.includes('app_open')), 'opening the app is counted');
+  assert.ok(sent.some((b) => b.events.includes('open_mobile')), 'and on what kind of device (a phone here), nothing more about it');
   await page.click('button[aria-label="פרופיל והגדרות"]');
   const sw = page.locator('input[aria-label="עזרה בשיפור האפליקציה"]');
   assert.equal(await sw.isChecked(), true);

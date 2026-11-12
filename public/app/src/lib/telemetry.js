@@ -59,6 +59,12 @@ function visitorId() {
   if (!/^[\w-]{8,40}$/.test(v)) { v = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); writeLocal('visitor', v); }
   return v;
 }
+// What a person opens the app on: a computer, a phone's browser, or the app
+// installed on the phone. Only the kind of device, nothing else about it.
+export function deviceKind() {
+  if (matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) return 'installed';
+  return matchMedia('(min-width: 900px)').matches ? 'desktop' : 'mobile';
+}
 export async function beat() {
   if (!telemetryOn() || document.visibilityState !== 'visible') return;
   const tab = String(location.hash || '').replace(/^#\/?/, '').split(/[/?]/)[0];
