@@ -29,6 +29,7 @@ import { readLocal, writeLocal } from '../../lib/storage.js';
 import { SortSheet } from '../money/SortSheet.js';
 import { TransferSheet } from './TransferSheet.js';
 import { MoveSheet } from './MoveSheet.js';
+import { FixedCheckCard } from './FixedCheck.js';
 import { transferDays } from '../../domain/transfers.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
@@ -119,6 +120,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       <${InstallCard} />
       <${TripFound} data=${data} trips=${trips} />
       <${Attention} items=${items} onAct=${act} />
+      <${FixedCheckCard} data=${data} />
       <${PlanCards} data=${data} onSheet=${(s) => { setSheet(null); planSheet.open(s); }} />
       <${WhereMoney} top=${top} />
     </div>
