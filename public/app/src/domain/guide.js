@@ -14,8 +14,7 @@ export const STEPS = [
   { key: 'income', title: 'כמה נכנס בחודש?', why: 'בערך, נטו. ככה נדע כמה נשאר לכם להוציא החודש ולאן החודש הולך.', time: '10 שניות', cta: 'לשמור' },
   { key: 'budget', title: 'תקציב לכמה קטגוריות', why: 'לא צריך לכולן. מתחילים מ-2-3 שהכי חשובות (אוכל, בילויים), ונקבל התראה לפני שחורגים.', time: 'דקה', cta: 'לקבוע תקציב' },
   { key: 'card', title: 'כל כרטיסי האשראי ויום החיוב', why: 'כל כרטיס של שניכם, עם שם ויום חיוב, כדי ששום חיוב לא יפתיע. ככה נראה מראש כמה ירד מהעו"ש ומתי. יש כמה חשבונות בנק? מוסיפים את כולם במסך הנכסים, ורואים הכל במקום אחד.', time: '30 שניות', cta: 'להוסיף כרטיס' },
-  { key: 'ask', title: 'שאלה ראשונה ליועץ', why: 'למשל: "איפה הכי קל לנו לחסוך?" הוא רואה את המספרים שלכם ועונה עליהם.', time: '30 שניות', cta: 'לשאול את היועץ' },
-  { key: 'partner', title: 'מזמינים את בן או בת הזוג', why: 'כל אחד מוסיף מהטלפון שלו, ושניכם רואים את אותה תמונה.', time: '10 שניות', cta: 'לשלוח הזמנה', optional: true }
+  { key: 'ask', title: 'שאלה ראשונה ליועץ', why: 'למשל: "איפה הכי קל לנו לחסוך?" הוא רואה את המספרים שלכם ועונה עליהם.', time: '30 שניות', cta: 'לשאול את היועץ' }
 ];
 
 // Transactions without a category, in the last `days`.
@@ -35,8 +34,7 @@ export function guideSteps(data, { asked = false, skipped = new Set(), today = n
     income: Array.isArray(data.income) && data.income.some((i) => Number(i.amount) > 0),
     budget: (data.budgets || []).some((b) => Number(b.monthly_amount) > 0),
     card: (data.cards || []).length > 0,
-    ask: !!asked,
-    partner: Object.keys(data.members || {}).length > 1
+    ask: !!asked
   };
   return STEPS.map((s) => ({ ...s, done: !!done[s.key], skipped: !done[s.key] && skipped.has(s.key) }));
 }
