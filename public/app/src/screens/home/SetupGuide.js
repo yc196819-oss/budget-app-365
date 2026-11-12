@@ -6,7 +6,6 @@ import { setIncome } from '../../data/household.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { track } from '../../lib/telemetry.js';
 import { showToast } from '../../lib/toast.js';
-import { InviteButton } from '../../components/InviteButton.js';
 import { CardSheet } from '../assets/CardSheet.js';
 import { SortSheet } from '../money/SortSheet.js';
 
@@ -27,8 +26,11 @@ export function SetupGuide({ data, userId, onImport, onAdd, onAsk }) {
   const [busy, setBusy] = useState(false);
   let asked = false;
   try { asked = localStorage.getItem(askedKey) === '1'; } catch (_e) { /* private mode */ }
-  const steps = guideSteps(data, { asked, skipped });
-  const p = guideProgress(steps);
+  const all = guideSteps(data, { asked, skipped });
+  const p = guideProgress(all);
+  // Before the first statement, only that: the rest waits until there are numbers.
+  const first = !data.txs.length;
+  const steps = first ? all.filter((s) => s.key === 'import') : all;
   if (p.complete || (later && data.txs.length)) return null;
   const current = steps.find((s) => s.key === open && !s.done) || p.next;
 
@@ -60,26 +62,25 @@ export function SetupGuide({ data, userId, onImport, onAdd, onAsk }) {
   return html`<section class="card stack setup-guide" aria-label="מסלול התחלה">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
       <b style="font-size:17px">${!data.txs.length ? 'בואו נסדר לכם את התמונה' : 'ממשיכים מאיפה שעצרתם'}</b>
-      <span class="muted num" style="font-size:13px">${p.finished} מתוך ${p.total}</span>
+      ${!first && html`<span class="muted num" style="font-size:13px">${p.finished} מתוך ${p.total}</span>`}
     </div>
-    <div class="guide-bar" role="progressbar" aria-valuemin="0" aria-valuemax=${p.total} aria-valuenow=${p.finished} aria-label="התקדמות" style="height:6px;border-radius:3px;background:var(--line);overflow:hidden">
-      <i style=${'display:block;height:100%;background:var(--accent);width:' + Math.round((p.finished / Math.max(1, p.total)) * 100) + '%'}></i></div>
+    ${!first && html`<div class="guide-bar" role="progressbar" aria-valuemin="0" aria-valuemax=${p.total} aria-valuenow=${p.finished} aria-label="התקדמות" style="height:6px;border-radius:3px;background:var(--line);overflow:hidden">
+      <i style=${'display:block;height:100%;background:var(--accent);width:' + Math.round((p.finished / Math.max(1, p.total)) * 100) + '%'}></i></div>`}
     <ol class="guide-steps" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px">
       ${steps.map((s, i) => {
         const isOpen = current && s.key === current.key;
         return html`<li key=${s.key} class=${'guide-step' + (s.done ? ' done' : '') + (isOpen ? ' open' : '')}>
           <button type="button" class="guide-head" aria-expanded=${String(!!isOpen)} disabled=${s.done} onClick=${() => setOpen(s.key)}
             style="display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:8px 0;color:inherit;font:inherit;text-align:start;cursor:pointer">
-            <span aria-hidden="true" style=${'width:24px;height:24px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:none;' + (s.done ? 'background:var(--income);color:#fff' : isOpen ? 'background:var(--accent);color:var(--accent-ink)' : 'border:1.5px solid var(--line)')}>${s.done ? '✓' : i + 1}</span>
+            ${!first && html`<span aria-hidden="true" style=${'width:24px;height:24px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:none;' + (s.done ? 'background:var(--income);color:#fff' : isOpen ? 'background:var(--accent);color:var(--accent-ink)' : 'border:1.5px solid var(--line)')}>${s.done ? '✓' : i + 1}</span>`}
             <span style=${'flex:1;' + (s.done ? 'text-decoration:line-through;opacity:.6' : s.skipped ? 'opacity:.55' : '')}>${s.title}${s.skipped ? ' · דילגתם' : ''}</span>
             ${!s.done && !isOpen && html`<span class="faint" style="font-size:12px">${s.time}</span>`}
           </button>
-          ${isOpen && html`<div class="stack" style="gap:10px;padding:0 34px 10px 0">
+          ${isOpen && html`<div class="stack" style=${'gap:10px;padding:0 ' + (first ? 0 : 34) + 'px 10px 0'}>
             <span class="muted" style="font-size:14px;line-height:1.55">${s.key === 'sort' && loose ? (loose === 1 ? 'תנועה אחת מחכה לקטגוריה. ' : loose + ' תנועות מחכות לקטגוריה. ') : ''}${s.why}</span>
             ${s.key === 'income' ? html`<form onSubmit=${saveIncome} style="display:flex;gap:8px">
                 <input class="input num" inputmode="numeric" placeholder="למשל 18,000" aria-label="הכנסה חודשית נטו" value=${income} onInput=${(e) => setIncomeText(e.target.value)} style="flex:1;width:auto;min-width:0" />
                 <button type="submit" class="btn" style="width:auto" disabled=${busy || !(toNumber(income) > 0)}>${s.cta}</button></form>`
-              : s.key === 'partner' ? html`<${InviteButton} hid=${data.hid} userId=${userId} variant="btn" />`
               : html`<button type="button" class="btn" onClick=${() => go(s)}>${s.cta}</button>`}
             ${s.key === 'import' && html`<span style="font-size:14px;line-height:1.55;color:var(--income);font-weight:700">יש לכם כמה כרטיסים או כמה חשבונות בנק? מכניסים את כולם, והכל מסודר במקום אחד.</span>`}
             ${s.key === 'import' && html`<button type="button" class="btn-text" style="align-self:flex-start" onClick=${onAdd}>או להוסיף הוצאה ידנית / בקול</button>`}

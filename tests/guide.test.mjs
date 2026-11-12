@@ -13,7 +13,7 @@ test('a new household starts at the statement, and every step ticks from the dat
   const data = { txs: [tx({}), tx({ category_id: null, description: 'ארומה' })], budgets: [{ monthly_amount: 3000 }], cards: [], income: [{ amount: 18000 }], members: { u1: 'א' } };
   const s = guideSteps(data, { today: TODAY });
   const done = Object.fromEntries(s.map((x) => [x.key, x.done]));
-  assert.deepEqual(done, { import: true, sort: false, income: true, budget: true, card: false, ask: false, partner: false });
+  assert.deepEqual(done, { import: true, sort: false, income: true, budget: true, card: false, ask: false });
   assert.equal(guideProgress(s).next.key, 'sort', 'one line without a category is the next step');
 });
 
@@ -22,8 +22,9 @@ test('skipped steps leave the count, a question asked on the device counts, and 
   assert.equal(guideProgress(guideSteps(data, { today: TODAY })).next.key, 'ask');
   const p = guideProgress(guideSteps(data, { asked: true, today: TODAY }));
   assert.equal(p.complete, true);
-  const sk = guideProgress(guideSteps({ ...data, members: { u1: 'א' } }, { asked: true, skipped: new Set(['partner']), today: TODAY }));
+  const sk = guideProgress(guideSteps({ ...data, cards: [] }, { asked: true, skipped: new Set(['card']), today: TODAY }));
   assert.deepEqual([sk.complete, sk.total], [true, STEPS.length - 1]);
+  assert.ok(!STEPS.some((x) => x.key === 'partner'), 'inviting a partner is not a step any more');
 });
 
 test('lines without a category: recent only, one group per merchant and type, biggest first', () => {

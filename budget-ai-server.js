@@ -2528,7 +2528,8 @@ app.post('/api/admin/reengage', requireAuth, async (req, res) => {
       if (await mailedThisWeek(u.id)) continue;
       // Marked first: a person never gets the same email twice, even if this is pressed again.
       const { error } = await supabaseAdmin.from('mail_sent').insert({ user_id: u.id, campaign });
-      if (error) continue;
+      // Not marked, so not sent (it could go twice otherwise); said, not skipped quietly.
+      if (error) { failed++; lastError = 'המייל לא נשלח: מסד הנתונים לא קיבל את הרישום (' + String(error.message || '').slice(0, 120) + ')'; console.error('mail_sent insert failed:', error.message); continue; }
       const unsub = unsubLinkFor(u.id, publicOrigin(req), 'news');
       try { await sendMailWithFallback({ to: u.email, ...ops.campaignMail(campaign, appLinkOf(req), unsub), headers: unsubHeaders(unsub) }); sent++; } catch (err) {
         failed++; lastError = ops.mailErrorText(err);

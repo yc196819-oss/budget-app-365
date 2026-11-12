@@ -755,3 +755,23 @@ test('a new household is made without reading it back: people may read only the 
   assert.deepEqual(reads.filter((u) => !/id=eq\./.test(u)), [], 'no reading of households beyond one\'s own');
   await page.close();
 });
+
+test('emails to users: when nothing went out, the board says so instead of "done"', async () => {
+  const { page } = await open({ email: 'budgetapp2852@gmail.com' });
+  await page.route('**/api/admin/stats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: { day: 1, week: 1, month: 1 }, retention: { started: 0, cameBack: 0, pct: null }, members: 1, use: [], errors: { week: 0, top: [] } }) }));
+  await page.route('**/api/admin/live', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"users":0,"visitors":0,"screens":{},"devices":{"mobile":0,"desktop":0},"installed":0}' }));
+  await page.route('**/api/admin/feedback', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('**/api/admin/reengage', (r) => r.request().method() === 'POST'
+    ? r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sent: 0, failed: 0, left: 51 }) })
+    : r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mail: { ready: true }, stopped: 0, campaigns: [{ id: 'nudge', title: 'נכנסו ולא העלו פירוט', count: 52, preview: { subject: 'דקה אחת', text: 'היי' } }] }) }));
+  await page.click('button[aria-label="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  await page.click('.admin-hub-btn:has-text("מיילים")');
+  const c = page.locator('.campaign-nudge');
+  await c.locator('button:has-text("לשלוח ל-52")').click();
+  await c.locator('button:has-text("בטוח? לשלוח עכשיו ל-52")').click();
+  await c.locator('.mail-job.is-error').waitFor();
+  assert.match(await c.locator('.mail-job').textContent(), /אף מייל לא נשלח/);
+  assert.equal(await c.locator('.mail-steps .st-ok').count() < 3, true, 'no ✓ on "done"');
+  await page.close();
+});

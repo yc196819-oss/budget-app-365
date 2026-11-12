@@ -72,7 +72,9 @@ export function MailBoard({ back, setBack }) {
         setJ(c.id, { step: 2, sent, failed, error });
         if (!r.left || (!r.sent && !r.failed)) break;
       }
-      setJ(c.id, { phase: failed && !sent ? 'error' : 'done', step: 3 });
+      // Nothing went and nothing failed: no one was emailed, say so.
+      if (!sent && !failed) error = error || 'אף מייל לא נשלח. ייתכן שכל מי שברשימה כבר קיבל מייל השבוע. נסו שוב מחר, או כתבו לנו.';
+      setJ(c.id, { phase: !sent ? 'error' : 'done', step: 3, error });
       setBack((bk) => ({ ...bk, campaigns: bk.campaigns.map((x) => (x.id === c.id ? { ...x, count: Math.max(0, x.count - sent - failed) } : x)) }));
       if (hist) mailHistory().then(setHist).catch(() => {});
     } catch (err) { setJ(c.id, { phase: 'error', error: err.message || 'השליחה נכשלה. נסו שוב.' }); }
