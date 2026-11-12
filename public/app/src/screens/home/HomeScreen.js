@@ -28,6 +28,7 @@ import { showToast } from '../../lib/toast.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { SortSheet } from '../money/SortSheet.js';
 import { TransferSheet } from './TransferSheet.js';
+import { MoveSheet } from './MoveSheet.js';
 import { transferDays } from '../../domain/transfers.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
@@ -96,6 +97,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       return;
     }
     if (a.to === 'transfers') { planSheet.close(); setSheet({ kind: 'transfers' }); return; }
+    if (a.to === 'ask') { planSheet.close(); setSheet({ kind: 'ask', id: a.id, ask: a.kind }); return; }
     if (a.to === 'import') onImport();
     else if (a.to === 'sort') { planSheet.close(); setSheet({ kind: 'sort' }); }
     else if (a.to === 'tx') { planSheet.close(); setSheet({ kind: 'tx', id: a.id }); }
@@ -103,6 +105,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
     else location.hash = '#/' + a.to;
   };
   const sheetTx = sheet && sheet.kind === 'tx' ? data.txs.find((t) => t.id === sheet.id) : null;
+  const askTx = sheet && sheet.kind === 'ask' ? data.txs.find((t) => t.id === sheet.id) : null;
 
   return html`<div class="stack home">
     <div class="home-main stack">
@@ -127,6 +130,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
     </div>
     <${PlanSheets} data=${data} sheet=${planSheet.value} onClose=${planSheet.close} />
     ${sheet && sheet.kind === 'sort' && html`<${SortSheet} data=${data} onClose=${() => setSheet(null)} />`}
+    ${askTx && html`<${MoveSheet} key=${askTx.id} data=${data} line=${askTx} kind=${sheet.ask} onClose=${() => setSheet(null)} />`}
     ${sheet && sheet.kind === 'transfers' && html`<${TransferSheet} data=${data} dupeOk=${dupeOk} onClose=${() => setSheet(null)} onDays=${() => setDupeVer((v) => v + 1)} />`}
     ${sheet && sheet.kind === 'hero' && html`<${HeroSheet} plan=${plan} onClose=${() => setSheet(null)} />`}
     ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}

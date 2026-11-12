@@ -5,12 +5,14 @@ import { CatIcon } from '../../components/CatIcon.js';
 export function TxRow({ tx, categoriesById, showDate, onOpen }) {
   const cat = categoriesById.get(tx.subcategory_id) || categoriesById.get(tx.category_id);
   const top = categoriesById.get(tx.category_id);
-  const income = tx.type === 'income';
+  // A Bit refund is a minus expense: money back, shown with a plus.
+  const back = Number(tx.amount) < 0;
+  const income = tx.type === 'income' || back;
   const d = String(tx.tx_date).split('-');
-  const sub = [showDate ? Number(d[2]) + '.' + Number(d[1]) : null, cat ? cat.name : 'בלי קטגוריה', tx.spread === 'year' ? 'מחולק על 12 חודשים' : null].filter(Boolean).join(' · ');
+  const sub = [showDate ? Number(d[2]) + '.' + Number(d[1]) : null, cat ? cat.name : 'בלי קטגוריה', back ? 'החזר' : null, tx.spread === 'year' ? 'מחולק על 12 חודשים' : null].filter(Boolean).join(' · ');
   return html`<button type="button" class="row" onClick=${() => onOpen(tx)}>
     <${CatIcon} category=${top || cat} />
     <span class="row-main"><b>${tx.description}</b><span>${sub}</span></span>
-    <span class=${'amt num' + (income ? ' income' : '')}>${(income ? '+' : '−') + money(tx.amount)}</span>
+    <span class=${'amt num' + (income ? ' income' : '')}>${(income ? '+' : '−') + money(Math.abs(Number(tx.amount)))}</span>
   </button>`;
 }

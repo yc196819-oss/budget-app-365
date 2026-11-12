@@ -337,8 +337,9 @@ export function checkFile({ source, items = [], fromCard = false, sources = [], 
 export function withoutSaved(rows, saved) {
   // A line marked as a transfer between the household's accounts is still
   // the line it was (an expense or income) when the same file comes again.
-  const kind = (t) => (t.type === 'transfer_in' ? 'income' : t.type === 'transfer_out' ? 'expense' : t.type || 'expense');
-  const key = (t) => [t.tx_date, Number(t.amount).toFixed(2), String(t.description || '').trim(), t.card_id || '', t.account_id || '', kind(t)].join('|');
+  // So is a Bit refund (saved as a minus expense): it was money in.
+  const kind = (t) => (t.nature === 'refund' || t.type === 'transfer_in' ? 'income' : t.type === 'transfer_out' ? 'expense' : t.type || 'expense');
+  const key = (t) => [t.tx_date, Math.abs(Number(t.amount)).toFixed(2), String(t.description || '').trim(), t.card_id || '', t.account_id || '', kind(t)].join('|');
   const left = new Map();
   for (const t of saved || []) left.set(key(t), (left.get(key(t)) || 0) + 1);
   return (rows || []).filter((r) => {

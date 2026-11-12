@@ -3,6 +3,7 @@
 // needs attention. No DOM, no network.
 
 import { transferPairs } from './transfers.js';
+import { linesToAsk } from './moves.js';
 import { isoDate, parseDate, monthShare, sameMerchant, merchantKey, categoryRows, totalsFor, monthsBack } from './money.js';
 import { bestDuplicate, isCardCharge } from './statement.js';
 import { money } from './format.js';
@@ -234,6 +235,19 @@ export function attention({ txs, categories, budgets, cards, today, plan, limit 
     items.push({ kind: 'transfer', tone: 'accent', title: moves.length === 1 ? 'העברה בין החשבונות שלכם?' : moves.length + ' העברות בין החשבונות שלכם?',
       detail: money(total) + (moves.length === 1 ? '' : ' בסך הכול') + ' יצאו מחשבון אחד שלכם ונכנסו לחשבון אחר שלכם. כרגע הם נספרים גם כהוצאה וגם כהכנסה.',
       action: { label: 'לבדוק', to: 'transfers' } });
+  }
+  // Money in from Bit, and money to or from an investment: asked, one at a
+  // time, until the household says what it was.
+  const asked = new Set([...dupeOk].filter((k) => String(k).startsWith('a:')).map((k) => k.slice(2)));
+  const ask = linesToAsk(txs, { categories, no: asked, today });
+  if (ask.bit.length) {
+    const t = ask.bit[0];
+    items.push({ kind: 'bit', tone: 'accent', title: money(t.amount) + ' נכנסו מביט. מה זה?', detail: (ask.bit.length > 1 ? 'ועוד ' + (ask.bit.length - 1) + ' כאלה. ' : '') + 'אם זה החזר על הוצאה, זו לא הכנסה. כרגע זה נספר כהכנסה.', action: { label: 'לבחור', to: 'ask', id: t.id, kind: 'bit' } });
+  }
+  if (ask.invest.length) {
+    const t = ask.invest[0];
+    const inn = t.type === 'income';
+    items.push({ kind: 'invest', tone: 'accent', title: inn ? money(t.amount) + ' מהשקעה: משיכה או רווח?' : money(t.amount) + ' להשקעה: הפקדה?', detail: inn ? 'משיכה מההשקעה היא הכסף שלכם שעבר לבנק, לא הכנסה.' : 'הפקדה להשקעה היא כסף שלכם שעבר להשקעה, לא הוצאה.', action: { label: 'לבדוק', to: 'ask', id: t.id, kind: 'invest' } });
   }
   const mo = { y: today.getFullYear(), m: today.getMonth() };
 
