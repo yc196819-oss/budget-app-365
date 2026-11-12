@@ -27,6 +27,8 @@ import { removeMany, keepBoth } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { SortSheet } from '../money/SortSheet.js';
+import { TransferSheet } from './TransferSheet.js';
+import { transferDays } from '../../domain/transfers.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
 // what needs attention (one action each) and what is coming up.
@@ -65,7 +67,8 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   const soon = upcoming({ txs: data.txs, cards: data.cards, today });
   // "Complete the picture" (its card, or the ✓ at the top) already says which
   // statement is due: the "card was charged, upload it" notes would repeat it.
-  const items = attention({ txs: data.txs, categories: data.categories, budgets: data.budgets, cards: onPicture ? [] : data.cards, today, plan, dupeOk });
+  const days = transferDays(readLocal('transfer:days:' + data.hid, '2'));
+  const items = attention({ txs: data.txs, categories: data.categories, budgets: data.budgets, cards: onPicture ? [] : data.cards, today, plan, dupeOk, transferDays: days });
   const top = topCategories(data.txs, data.categories, data.budgets, today);
 
   const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} />`;
@@ -92,6 +95,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       catch (_e) { showToast('לא הצלחנו להסיר. נסו שוב.'); }
       return;
     }
+    if (a.to === 'transfers') { planSheet.close(); setSheet({ kind: 'transfers' }); return; }
     if (a.to === 'import') onImport();
     else if (a.to === 'sort') { planSheet.close(); setSheet({ kind: 'sort' }); }
     else if (a.to === 'tx') { planSheet.close(); setSheet({ kind: 'tx', id: a.id }); }
@@ -123,6 +127,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
     </div>
     <${PlanSheets} data=${data} sheet=${planSheet.value} onClose=${planSheet.close} />
     ${sheet && sheet.kind === 'sort' && html`<${SortSheet} data=${data} onClose=${() => setSheet(null)} />`}
+    ${sheet && sheet.kind === 'transfers' && html`<${TransferSheet} data=${data} dupeOk=${dupeOk} onClose=${() => setSheet(null)} onDays=${() => setDupeVer((v) => v + 1)} />`}
     ${sheet && sheet.kind === 'hero' && html`<${HeroSheet} plan=${plan} onClose=${() => setSheet(null)} />`}
     ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
   </div>`;

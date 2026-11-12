@@ -6,7 +6,7 @@ import { CatIcon } from '../../components/CatIcon.js';
 import { dayLabel, sameMerchantIds, filterTxs, monthsBack, inMonth } from '../../domain/money.js';
 import { chainQuery } from '../../domain/spend.js';
 import { money } from '../../domain/format.js';
-import { setCategory, restoreCategories, deleteWithUndo, snapshot } from '../../data/household.js';
+import { setCategory, restoreCategories, deleteWithUndo, snapshot, markTransfer } from '../../data/household.js';
 import { listRules, saveRule } from '../../data/rules.js';
 import { shouldAskRule } from '../../domain/rules.js';
 import { Icon } from '../../components/Icon.js';
@@ -61,6 +61,16 @@ export function TxSheet({ tx, txs, categories, members, onClose, onMerchant }) {
     showToast('התנועה נמחקה', { undo });
   };
 
+  // A line of a bank account (not a card): money moved to or from another
+  // account of the household, so neither spent nor earned. On request only.
+  const ownMove = async () => {
+    try {
+      await markTransfer([tx.id], true);
+      onClose();
+      showToast('סומן כהעברה בין החשבונות שלכם. לא נספר כ' + (income ? 'הכנסה' : 'הוצאה') + '.', { undo: () => markTransfer([tx.id], false).catch(() => showToast('לא הצלחנו לבטל. נסו שוב.')) });
+    } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
+  };
+
   return html`<${Sheet} title="פרטי תנועה" onClose=${onClose}>
     <div style="display:flex;align-items:center;gap:14px">
       <${CatIcon} category=${byId.get(tx.category_id)} size=${52} />
@@ -104,6 +114,7 @@ export function TxSheet({ tx, txs, categories, members, onClose, onMerchant }) {
       ${others.length > 0 && html`<label class="check"><input type="checkbox" checked=${applyAll} onChange=${(e) => setApplyAll(e.target.checked)} />
         <span>לשנות גם ב-${others.length} התנועות האחרות של ${tx.description}</span></label>`}
     </div>
+    ${tx.account_id && !tx.card_id && html`<button type="button" class="btn btn-ghost tx-own-move" onClick=${ownMove}><${Icon} name="swap" size=${16} />זו העברה בין החשבונות שלי</button>`}
     <button type="button" class="btn btn-ghost" style="color:var(--danger)" onClick=${remove}>מחיקת התנועה</button>
   <//>`;
 }

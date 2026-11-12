@@ -391,3 +391,33 @@ test('one step at a time: two banks with a Max card each, in bank order; after a
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('a bank account whose current-account statement is not uploaded: one tap in the guide, only its cards stay, and it can be undone', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.bank_accounts = [{ id: 'b1', household_id: d.hid, name: 'החשבון של משה', provider: 'leumi', balance: 1 }, { id: 'b2', household_id: d.hid, name: 'החשבון של רחל', provider: 'hapoalim', balance: 1 }];
+    d.tables.credit_cards = [{ id: 'm2', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 1, last4: '2928', bank_account_id: 'b2' }];
+    d.tables.imports = [1, 2, 3].map((k) => ({ id: 'x' + k, household_id: d.hid, source_kind: 'bank', source_id: 'b1', date_from: ym(k) + '-01', date_to: ym(k) + '-28' }));
+  });
+  await page.click('.pic-card');
+  await page.waitForSelector('.pg-hero');
+  assert.match(await page.locator('.pg-hero').textContent(), /עוד 2 פירוטים/);
+  await page.click('.pg-go:has-text("בואו נתחיל")');
+  await page.waitForSelector('.pg-card h2');
+  assert.match(await page.locator('.pg-card h2').textContent(), /עו״ש הפועלים/);
+  await page.click('.pg-cards-only');
+  for (let i = 0; i < 30 && !db.tables.bank_accounts[1].cards_only; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.bank_accounts[1].cards_only, true);
+  // The next step is its card: the account is no longer asked for.
+  await page.waitForFunction(() => /מקס ••2928/.test(document.querySelector('.pg-card h2')?.textContent || ''));
+  await page.click('.pg-link:has-text("לכל החשבונות")');
+  await page.waitForSelector('.pic-item');
+  const off = page.locator('.pic-item', { hasText: 'הפועלים' });
+  assert.match(await off.textContent(), /רק אשראי/);
+  assert.match(await page.locator('.pic-ring2').getAttribute('aria-label'), /1 מתוך 2/);
+  await off.locator('button').click();
+  await page.click('.pic-focus button:has-text("לחזור להעלות את העו״ש")');
+  for (let i = 0; i < 30 && db.tables.bank_accounts[1].cards_only; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.bank_accounts[1].cards_only, false);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

@@ -246,3 +246,21 @@ test('"found one card of two" counts only the company\'s cards of the same bank'
   assert.deepEqual(missingCards({ source: m1, items: [{ card4: '4821' }], sources }), { found: 1, total: 2 }, 'm3 is of the same bank');
   assert.equal(missingCards({ source: m1, items: [{ card4: '4821' }], sources: sources.filter((x) => x.id !== 'm3') }), null, 'm2 is another bank\'s');
 });
+
+test('a bank account marked "only its cards": not asked for, not counted, still listed; its cards stay', () => {
+  const two = [{ id: 'b1', name: 'לאומי', provider: 'leumi' }, { id: 'b2', name: 'דיסקונט', provider: 'discount', cards_only: true }];
+  const myCards = [{ id: 'c9', name: 'מקס', provider: 'max', billing_day: 2, bank_account_id: 'b2' }];
+  const imports = [{ id: 'a', source_id: 'b1', date_from: '2026-10-01', date_to: '2026-10-31' }];
+  const t = tracker({ accounts: two, cards: myCards, imports }, today);
+  // Due now: the Leumi account (uploaded) and the Max card (missing). Discount is not asked for.
+  assert.deepEqual(t.ring, { done: 1, total: 2, pct: 50 });
+  assert.deepEqual(t.tasks.map((x) => x.source.id), ['c9']);
+  assert.equal(t.rows.some((r) => r.source.id === 'b2'), false);
+  const off = t.all.find((r) => r.source.id === 'b2');
+  assert.equal(off.off, true);
+  assert.ok(off.months.every((m) => m.status === 'off'));
+  assert.equal(t.all.length, 3);
+  // Undone: asked for again.
+  const back = tracker({ accounts: two.map((a) => ({ ...a, cards_only: false })), cards: myCards, imports }, today);
+  assert.ok(back.tasks.some((x) => x.source.id === 'b2'));
+});

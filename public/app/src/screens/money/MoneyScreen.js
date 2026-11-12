@@ -7,6 +7,8 @@ import { ListView } from './ListView.js';
 import { CategoriesView } from './CategoriesView.js';
 import { ReportView } from './ReportView.js';
 import { TxSheet } from './TxSheet.js';
+import { Icon } from '../../components/Icon.js';
+import { TransferSheet } from '../home/TransferSheet.js';
 import { CategorySheet } from './CategorySheet.js';
 import { ManageCategories } from './ManageCategories.js';
 import { monthsBack } from '../../domain/money.js';
@@ -41,11 +43,13 @@ export function MoneyScreen({ data, onAdd, onImport }) {
   return html`<div class="stack">
     <${PeriodBar} months=${months} period=${period} index=${index} onPeriod=${setPeriod} onIndex=${pickIndex} txs=${data.txs} />
     <${Segmented} variant="tabs" label="תצוגה" value=${view} onChange=${setView} options=${VIEWS} />
+    ${view === 'list' && (data.transfers || []).length > 0 && html`<button type="button" class="btn-text tr-money-link" onClick=${() => setSheet({ kind: 'transfers' })}><${Icon} name="swap" size=${15} />${(data.transfers || []).length === 1 ? 'תנועה אחת היא העברה בין החשבונות שלכם' : (data.transfers || []).length + ' תנועות הן העברות בין החשבונות שלכם'}, ולא נספרות ›</button>`}
     ${view === 'list' && html`<${ListView} txs=${data.txs} months=${months} period=${period} index=${index} categoriesById=${categoriesById} onOpen=${openTx} onAdd=${onAdd} onImport=${onImport} query=${query} onQuery=${setQuery} />`}
     ${view === 'cats' && html`<${CategoriesView} ...${common} onOpenCategory=${(id) => setSheet({ kind: 'cat', id })} onManage=${() => setSheet({ kind: 'manage' })} />`}
     ${view === 'report' && html`<${ReportView} ...${common} />`}
     ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)}
       onMerchant=${(q) => { setSheet(null); setView('list'); setPeriod('year'); setQuery(q); }} />`}
+    ${sheet && sheet.kind === 'transfers' && html`<${TransferSheet} data=${data} dupeOk=${new Set(data.dupeOk || [])} onClose=${() => setSheet(null)} />`}
     ${sheet && sheet.kind === 'manage' && html`<${ManageCategories} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
     ${sheet && sheet.kind === 'cat' && html`<${CategorySheet} categoryId=${sheet.id} ...${common} months=${months} onOpenTx=${openTx} onClose=${() => setSheet(null)} />`}
   </div>`;

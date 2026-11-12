@@ -10,7 +10,7 @@ const EVENTS = ['app_open', 'open_desktop', 'open_mobile', 'open_installed', 'tx
   ...['ai_off', 'excel', 'password', 'xls', 'type', 'empty', 'pdf_scan', 'image_big', 'no_rows', 'junk', 'other'].map((c) => 'import_fail_' + c),
   ...['pick', 'work', 'review', 'error'].map((s) => 'import_abandon_' + s),
   // The first month built from their own data; the shopping list in use.
-  'first_value', 'shop_add', 'shop_done', 'shop_reuse', 'picture_open', 'picture_add', 'picture_check', 'guide_start', 'guide_upload', 'guide_skip_step', 'share_in', 'share_pick', 'price_open', 'price_pick', 'price_notify'];
+  'first_value', 'shop_add', 'shop_done', 'shop_reuse', 'picture_open', 'picture_add', 'picture_check', 'guide_start', 'guide_upload', 'guide_skip_step', 'share_in', 'share_pick', 'picture_cards_only', 'picture_cards_only_undo', 'transfer_mark', 'transfer_undo', 'transfer_yes', 'transfer_no', 'transfer_days', 'price_open', 'price_pick', 'price_notify'];
 const text = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 // A failure report from the app -> a row, or null. Never more than 20 at once.
