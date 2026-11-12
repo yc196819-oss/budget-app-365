@@ -2041,6 +2041,7 @@ async function runFreeLoad() {
     // and then nothing was saved.
     for (const key of keys) {
       seedJob.part++;
+      seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
       let [r] = await pricefiles.allChains(fetch, { only: [key] });
       // A chain that failed (a site busy for a moment) is asked once more.
       if (r.error) { await new Promise((ok) => setTimeout(ok, 5000)); [r] = await pricefiles.allChains(fetch, { only: [key] }); }
@@ -2062,6 +2063,7 @@ async function runFreeLoad() {
     console.error('free price load failed:', seedJob.error);
   }
   seedJob.running = false;
+  seedJob.current = null;
   seedJob.endedAt = new Date().toISOString();
 }
 // ── prices by the family's area ──

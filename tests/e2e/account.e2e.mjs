@@ -715,7 +715,7 @@ test('owner: the catalog loads on the server; the card shows the numbers from th
   let state = { running: false, part: 0, parts: 0, added: 0, cost: 0, error: null, endedAt: null, products: 120, offers: 131, chains: 19, wanted: 3, chainsDone: [{ key: 'shufersal', name: 'שופרסל', count: 7500 }, { key: 'keshet', name: 'קשת טעמים', count: 0, error: 'HTTP 403' }] };
   let started = 0;
   await page.route('**/api/admin/prices/load', (r) => {
-    if (r.request().method() === 'POST') { started++; state = { ...state, running: true, free: true, part: 1, parts: 7 }; }
+    if (r.request().method() === 'POST') { started++; state = { ...state, running: true, free: true, part: 3, parts: 7, current: 'רמי לוי', chainsDone: [...state.chainsDone, { key: 'rami', name: 'יוחננוף', count: 11000 }] }; }
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state) });
   });
   await page.click('button[aria-label="פרופיל והגדרות"]');
@@ -728,7 +728,11 @@ test('owner: the catalog loads on the server; the card shows the numbers from th
   assert.match(await c.locator('.price-seed-chains li.bad').textContent(), /קשת טעמים.*לא נטען/);
   assert.match(await c.textContent(), /בחינם מהקבצים הרשמיים/);
   await c.locator('button:has-text("לעדכן מחירים מהרשתות עכשיו (חינם)")').click();
-  await c.locator('text=טוען רשת 1 מתוך 7').waitFor();
+  await c.locator('text=טוען רשת 3 מתוך 7').waitFor();
+  // A cart rolls along the way, with a product for each chain done.
+  assert.match(await c.locator('.cart-load').textContent(), /עכשיו בסל: רמי לוי/);
+  assert.equal(await c.locator('.cart-good').count(), 2);
+  if (process.env.SHOT_DIR) { await c.scrollIntoViewIfNeeded(); await page.waitForTimeout(700); await c.screenshot({ path: process.env.SHOT_DIR + '/cart.png' }); }
   assert.equal(started, 1);
   assert.equal(await c.locator('button:has-text("לעדכן")').count(), 0, 'no second start while it runs');
   assert.match(await c.textContent(), /אפשר לסגור את המסך/);

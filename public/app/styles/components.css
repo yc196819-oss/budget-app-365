@@ -1582,3 +1582,22 @@ body.chat-open { overflow: hidden; }
 .fx-sec { background: #fff; color: #92490A; border: 1px solid #E8CFAE; }
 .fx-done { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--income); font-weight: 800; margin: 4px 0; }
 .fx-trust { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--faint); font-size: 12.5px; margin: 2px 0 0; }
+
+/* The price load: a cart rolling along, a product dropping in per chain */
+.cart-load { display: flex; flex-direction: column; gap: 8px; padding: 6px 0 2px; }
+.cart-road { position: relative; height: 64px; border-bottom: 2px dashed var(--line, var(--surface-2)); }
+.cart-line { position: absolute; bottom: -2px; inset-inline-start: 0; height: 2px; background: linear-gradient(90deg, #D98B3E, #F2CF95); transition: width .8s ease; }
+.cart-go { position: absolute; bottom: 2px; transition: inset-inline-start .8s ease; animation: cart-bob .6s ease-in-out infinite alternate; }
+[dir="rtl"] .cart-go svg { transform: scaleX(-1); }
+.cart-body { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.cart-wheel circle { fill: var(--surface); stroke: var(--text); stroke-width: 2.5; }
+.cart-wheel path { stroke: var(--text); stroke-width: 1.5; }
+.cart-wheel { animation: cart-spin .7s linear infinite; }
+.cart-good { stroke: none; }
+.cart-good.g0 { fill: #E8B46E; } .cart-good.g1 { fill: #8FC7AE; } .cart-good.g2 { fill: #B9A0E3; } .cart-good.g3 { fill: #E89A86; }
+.cart-drop { fill: #D98B3E; animation: cart-drop 1.4s ease-in infinite; }
+.cart-now { font-size: 13.5px; font-weight: 700; color: var(--accent); }
+@keyframes cart-bob { from { transform: translateY(0); } to { transform: translateY(-2px); } }
+@keyframes cart-spin { to { transform: rotate(360deg); } }
+@keyframes cart-drop { 0% { width: 8px; height: 8px; x: 30px; y: -10px; opacity: 0; } 20% { opacity: 1; } 70% { y: 20px; opacity: 1; } 100% { y: 24px; opacity: 0; width: 8px; height: 8px; x: 30px; } }
+@media (prefers-reduced-motion: reduce) { .cart-go, .cart-wheel, .cart-drop { animation: none; } .cart-drop { display: none; } }
