@@ -29,6 +29,8 @@ test('a card statement belongs to the month it was charged', () => {
   assert.equal(billingMonth('2026-10-08', 10), '2026-10');
   assert.equal(billingMonth('2026-10-09', 10), '2026-10');
   assert.equal(billingMonth('2026-10-12', 10), '2026-11');
+  assert.equal(billingMonth('2026-11-10', 10), '2026-11', 'a statement that stops on the charge day is that charge\'s');
+  assert.equal(billingMonth('2026-11-11', 10), '2026-12');
   assert.equal(billingMonth('2026-12-20', 10), '2027-01');
   assert.equal(billingMonth('2026-10-01', 2), '2026-10');
 });
@@ -204,4 +206,14 @@ test('the next statement: a card the day after its next charge, a bank account o
   assert.equal(iso(nextDue({ kind: 'bank' }, new Date(2026, 11, 20))), '2027-1-1');
   const list = upcoming([{ source: { id: 'b', kind: 'bank' } }, { source: { id: 'c', kind: 'card', billingDay: 2 } }], new Date(2026, 10, 11));
   assert.deepEqual(list.map((x) => x.source.id), ['b', 'c'], 'the nearest first');
+});
+
+test('saving a file twice saves its lines once; two real twin purchases both stay', async () => {
+  const { withoutSaved } = await import('../public/app/src/domain/sources.js');
+  const a = { tx_date: '2026-11-02', amount: 38, description: 'קפה בדוי', card_id: 'c1', type: 'expense' };
+  const b = { tx_date: '2026-11-03', amount: 120, description: 'חנות בדויה', card_id: 'c1', type: 'expense' };
+  assert.deepEqual(withoutSaved([a, b], [a, b]), [], 'the same file again: nothing new');
+  assert.deepEqual(withoutSaved([a, a, b], [a]), [a, b], 'two coffees, one saved before: the other stays');
+  assert.deepEqual(withoutSaved([a], [{ ...a, card_id: 'c2' }]), [a], 'another card is another purchase');
+  assert.deepEqual(withoutSaved([a], [{ ...a, amount: '38.00' }]), [], 'amounts compared as numbers');
 });

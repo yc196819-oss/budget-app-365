@@ -1,3 +1,4 @@
+import { withoutSaved } from '../domain/sources.js';
 import { sb } from '../lib/supabase.js';
 import { track, reportError } from '../lib/telemetry.js';
 import { addMissingCategories } from './onboarding.js';
@@ -378,6 +379,15 @@ export async function addImported(rows, { fileName = null, kind = null, source =
   const added = [];
   // A bank file's lines belong to its account.
   if (source && source.kind === 'bank') rows = rows.map((r) => (r.account_id ? r : { ...r, account_id: source.id }));
+  // What is already saved in these dates (the same file saved twice, or from
+  // another tab or device) is not saved again.
+  const dates = rows.map((r) => r.tx_date).filter(Boolean).sort();
+  if (dates.length) {
+    const { data: saved, error: readErr } = await sb.from('transactions').select('tx_date,amount,description,card_id,account_id,type')
+      .eq('household_id', state.hid).gte('tx_date', dates[0]).lte('tx_date', dates[dates.length - 1]).limit(5000);
+    if (!readErr) rows = withoutSaved(rows, saved || []);
+  }
+  if (!rows.length) return added;
   const importId = await startImport(rows, { fileName, kind, source });
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500).map((r) => ({ ...r, household_id: state.hid, created_by: state.userId, ...(importId ? { import_id: importId } : {}) }));

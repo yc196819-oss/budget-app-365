@@ -72,7 +72,7 @@ export function makeFakeDb(today = new Date()) {
   };
 }
 
-// Minimal PostgREST: eq / gte / in filters, order, offset/limit, insert, update, delete.
+// Minimal PostgREST: eq / gte / lte / in filters, order, offset/limit, insert, update, delete.
 function applyFilters(rows, params) {
   let out = rows;
   for (const [k, v] of params) {
@@ -81,6 +81,7 @@ function applyFilters(rows, params) {
     const val = rest.join('.');
     if (op === 'eq') out = out.filter((r) => String(r[k]) === val);
     else if (op === 'gte') out = out.filter((r) => String(r[k]) >= val);
+    else if (op === 'lte') out = out.filter((r) => String(r[k]) <= val);
     else if (op === 'is' && val === 'null') out = out.filter((r) => r[k] == null);
     else if (op === 'in') {
       const set = new Set(val.replace(/^\(|\)$/g, '').split(',').map((s) => s.replace(/^"|"$/g, '')));

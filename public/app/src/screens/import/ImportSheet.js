@@ -29,6 +29,7 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
   const [saving, setSaving] = useState(false);
+  const busySave = useRef(false);
   const sources = sourcesOf({ accounts: data.accounts, cards: data.cards });
   // Which account or card this file is (chosen before, or found in the file).
   const [sourceId, setSourceId] = useState(preset ? preset.id : null);
@@ -137,10 +138,13 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
     // The bank's monthly charge for these same purchases, already saved: out,
     // so the money is not counted twice (back with "בטל", or from the bin).
     const covered = isCard && dropCharges ? coveredCharges(items, data.txs).map((t) => t.id) : [];
-    if (!rows.length || saving) return;
+    // A second tap before the screen updates must not save the file twice.
+    if (!rows.length || saving || busySave.current) return;
+    busySave.current = true;
     setSaving(true);
     try {
       const added = await addImported(rows, { fileName, kind: String(fileName).split('.').pop().toLowerCase().slice(0, 5), source });
+      if (!added.length) { busySave.current = false; saved.current = true; onClose(); showToast('כל התנועות בפירוט הזה כבר שמורות. לא נשמרו פעמיים.'); return; }
       // Installment payments create (or correct) their deal, so the payments
       // still to come are in the forecast. Never holds up the import.
       const deals = installmentDeals(rows, data.installments);
@@ -163,6 +167,7 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
           .then(() => showToast('הייבוא בוטל')).catch(() => showToast('הביטול נכשל. אפשר למחוק את הקובץ מ"קבצים שהועלו" בפרופיל.'))
       });
     } catch (err) {
+      busySave.current = false;
       setSaving(false);
       const saved = (err.saved || []).length;
       showToast(saved ? 'נשמרו רק ' + saved + ' תנועות. נסו לשמור שוב את השאר.' : 'השמירה נכשלה. נסו שוב.');
