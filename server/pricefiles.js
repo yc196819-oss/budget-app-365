@@ -37,6 +37,16 @@ const BINA = [
   { key: 'city-market', name: 'סיטי מרקט', host: 'citymarketkiryatgat', id: '7290058288526' },
   { key: 'good-pharm', name: 'גוד פארם', host: 'goodpharm', id: '7290058197699' }
 ];
+// Chains on a site of their own (no login). Each lists its files its own
+// way; list(fetchFn, kind) gives [{ name, url, size }] for 'PriceFull' or
+// 'Stores', the newest first where the site says so.
+const OWN = [
+  { key: 'victory', name: 'ויקטורי', site: 'laib', id: '7290696200003' },
+  { key: 'machsanei-hashuk', name: 'מחסני השוק', site: 'laib', id: '7290661400001' },
+  { key: 'hazi-hinam', name: 'חצי חינם', site: 'hazi', id: '7290700100008' },
+  { key: 'carrefour', name: 'קרפור', site: 'carrefour', id: '7290055700007' },
+  { key: 'super-pharm', name: 'סופר-פארם', site: 'superpharm', id: '7290172900007' }
+];
 const CERB = 'https://url.publishedprices.co.il';
 const SHUF = 'https://prices.shufersal.co.il';
 const UA = { 'user-agent': 'Mozilla/5.0 (budget app price files)' };
@@ -168,12 +178,92 @@ async function bina(fetchFn, chain) {
   return best;
 }
 
+// ── chains on their own sites ──
+const LAIB = 'https://laibcatalog.co.il';
+const HAZI = 'https://shop.hazi-hinam.co.il';
+const HAZI_FILES = 'https://hazihinamprod01.blob.core.windows.net/regulatories/';
+const CARREFOUR = 'https://prices.carrefour.co.il';
+const SUPERPHARM = 'https://prices.super-pharm.co.il';
+const kb = (v) => { const m = String(v || '').match(/([\d.]+)\s*(KB|MB)?/i); return m ? Number(m[1]) * (/mb/i.test(m[2] || '') ? 1024 : 1) : 0; };
+const isKind = (kind) => (n) => new RegExp('^' + (kind === 'Stores' ? 'Stores(Full)?' : kind) + '\\d', 'i').test(n);
+// Today in Israel, as YYYY-MM-DD (the sites list files by the local day).
+const ilDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(d);
+const text = async (fetchFn, url) => (await getBuf(fetchFn, url)).toString('utf8');
+
+// Victory, Mahsanei HaShuk: one JSON list of every file of the chain.
+async function laibList(fetchFn, chain, kind) {
+  const all = JSON.parse(await text(fetchFn, LAIB + '/webapi/api/getfiles?edi=' + chain.id) || '[]');
+  return (Array.isArray(all) ? all : [])
+    .filter((f) => f && String(f.fileType || '').toLowerCase() === kind.toLowerCase() && /^[\w.-]+$/.test(String(f.fileName || '')))
+    .map((f) => ({ name: f.fileName, url: LAIB + '/webapi/' + chain.id + '/' + f.fileName, size: kb(f.fileSize), at: String(f.fileDate || '') }))
+    .sort((a, b) => b.at.localeCompare(a.at));
+}
+// Hazi Hinam: an HTML page of links by day (50 a page; full price files
+// come after the hourly ones, so a few pages are read).
+async function haziList(fetchFn, chain, kind) {
+  const out = [];
+  for (const day of [ilDay(), ilDay(new Date(Date.now() - 86400000))]) {
+    for (let p = 1; p <= 15; p++) {
+      const html = await text(fetchFn, HAZI + '/Prices?' + new URLSearchParams({ p: String(p), s: '', f: '', t: kind === 'Stores' ? '3' : '1', d: day }));
+      const rows = [...html.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((r) => r[1]);
+      // Columns: time, branch, file, kind, size (KB), link.
+      const links = rows.map((r) => {
+        const cells = [...r.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => c[1].replace(/<[^>]+>/g, '').trim());
+        return { url: (r.match(/href="(https:\/\/hazihinamprod01\.blob\.core\.windows\.net\/regulatories\/[\w.-]+)"/) || [])[1], size: kb(cells[4]) };
+      }).filter((x) => x.url);
+      if (!links.length) break;
+      const before = out.length;
+      for (const x of links) { const name = x.url.slice(HAZI_FILES.length); if (isKind(kind)(name)) out.push({ name, url: x.url, size: x.size }); }
+      // The full files come together: once found, a page without them ends it.
+      if (before && out.length === before) break;
+      if (kind === 'Stores' && out.length) break;
+    }
+    if (out.length) break;
+  }
+  return out;
+}
+// Carrefour: the day's files are a list inside the page itself.
+async function carrefourList(fetchFn, chain, kind) {
+  const html = await text(fetchFn, CARREFOUR + '/');
+  const m = html.match(/const files\s*=\s*(\[[\s\S]*?\]);/);
+  const files = m ? JSON.parse(m[1]) : [];
+  return files.filter((f) => f && isKind(kind)(String(f.name || '')) && /^[\w.-]+$/.test(f.name))
+    .map((f) => { const day = (f.name.match(/-(\d{8})-/) || [])[1]; return day ? { name: f.name, url: CARREFOUR + '/' + day + '/' + f.name, size: Number(f.size) || 0 } : null; })
+    .filter(Boolean);
+}
+// Super-Pharm: an HTML table, filtered by kind on the server, newest first.
+async function superpharmList(fetchFn, chain, kind) {
+  const html = await text(fetchFn, SUPERPHARM + '/?' + new URLSearchParams({ 'Category-equals': kind }));
+  return [...html.matchAll(/href="(\/Download\/([\w.-]+)\?bucketName=[\w-]+)"/g)]
+    .filter((m) => isKind(kind)(m[2]))
+    .map((m) => ({ name: m[2], url: SUPERPHARM + unescape(m[1]), size: 0 }));
+}
+const OWN_LIST = { laib: laibList, hazi: haziList, carrefour: carrefourList, superpharm: superpharmList };
+const ownList = (fetchFn, chain, kind) => OWN_LIST[chain.site](fetchFn, chain, kind);
+
+// A chain on its own site: the biggest full price file of the newest ones
+// (a branch's size says how many products it has); when the site gives no
+// sizes, up to three branches are read and the fullest kept.
+async function own(fetchFn, chain) {
+  const list = await ownList(fetchFn, chain, 'PriceFull');
+  if (!list.length) throw new Error('no files');
+  const sized = list.some((f) => f.size > 0);
+  const tries = sized ? list.slice(0, 60).sort((a, b) => b.size - a.size).slice(0, 2) : list.slice(0, 3);
+  let best = [];
+  for (const f of tries) {
+    const rows = parsePriceFile(gunzip(await getBuf(fetchFn, f.url)), chain);
+    if (rows.length > best.length) best = rows;
+    if (best.length >= 500) break;
+  }
+  return best;
+}
+
 // Every chain we can reach, in order: its rows, or why not (one failing
 // chain never stops the others).
 const ready = (c) => !c.passEnv || !!process.env[c.passEnv];
-const CHAINS = [{ key: 'shufersal', name: 'שופרסל' }, ...CERBERUS, ...BINA].filter(ready);
+const CHAINS = [{ key: 'shufersal', name: 'שופרסל' }, ...CERBERUS, ...BINA, ...OWN].filter(ready);
 async function allChains(fetchFn, { only = null } = {}) {
-  const jobs = [{ key: 'shufersal', name: 'שופרסל', run: () => shufersal(fetchFn) }, ...CERBERUS.filter(ready).map((c) => ({ ...c, run: () => cerberus(fetchFn, c) })), ...BINA.map((c) => ({ ...c, run: () => bina(fetchFn, c) }))]
+  const jobs = [{ key: 'shufersal', name: 'שופרסל', run: () => shufersal(fetchFn) }, ...CERBERUS.filter(ready).map((c) => ({ ...c, run: () => cerberus(fetchFn, c) })), ...BINA.map((c) => ({ ...c, run: () => bina(fetchFn, c) })), ...OWN.map((c) => ({ ...c, run: () => own(fetchFn, c) }))]
     .filter((j) => !only || only.includes(j.key));
   const out = [];
   for (const j of jobs) {
@@ -217,6 +307,11 @@ async function chainStores(fetchFn, chain) {
     if (!link) throw new Error('no stores file');
     return parseStores(gunzip(await getBuf(fetchFn, unescape(link))));
   }
+  if (chain.site) {
+    const f = (await ownList(fetchFn, chain, 'Stores'))[0];
+    if (!f) throw new Error('no stores file');
+    return parseStores(gunzip(await getBuf(fetchFn, f.url)));
+  }
   if (chain.host) {
     const base = 'https://' + chain.host + '.binaprojects.com';
     const list = JSON.parse((await getBuf(fetchFn, base + '/MainIO_Hok.aspx?' + new URLSearchParams({ _: chain.id, wReshet: 'הכל', WFileType: '1', WDate: '', WStore: '' }))).toString('utf8') || '[]');
@@ -247,6 +342,12 @@ async function storePrices(fetchFn, chain, storeId) {
     if (!link) throw new Error('no file for branch');
     return parsePriceFile(gunzip(await getBuf(fetchFn, unescape(link))), chain);
   }
+  if (chain.site) {
+    // Newest first where the site says so; otherwise by the time in the name.
+    const f = newestOf((await ownList(fetchFn, chain, 'PriceFull')).filter((x) => storeOfFile(x.name) === id), (x) => fileStamp(x.name));
+    if (!f) throw new Error('no file for branch');
+    return parsePriceFile(gunzip(await getBuf(fetchFn, f.url)), chain);
+  }
   if (chain.host) {
     const base = 'https://' + chain.host + '.binaprojects.com';
     const list = JSON.parse((await getBuf(fetchFn, base + '/MainIO_Hok.aspx?' + new URLSearchParams({ _: chain.id, wReshet: 'הכל', WFileType: '4', WDate: '', WStore: '' }))).toString('utf8') || '[]');
@@ -260,4 +361,4 @@ async function storePrices(fetchFn, chain, storeId) {
   return parsePriceFile(await site.get(f), chain);
 }
 
-module.exports = { parsePriceFile, parseStores, storeOfFile, shufersal, cerberus, bina, allChains, chainStores, storePrices, CERBERUS, BINA, CHAINS };
+module.exports = { parsePriceFile, parseStores, storeOfFile, shufersal, cerberus, bina, own, ownList, allChains, chainStores, storePrices, CERBERUS, BINA, OWN, CHAINS };
