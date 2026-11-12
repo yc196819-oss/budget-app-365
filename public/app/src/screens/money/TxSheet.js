@@ -6,7 +6,8 @@ import { CatIcon } from '../../components/CatIcon.js';
 import { dayLabel, sameMerchantIds, filterTxs, monthsBack, inMonth } from '../../domain/money.js';
 import { chainQuery } from '../../domain/spend.js';
 import { money } from '../../domain/format.js';
-import { setCategory, restoreCategories, deleteWithUndo, snapshot, markTransfer } from '../../data/household.js';
+import { setCategory, restoreCategories, deleteWithUndo, snapshot, markTransfer, updateTx } from '../../data/household.js';
+import { isRefund, fromRefund } from '../../domain/moves.js';
 import { listRules, saveRule } from '../../data/rules.js';
 import { shouldAskRule } from '../../domain/rules.js';
 import { Icon } from '../../components/Icon.js';
@@ -27,7 +28,9 @@ export function TxSheet({ tx, txs, categories, members, onClose, onMerchant }) {
   const tops = categories.filter((c) => !c.parent_id && (c.kind || 'expense') === kind);
   const subs = categories.filter((c) => c.parent_id && c.parent_id === tx.category_id);
   const others = sameMerchantIds(tx, txs);
-  const income = tx.type === 'income';
+  // A Bit refund (a minus expense): money back.
+  const refund = isRefund(tx);
+  const income = tx.type === 'income' || refund;
 
   const choose = async (category_id, subcategory_id = null, created = null) => {
     if (busy) return;
@@ -75,7 +78,7 @@ export function TxSheet({ tx, txs, categories, members, onClose, onMerchant }) {
     <div style="display:flex;align-items:center;gap:14px">
       <${CatIcon} category=${byId.get(tx.category_id)} size=${52} />
       <span style="flex:1;min-width:0;display:flex;flex-direction:column"><b style="font-size:19px">${tx.description}</b><span class="muted" style="font-size:13px">${dayLabel(tx.tx_date, new Date())}</span></span>
-      <b class=${'num' + (income ? ' income' : '')} style=${'font-size:22px;' + (income ? 'color:var(--income)' : '')}>${(income ? '+' : '−') + money(tx.amount)}</b>
+      <b class=${'num' + (income ? ' income' : '')} style=${'font-size:22px;' + (income ? 'color:var(--income)' : '')}>${(income ? '+' : '−') + money(Math.abs(Number(tx.amount)))}</b>
     </div>
     ${onMerchant && !income && (() => {
       // Every purchase at this place in the last 12 months, in one tap.
@@ -114,7 +117,9 @@ export function TxSheet({ tx, txs, categories, members, onClose, onMerchant }) {
       ${others.length > 0 && html`<label class="check"><input type="checkbox" checked=${applyAll} onChange=${(e) => setApplyAll(e.target.checked)} />
         <span>לשנות גם ב-${others.length} התנועות האחרות של ${tx.description}</span></label>`}
     </div>
-    ${tx.account_id && !tx.card_id && html`<button type="button" class="btn btn-ghost tx-own-move" onClick=${ownMove}><${Icon} name="swap" size=${16} />זו העברה בין החשבונות שלי</button>`}
+    ${refund && html`<div class="card rule-saved" role="status"><${Icon} name="check" size=${18} />החזר על הוצאה: מקטין את ההוצאות בקטגוריה הזו.
+      <button type="button" class="btn-text" onClick=${() => updateTx(tx.id, fromRefund(tx)).then(() => { onClose(); showToast('בוטל: נספר שוב כהכנסה.'); }).catch(() => showToast('לא הצלחנו לבטל. נסו שוב.'))}>לבטל</button></div>`}
+    ${tx.account_id && !tx.card_id && !refund && html`<button type="button" class="btn btn-ghost tx-own-move" onClick=${ownMove}><${Icon} name="swap" size=${16} />זו העברה בין החשבונות שלי</button>`}
     <button type="button" class="btn btn-ghost" style="color:var(--danger)" onClick=${remove}>מחיקת התנועה</button>
   <//>`;
 }

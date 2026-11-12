@@ -366,6 +366,20 @@ export async function markTransfer(ids, on = true) {
   track(on ? 'transfer_mark' : 'transfer_undo');
 }
 
+// Changes one transaction (a Bit refund, or back); undone on failure.
+export async function updateTx(id, patch) {
+  const before = state.txs.find((t) => t.id === id);
+  if (!before) throw new Error('not found');
+  state.txs = state.txs.map((t) => (t.id === id ? { ...t, ...patch } : t));
+  emit();
+  const { error } = await sb.from('transactions').update(patch).eq('id', id).eq('household_id', state.hid);
+  if (error) {
+    state.txs = state.txs.map((t) => (t.id === id ? before : t));
+    emit();
+    throw error;
+  }
+}
+
 // How many people live at home (for "per person" amounts).
 export async function setPeople(n) {
   const value = Math.max(1, Math.min(20, Math.round(Number(n) || 0)));

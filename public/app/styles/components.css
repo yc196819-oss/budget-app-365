@@ -1519,3 +1519,21 @@ body.chat-open { overflow: hidden; }
 .tr-money-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; margin: 0 4px 6px; color: var(--muted); }
 .tx-own-move { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .tr-days { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13.5px; justify-content: center; }
+/* Bit and investment lines: what was it? */
+.mv-line { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface); }
+.mv-line.in .tr-arrow { background: var(--income-tint); color: var(--income); }
+.mv-line.out .tr-arrow { background: var(--danger-tint); color: var(--danger); }
+.mv-line.in > b { color: var(--income); }
+.mv-q { font-size: 15.5px; margin: 4px 2px 0; }
+.mv-opts { display: flex; flex-direction: column; gap: 8px; }
+.mv-opt { background: var(--surface); border: 2px solid transparent; border-radius: 16px; }
+.mv-opt.on { border-color: var(--accent); }
+.mv-pick { display: flex; gap: 10px; align-items: flex-start; width: 100%; background: none; border: 0; padding: 12px; text-align: start; font: inherit; color: inherit; cursor: pointer; }
+.mv-pick b { display: block; font-size: 15px; }
+.mv-pick small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; line-height: 1.45; }
+.mv-r { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line, var(--surface-2)); flex: none; margin-top: 2px; }
+.mv-opt.on .mv-r { border: 6px solid var(--accent); }
+.mv-sub { display: flex; flex-direction: column; gap: 6px; padding: 0 12px 12px 12px; }
+.mv-item { display: flex; justify-content: space-between; gap: 8px; align-items: center; background: var(--surface-2); border: 0; border-radius: 12px; padding: 9px 11px; font: inherit; font-size: 14px; color: inherit; text-align: start; cursor: pointer; }
+.mv-item small { color: var(--muted); font-size: 12px; }
+.mv-item.on { background: var(--accent-tint); color: var(--accent); font-weight: 800; }
