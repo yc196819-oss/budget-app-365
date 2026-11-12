@@ -100,3 +100,26 @@ test('one line of a bank account can be marked by hand from its details', async 
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('a transfer that took 4 days is found once the household widens the days', async () => {
+  const { page, db, errors } = await open();
+  db.tables.transactions.find((x) => x.id === 'tin').tx_date = day(0);
+  db.tables.transactions.find((x) => x.id === 'tout').tx_date = day(4);
+  await page.reload();
+  await page.waitForSelector('.att');
+  assert.equal(await page.locator('.att', { hasText: 'העברה בין החשבונות שלכם' }).count(), 0, 'not within 2 days');
+  // Widened (as the choice in the sheet keeps it): found and asked about.
+  await page.evaluate(() => localStorage.setItem('transfer:days:h1', '4'));
+  await page.reload();
+  const att = page.locator('.att', { hasText: 'העברה בין החשבונות שלכם' });
+  await att.waitFor();
+  await att.locator('button:has-text("לבדוק")').click();
+  await page.waitForSelector('.tr-pair');
+  assert.match(await page.locator('.tr-q').textContent(), /4 ימים אחר כך/);
+  assert.equal(await page.locator('.tr-days button[aria-pressed="true"]').textContent(), '4 ימים');
+  // Back to 2 days: the pair is no longer asked about.
+  await page.click('.tr-days button:has-text("2 ימים")');
+  await page.waitForSelector('.tr-empty');
+  assert.deepEqual(errors, []);
+  await page.close();
+});

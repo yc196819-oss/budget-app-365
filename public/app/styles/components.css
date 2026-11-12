@@ -1518,3 +1518,4 @@ body.chat-open { overflow: hidden; }
 .tr-note { font-size: 12.5px; text-align: center; margin: 2px 0 0; }
 .tr-money-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; margin: 0 4px 6px; color: var(--muted); }
 .tx-own-move { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.tr-days { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13.5px; justify-content: center; }

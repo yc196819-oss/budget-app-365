@@ -215,7 +215,7 @@ export function doubleCardCharges(txs) {
 // The same two lines, whichever came first.
 export const dupePair = (d) => [d.tx.id, d.of.id].sort().join('|');
 
-export function attention({ txs, categories, budgets, cards, today, plan, limit = 3, dupeOk = new Set() }) {
+export function attention({ txs, categories, budgets, cards, today, plan, limit = 3, dupeOk = new Set(), transferDays = 2 }) {
   const items = [];
   // Counted twice: it changes every number in the app, so it comes first.
   const twice = doubleCardCharges(txs);
@@ -228,7 +228,7 @@ export function attention({ txs, categories, budgets, cards, today, plan, limit 
   // Money moved between the household's own accounts, counted as spent and
   // as earned: asked about, never marked on its own.
   const no = new Set([...dupeOk].filter((k) => String(k).startsWith('t:')).map((k) => k.slice(2)));
-  const moves = transferPairs(txs, { no });
+  const moves = transferPairs(txs, { no, days: transferDays });
   if (moves.length) {
     const total = sum(moves, (p) => p.amount);
     items.push({ kind: 'transfer', tone: 'accent', title: moves.length === 1 ? 'העברה בין החשבונות שלכם?' : moves.length + ' העברות בין החשבונות שלכם?',

@@ -13,6 +13,11 @@ export const isTransfer = (t) => !!t && (t.type === TRANSFER_OUT || t.type === T
 export const typeBefore = (t) => (t.type === TRANSFER_IN ? 'income' : t.type === TRANSFER_OUT ? 'expense' : t.type || 'expense');
 export const asTransfer = (t) => (typeBefore(t) === 'income' ? TRANSFER_IN : TRANSFER_OUT);
 
+// How many days apart the two sides may be: 2 by default; the household can
+// widen it (a transfer between banks can take a few days).
+export const DAY_CHOICES = [2, 4, 7];
+export const transferDays = (v) => (DAY_CHOICES.includes(Number(v)) ? Number(v) : 2);
+
 const DAY = 86400000;
 const dayOf = (iso) => { const [y, m, d] = String(iso || '').slice(0, 10).split('-').map(Number); return Date.UTC(y, (m || 1) - 1, d || 1); };
 const cents = (v) => Math.round(Math.abs(Number(v) || 0) * 100);

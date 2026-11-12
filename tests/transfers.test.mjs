@@ -81,3 +81,15 @@ test('home asks about a transfer (never marks it), and not after "no"', () => {
   const after = attention({ txs, categories: [], budgets: [], cards: [], today, plan, limit: 5, dupeOk: new Set(['t:' + pairKey(txs[0], txs[1])]) });
   assert.equal(after.some((x) => x.kind === 'transfer'), false);
 });
+
+test('the household can widen how many days apart the two sides may be', async () => {
+  const { transferDays } = await import('../public/app/src/domain/transfers.js');
+  const txs = [out('o1', 900, '2026-11-01'), inn('i1', 900, '2026-11-05')];
+  assert.equal(transferPairs(txs).length, 0);
+  assert.equal(transferPairs(txs, { days: 4 }).length, 1);
+  assert.equal(transferDays('7'), 7);
+  assert.equal(transferDays('30'), 2, 'only the offered choices');
+  const today = new Date(2026, 10, 12);
+  const items = attention({ txs, categories: [], budgets: [], cards: [], today, plan: { canForecast: false }, limit: 5, transferDays: 7 });
+  assert.ok(items.some((x) => x.kind === 'transfer'));
+});

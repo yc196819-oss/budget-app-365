@@ -3,7 +3,8 @@ import { useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
 import { money } from '../../domain/format.js';
-import { transferPairs, markedPairs } from '../../domain/transfers.js';
+import { transferPairs, markedPairs, transferDays, DAY_CHOICES } from '../../domain/transfers.js';
+import { readLocal, writeLocal } from '../../lib/storage.js';
 import { markTransfer, keepBoth } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
@@ -14,11 +15,15 @@ import { track } from '../../lib/telemetry.js';
 // again. The transfers marked before are listed below, each with an undo.
 const dm = (iso) => String(iso || '').slice(5, 10).split('-').reverse().map(Number).join('.');
 
-export function TransferSheet({ data, dupeOk, onClose }) {
+export function TransferSheet({ data, dupeOk, onClose, onDays }) {
   const [busy, setBusy] = useState('');
   const [showMarked, setShowMarked] = useState(false);
   const no = new Set([...dupeOk].filter((k) => String(k).startsWith('t:')).map((k) => k.slice(2)));
-  const pairs = transferPairs(data.txs, { no });
+  // How far apart the two sides may be, kept for this household on this device.
+  const daysKey = 'transfer:days:' + data.hid;
+  const [days, setDaysState] = useState(() => transferDays(readLocal(daysKey, '2')));
+  const setDays = (d) => { writeLocal(daysKey, String(d)); setDaysState(d); track('transfer_days'); if (onDays) onDays(d); };
+  const pairs = transferPairs(data.txs, { no, days });
   const marked = markedPairs(data.transfers || []);
   const acct = (id) => { const a = (data.accounts || []).find((x) => x.id === id); return a ? a.name || a.bank_name || 'חשבון בנק' : 'חשבון בנק'; };
 
@@ -61,6 +66,10 @@ export function TransferSheet({ data, dupeOk, onClose }) {
       ${showMarked && html`<ul class="tr-marked">${marked.map((m, i) => html`<li key=${i}>
         <span><b>${money(m.amount)}</b><small class="muted">${m.out ? acct(m.out.account_id) : '?'} ← ${m.in ? acct(m.in.account_id) : '?'} · ${dm((m.out || m.in).tx_date)}</small></span>
         <button type="button" class="btn-text" onClick=${() => undo(m)}>לבטל</button></li>`)}</ul>`}
+      <div class="tr-days" role="group" aria-label="כמה ימים יכולים לעבור בין היציאה לכניסה">
+        <span class="muted">לחפש העברות שהגיעו תוך</span>
+        ${DAY_CHOICES.map((d) => html`<button type="button" key=${d} class="chip" aria-pressed=${String(days === d)} onClick=${() => setDays(d)}>${d} ימים</button>`)}
+      </div>
       <p class="faint tr-note">רק אתם מחליטים. שום דבר לא מסומן בלי אישור, ואפשר לבטל בכל רגע.</p>
     </div>
   <//>`;
