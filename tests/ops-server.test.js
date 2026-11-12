@@ -646,3 +646,17 @@ test('every one-time email is allowed by the database (the mail_sent check lists
   const allowed = last[1].split(',').map((x) => x.trim().replace(/'/g, ''));
   for (const c of ops.CAMPAIGNS) assert.ok(allowed.includes(c), c + ' is allowed');
 });
+
+test('the owner is known by address or by a fingerprint of the email, never by a personal address in the code', () => {
+  const { isOwnerEmail } = require('../server/ops');
+  const hash = require('crypto').createHash('sha256').update('owner@example.test').digest('hex');
+  assert.equal(isOwnerEmail('Owner@Example.test ', [], [hash]), true, 'any case and spaces');
+  assert.equal(isOwnerEmail('box@example.test', ['box@example.test'], []), true);
+  assert.equal(isOwnerEmail('someone@example.test', ['box@example.test'], [hash]), false);
+  assert.equal(isOwnerEmail('', [], [hash]), false);
+  const fs = require('fs'), path = require('path');
+  for (const f of ['budget-ai-server.js', 'public/app/src/config.js']) {
+    const found = (fs.readFileSync(path.join(__dirname, '..', f), 'utf8').match(/[\w.+-]+@gmail\.com/g) || []).filter((a) => a !== 'budgetapp2852@gmail.com');
+    assert.deepEqual(found, [], f + ': no personal address, only the app\'s own mailbox');
+  }
+});

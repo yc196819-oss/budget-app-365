@@ -3,6 +3,7 @@ import { setScreen } from '../../lib/telemetry.js';
 import { InstallCard } from '../../components/InstallCard.js';
 import { Icon } from '../../components/Icon.js';
 import { useState } from 'preact/hooks';
+import { oauthErrorText } from '../../lib/oauthError.js';
 import { sb } from '../../lib/supabase.js';
 import { readLocal } from '../../lib/storage.js';
 import { PENDING_INVITE } from '../../data/onboarding.js';
@@ -22,7 +23,13 @@ export function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  // Back from Google with an error in the address: say what happened, once,
+  // and take it out of the address.
+  const [error, setError] = useState(() => {
+    const text = oauthErrorText(location.search, location.hash);
+    if (text) { try { history.replaceState(null, '', location.pathname); } catch (_e) { /* old browser */ } }
+    return text;
+  });
   const [notice, setNotice] = useState('');
   const [agreed, setAgreed] = useState(false);
 

@@ -93,6 +93,8 @@ function applyFilters(rows, params) {
 export async function mockSupabase(page, db, calls = []) {
   // "Tell your friends" in the profile: a code and nobody joined yet.
   await page.route('**/api/share', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"code":"a1b2c3","joined":0}' }));
+  // The server's version, for the owner's dashboard only.
+  await page.route('**/api/admin/health', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"version":"abc1234","startedAt":"2026-11-12T08:00:00Z"}' }));
   // Realtime (live updates): a quiet Phoenix server that accepts every join
   // and heartbeat, so nothing reaches the network.
   await page.routeWebSocket(/supabase\.co\/realtime/, (ws) => {

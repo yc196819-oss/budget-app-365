@@ -1,5 +1,6 @@
 import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
+import { api } from '../../lib/api.js';
 import { useEffect, useState } from 'preact/hooks';
 import { adminStats, adminLive, adminAsk, adminReengage, testMonthlyMail, sendMonthlyMail, priceReach } from '../../data/account.js';
 import { MailBoard } from './MailBoard.js';
@@ -372,7 +373,7 @@ export function AdminView({ onBack }) {
   const hi = greeting();
   // Which version the server runs, and since when: did the update go up?
   const [ver, setVer] = useState(null);
-  useEffect(() => { fetch('/api/health').then((r) => r.json()).then(setVer).catch(() => setVer(null)); }, []);
+  useEffect(() => { api('/api/admin/health').then(setVer).catch(() => setVer(null)); }, []);
   // On a computer and on a phone alike: a main screen (the numbers, what is
   // happening now) with a button for each part, and each part on its own
   // page with a way back. Only up-and-down scrolling, never sideways.
