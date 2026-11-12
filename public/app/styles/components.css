@@ -402,7 +402,7 @@ textarea.input { height: auto; padding-top: 10px; padding-bottom: 10px; resize: 
 .push-nudge.partner { border-color: var(--line); font-size: 14px; color: var(--muted); }
 
 body.chat-open { overflow: hidden; }
-.wa-scrim { position: fixed; inset: 0; z-index: 17; background: var(--scrim); animation: fade-in .2s ease; }
+.wa-scrim { position: fixed; inset: 0; z-index: 17; background: var(--scrim); animation: fade-in .2s ease; touch-action: none; }
 .wa {
   --wa-green: #25A35A; --me: #DCF6C8; --them: #FFFFFF; --wall: #EFE7DD; --wall-dot: rgba(120, 92, 60, .07); --ai: #FFF8EC; --ai-line: #EBCB97; --tick: #3497F9;
   position: fixed; inset: 0; z-index: 18; display: flex; flex-direction: column;
@@ -1082,7 +1082,7 @@ body.chat-open { overflow: hidden; }
 .pic-focus-off { margin: 4px 2px 8px; line-height: 1.6; font-size: 14.5px; }
 .pic-pill.off { background: transparent; color: var(--muted); border: 1px solid var(--line, var(--surface-2)); }
 .pic-chev { color: var(--faint); font-size: 20px; line-height: 1; }
-.pic-veil { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .55); display: flex; align-items: flex-end; justify-content: center; animation: scan-in .2s ease both; }
+.pic-veil { overscroll-behavior: contain; touch-action: pan-y; position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .55); display: flex; align-items: flex-end; justify-content: center; animation: scan-in .2s ease both; }
 .pic-focus { width: 100%; max-width: 520px; background: var(--surface); border-radius: 26px 26px 0 0; padding: 24px 22px calc(22px + env(safe-area-inset-bottom)); display: grid; gap: 14px; animation: pic-up .35s cubic-bezier(.22, .8, .24, 1) both; }
 @keyframes pic-up { from { transform: translateY(40px); opacity: 0; } }
 .pic-focus-head { display: flex; align-items: center; gap: 14px; }

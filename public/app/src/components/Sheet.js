@@ -1,6 +1,7 @@
 import { html } from '../lib/html.js';
 import { useEffect, useRef } from 'preact/hooks';
 import { Icon } from './Icon.js';
+import { lockScroll } from '../lib/scrollLock.js';
 
 // Bottom sheet on mobile, centered dialog on desktop (see layout.css).
 // Closes on Escape and on the scrim, and returns focus to where it was.
@@ -14,7 +15,10 @@ export function Sheet({ title, onClose, children, full = false }) {
     if (ref.current && !ref.current.contains(document.activeElement)) ref.current.focus();
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
+    // The page behind stays still while the sheet is open.
+    const unlock = lockScroll();
     return () => {
+      unlock();
       document.removeEventListener('keydown', onKey);
       if (prev && prev.focus) prev.focus();
     };

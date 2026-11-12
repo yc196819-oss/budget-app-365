@@ -3,6 +3,7 @@ import { g as gWord, genderOf } from '../../domain/people.js';
 import { Icon } from '../../components/Icon.js';
 import { asOfLabel } from '../../domain/numbers.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { lockScroll } from '../../lib/scrollLock.js';
 import { threadFor, unreadCount, withDays, readBy, STATUS, outcome, needsMyAnswer, canConclude, isClosed, votesFor, VOTES, answerers } from '../../domain/decisions.js';
 import { money, initials } from '../../domain/format.js';
 import { sendMessage, askAdvisor, markSeen, seenAt, deleteMessage, sendTyping } from '../../data/decisions.js';
@@ -66,6 +67,7 @@ export function ChatScreen({ d, dec, data, userId, memberIds, nameOf, onClose, o
   const partners = memberIds.filter((id) => id !== userId);
   const typing = dec.typing && dec.typing[d.id];
 
+  useEffect(() => lockScroll(), []);
   useEffect(() => { markSeen(d.id, userId); }, [thread.length]);
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [thread.length, live, typing]);
   useEffect(() => {
