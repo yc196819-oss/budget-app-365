@@ -357,3 +357,14 @@ export function guideOrder(tasks, accounts = []) {
   };
   return tasks.map((t, i) => ({ ...t, bank: label(t), i })).sort((a, b) => rank(a) - rank(b) || a.i - b.i).map(({ i, ...t }) => t);
 }
+
+// A file shared from the phone: which account or card, by its name (the
+// card's last 4 digits, or the only source of the company it names). Pure.
+export function shareGuess(fileName, sources) {
+  const name = String(fileName || '');
+  const four = (name.match(/(?:^|\D)(\d{4})(?:\D|$)/) || [])[1];
+  if (four) { const byFour = sources.find((x) => x.kind === 'card' && String(x.last4 || '') === four); if (byFour) return byFour.id; }
+  const p = guessProvider(name.replace(/[_.-]+/g, ' '), 'card') || guessProvider(name.replace(/[_.-]+/g, ' '), 'bank');
+  const same = p ? sources.filter((x) => x.provider === p) : [];
+  return same.length === 1 ? same[0].id : null;
+}

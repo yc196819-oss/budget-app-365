@@ -22,7 +22,7 @@ const fileType = (name) => {
   return /^(png|jpe?g|webp|heic|gif)$/.test(ext) ? 'image' : 'other';
 };
 
-export function ImportSheet({ data, onClose, source: preset = null }) {
+export function ImportSheet({ data, onClose, source: preset = null, file: given = null }) {
   const [phase, setPhase] = useState('pick');
   const [step, setStep] = useState(null);
   const [items, setItems] = useState([]);
@@ -56,6 +56,8 @@ export function ImportSheet({ data, onClose, source: preset = null }) {
   const [change, setChange] = useState(false);
   const [dropCharges, setDropCharges] = useState(true);
 
+  // A file that arrived from outside (shared from the phone): read it at once.
+  useEffect(() => { if (given) setTimeout(() => start(given), 0); }, []);
   const start = async (file) => {
     const id = ++run.current;
     setFileName(file.name);

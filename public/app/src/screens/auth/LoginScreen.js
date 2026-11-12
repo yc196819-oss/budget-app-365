@@ -2,8 +2,9 @@ import { html } from '../../lib/html.js';
 import { setScreen } from '../../lib/telemetry.js';
 import { InstallCard } from '../../components/InstallCard.js';
 import { Icon } from '../../components/Icon.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { oauthErrorText } from '../../lib/oauthError.js';
+import { sharedFiles, dropShared } from '../../lib/shared.js';
 import { sb } from '../../lib/supabase.js';
 import { readLocal } from '../../lib/storage.js';
 import { PENDING_INVITE } from '../../data/onboarding.js';
@@ -25,6 +26,9 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   // Back from Google with an error in the address: say what happened, once,
   // and take it out of the address.
+  // A file shared from the phone before signing in: it waits on the device.
+  const [waiting, setWaiting] = useState('');
+  useEffect(() => { sharedFiles().then((l) => setWaiting(l.length ? l[0].name : '')); }, []);
   const [error, setError] = useState(() => {
     const text = oauthErrorText(location.search, location.hash);
     if (text) { try { history.replaceState(null, '', location.pathname); } catch (_e) { /* old browser */ } }
@@ -79,7 +83,8 @@ export function LoginScreen() {
   return html`
     <main class="login">
       <div class="brand-login"><img class="brand-mark" src="/wallet.svg" alt="" /><b class="display" style="font-size:22px">התקציב שלנו</b></div>
-      <h1 class="display" style="font-size:36px;line-height:1.1;margin:0">לדעת בכל רגע כמה נשאר להוציא</h1>
+      ${waiting ? html`<div class="share-wait" role="status"><span class="share-ext">${(waiting.split('.').pop() || '').slice(0, 4).toUpperCase()}</span><span><b><bdi>${waiting}</bdi> מחכה לך</b>אחרי הכניסה נמשיך ישר להעלאה. <button type="button" class="pg-link faint" style="padding:0" onClick=${() => { dropShared(); setWaiting(''); }}>לבטל</button></span></div>`
+        : html`<h1 class="display" style="font-size:36px;line-height:1.1;margin:0">לדעת בכל רגע כמה נשאר להוציא</h1>`}
       <div class="seg" role="group" aria-label="כניסה או הרשמה">
         <button type="button" aria-pressed=${String(mode === 'login')} onClick=${() => { setMode('login'); setError(''); setNotice(''); }}>כניסה</button>
         <button type="button" aria-pressed=${String(mode === 'register')} onClick=${() => { setMode('register'); setError(''); setNotice(''); }}>הרשמה</button>

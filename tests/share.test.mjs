@@ -1,27 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shareLink, shareText, shareTargets, refFrom } from '../public/app/src/domain/share.js';
+import { readFileSync } from 'node:fs';
 
-test('tell your friends: a link with the code, a ready message, WhatsApp and email', () => {
-  const link = shareLink('https://app.example/', 'a1b2c3');
-  assert.equal(link, 'https://app.example/app/?ref=a1b2c3');
-  assert.equal(shareLink('https://app.example', 'nope'), 'https://app.example/app/', 'no code, no ref');
-  const t = shareText(link);
-  assert.match(t, /התקציב שלנו/);
-  assert.match(t, /בחינם/);
-  assert.match(t, /פתוח למשתמשי נטפרי/);
-  assert.ok(t.trim().endsWith(link), 'the link is last, so it shows as a link');
-  const g = shareTargets(link);
-  assert.ok(g.whatsapp.startsWith('https://wa.me/?text='));
-  assert.equal(decodeURIComponent(g.whatsapp.split('text=')[1]), t);
-  assert.ok(g.email.startsWith('mailto:?subject='));
-  assert.match(decodeURIComponent(g.email), /ref=a1b2c3/);
+test('the app takes files shared from the phone: spreadsheets, PDFs and pictures, by POST to its own page', () => {
+  const m = JSON.parse(readFileSync(new URL('../public/manifest.json', import.meta.url), 'utf8'));
+  const t = m.share_target;
+  assert.equal(t.action, '/app/share-target');
+  assert.equal(t.method, 'POST');
+  assert.equal(t.enctype, 'multipart/form-data');
+  const accept = t.params.files[0].accept;
+  for (const a of ['.xlsx', '.xls', '.csv', '.pdf', 'image/*']) assert.ok(accept.includes(a), a);
+  const sw = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.match(sw, /\/app\/share-target/);
+  assert.match(sw, /k !== SHARED/, 'a new version of the app does not throw away a waiting file');
 });
 
-test('arriving from a friend: only a valid code is kept', () => {
-  assert.equal(refFrom('?ref=a1b2c3'), 'a1b2c3');
-  assert.equal(refFrom('?ref=A1B2C3'), null);
-  assert.equal(refFrom('?ref=<script>'), null);
-  assert.equal(refFrom(''), null);
-  assert.equal(refFrom('?go=import&ref=00ff00'), '00ff00');
+test('a guess from the file name: the card by its last 4 digits, or the only one of that company', async () => {
+  const { shareGuess } = await import('../public/app/src/domain/sources.js');
+  const sources = [{ id: 'm1', kind: 'card', provider: 'max', last4: '4821' }, { id: 'm2', kind: 'card', provider: 'max', last4: '2928' }, { id: 'c1', kind: 'card', provider: 'cal', last4: '7710' }];
+  assert.equal(shareGuess('statement_2928_nov.xlsx', sources), 'm2');
+  assert.equal(shareGuess('cal-export.xlsx', sources), 'c1');
+  assert.equal(shareGuess('max-export.xlsx', sources), null, 'two Max cards: no guess');
+  assert.equal(shareGuess('file.pdf', sources), null);
 });
