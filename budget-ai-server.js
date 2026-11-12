@@ -2478,7 +2478,7 @@ app.get('/api/admin/reengage', requireAuth, async (req, res) => {
     const st = ops.campaignStats(d.sent, d.stopped);
     const out = { sent: d.sent, clicks: clicks || [], uploads: d.uploads, stopped: d.stopped };
     const results = ops.campaignResults(out);
-    const campaigns = ops.CAMPAIGNS.map((id) => ({ id, title: ops.campaignTitle(id), count: ops.campaignList(id, d).length, preview: ops.campaignMail(id, link), image: ops.campaignImage(id), done: { sent: 0, failed: 0, last: null, ...(st.byCampaign[id] || {}), clicked: 0, uploaded: 0, ...(results[id] || {}) } }));
+    const campaigns = ops.ON_BOARD.map((id) => ({ id, title: ops.campaignTitle(id), count: ops.campaignList(id, d).length, preview: ops.campaignMail(id, link), image: ops.campaignImage(id), done: { sent: 0, failed: 0, last: null, ...(st.byCampaign[id] || {}), clicked: 0, uploaded: 0, ...(results[id] || {}) } }));
     return res.json({ campaigns, stopped: st.stopped, kpis: ops.mailKpis(out), mail: mailStatus() });
   } catch (err) { return res.status(500).json({ error: 'failed' }); }
 });
@@ -2504,7 +2504,9 @@ app.get('/api/admin/mail/history', requireAuth, async (req, res) => {
 });
 app.post('/api/admin/reengage', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
-  const campaign = ops.CAMPAIGNS.includes(req.body && req.body.campaign) ? req.body.campaign : 'start';
+  const asked = req.body && req.body.campaign;
+  if (asked && !ops.ON_BOARD.includes(asked)) return res.status(400).json({ error: 'המייל הזה כבר לא נשלח.' });
+  const campaign = asked || 'start';
   const mail = ops.campaignMail(campaign, appLinkOf(req));
   try {
     // A test goes only to the owner's own address, and marks no one.
