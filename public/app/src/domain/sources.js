@@ -62,10 +62,12 @@ export function companiesOf(sources) {
   const seen = new Map();
   for (const s of sources) {
     if (s.kind !== 'card' || !s.provider) { out.push({ ...s, ids: [s.id], count: 1 }); continue; }
-    const g = seen.get(s.provider);
+    // One row per company per bank account: two banks' Max cards are two rows.
+    const k = s.provider + '|' + (s.bankId || '');
+    const g = seen.get(k);
     if (g) { g.ids.push(s.id); g.count++; if (!g.billingDay && s.billingDay) g.billingDay = s.billingDay; continue; }
     const one = { ...s, ids: [s.id], count: 1 };
-    seen.set(s.provider, one);
+    seen.set(k, one);
     out.push(one);
   }
   return out;
@@ -95,7 +97,9 @@ export function otherSource({ source, items = [], issuer = null, sources = [] })
 // digits the lines carry are counted; a file without digits says nothing).
 export function missingCards({ source, items = [], sources = [] }) {
   if (!source || source.kind !== 'card' || !source.provider) return null;
-  const total = sources.filter((x) => x.kind === 'card' && x.provider === source.provider).length;
+  // The company's cards charged to the same bank account: another bank's
+  // card of that company has a statement of its own.
+  const total = sources.filter((x) => x.kind === 'card' && x.provider === source.provider && (x.bankId || null) === (source.bankId || null)).length;
   const found = new Set(items.map((t) => t.card4).filter(Boolean)).size;
   return total > 1 && found > 0 && found < total ? { found, total } : null;
 }
@@ -141,7 +145,7 @@ export const monthShort = (key) => SHORT[Number(key.slice(5)) - 1];
 export function sourcesOf({ accounts = [], cards = [] }) {
   return [
     ...accounts.map((a) => ({ kind: 'bank', id: a.id, name: a.name || a.bank_name || 'חשבון בנק', provider: a.provider || guessProvider(a.bank_name || a.name, 'bank'), saved: !!a.provider, salaryDay: Number(a.salary_day) || null })),
-    ...cards.filter((c) => c.is_active !== false).map((c) => ({ kind: 'card', id: c.id, name: c.name || 'כרטיס', provider: c.provider || guessProvider(c.name, 'card'), saved: !!c.provider, billingDay: Number(c.billing_day) || null, last4: c.last4 || null }))
+    ...cards.filter((c) => c.is_active !== false).map((c) => ({ kind: 'card', id: c.id, name: c.name || 'כרטיס', provider: c.provider || guessProvider(c.name, 'card'), saved: !!c.provider, billingDay: Number(c.billing_day) || null, last4: c.last4 || null, bankId: c.bank_account_id || null }))
   ];
 }
 
@@ -164,10 +168,16 @@ export function filesOf(source, { imports = [], txs = [], banks = 1 } = {}) {
   const byImport = new Map();
   for (const t of txs) {
     if (!t.import_id) continue;
-    const g = byImport.get(t.import_id) || { from: t.tx_date, to: t.tx_date, card: new Set(), credit: 0, account: new Set(), n: 0 };
+    const g = byImport.get(t.import_id) || { from: t.tx_date, to: t.tx_date, card: new Set(), cardSpan: new Map(), credit: 0, account: new Set(), n: 0 };
     if (t.tx_date < g.from) g.from = t.tx_date;
     if (t.tx_date > g.to) g.to = t.tx_date;
-    if (t.card_id) g.card.add(t.card_id);
+    if (t.card_id) {
+      g.card.add(t.card_id);
+      const c = g.cardSpan.get(t.card_id) || { from: t.tx_date, to: t.tx_date };
+      if (t.tx_date < c.from) c.from = t.tx_date;
+      if (t.tx_date > c.to) c.to = t.tx_date;
+      g.cardSpan.set(t.card_id, c);
+    }
     if (t.account_id) g.account.add(t.account_id);
     if (t.payment_method === 'credit') g.credit++;
     g.n++;
@@ -175,7 +185,15 @@ export function filesOf(source, { imports = [], txs = [], banks = 1 } = {}) {
   }
   const known = new Set(imports.filter((f) => f.source_id).map((f) => f.id));
   const inferred = [];
+  const ownIds = new Set(own.map((f) => f.id));
   for (const [id, g] of byImport) {
+    // A card's lines in a file chosen for another card (one Max file with
+    // both cards): that file is this card's too, for this card's dates.
+    if (source.kind === 'card' && known.has(id) && !ownIds.has(id) && g.cardSpan.has(source.id)) {
+      const c = g.cardSpan.get(source.id);
+      inferred.push({ id, date_from: c.from, date_to: c.to });
+      continue;
+    }
     if (known.has(id)) continue;
     const mine = source.kind === 'card'
       ? g.card.has(source.id)
@@ -321,4 +339,32 @@ export function withoutSaved(rows, saved) {
     if (n > 0) { left.set(k, n - 1); return false; }
     return true;
   });
+}
+
+// "Complete the picture", one step at a time: what is due now, in the order
+// of the household's banks, each bank account and then the cards charged to
+// it; cards with no bank last. Each step says which bank it belongs to, so
+// two banks' cards of the same company are never confused. Pure.
+export function guideOrder(tasks, accounts = []) {
+  const order = new Map(accounts.map((a, i) => [a.id, i]));
+  const bankOf = (src) => (src.kind === 'bank' ? src.id : src.bankId || null);
+  const rank = (t) => { const b = bankOf(t.source); return (order.has(b) ? order.get(b) : accounts.length) * 2 + (t.source.kind === 'bank' ? 0 : 1); };
+  const label = (t) => {
+    const b = accounts.find((a) => a.id === bankOf(t.source));
+    if (!b) return '';
+    const name = b.name || b.bank_name || 'חשבון בנק';
+    return t.source.kind === 'bank' ? name : 'יורד מ' + name;
+  };
+  return tasks.map((t, i) => ({ ...t, bank: label(t), i })).sort((a, b) => rank(a) - rank(b) || a.i - b.i).map(({ i, ...t }) => t);
+}
+
+// A file shared from the phone: which account or card, by its name (the
+// card's last 4 digits, or the only source of the company it names). Pure.
+export function shareGuess(fileName, sources) {
+  const name = String(fileName || '');
+  const four = (name.match(/(?:^|\D)(\d{4})(?:\D|$)/) || [])[1];
+  if (four) { const byFour = sources.find((x) => x.kind === 'card' && String(x.last4 || '') === four); if (byFour) return byFour.id; }
+  const p = guessProvider(name.replace(/[_.-]+/g, ' '), 'card') || guessProvider(name.replace(/[_.-]+/g, ' '), 'bank');
+  const same = p ? sources.filter((x) => x.provider === p) : [];
+  return same.length === 1 ? same[0].id : null;
 }

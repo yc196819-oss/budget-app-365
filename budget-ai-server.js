@@ -3309,6 +3309,9 @@ app.get('/sw.js', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('application/javascript').send(SW_BODY);
 });
+// A file shared to the app reaches here only when the app's service worker
+// is not there yet: nothing is kept, the app says to share it again.
+app.post('/app/share-target', (_req, res) => res.redirect(303, '/app/?action=shared-lost'));
 app.use(express.static(PUBLIC_DIR, { index: false }));
 // The new app uses hash routes (/app/#/money), so every other GET under /app
 // gets its shell.

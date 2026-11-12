@@ -29,6 +29,8 @@ import { AddSheet } from '../screens/add/AddSheet.js';
 import { ImportSheet } from '../screens/import/ImportSheet.js';
 import { PictureSheet, PictureCheck } from '../screens/picture/Picture.js';
 import { useOwner } from '../lib/owner.js';
+import { sharedFiles, dropShared } from '../lib/shared.js';
+import { ShareSheet } from '../screens/import/ShareSheet.js';
 import { LearnSheet } from '../screens/learn/LearnSheet.js';
 import { ToastHost } from '../components/ToastHost.js';
 import { useHousehold } from '../data/useHousehold.js';
@@ -53,7 +55,17 @@ export function Shell({ tab, session }) {
   const owner = useOwner(session.user && session.user.email);
   // The account or card an upload is for, when it was started from one.
   const [importFor, setImportFor] = useState(null);
-  const openImport = (src) => { setImportFor(src && src.id ? src : null); setOverlay('import'); };
+  const [importFile, setImportFile] = useState(null);
+  const openImport = (src, file = null) => { setImportFor(src && src.id ? src : null); setImportFile(file); setOverlay('import'); };
+  // A file shared to the app from the phone (kept on the device, also through
+  // signing in): which account or card it is for, then the usual upload.
+  const [shared, setShared] = useState(null);
+  useEffect(() => {
+    if (!session.household) return;
+    sharedFiles().then((list) => { if (list.length) { setShared(list[0]); setOverlay('shared'); track('share_in'); } });
+  }, [session.household && session.household.household_id]);
+  // An upload started from "complete the picture" comes back to it (to its ✓).
+  const [backTo, setBackTo] = useState(null);
   // Opened as the advisor's own window (desktop): only the conversation.
   const [solo, setSolo] = useState(() => /^#\/advisor/.test(location.hash));
   useEffect(() => {
@@ -155,6 +167,8 @@ export function Shell({ tab, session }) {
     history.replaceState(null, '', location.pathname + location.hash);
     track('shortcut');
     if (!session.household) return;
+    if (action === 'shared') return; // the file itself is read from the device (above)
+    if (action === 'shared-lost') { showToast('הקובץ לא נקלט. פתחו את האפליקציה פעם אחת, ושתפו אותו שוב.'); return; }
     if (action === 'add' || action === 'voice' || action === 'talk' || action === 'picture') setOverlay(action);
     else if (action === 'import') openImport(null);
     else if (action === 'ask') {
@@ -219,8 +233,9 @@ export function Shell({ tab, session }) {
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} startTalk=${true} />` : html`<${Loading} />`}
       <//>`}
       ${overlay === 'learn' && html`<${LearnSheet} userId=${session.user.id} householdId=${session.household ? session.household.household_id : null} data=${session.household && data.status === 'ready' ? data : null} onClose=${close} />`}
-      ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} key=${importFor ? importFor.id : 'any'} data=${data} source=${importFor} onClose=${close} />`}
-      ${overlay === 'picture' && session.household && data.status === 'ready' && html`<${PictureSheet} data=${data} onClose=${close} onUpload=${openImport} />`}
+      ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} key=${importFor ? importFor.id : 'any'} data=${data} source=${importFor} file=${importFile} onClose=${() => { setImportFile(null); setOverlay(backTo); setBackTo(null); }} />`}
+      ${overlay === 'shared' && shared && session.household && data.status === 'ready' && html`<${ShareSheet} data=${data} file=${shared} onPick=${(src) => { const f = shared; dropShared(); setShared(null); track('share_pick'); openImport(src, f); }} onClose=${() => { dropShared(); setShared(null); setOverlay(null); }} />`}
+      ${overlay === 'picture' && session.household && data.status === 'ready' && html`<${PictureSheet} data=${data} onClose=${close} onUpload=${(src) => { setBackTo('picture'); openImport(src); }} />`}
       ${overlay === 'advisor' && !railOn && html`<${Sheet} title="היועץ" onClose=${close}>
         ${desktop && html`<span class="adv-modes"><button type="button" class="btn-text rail-pin" onClick=${() => setMode('side')}>להציג קבוע בצד המסך</button> · <button type="button" class="btn-text float-pin" onClick=${() => setMode('float')}>כחלון צף</button></span>`}
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} />` : html`<${Loading} />`}

@@ -93,5 +93,30 @@
         }
       ]
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/app/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [
+        {
+          "name": "file",
+          "accept": [
+            "application/pdf",
+            ".pdf",
+            "application/vnd.ms-excel",
+            ".xls",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xlsx",
+            "text/csv",
+            ".csv",
+            "image/*"
+          ]
+        }
+      ]
+    }
+  }
 }

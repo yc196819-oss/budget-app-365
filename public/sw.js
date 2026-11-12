@@ -8,6 +8,10 @@
 // The server replaces this with a version made from the app's files.
 const CACHE = 'budget-app-dev';
 const PRECACHE = ['/app/', '/manifest.json', '/wallet.svg', '/wallet-192.png', '/wallet-512.png', '/badge-96.png'];
+// A file shared to the app from the phone ("שיתוף"): kept here, on the
+// device only, until the person picks the account or card it is for (after
+// signing in, if needed). Never sent anywhere before that.
+const SHARED = 'shared-files';
 const STATIC = /^\/(app\/(src|styles|vendor|fonts)\/|(icon|wallet|shortcut|badge)[\w-]*\.(svg|png)$|manifest\.json$)/;
 
 self.addEventListener('install', (e) => {
@@ -16,7 +20,7 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== SHARED).map((k) => caches.delete(k)))));
   self.clients.claim();
 });
 
@@ -42,8 +46,23 @@ async function staleWhileRevalidate(request, cacheKey, { notifyOnChange = false 
   return (await fresh) || new Response('', { status: 504 });
 }
 
+async function receiveShare(req) {
+  try {
+    const form = await req.formData();
+    const files = form.getAll('file').filter((f) => f && typeof f === 'object' && f.size > 0).slice(0, 5);
+    const cache = await caches.open(SHARED);
+    for (const k of await cache.keys()) await cache.delete(k);
+    let i = 0;
+    for (const f of files) {
+      await cache.put('/shared/' + (i++), new Response(f, { headers: { 'content-type': f.type || 'application/octet-stream', 'x-name': encodeURIComponent(f.name || 'file'), 'x-at': String(Date.now()) } }));
+    }
+  } catch (_e) { /* nothing kept: the app opens as usual */ }
+  return Response.redirect('/app/?action=shared', 303);
+}
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
+  if (req.method === 'POST' && new URL(req.url).pathname === '/app/share-target') { e.respondWith(receiveShare(req)); return; }
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // Supabase, fonts: straight to the network
