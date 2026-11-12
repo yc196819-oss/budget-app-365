@@ -210,3 +210,94 @@ test('a chain with a password is loaded only when its password is in the server 
     assert.equal(CHAINS.some((x) => x.key === c.key), !!process.env[c.passEnv]);
   }
 });
+
+// Five chains on sites of their own, each listing its files its own way (the
+// shapes below are as the sites sent them; products are made up).
+test('chains on their own sites: each list is read, the fullest branch taken, and a branch\'s own file found', async () => {
+  const { own, ownList, OWN, CHAINS, storePrices, chainStores } = createRequire(import.meta.url)('../server/pricefiles.js');
+  const zlib = await import('node:zlib');
+  const item = (code, price) => `<Item><ItemCode>${code}</ItemCode><ItemName>מוצר בדוי ${code}</ItemName><ItemPrice>${price}</ItemPrice></Item>`;
+  const file = (n) => zlib.gzipSync('<Root><ChainID>7290000000000</ChainID><Items>' + Array.from({ length: n }, (_, i) => item(7290000300000 + i, 4.5)).join('') + '</Items></Root>');
+  const stores = zlib.gzipSync('<Root><Stores><Store><StoreID>97</StoreID><StoreName>סניף בדוי</StoreName><Address>רחוב בדוי 1</Address><City>עיר בדויה</City></Store></Stores></Root>');
+  const ok = (b) => ({ ok: true, status: 200, arrayBuffer: async () => Buffer.from(b) });
+  const no = { ok: false, status: 404, arrayBuffer: async () => Buffer.from('') };
+  for (const c of OWN) assert.ok(CHAINS.some((x) => x.key === c.key), c.key + ' is loaded (no password)');
+  const by = (key) => OWN.find((c) => c.key === key);
+
+  // Victory (and Mahsanei HaShuk): one JSON list of all files.
+  const laib = async (url) => {
+    if (url === 'https://laibcatalog.co.il/webapi/api/getfiles?edi=7290696200003') return ok(JSON.stringify([
+      { branchNumber: 97, fileName: 'Promo7290696200003-001-097-20261112-152724.gz', fileType: 'promo', fileDate: '2026-11-12 15:27:24', fileSize: '33.92 KB' },
+      { branchNumber: 97, fileName: 'PriceFull7290696200003-001-097-20261112-051715.gz', fileType: 'pricefull', fileDate: '2026-11-12 05:17:15', fileSize: '418.42 KB' },
+      { branchNumber: 1, fileName: 'PriceFull7290696200003-001-001-20261112-051224.gz', fileType: 'pricefull', fileDate: '2026-11-12 05:12:24', fileSize: '537.51 KB' },
+      { branchNumber: 0, fileName: 'Stores7290696200003-000-20261112060059-060059.gz', fileType: 'stores', fileDate: '2026-11-12 06:00:59', fileSize: '2.42 KB' }]));
+    if (url.endsWith('-001-001-20261112-051224.gz')) return ok(file(600));
+    if (url.endsWith('-001-097-20261112-051715.gz')) return ok(file(550));
+    if (url.endsWith('Stores7290696200003-000-20261112060059-060059.gz')) return ok(stores);
+    return no;
+  };
+  const v = await own(laib, by('victory'));
+  assert.equal(v.length, 600, 'the biggest branch file');
+  assert.equal(v[0].chainName, 'ויקטורי');
+  assert.deepEqual((await ownList(laib, by('victory'), 'PriceFull')).map((f) => f.url), ['https://laibcatalog.co.il/webapi/7290696200003/PriceFull7290696200003-001-097-20261112-051715.gz', 'https://laibcatalog.co.il/webapi/7290696200003/PriceFull7290696200003-001-001-20261112-051224.gz']);
+  assert.equal((await storePrices(laib, by('victory'), '97')).length, 550, 'one branch\'s own file');
+  assert.deepEqual((await chainStores(laib, by('victory'))).map((s) => s.store_id), ['97']);
+
+  // Hazi Hinam: HTML pages of links; the full files come after the hourly ones.
+  const row = (store, name, size) => `<tr>
+    <td style="direction:ltr; width:150px;"><span>12-11-2026</span><span>16:24</span></td>
+    <td>
+        ${store}
+    </td>
+    <td>${name}</td>
+    <td>&#x5DE;&#x5D7;&#x5D9;&#x5E8;&#x5D9;&#x5DD;</td>
+    <td>
+        ${size}
+    </td>
+    <td><a href="https://hazihinamprod01.blob.core.windows.net/regulatories/${name}">הורדה</a></td>
+  </tr>`;
+  const pages = { 1: [row(202, 'Price7290700100008-000-202-20261112-162301.gz', '2.0')], 2: [row(217, 'PriceFull7290700100008-000-217-20261112-005808.gz', '32.4'), row(210, 'PriceFull7290700100008-000-210-20261112-005806.gz', '43.0')], 3: [row(201, 'Promo7290700100008-000-201-20261112-005000.gz', '9.0')] };
+  const asked = [];
+  const hazi = async (url) => {
+    asked.push(url);
+    const u = new URL(url);
+    if (u.host === 'shop.hazi-hinam.co.il') {
+      if (u.searchParams.get('t') === '3') return ok('<table>' + row(0, 'StoresFull7290700100008-000-20261112-005415.gz', '0.8') + '</table>');
+      return ok('<table>' + (pages[u.searchParams.get('p')] || []).join('') + '</table>');
+    }
+    if (url.endsWith('-210-20261112-005806.gz')) return ok(file(520));
+    if (url.endsWith('-217-20261112-005808.gz')) return ok(file(400));
+    if (url.endsWith('StoresFull7290700100008-000-20261112-005415.gz')) return ok(stores);
+    return no;
+  };
+  const h = await own(hazi, by('hazi-hinam'));
+  assert.equal(h.length, 520, 'the bigger of the full files (43 KB), not the store number');
+  assert.ok(!asked.some((u) => u.includes('p=4')), 'stops after the full files');
+  assert.deepEqual((await chainStores(hazi, by('hazi-hinam'))).map((s) => s.store_id), ['97']);
+
+  // Carrefour: the day's list inside the page.
+  const page = '<html><script>const path = "/"; const files = [{"name":"Price7290055700007-001-004-20261112-150015.gz","size":533,"modified":"15:00 12-11-2026"},{"name":"PriceFull7290055700007-001-002-20261112-051006.gz","size":431235,"modified":"05:08 12-11-2026"},{"name":"PriceFull7290055700007-001-004-20261112-051017.gz","size":962677,"modified":"05:10 12-11-2026"},{"name":"Stores7290055700007-000-20261112-000100.xml","size":61394,"modified":"00:01 12-11-2026"}];</script></html>';
+  const carrefour = async (url) => {
+    if (url === 'https://prices.carrefour.co.il/') return ok(page);
+    if (url === 'https://prices.carrefour.co.il/20261112/PriceFull7290055700007-001-004-20261112-051017.gz') return ok(file(700));
+    if (url === 'https://prices.carrefour.co.il/20261112/PriceFull7290055700007-001-002-20261112-051006.gz') return ok(file(300));
+    // The branch list is plain XML, in UTF-16.
+    if (url === 'https://prices.carrefour.co.il/20261112/Stores7290055700007-000-20261112-000100.xml') return ok(Buffer.from('﻿' + zlib.gunzipSync(stores).toString(), 'utf16le'));
+    return no;
+  };
+  assert.equal((await own(carrefour, by('carrefour'))).length, 700);
+  assert.deepEqual((await chainStores(carrefour, by('carrefour'))).map((s) => s.city), ['עיר בדויה']);
+
+  // Super-Pharm: an HTML table filtered on the server, no sizes: up to three read.
+  const sp = (n) => `<tr><td>1</td><td>${n}</td><td>11/12/2026 07:15:57</td><td>PriceFull</td><td>&#x5E1;</td><td><a href="/Download/${n}?bucketName=sp_transparency_output_prod_v2">&#x5D4;</a></td></tr>`;
+  const superpharm = async (url) => {
+    if (url === 'https://prices.super-pharm.co.il/?Category-equals=PriceFull') return ok(sp('PriceFull7290172900007-000-209-20261112-071557.gz') + sp('PriceFull7290172900007-000-206-20261112-071554.gz'));
+    if (url === 'https://prices.super-pharm.co.il/Download/PriceFull7290172900007-000-209-20261112-071557.gz?bucketName=sp_transparency_output_prod_v2') return ok(file(40));
+    if (url === 'https://prices.super-pharm.co.il/Download/PriceFull7290172900007-000-206-20261112-071554.gz?bucketName=sp_transparency_output_prod_v2') return ok(file(90));
+    return no;
+  };
+  assert.equal((await own(superpharm, by('super-pharm'))).length, 90, 'the fuller of the branches read');
+  assert.equal((await storePrices(superpharm, by('super-pharm'), '209')).length, 40);
+  // A site with nothing to list says so (and the load goes on to the next chain).
+  await assert.rejects(own(async () => ok('<html></html>'), by('super-pharm')), /no files/);
+});
