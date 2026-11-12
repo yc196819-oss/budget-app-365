@@ -25,6 +25,9 @@ const { AsyncLocalStorage } = require('node:async_hooks');
 
 const app = express();
 app.disable('x-powered-by');
+// Money moved between the household's own accounts (marked so by them) is
+// neither an expense nor income: the summaries and the advisor skip it.
+const COUNTED = ['expense', 'income'];
 app.set('trust proxy', 1);
 // The app's files go out compressed (about a third of the size). The API is
 // left as is: the advisor's answer streams word by word.
@@ -1368,7 +1371,7 @@ async function buildAlertsForHousehold(hid) {
   const month = ilMonth(today);
   const since = addDaysIso(today, -120);
   const [{ data: tx }, { data: cats }, { data: budgets }, { data: invs }] = await Promise.all([
-    supabaseAdmin.from('transactions').select('id,type,amount,description,tx_date,category_id,card_id,created_at').eq('household_id', hid).gte('tx_date', since),
+    supabaseAdmin.from('transactions').select('id,type,amount,description,tx_date,category_id,card_id,created_at').eq('household_id', hid).in('type', COUNTED).gte('tx_date', since),
     supabaseAdmin.from('categories').select('id,name,parent_id').eq('household_id', hid),
     supabaseAdmin.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
     supabaseAdmin.from('investments').select('id,name,symbol,units,currency,current_value').eq('household_id', hid)
@@ -1504,7 +1507,7 @@ app.post('/api/checkin/run', async (req, res) => {
     for (const hid of ids) {
       const since = addDaysIso(weekStart, -56);
       const [{ data: tx }, { data: cats }, { data: tasks }, { data: goals }] = await Promise.all([
-        supabaseAdmin.from('transactions').select('type,amount,tx_date,category_id').eq('household_id', hid).gte('tx_date', since),
+        supabaseAdmin.from('transactions').select('type,amount,tx_date,category_id').eq('household_id', hid).in('type', COUNTED).gte('tx_date', since),
         supabaseAdmin.from('categories').select('id,name').eq('household_id', hid),
         supabaseAdmin.from('advisor_tasks').select('title,status,done_at,due_date').eq('household_id', hid),
         supabaseAdmin.from('goals').select('name,target_amount,saved_amount').eq('household_id', hid)
@@ -2957,7 +2960,7 @@ app.post('/api/reports/run', async (req, res) => {
     const monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
     for (const hid of ids) {
       const [{ data: tx }, { data: cats }, { data: goals }, { data: tasks }, { data: mems }] = await Promise.all([
-        supabaseAdmin.from('transactions').select('type,amount,tx_date,category_id').eq('household_id', hid).gte('tx_date', prevMonth + '-01').lt('tx_date', addDaysIso(today, 1)),
+        supabaseAdmin.from('transactions').select('type,amount,tx_date,category_id').eq('household_id', hid).in('type', COUNTED).gte('tx_date', prevMonth + '-01').lt('tx_date', addDaysIso(today, 1)),
         supabaseAdmin.from('categories').select('id,name').eq('household_id', hid),
         supabaseAdmin.from('goals').select('name,target_amount,saved_amount').eq('household_id', hid),
         supabaseAdmin.from('advisor_tasks').select('title,status,done_at').eq('household_id', hid),

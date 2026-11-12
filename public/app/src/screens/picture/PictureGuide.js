@@ -4,7 +4,7 @@ import { Icon } from '../../components/Icon.js';
 import { providerOf, nameOf, monthName, howSteps, guideOrder } from '../../domain/sources.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { track } from '../../lib/telemetry.js';
-import { Logo } from './Picture.js';
+import { Logo, setCardsOnly } from './Picture.js';
 
 // "Complete the picture", one thing at a time: how much is left (and how
 // little time it takes), then one account or card per screen with its month,
@@ -80,6 +80,7 @@ export function PictureGuide({ tasks, accounts, onUpload, onAll }) {
       <div class="pg-how"><b>איך מורידים, ב-3 צעדים:</b>
         <ol>${howSteps(x.kind, x.provider).map((h, i) => html`<li key=${i}>${h}${i === 0 && x.kind === 'card' && x.last4 ? ' (הכרטיס ' + x.last4 + ')' : ''}</li>`)}</ol></div>
     </div>
+    ${x.kind === 'bank' && html`<button type="button" class="pg-link faint pg-cards-only" onClick=${() => { setFocusId(''); setCardsOnly(x, true); }}>אני לא מעלה פירוט עו״ש מהחשבון הזה, רק את הכרטיסים</button>`}
     <div class="pg-foot">
       ${left.length > 1 ? html`<button type="button" class="pg-link faint" onClick=${() => { setFocusId(''); setSkipped([...skipped.filter((id) => id !== x.id), x.id]); track('guide_skip_step'); }}>לא עכשיו, לדלג</button>` : html`<button type="button" class="pg-link faint" onClick=${onAll}>לכל החשבונות</button>`}
       ${p && p.url && html`<a class="pg-link" href=${p.url} target="_blank" rel="noopener noreferrer">לאתר של ${p.name} ‹</a>`}

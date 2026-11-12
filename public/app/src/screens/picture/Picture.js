@@ -39,16 +39,26 @@ export function useSourceFiles(hid, txsKey) {
   return files;
 }
 
+// A bank account whose current-account statement the household does not
+// upload (only its cards'): set or undone from the guide and the full list.
+export async function setCardsOnly(source, on) {
+  try {
+    await saveRow('bank_accounts', { id: source.id, cards_only: !!on });
+    track(on ? 'picture_cards_only' : 'picture_cards_only_undo');
+    showToast(on ? 'בסדר. לא נבקש פירוט עו״ש מ' + nameOf(source) + '. הכרטיסים שלו נשארים.' : 'נחזור לבקש את פירוט העו״ש של ' + nameOf(source) + '.');
+  } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
+}
+
 // What a row shows now: the month due and its status.
 function statusFor(t, r) { const m = r.months.find((x) => x.key === r.due); return { key: r.due, status: m ? m.status : t.tasks.some((x) => x.source.id === r.source.id) ? 'missing' : 'ok' }; }
 
-const STATUS = { ok: 'הועלה', partial: 'חלקי', missing: 'חסר', waiting: 'עוד לא' };
+const STATUS = { ok: 'הועלה', partial: 'חלקי', missing: 'חסר', waiting: 'עוד לא', off: 'רק אשראי' };
 
 // On the home screen: the ring and what is missing, one tap to the sheet.
 export function PictureCard({ data, onOpen }) {
   const files = useSourceFiles(data.hid, data.txs.length);
   if (files === null) return null;
-  const t = tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: data.txs });
+  const t = tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: [...data.txs, ...(data.transfers || [])] });
   if (!t.sources.length) {
     return html`<button type="button" class="card pic-card pic-start" onClick=${onOpen}>
       <span class="pic-logos" aria-hidden="true">${['leumi', 'hapoalim', 'max', 'cal'].map((k) => html`<${Logo} key=${k} provider=${k} size="s" />`)}</span>
@@ -74,7 +84,7 @@ export function PictureCheck({ data, onOpen }) {
   const files = useSourceFiles(data.hid, data.txs.length);
   const [open, setOpen] = useState(false);
   if (files === null) return null;
-  const t = tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: data.txs });
+  const t = tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: [...data.txs, ...(data.transfers || [])] });
   if (!t.sources.length || t.tasks.length) return null;
   const next = upcoming(t.rows);
   const last = t.months.filter((k) => t.rows.every((r) => (r.months.find((x) => x.key === k) || {}).status === 'ok')).pop();
@@ -180,7 +190,7 @@ function Picker({ data, step, onStep, onDone }) {
 
 export function PictureSheet({ data, onClose, onUpload }) {
   const files = useSourceFiles(data.hid, data.txs.length);
-  const t = files ? tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: data.txs }) : null;
+  const t = files ? tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: [...data.txs, ...(data.transfers || [])] }) : null;
   // false, or the step of the picker: 'bank' then 'card'.
   const [edit, setEdit] = useState(() => (data.accounts.length + data.cards.length ? false : 'bank'));
   // On a phone: the tiles, or the last 6 months instead of them. A tile
@@ -206,6 +216,7 @@ export function PictureSheet({ data, onClose, onUpload }) {
       : monthName(st.key || now);
     // The card's own name too, when it says more than the company (רמי לוי).
     const own = x.count === 1 && x.name && !x.name.includes((providerOf(x.provider) || {}).name || x.name) && x.name !== nameOf(x) ? x.name + ' · ' : '';
+    if (r.off) return { x, st: { key: st.key, status: 'off' }, sub: 'לא מעלים עו״ש מכאן, רק את הכרטיסים', due: false };
     return { x, st, sub: own + sub, due: st.status === 'missing' || st.status === 'partial' };
   };
   // A row for each bank account and card company, as in a settings list:
@@ -215,16 +226,16 @@ export function PictureSheet({ data, onClose, onUpload }) {
     const { x, st, sub, due } = info(r);
     const p = providerOf(x.provider);
     return html`<li key=${x.id} class=${'pic-task pic-item is-' + st.status}>
-      <button type="button" class="pic-item-main" style=${'--i:' + idx} onClick=${() => setFocus(x.id)} aria-label=${nameOf(x) + ': ' + (due ? 'חסר' : st.status === 'ok' ? 'הועלה' : 'עוד לא הגיע הזמן')}>
+      <button type="button" class="pic-item-main" style=${'--i:' + idx} onClick=${() => setFocus(x.id)} aria-label=${nameOf(x) + ': ' + (st.status === 'off' ? 'לא מעלים עו״ש מהחשבון הזה' : due ? 'חסר' : st.status === 'ok' ? 'הועלה' : 'עוד לא הגיע הזמן')}>
         ${p ? html`<${Logo} provider=${p.key} size="s" />` : html`<span class="logo-chip logo-s logo-blank" aria-hidden="true"><${Icon} name=${x.kind === 'card' ? 'money' : 'assets'} size=${18} /></span>`}
         <span class="pic-item-t"><b>${nameOf(x)}</b><small>${sub}${st.status === 'partial' ? ' · הקובץ לא שלם' : ''}</small></span>
-        ${!p ? html`<span class="pic-pill pick">${x.kind === 'card' ? 'איזו חברה?' : 'איזה בנק?'}</span>` : due ? html`<span class="pic-pill todo">להעלות</span>` : st.status === 'ok' ? html`<span class="pic-pill ok">הועלה</span>` : html`<span class="pic-pill">עוד לא</span>`}
+        ${st.status === 'off' ? html`<span class="pic-pill off">רק אשראי</span>` : !p ? html`<span class="pic-pill pick">${x.kind === 'card' ? 'איזו חברה?' : 'איזה בנק?'}</span>` : due ? html`<span class="pic-pill todo">להעלות</span>` : st.status === 'ok' ? html`<span class="pic-pill ok">הועלה</span>` : html`<span class="pic-pill">עוד לא</span>`}
         <span class="pic-chev" aria-hidden="true">‹</span>
       </button>
     </li>`;
   };
-  const banks = t.rows.filter((r) => r.source.kind === 'bank');
-  const cards = t.rows.filter((r) => r.source.kind === 'card');
+  const banks = t.all.filter((r) => r.source.kind === 'bank');
+  const cards = t.all.filter((r) => r.source.kind === 'card');
   const rows = [...banks, ...cards];
   const sel = focus && rows.find((r) => r.source.id === focus);
   const panel = sel && (() => {
@@ -248,6 +259,17 @@ export function PictureSheet({ data, onClose, onUpload }) {
           <p class="pic-safe"><${Icon} name="spark" size=${14} />לא בטוחים? מעלים את הפירוט, ונזהה את החברה מתוכו.</p>
         </div></div>`;
     }
+    const head = (title, small) => html`<div class="pic-focus-head">${p ? html`<${Logo} provider=${p.key} size="m" />` : null}<span><h3>${title}</h3><small class="muted">${small}</small></span>
+          <button type="button" class="icon-btn" aria-label="סגירה" onClick=${close}><${Icon} name="x" size=${16} /></button></div>`;
+    // Only its cards are uploaded: say so, and how to undo it.
+    if (st.status === 'off') {
+      return html`<div class=${'pic-veil' + (closing ? ' out' : '')} onClick=${(e) => { if (e.target === e.currentTarget) close(); }}>
+        <div class="pic-focus" role="dialog" aria-label=${nameOf(x)}>
+          ${head('העו״ש של ' + nameOf(x), 'רק כרטיסי האשראי')}
+          <p class="muted pic-focus-off">את פירוט העו״ש של החשבון הזה אתם לא מעלים, ולכן לא נבקש אותו ולא נספור אותו כחסר. הכרטיסים שיורדים ממנו נשארים כרגיל.</p>
+          <button type="button" class="btn btn-ghost" onClick=${() => { setFocus(null); setCardsOnly(x, false); }}>לחזור להעלות את העו״ש מכאן</button>
+        </div></div>`;
+    }
     return html`<div class=${'pic-veil' + (closing ? ' out' : '')} onClick=${(e) => { if (e.target === e.currentTarget) close(); }}>
       <div class="pic-focus" role="dialog" aria-label=${nameOf(x)}>
         <div class="pic-focus-head">${p ? html`<${Logo} provider=${p.key} size="m" />` : null}<span><h3>הפירוט של ${nameOf(x)}</h3><small class="muted">${when}${x.count > 1 ? ' · ' + x.count + ' כרטיסים, פירוט אחד' : ''}</small></span>
@@ -260,6 +282,7 @@ export function PictureSheet({ data, onClose, onUpload }) {
           <button type="button" class="btn" onClick=${() => { setFocus(null); onUpload(x); }}><${Icon} name="upload" size=${16} />להעלות את הקובץ</button>
           ${p && html`<a class="btn btn-ghost" href=${p.url} target="_blank" rel="noopener noreferrer">לאתר של ${p.name} <span aria-hidden="true">↗</span></a>`}
         </div>
+        ${x.kind === 'bank' && html`<button type="button" class="pg-link faint pic-cards-only" onClick=${() => { setFocus(null); setCardsOnly(x, true); }}>אני לא מעלה פירוט עו״ש מהחשבון הזה, רק את הכרטיסים</button>`}
         <p class="pic-safe"><${Icon} name="lock" size=${14} />לא נבקש מכם סיסמה. את הקובץ מורידים בעצמכם מהאתר הרשמי.</p>
       </div></div>`;
   })();
@@ -267,8 +290,8 @@ export function PictureSheet({ data, onClose, onUpload }) {
         <div class="pic-h-row"><h3 class="pic-h" style="margin:0">6 החודשים האחרונים</h3>${view === 'history' && html`<button type="button" class="btn-text" onClick=${() => setView('now')}>→ חזרה</button>`}</div>
         <div class="pic-table" role="table" aria-label="פירוטים לפי חודש">
           <div class="pic-tr pic-th" role="row"><span role="columnheader"><span class="sr-only">חשבון</span></span>${t.months.map((k) => html`<span role="columnheader" key=${k}>${monthShort(k)}</span>`)}</div>
-          ${t.rows.map((r) => html`<div class="pic-tr" role="row" key=${r.source.id}>
-            <span role="rowheader" class="pic-src"><${SiteLogo} source=${r.source} /><small>${r.source.kind === 'bank' ? 'עו״ש' : r.source.count > 1 ? r.source.count + ' כרטיסים' : r.source.last4 || ''}</small></span>
+          ${t.all.map((r) => html`<div class=${'pic-tr' + (r.off ? ' is-off' : '')} role="row" key=${r.source.id}>
+            <span role="rowheader" class="pic-src"><${SiteLogo} source=${r.source} /><small>${r.source.kind === 'bank' ? (r.off ? 'רק אשראי' : 'עו״ש') : r.source.count > 1 ? r.source.count + ' כרטיסים' : r.source.last4 || ''}</small></span>
             ${r.months.map((m, i) => html`<span role="cell" key=${m.key}>${m.status === 'missing' || m.status === 'partial'
               ? html`<button type="button" class=${'pic-dot is-' + m.status} style=${'--i:' + i} title=${STATUS[m.status] + ': ' + monthName(m.key) + ' · להעלות'} aria-label=${nameOf(r.source) + ', ' + monthName(m.key) + ': ' + STATUS[m.status] + '. להעלות'} onClick=${() => onUpload(r.source)}>${m.status === 'partial' ? '!' : '+'}</button>`
               : html`<span class=${'pic-dot is-' + m.status} style=${'--i:' + i} title=${STATUS[m.status] + ': ' + monthName(m.key)} aria-label=${nameOf(r.source) + ', ' + monthName(m.key) + ': ' + STATUS[m.status]}>${m.status === 'ok' ? '✓' : ''}</span>`}</span>`)}

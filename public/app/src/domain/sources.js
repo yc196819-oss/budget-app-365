@@ -144,7 +144,7 @@ export const monthShort = (key) => SHORT[Number(key.slice(5)) - 1];
 // The household's sources: every bank account and every active card.
 export function sourcesOf({ accounts = [], cards = [] }) {
   return [
-    ...accounts.map((a) => ({ kind: 'bank', id: a.id, name: a.name || a.bank_name || 'חשבון בנק', provider: a.provider || guessProvider(a.bank_name || a.name, 'bank'), saved: !!a.provider, salaryDay: Number(a.salary_day) || null })),
+    ...accounts.map((a) => ({ kind: 'bank', id: a.id, name: a.name || a.bank_name || 'חשבון בנק', provider: a.provider || guessProvider(a.bank_name || a.name, 'bank'), saved: !!a.provider, salaryDay: Number(a.salary_day) || null, cardsOnly: !!a.cards_only })),
     ...cards.filter((c) => c.is_active !== false).map((c) => ({ kind: 'card', id: c.id, name: c.name || 'כרטיס', provider: c.provider || guessProvider(c.name, 'card'), saved: !!c.provider, billingDay: Number(c.billing_day) || null, last4: c.last4 || null, bankId: c.bank_account_id || null }))
   ];
 }
@@ -266,10 +266,14 @@ export function tracker({ accounts = [], cards = [], imports = [], txs = [] }, t
   const banks = all.filter((s) => s.kind === 'bank').length;
   const sources = companiesOf(all);
   const months = Array.from({ length: n }, (_, i) => { const d = new Date(today.getFullYear(), today.getMonth() - (n - 1) + i, 1); return ymOf(d); });
-  const rows = sources.map((s) => {
+  const all6 = sources.map((s) => {
     const files = s.ids.flatMap((id) => filesOf({ ...s, id }, { imports, txs, banks }));
+    // A bank account the household does not upload (only its cards are):
+    // nothing is asked of it, and it is not counted.
+    if (s.cardsOnly) return { source: s, files, off: true, months: months.map((k) => ({ key: k, status: 'off' })), due: dueMonth(s, today) };
     return { source: s, files, months: months.map((k) => ({ key: k, status: statusOf(s, files, k, today) })), due: dueMonth(s, today) };
   });
+  const rows = all6.filter((r) => !r.off);
   const due = rows.map((r) => ({ ...r, dueStatus: statusOf(r.source, r.files, r.due, today) }));
   const done = due.filter((r) => r.dueStatus === 'ok').length;
   const tasks = due.filter((r) => r.dueStatus !== 'ok').map((r) => reminder(r.source, r.due, r.dueStatus, today));
@@ -277,7 +281,7 @@ export function tracker({ accounts = [], cards = [], imports = [], txs = [] }, t
   const full = months.filter((k) => k < ymOf(today)).reverse();
   let streak = 0;
   for (const k of full) { if (rows.length && rows.every((r) => ['ok', 'waiting'].includes(statusOf(r.source, r.files, k, today)))) streak++; else break; }
-  return { sources, months, rows, ring: { done, total: rows.length, pct: rows.length ? Math.round((done / rows.length) * 100) : 0 }, tasks, streak };
+  return { sources, months, rows, all: all6, ring: { done, total: rows.length, pct: rows.length ? Math.round((done / rows.length) * 100) : 0 }, tasks, streak };
 }
 
 // One reminder, in plain words, with the date it is about.
@@ -331,7 +335,10 @@ export function checkFile({ source, items = [], fromCard = false, sources = [], 
 // two tabs): out, one for one, so two real purchases on the same day for the
 // same amount both stay when only one of them was saved before. Pure.
 export function withoutSaved(rows, saved) {
-  const key = (t) => [t.tx_date, Number(t.amount).toFixed(2), String(t.description || '').trim(), t.card_id || '', t.account_id || '', t.type || 'expense'].join('|');
+  // A line marked as a transfer between the household's accounts is still
+  // the line it was (an expense or income) when the same file comes again.
+  const kind = (t) => (t.type === 'transfer_in' ? 'income' : t.type === 'transfer_out' ? 'expense' : t.type || 'expense');
+  const key = (t) => [t.tx_date, Number(t.amount).toFixed(2), String(t.description || '').trim(), t.card_id || '', t.account_id || '', kind(t)].join('|');
   const left = new Map();
   for (const t of saved || []) left.set(key(t), (left.get(key(t)) || 0) + 1);
   return (rows || []).filter((r) => {

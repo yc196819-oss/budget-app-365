@@ -1,4 +1,5 @@
 import { withoutSaved } from '../domain/sources.js';
+import { isTransfer, asTransfer, typeBefore } from '../domain/transfers.js';
 import { sb } from '../lib/supabase.js';
 import { track, reportError } from '../lib/telemetry.js';
 import { addMissingCategories } from './onboarding.js';
@@ -45,7 +46,10 @@ export function snapshot() {
     status: state.status,
     error: state.error,
     refreshing: state.refreshing,
-    txs: state.txs.filter((t) => !state.hidden.has(t.id)),
+    // Money moved between the household's own accounts is neither spent nor
+    // earned: every screen counts txs, and the transfers are kept apart.
+    txs: state.txs.filter((t) => !state.hidden.has(t.id) && !isTransfer(t)),
+    transfers: state.txs.filter((t) => !state.hidden.has(t.id) && isTransfer(t)),
     categories: state.categories,
     budgets: state.budgets,
     members: state.members,
@@ -95,7 +99,7 @@ export async function load(hid, userId, { force = false } = {}) {
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
       sb.from('memberships').select('user_id,display_name,gender').eq('household_id', hid),
-      sb.from('bank_accounts').select('id,name,bank_name,provider,salary_day,balance,balance_updated_at').eq('household_id', hid),
+      sb.from('bank_accounts').select('id,name,bank_name,provider,salary_day,cards_only,balance,balance_updated_at').eq('household_id', hid),
       sb.from('credit_cards').select('id,name,provider,bank_account_id,billing_day,last4,owner_user_id,credit_limit,is_active').eq('household_id', hid),
       sb.from('goals').select('*').eq('household_id', hid),
       sb.from('installments').select('*').eq('household_id', hid),
@@ -335,6 +339,31 @@ export async function keepBoth(pair) {
   emit();
   const { error } = await sb.from('dupe_ok').upsert({ household_id: state.hid, pair }, { onConflict: 'household_id,pair' });
   if (error) throw error;
+}
+
+// Lines marked as money moved between the household's own accounts (both
+// sides of each pair), or back to what they were. Only on the household's
+// say-so: the screens ask first.
+export async function markTransfer(ids, on = true) {
+  const set = new Set(ids);
+  const lines = state.txs.filter((t) => set.has(t.id));
+  const before = lines.map((t) => ({ id: t.id, type: t.type }));
+  const next = (t) => (on ? asTransfer(t) : typeBefore(t));
+  state.txs = state.txs.map((t) => (set.has(t.id) ? { ...t, type: next(t) } : t));
+  emit();
+  try {
+    for (const type of new Set(lines.map(next))) {
+      const part = lines.filter((t) => next(t) === type).map((t) => t.id);
+      const { error } = await sb.from('transactions').update({ type }).in('id', part).eq('household_id', state.hid);
+      if (error) throw error;
+    }
+  } catch (err) {
+    const was = new Map(before.map((b) => [b.id, b.type]));
+    state.txs = state.txs.map((t) => (was.has(t.id) ? { ...t, type: was.get(t.id) } : t));
+    emit();
+    throw err;
+  }
+  track(on ? 'transfer_mark' : 'transfer_undo');
 }
 
 // How many people live at home (for "per person" amounts).
