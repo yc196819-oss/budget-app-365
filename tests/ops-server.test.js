@@ -546,7 +546,7 @@ test('where uploads stop: opened, picked, saved; why it failed and where people 
 });
 
 test('every new event name the app sends is allowed, and nothing free-form', () => {
-  for (const n of ['import_open', 'import_file_image', 'import_fail_no_rows', 'import_abandon_review', 'first_value', 'shop_add', 'shop_done', 'shop_reuse']) assert.ok(ops.EVENTS.includes(n), n);
+  for (const n of ['open_desktop', 'open_mobile', 'open_installed', 'import_open', 'import_file_image', 'import_fail_no_rows', 'import_abandon_review', 'first_value', 'shop_add', 'shop_done', 'shop_reuse']) assert.ok(ops.EVENTS.includes(n), n);
   assert.equal(ops.EVENTS.some((n) => /\s/.test(n)), false);
 });
 

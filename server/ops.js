@@ -2,7 +2,7 @@
 // owner looks at (who uses it, who comes back, what breaks). Pure.
 
 // The only events kept: what someone did, never what they wrote or how much.
-const EVENTS = ['app_open', 'tx_add', 'import_done', 'advisor_ask', 'advisor_talk', 'decision_open', 'decision_message', 'trip_plan', 'news_open', 'lesson_done', 'shortcut', 'export', 'restore', 'import_fail', 'guide_step', 'guide_skip', 'learn_auto', 'learn_undo', 'onboard_0', 'onboard_1', 'onboard_2', 'onboard_3', 'onboard_4', 'onboard_5', 'onboard_done', 'share', 'share_joined', 'howto', 'repair_shown', 'repair_fix', 'repair_skip',
+const EVENTS = ['app_open', 'open_desktop', 'open_mobile', 'open_installed', 'tx_add', 'import_done', 'advisor_ask', 'advisor_talk', 'decision_open', 'decision_message', 'trip_plan', 'news_open', 'lesson_done', 'shortcut', 'export', 'restore', 'import_fail', 'guide_step', 'guide_skip', 'learn_auto', 'learn_undo', 'onboard_0', 'onboard_1', 'onboard_2', 'onboard_3', 'onboard_4', 'onboard_5', 'onboard_done', 'share', 'share_joined', 'howto', 'repair_shown', 'repair_fix', 'repair_skip',
   // Where an upload stops: opened, which kind of file, why it failed (a fixed word), left at which step.
   // A click on an email's button (which email it was).
   ...['start', 'first', 'more', 'picture', 'nudge', 'fixed', 'monthly'].map((c) => 'mail_click_' + c),
