@@ -494,3 +494,13 @@ alter table public.mail_sent add constraint mail_sent_campaign_check check (
   or campaign ~ '^thanks-[0-9a-f-]{36}$'
 );
 create index if not exists mail_sent_user_sent on public.mail_sent (user_id, sent_at desc);
+
+-- 2026-11-12 (mail_sent_campaigns): the newer one-time emails ("picture",
+-- "nudge", "fixed") were refused by the check, so nothing was sent for them.
+-- Every name in server/ops.js CAMPAIGNS must be listed here (a test checks).
+alter table public.mail_sent drop constraint if exists mail_sent_campaign_check;
+alter table public.mail_sent add constraint mail_sent_campaign_check check (
+  campaign = any (array['start','first','more','picture','nudge','fixed'])
+  or campaign ~ '^monthly-[0-9]{4}-[0-9]{2}$'
+  or campaign ~ '^thanks-[0-9a-f-]{36}$'
+);
