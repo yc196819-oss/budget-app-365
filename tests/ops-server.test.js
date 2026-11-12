@@ -630,3 +630,9 @@ test('"fixed, upload again": only to whoever had an Excel statement read as empt
   assert.match(m.text, /תקלה אצלנו, לא בקובץ שלך/);
   assert.match(m.html, /href="https:\/\/app\.example\/app\/\?action=import&m=fixed"/);
 });
+
+test('the board offers every email but the retired "first" (its sends stay in the history)', () => {
+  const ops = require('../server/ops');
+  assert.deepEqual(ops.ON_BOARD, ['start', 'more', 'picture', 'nudge', 'fixed']);
+  assert.ok(ops.CAMPAIGNS.includes('first'), 'still known, for its history and numbers');
+});

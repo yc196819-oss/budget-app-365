@@ -328,6 +328,11 @@ function feedbackPatch(body) {
 //   fixed: their Excel statement was read as empty (a fault of ours, fixed
 //          since) and they did not upload after it: "fixed, try again"
 const CAMPAIGNS = ['start', 'first', 'more', 'picture', 'nudge', 'fixed'];
+// The emails the owner can still send. "first" was replaced by "nudge" (the
+// same people, a personal letter with a picture); what it already sent stays
+// in the history and the numbers.
+const RETIRED = ['first'];
+const ON_BOARD = CAMPAIGNS.filter((c) => !RETIRED.includes(c));
 // At most one email a week from us to a person, whatever its kind. Not
 // counted: what the person asked for (the monthly summary they turned on,
 // an answer to their request, sign-in codes, sign-up and password emails,
@@ -936,4 +941,4 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };
+module.exports = { mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, ON_BOARD, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };
