@@ -7,7 +7,7 @@ export const CONFIG = {
   // The AI server is this same origin. There is deliberately no way to
   // override it from the browser.
   apiBase: '',
-  // Who sees the owner's dashboard in the profile. The server checks again
-  // (ADMIN_EMAILS); this only saves everyone else a request.
-  adminEmails: ['budgetapp2852@gmail.com', 'yc196819@gmail.com']
+  // Who sees the owner's dashboard: fingerprints (SHA-256) of the owners'
+  // emails, not the addresses themselves. The server checks again.
+  ownerHashes: ['8ff0b3475c30a05f1ea79f5ef44dfb52fc75db4e5f1b3bb09c06111f902bbd33', '1b7e1165d7b1de7d108a92534c4fabc7795d132f0db4c97c8241efd892b39cda']
 };

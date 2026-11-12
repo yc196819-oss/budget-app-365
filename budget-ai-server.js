@@ -24,6 +24,7 @@ const insights = require('./server/insights');
 const { AsyncLocalStorage } = require('node:async_hooks');
 
 const app = express();
+app.disable('x-powered-by');
 app.set('trust proxy', 1);
 // The app's files go out compressed (about a third of the size). The API is
 // left as is: the advisor's answer streams word by word.
@@ -834,7 +835,10 @@ async function sendMailWithFallback({ userId, to, subject, html, text, headers }
 // Which version of the code is running, and since when (Render names the
 // commit it deployed): to tell whether an update really went up.
 const STARTED_AT = new Date().toISOString();
-app.get('/api/health', async (_req, res) => {
+// Public: only that the server is up. The details are for the owner.
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/admin/health', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   const availableAiProviders = getAvailableAiProviders();
   return res.json({
     ok: true,
@@ -1702,7 +1706,12 @@ process.on('unhandledRejection', (err) => { console.error('unhandledRejection:',
 
 // The owner's numbers (ADMIN_EMAILS): active people, who came back, what is
 // used, and the week's failures.
-const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || 'budgetapp2852@gmail.com,yc196819@gmail.com').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+// The app's own public mailbox by address; other owners only by a SHA-256
+// fingerprint of their email, so no personal address is in the public code.
+// ADMIN_EMAILS in the server's settings can name more.
+const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || 'budgetapp2852@gmail.com').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+const OWNER_HASHES = ['8ff0b3475c30a05f1ea79f5ef44dfb52fc75db4e5f1b3bb09c06111f902bbd33', '1b7e1165d7b1de7d108a92534c4fabc7795d132f0db4c97c8241efd892b39cda'];
+const isOwnerEmail = (email) => ops.isOwnerEmail(email, ADMIN_EMAILS, OWNER_HASHES);
 // Requests from users are emailed to the app's own mailbox only, not to the
 // owner's personal one (FEEDBACK_TO can name another).
 const FEEDBACK_TO = String(process.env.FEEDBACK_TO || ADMIN_EMAILS.find((e) => e.startsWith('budgetapp')) || ADMIN_EMAILS[0] || '').toLowerCase().trim();
@@ -1723,7 +1732,7 @@ const listAllUsers = () => ops.pageAll(async (_from, _to, page) => {
 }).then((users) => ({ data: { users }, error: null }), (error) => ({ data: null, error }));
 async function ownerIds(allUsers) {
   if (allUsers) {
-    ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())).map((u) => u.id) };
+    ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => isOwnerEmail(u.email)).map((u) => u.id) };
   } else if (Date.now() - ownerIdsCache.at > 10 * 60 * 1000 && supabaseAdmin) {
     const { data } = await listAllUsers();
     return ownerIds((data && data.users) || []);
@@ -1832,7 +1841,7 @@ async function isAdmin(userId) {
   if (!supabaseAdmin || !userId) return false;
   const { data } = await supabaseAdmin.auth.admin.getUserById(userId);
   const u = data && data.user;
-  return !!(u && u.email_confirmed_at && ADMIN_EMAILS.includes(String(u.email || '').toLowerCase()));
+  return !!(u && u.email_confirmed_at && isOwnerEmail(u.email));
 }
 
 // Who opened the app today (Israel time), what they did, AI use and errors,
@@ -2371,7 +2380,7 @@ async function thankSharer(ref, req) {
   if (!mailStatus().ready) return;
   const { data } = await listAllUsers();
   const u = ((data && data.users) || []).find((x) => ops.refCode(x.id, ADMIN_SALT) === ref);
-  if (!u || !u.email || ADMIN_EMAILS.includes(String(u.email).toLowerCase())) return;
+  if (!u || !u.email || isOwnerEmail(u.email)) return;
   const { data: pref } = await supabaseAdmin.from('mail_prefs').select('news').eq('user_id', u.id).maybeSingle();
   if (pref && pref.news === false) return;
   if (await mailedThisWeek(u.id)) return;
@@ -2450,7 +2459,7 @@ async function campaignData() {
   for (const m of members || []) if (!first.has(m.user_id)) first.set(m.user_id, m);
   return {
     users: (people && people.users) || [], members: [...first.values()], spans: spans || [],
-    sent: [...(sent || []), ...(oldSent || []).map((r) => ({ user_id: r.user_id, campaign: 'start' }))], owners: ADMIN_EMAILS,
+    sent: [...(sent || []), ...(oldSent || []).map((r) => ({ user_id: r.user_id, campaign: 'start' }))], owners: (people && people.users || []).filter((u) => isOwnerEmail(u.email)).map((u) => String(u.email).toLowerCase()),
     stopped: (off || []).map((r) => r.user_id),
     failed, uploads: uploads || []
   };

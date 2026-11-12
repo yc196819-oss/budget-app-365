@@ -19,7 +19,7 @@ import { AdminView } from './AdminView.js';
 import { FeedbackView } from './FeedbackView.js';
 import { SecurityView } from './SecurityView.js';
 import { telemetryOn, setTelemetry } from '../../lib/telemetry.js';
-import { CONFIG } from '../../config.js';
+import { useOwner } from '../../lib/owner.js';
 
 function TextSize() {
   const [size, setSize] = useState(() => readLocal('text:size', ''));
@@ -40,7 +40,7 @@ export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTh
     setMonthly(on);
     try { await setMonthlyMail(userId, on); } catch (_e) { setMonthly(!on); showToast('לא נשמר. נסו שוב.'); }
   };
-  const isAdmin = CONFIG.adminEmails.includes(String(profile.email || '').toLowerCase());
+  const isAdmin = useOwner(profile.email);
   if (view === 'memories') {
     return html`<${Sheet} title="מה היועץ יודע עלינו" onClose=${onClose}><${MemoriesView} hid=${hid} userId=${userId} onBack=${() => setView('main')} /><//>`;
   }

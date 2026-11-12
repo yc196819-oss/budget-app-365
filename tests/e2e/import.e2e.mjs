@@ -318,3 +318,32 @@ test('choosing to keep the bank charge keeps it', async () => {
   assert.equal(db.tables.transactions.some((t) => t.id === 'bankcharge'), true);
   await page.close();
 });
+
+test('the same statement saved twice: its lines are saved once, and the person is told', async () => {
+  const { makeFakeDb: mk, mockSupabase: mock, signIn: sign } = await import('./helpers.mjs');
+  const db = mk();
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  await page.route('**/api/telemetry', (r) => r.fulfill({ status: 204, body: '' }));
+  await page.route('**/api/ai/import', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"transactions":[]}' }));
+  await mock(page, db); await sign(page, server.base);
+  await page.goto(server.base + '/app/#/home'); await page.waitForSelector('.hero');
+  const p = (d) => { const x = new Date(); x.setMonth(x.getMonth() - 1); x.setDate(d); return String(x.getDate()).padStart(2, '0') + '/' + String(x.getMonth() + 1).padStart(2, '0') + '/' + x.getFullYear(); };
+  const file = makeXlsx([['פירוט עסקאות לכרטיס 4821'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב'], [p(3), 'מסעדה בדויה', '80.00', '80.00'], [p(5), 'חנות בדויה', '120.00', '120.00'], ['', 'סה"כ', '', '200.00']]);
+  const upload = async () => {
+    await page.evaluate(() => { location.search = '?action=import'; });
+    await page.waitForSelector('.sheet input[type="file"]', { state: 'attached' });
+    await page.setInputFiles('.sheet input[type="file"]', { name: 'card.xlsx', mimeType: '', buffer: file });
+    await page.waitForSelector('.sheet button:has-text("לשמור")');
+  };
+  await upload();
+  const before = db.tables.transactions.length;
+  await page.click('.sheet button:has-text("לשמור")');
+  await page.waitForSelector('.toast:has-text("נשמרו")');
+  assert.equal(db.tables.transactions.length, before + 2);
+  // The same lines saved again (as from a second tab, before this one knew): not doubled.
+  const rows = db.tables.transactions.slice(-2).map(({ id, import_id, created_at, ...r }) => r);
+  const again = await page.evaluate(async (r) => { const m = await import('/app/src/data/household.js'); return (await m.addImported(r)).length; }, rows);
+  assert.equal(again, 0);
+  assert.equal(db.tables.transactions.length, before + 2, 'still two');
+  await page.close();
+});

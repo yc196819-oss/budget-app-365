@@ -941,4 +941,12 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
 
-module.exports = { mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, ON_BOARD, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };
+// The owner: by address (the app's own mailbox, or what the server's settings
+// name) or by a SHA-256 fingerprint of the email. Pure.
+function isOwnerEmail(email, emails = [], hashes = []) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return false;
+  if (emails.includes(e)) return true;
+  return hashes.includes(require('crypto').createHash('sha256').update(e).digest('hex'));
+}
+module.exports = { isOwnerEmail, mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, ON_BOARD, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };

@@ -44,11 +44,11 @@ function CardRow({ card, u, members, userId, onClick }) {
   const tone = u.level === 'over' ? 'var(--danger)' : u.level === 'near' ? 'var(--warn, #c98a12)' : 'var(--accent)';
   return html`<button type="button" class="row card-row" onClick=${onClick}>
     <span class="cat-icon" style="background:var(--surface-2)" aria-hidden="true">💳</span>
-    <span class="row-main"><b>${cardLabel(card)}</b><span>${cardSub(card, u.cyc, members, userId)} · עוד לא ירד (הערכה)</span>
+    <span class="row-main"><b>${cardLabel(card)}</b><span>${cardSub(card, u.cyc, members, userId)} · ${u.used ? 'עוד לא ירד (הערכה)' : 'אין הערכה: עוד אין חיובים רשומים מאז החיוב האחרון'}</span>
       ${u.limit !== null && html`<span class="card-limit">
         <span class="bar" role="meter" aria-label="ניצול המסגרת" aria-valuemin="0" aria-valuemax=${u.limit} aria-valuenow=${Math.round(u.used)}><span style=${'width:' + Math.min(100, Math.round(u.ratio * 100)) + '%;background:' + tone}></span></span>
         <span style=${u.level === 'ok' ? '' : 'color:' + tone}>${u.level === 'over' ? 'חריגה של ' + money(-u.left) + ' מהמסגרת' : 'נשארו ' + money(u.left) + ' מתוך ' + money(u.limit)}</span>
       </span>`}</span>
-    <b class="amt num">${'−' + money(u.used)}</b>
+    <b class="amt num">${u.used ? '−' + money(u.used) : html`<span class="faint" aria-label="לא ידוע">—</span>`}</b>
   </button>`;
 }

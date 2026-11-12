@@ -151,7 +151,9 @@ export function sourcesOf({ accounts = [], cards = [] }) {
 export function billingMonth(lastPurchase, billingDay = 10) {
   const d = parse(lastPurchase);
   const day = billingDay || 10;
-  return d.getDate() < day ? ymOf(d) : ym(d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear(), (d.getMonth() + 1) % 12);
+  // A purchase on the charge day itself still ends that month's statement
+  // (a statement downloaded on the 12th that stops on the 10th is the 10th's).
+  return d.getDate() <= day ? ymOf(d) : ym(d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear(), (d.getMonth() + 1) % 12);
 }
 
 // The files that belong to a source: chosen for it when uploaded, or (older
@@ -305,4 +307,18 @@ export function checkFile({ source, items = [], fromCard = false, sources = [], 
   const dupes = items.filter((t) => t.dupe && !t.include).length;
   if (dupes) out.push({ ok: null, text: dupes + ' תנועות כבר קיימות מפירוט קודם: לא יישמרו שוב' });
   return out;
+}
+
+// Lines of a file that are already saved (the same file saved twice, or from
+// two tabs): out, one for one, so two real purchases on the same day for the
+// same amount both stay when only one of them was saved before. Pure.
+export function withoutSaved(rows, saved) {
+  const key = (t) => [t.tx_date, Number(t.amount).toFixed(2), String(t.description || '').trim(), t.card_id || '', t.account_id || '', t.type || 'expense'].join('|');
+  const left = new Map();
+  for (const t of saved || []) left.set(key(t), (left.get(key(t)) || 0) + 1);
+  return (rows || []).filter((r) => {
+    const k = key(r), n = left.get(k) || 0;
+    if (n > 0) { left.set(k, n - 1); return false; }
+    return true;
+  });
 }

@@ -286,7 +286,7 @@ test('a picture with a request: shrunk on the device, sent after the text, and s
 });
 
 test('owner inbox: like a messaging app; unread first, the name, answer and close or ask, notes, read ticks', async () => {
-  const { page, errors } = await open({ email: 'yc196819@gmail.com' });
+  const { page, errors } = await open({ email: 'budgetapp2852@gmail.com' });
   const acts = [];
   const items = [
     { id: 'f1', who: 'רון', label: '#abc123', kind: 'bug', status: 'new', screen: 'money', device: 'טלפון', created_at: '2026-11-02T10:00:00Z', last_at: '2026-11-02T10:05:00Z', last_by: 'user', unread: 2, pinned: false, archived: false, closed: false, helped: null, readByUser: false,

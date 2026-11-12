@@ -28,7 +28,7 @@ import { ProfileSheet } from '../screens/profile/ProfileSheet.js';
 import { AddSheet } from '../screens/add/AddSheet.js';
 import { ImportSheet } from '../screens/import/ImportSheet.js';
 import { PictureSheet, PictureCheck } from '../screens/picture/Picture.js';
-import { CONFIG } from '../config.js';
+import { useOwner } from '../lib/owner.js';
 import { LearnSheet } from '../screens/learn/LearnSheet.js';
 import { ToastHost } from '../components/ToastHost.js';
 import { useHousehold } from '../data/useHousehold.js';
@@ -50,6 +50,7 @@ export function Shell({ tab, session }) {
   setScreen(tab);
   // One overlay at a time: 'profile' | 'add' | 'voice' | 'import' | 'learn' | 'advisor' | 'talk' | null.
   const [overlay, setOverlay] = useState(null);
+  const owner = useOwner(session.user && session.user.email);
   // The account or card an upload is for, when it was started from one.
   const [importFor, setImportFor] = useState(null);
   const openImport = (src) => { setImportFor(src && src.id ? src : null); setOverlay('import'); };
@@ -204,7 +205,7 @@ export function Shell({ tab, session }) {
             <button type="button" class="icon-btn only-mobile" aria-label=${answers > 0 ? 'פרופיל והגדרות, יש תשובה לפנייה שלך' : 'פרופיל והגדרות'} style="position:relative" onClick=${() => { setProfileView('main'); setOverlay('profile'); }}>${profile.initials}${answers > 0 && html`<span class="fb-dot" aria-hidden="true">${answers}</span>`}</button>
           </div>
         </header>
-        ${session.household ? html`<${Screen} key=${tab + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} owner=${CONFIG.adminEmails.includes(String(session.user.email || '').toLowerCase())} onImport=${openImport} onPicture=${() => setOverlay('picture')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
+        ${session.household ? html`<${Screen} key=${tab + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} owner=${owner} onImport=${openImport} onPicture=${() => setOverlay('picture')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
       ${railOn && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} onFloat=${() => setMode('float')} onHide=${() => setMode('button')} />`}
