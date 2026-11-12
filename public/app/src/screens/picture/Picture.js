@@ -6,6 +6,7 @@ import { PROVIDERS, providerOf, tracker, upcoming, monthName, monthShort, howTo,
 import { listSourceFiles, saveRow, archiveCard, deleteRow } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
+import { PictureGuide } from './PictureGuide.js';
 
 // "Complete the picture": the household's banks and cards (with their real
 // logos), a ring for what is due now, a reminder for each missing statement
@@ -187,9 +188,12 @@ export function PictureSheet({ data, onClose, onUpload }) {
   const [view, setView] = useState('now');
   const [focus, setFocus] = useState(null);
   const [closing, setClosing] = useState(false);
+  const [all, setAll] = useState(false);
   useEffect(() => { track('picture_open'); }, []);
   if (!t) return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}><span class="muted">טוען…</span><//>`;
   if (edit) return html`<${Sheet} title="הבנקים והכרטיסים שלכם" onClose=${onClose}><${Picker} data=${data} step=${edit} onStep=${setEdit} onDone=${() => setEdit(false)} /><//>`;
+  // Something to upload: one step at a time, unless all of it was asked for.
+  if (t.tasks.length && !all) return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}><${PictureGuide} tasks=${t.tasks} accounts=${data.accounts} onUpload=${onUpload} onAll=${() => setAll(true)} /><//>`;
   const full = t.tasks.length === 0;
   // Saved before the companies were chosen, and not recognised by name.
   const unknown = sourcesOf({ accounts: data.accounts, cards: data.cards }).filter((x) => !x.provider);

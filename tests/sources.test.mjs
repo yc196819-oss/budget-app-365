@@ -217,3 +217,32 @@ test('saving a file twice saves its lines once; two real twin purchases both sta
   assert.deepEqual(withoutSaved([a], [{ ...a, card_id: 'c2' }]), [a], 'another card is another purchase');
   assert.deepEqual(withoutSaved([a], [{ ...a, amount: '38.00' }]), [], 'amounts compared as numbers');
 });
+
+test('two banks, each with a Max card: two rows, each counted by its own lines; steps ordered by bank', async () => {
+  const { sourcesOf, companiesOf, filesOf, guideOrder } = await import('../public/app/src/domain/sources.js');
+  const accounts = [{ id: 'b1', name: 'החשבון של משה', provider: 'leumi' }, { id: 'b2', name: 'החשבון של רחל', provider: 'hapoalim' }];
+  const cards = [{ id: 'm1', name: 'מקס', provider: 'max', bank_account_id: 'b1', last4: '1928' }, { id: 'm2', name: 'מקס', provider: 'max', bank_account_id: 'b2', last4: '2928' }, { id: 'i1', name: 'ישראכרט', provider: 'isracard', bank_account_id: 'b1' }];
+  const rows = companiesOf(sourcesOf({ accounts, cards }));
+  assert.equal(rows.filter((r) => r.provider === 'max').length, 2, 'one Max row per bank');
+  // One file chosen for m1 with lines of both cards: m2 gets it too, for its own dates.
+  const imports = [{ id: 'f1', source_kind: 'card', source_id: 'm1', date_from: '2026-10-05', date_to: '2026-11-08' }];
+  const txs = [{ import_id: 'f1', tx_date: '2026-10-05', card_id: 'm1' }, { import_id: 'f1', tx_date: '2026-10-20', card_id: 'm2' }, { import_id: 'f1', tx_date: '2026-11-02', card_id: 'm2' }];
+  const m2 = sourcesOf({ accounts, cards }).find((x) => x.id === 'm2');
+  assert.deepEqual(filesOf(m2, { imports, txs, banks: 2 }), [{ id: 'f1', date_from: '2026-10-20', date_to: '2026-11-02' }]);
+  const i1 = sourcesOf({ accounts, cards }).find((x) => x.id === 'i1');
+  assert.deepEqual(filesOf(i1, { imports, txs, banks: 2 }), [], 'a card with no lines in it gets nothing');
+  const all = sourcesOf({ accounts, cards });
+  const tasks = ['m2', 'i1', 'b2', 'b1'].map((id) => ({ source: all.find((x) => x.id === id) }));
+  const steps = guideOrder(tasks, accounts);
+  assert.deepEqual(steps.map((t) => t.source.id), ['b1', 'i1', 'b2', 'm2'], 'bank, its cards, next bank, its cards');
+  assert.deepEqual(steps.map((t) => t.bank), ['החשבון של משה', 'יורד מהחשבון של משה', 'החשבון של רחל', 'יורד מהחשבון של רחל']);
+});
+
+test('"found one card of two" counts only the company\'s cards of the same bank', async () => {
+  const { missingCards, sourcesOf } = await import('../public/app/src/domain/sources.js');
+  const cards = [{ id: 'm1', provider: 'max', bank_account_id: 'b1', last4: '4821' }, { id: 'm2', provider: 'max', bank_account_id: 'b2', last4: '2928' }, { id: 'm3', provider: 'max', bank_account_id: 'b1', last4: '7777' }];
+  const sources = sourcesOf({ accounts: [], cards });
+  const m1 = sources.find((x) => x.id === 'm1');
+  assert.deepEqual(missingCards({ source: m1, items: [{ card4: '4821' }], sources }), { found: 1, total: 2 }, 'm3 is of the same bank');
+  assert.equal(missingCards({ source: m1, items: [{ card4: '4821' }], sources: sources.filter((x) => x.id !== 'm3') }), null, 'm2 is another bank\'s');
+});

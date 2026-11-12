@@ -12,6 +12,17 @@ const today = new Date();
 const ym = (k) => { const d = new Date(today.getFullYear(), today.getMonth() - k, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
 const dd = (k, day) => { const d = new Date(today.getFullYear(), today.getMonth() - k, day); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); };
 
+// Opens "complete the picture" on its full list (with something to upload,
+// it opens on the one-step-at-a-time guide first).
+async function openAll(page) {
+  // After an upload started from it, it is open again by itself.
+  await page.waitForTimeout(300);
+  if (!(await page.locator('.sheet[aria-label="השלמת התמונה"]').count())) await page.click('.pic-card');
+  await page.waitForSelector('.pg, .pic-history, .pic-picker, .pic-task');
+  const all = page.locator('.pg .pg-link:has-text("לראות את כל")');
+  if (await all.count()) await all.click();
+}
+
 async function open(width, setup) {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   const db = makeFakeDb();
@@ -28,7 +39,7 @@ async function open(width, setup) {
 test('first time: banks, then cards (how many of each, and the bank own cards), with the days reminders need', async () => {
   const { page, db, errors } = await open(390, (d) => { d.tables.bank_accounts = []; d.tables.credit_cards = []; d.tables.imports = []; });
   assert.match(await page.locator('.pic-card').textContent(), /איפה הכסף שלכם/);
-  await page.click('.pic-card');
+  await openAll(page);
   await page.waitForSelector('.pic-picker');
   // Step 1: the banks, Pagi among them.
   assert.match(await page.locator('.pic-title').textContent(), /באיזה בנק/);
@@ -63,6 +74,10 @@ test('first time: banks, then cards (how many of each, and the bank own cards), 
   assert.equal(db.tables.credit_cards.filter((c) => c.provider === 'leumi').length, 1);
   assert.match(await page.locator('.pic-chosen').textContent(), /אשראי לאומי/);
   await page.click('.pic-chosen button:has-text("סיימתי")');
+  // With statements to upload, the guide comes first: one step at a time.
+  await page.waitForSelector('.pg-hero');
+  assert.match(await page.locator('.pg-hero').textContent(), /עוד 3 פירוטים/);
+  await page.click('.pg-link:has-text("לראות את כל")');
   await page.waitForSelector('.pic-list');
   // One statement for each: the bank, Max (both cards), and Leumi's own cards.
   assert.equal(await page.locator('.pic-task').count(), 3);
@@ -91,7 +106,7 @@ test('a file of another company moves there without uploading again, and its lin
     d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10 }, { id: 'c2', household_id: d.hid, name: 'כאל', provider: 'cal', billing_day: 10 }];
     d.tables.imports = [];
   });
-  await page.click('.pic-card');
+  await openAll(page);
   await page.waitForSelector('.pic-task');
   await page.click('.pic-task:has-text("מקס") .pic-item-main');
   await page.click('.pic-focus button:has-text("להעלות את הקובץ")');
@@ -112,7 +127,7 @@ test('a file of another company moves there without uploading again, and its lin
   assert.ok(imp, 'the file is kept as Cal\'s');
   assert.ok(db.tables.transactions.filter((t) => t.import_id === imp.id).every((t) => t.card_id === 'c2'));
   // A company not in the list yet: added, and the file goes to it.
-  await page.click('.pic-card');
+  await openAll(page);
   await page.waitForSelector('.pic-task');
   await page.click('.pic-task:has-text("מקס") .pic-item-main');
   await page.click('.pic-focus button:has-text("להעלות את הקובץ")');
@@ -138,7 +153,7 @@ test('the ring and 6 months: what is uploaded, what is missing, and an upload fr
   });
   // The bank's last month is in; the card's statement of this month is not.
   assert.match(await page.locator('.pic-card').textContent(), /50%.*חסר פירוט אחד/);
-  await page.click('.pic-card');
+  await openAll(page);
   await page.waitForSelector('.pic-history');
   assert.equal(await page.locator('.pic-ring2 b').textContent(), '1/2');
   assert.equal(await page.locator('.pic-tr').count(), 3, 'a header and two accounts');
@@ -177,7 +192,7 @@ test('a bank file is kept as the bank account\'s, and a card file chosen for the
     d.tables.credit_cards = [];
     d.tables.imports = [];
   });
-  await page.click('.pic-card');
+  await openAll(page);
   await page.waitForSelector('.pic-task');
   await page.click('.pic-task .pic-item-main');
   await page.click('.pic-focus button:has-text("להעלות את הקובץ")');
@@ -217,7 +232,7 @@ test('a company with two cards: a file with only one of them says so, and can be
     d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10, last4: '4821' }, { id: 'c2', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10, last4: '5555' }];
     d.tables.imports = [];
   });
-  await page.click('.pic-card');
+  await openAll(page);
   await page.waitForSelector('.pic-task');
   assert.equal(await page.locator('.pic-task').count(), 1, 'one statement for the company');
   await page.click('.pic-task .pic-item-main');
@@ -240,7 +255,7 @@ test('accounts and cards saved before the companies: named ones get their logo, 
     d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'רמי לוי', billing_day: 10 }, { id: 'c2', household_id: d.hid, name: 'הכרטיס של קובי', billing_day: 10 }];
     d.tables.imports = [];
   });
-  await page.click('.pic-card');
+  await openAll(page);
   await page.waitForSelector('.pic-hint');
   // Rami Levy's card is Isracard's: its logo, not a question.
   assert.equal(await page.locator('.pic-task img[alt="ישראכרט"]').count(), 1);
@@ -339,6 +354,40 @@ test('a card charged a day ago: said once, by the picture card, not again under 
   await page.waitForSelector('.pic-card');
   await page.waitForSelector('.hero');
   assert.doesNotMatch(await page.locator('.home').textContent(), /ירד ב-/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('one step at a time: two banks with a Max card each, in bank order; after an upload, a ✓ and the next', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.bank_accounts = [{ id: 'b1', household_id: d.hid, name: 'החשבון של משה', provider: 'leumi', balance: 1 }, { id: 'b2', household_id: d.hid, name: 'החשבון של רחל', provider: 'hapoalim', balance: 1 }];
+    d.tables.credit_cards = [{ id: 'm2', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 1, last4: '2928', bank_account_id: 'b2' }, { id: 'm1', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 1, last4: '4821', bank_account_id: 'b1' }];
+    d.tables.imports = [1, 2, 3].flatMap((k) => [{ id: 'x' + k, household_id: d.hid, source_kind: 'bank', source_id: 'b1', date_from: ym(k) + '-01', date_to: ym(k) + '-28' }, { id: 'y' + k, household_id: d.hid, source_kind: 'bank', source_id: 'b2', date_from: ym(k) + '-01', date_to: ym(k) + '-28' }]);
+  });
+  await page.click('.pic-card');
+  await page.waitForSelector('.pg-hero');
+  assert.match(await page.locator('.pg-hero').textContent(), /עוד 2 פירוטים/);
+  assert.deepEqual(await page.locator('.pg-bank').allTextContents(), ['החשבון של משה', 'החשבון של רחל'], 'grouped by bank, in order');
+  assert.match(await page.locator('.pg-mini').nth(0).textContent(), /4821.*יורד מהחשבון של משה/);
+  assert.match(await page.locator('.pg-mini').nth(1).textContent(), /2928.*יורד מהחשבון של רחל/);
+  await page.click('.pg-go:has-text("בואו נתחיל")');
+  await page.waitForSelector('.pg-card h2');
+  assert.match(await page.locator('.pg-card h2').textContent(), /מקס ••4821/);
+  assert.match(await page.locator('.pg-card').textContent(), /יורד מהחשבון של משה/);
+  // Upload this one: the sheet knows the card, and after saving, back to a ✓.
+  await page.click('.pg-go:has-text("להעלות את הקובץ")');
+  await page.waitForSelector('.sheet:has-text("העלאת פירוט")');
+  const xlsx = makeXlsx([['פירוט עסקאות לכרטיס 4821'], [], ['תאריך עסקה', 'שם בית העסק', 'סכום עסקה', 'סכום חיוב'], [dd(1, 3), 'מסעדה בדויה', '80.00', '80.00'], [dd(1, 20), 'חנות בדויה', '120.00', '120.00'], ['', 'סה"כ', '', '200.00']]);
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: xlsx });
+  assert.equal(await page.locator('.sheet:has-text("נמצא כרטיס אחד מתוך")').count(), 0, 'the other bank\'s Max is not asked for here');
+  const saveBtn = page.locator('.sheet button', { hasText: /לשמור \d/ });
+  await saveBtn.waitFor();
+  await saveBtn.click();
+  await page.waitForSelector('.pg-check');
+  assert.match(await page.locator('.pg-card').textContent(), /מקס ••4821 מעודכן.*הבא: מקס ••2928.*האחרון/);
+  assert.ok(db.tables.imports.some((f) => f.source_id === 'm1'), 'saved as the card of the first bank');
+  await page.click('.pg-go:has-text("להמשיך")');
+  assert.match(await page.locator('.pg-card h2').textContent(), /מקס ••2928/);
   assert.deepEqual(errors, []);
   await page.close();
 });

@@ -54,6 +54,8 @@ export function Shell({ tab, session }) {
   // The account or card an upload is for, when it was started from one.
   const [importFor, setImportFor] = useState(null);
   const openImport = (src) => { setImportFor(src && src.id ? src : null); setOverlay('import'); };
+  // An upload started from "complete the picture" comes back to it (to its ✓).
+  const [backTo, setBackTo] = useState(null);
   // Opened as the advisor's own window (desktop): only the conversation.
   const [solo, setSolo] = useState(() => /^#\/advisor/.test(location.hash));
   useEffect(() => {
@@ -219,8 +221,8 @@ export function Shell({ tab, session }) {
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} startTalk=${true} />` : html`<${Loading} />`}
       <//>`}
       ${overlay === 'learn' && html`<${LearnSheet} userId=${session.user.id} householdId=${session.household ? session.household.household_id : null} data=${session.household && data.status === 'ready' ? data : null} onClose=${close} />`}
-      ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} key=${importFor ? importFor.id : 'any'} data=${data} source=${importFor} onClose=${close} />`}
-      ${overlay === 'picture' && session.household && data.status === 'ready' && html`<${PictureSheet} data=${data} onClose=${close} onUpload=${openImport} />`}
+      ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} key=${importFor ? importFor.id : 'any'} data=${data} source=${importFor} onClose=${() => { setOverlay(backTo); setBackTo(null); }} />`}
+      ${overlay === 'picture' && session.household && data.status === 'ready' && html`<${PictureSheet} data=${data} onClose=${close} onUpload=${(src) => { setBackTo('picture'); openImport(src); }} />`}
       ${overlay === 'advisor' && !railOn && html`<${Sheet} title="היועץ" onClose=${close}>
         ${desktop && html`<span class="adv-modes"><button type="button" class="btn-text rail-pin" onClick=${() => setMode('side')}>להציג קבוע בצד המסך</button> · <button type="button" class="btn-text float-pin" onClick=${() => setMode('float')}>כחלון צף</button></span>`}
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} />` : html`<${Loading} />`}
