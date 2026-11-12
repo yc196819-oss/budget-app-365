@@ -2036,18 +2036,22 @@ async function runFreeLoad() {
   Object.assign(seedJob, { running: true, part: 0, parts: pricefiles.CHAINS.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null, free: true, chainsDone: [] });
   try {
     const keys = pricefiles.CHAINS.map((c) => c.key);
-    const rows = [];
+    // Each chain is saved as soon as it is read, and let go: holding every
+    // chain's file until the end ran the server out of memory at night,
+    // and then nothing was saved.
     for (const key of keys) {
       seedJob.part++;
       const [r] = await pricefiles.allChains(fetch, { only: [key] });
-      for (const x of r.rows) rows.push(x);
-      seedJob.added += r.count;
-      seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error: r.error || null });
+      let error = r.error || null;
+      if (r.rows.length) await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
+      seedJob.added += error ? 0 : r.count;
+      seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error });
+      console.log('prices:', r.key, r.count, error || 'ok');
     }
-    if (rows.length) await saveCatalog(rows);
-    // Every chain's branches, then the branches families live near.
+    // Every chain's branches, then the branches families live near (their
+    // chain's prices read back from the catalog).
     await saveStores().catch((e) => console.error('stores failed:', e.message));
-    await loadLocal(rows).catch((e) => console.error('local prices failed:', e.message));
+    await loadLocal(null).catch((e) => console.error('local prices failed:', e.message));
     // Prices of a chain that left (or a product it stopped selling) older
     // than two weeks are not shown as today's price.
     await supabaseAdmin.from('price_offers').delete().lt('seen_at', new Date(Date.now() - 14 * 86400000).toISOString());
