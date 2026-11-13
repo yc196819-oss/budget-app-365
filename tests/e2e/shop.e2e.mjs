@@ -1,6 +1,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { startServer, launchBrowser, makeFakeDb, mockSupabase, signIn, collectErrors } from './helpers.mjs';
+const AXE = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 
 let server;
 let browser;
@@ -625,3 +628,39 @@ test('an area with no branch of any chain near it: no far chain is compared, and
   await page.close();
   assert.deepEqual(errors, []);
 });
+
+// The comparison only the owner sees: deals, a club deal, two chains, the
+// settings open, in light and dark: WCAG 2 AA (as the a11y test does for
+// the other screens).
+for (const scheme of ['light', 'dark']) {
+  test('the full price comparison passes WCAG 2 AA (' + scheme + ')', async () => {
+    const { page, errors } = await open(390, (d) => {
+      d.tables.shopping_items = [
+        { id: 's1', household_id: d.hid, name: 'קרקרים', qty: '×2', aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null },
+        { id: 's2', household_id: d.hid, name: 'במבה', qty: null, aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null },
+        { id: 's3', household_id: d.hid, name: 'שמן זית', qty: null, aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }
+      ];
+      d.tables.price_prefs = [{ household_id: d.hid, kosher: 'mehadrin', certs: ['הרב לנדא'] }];
+    }, OWNER);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const deal = { everyone: true, coupon: false, min_buy: 0, ends_at: '2026-12-05T21:59:00Z' };
+    await page.route('**/rest/v1/rpc/price_search', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+      { q: 1, barcode: '5001', name: 'קרקרים 300 גרם', names: '', qty: 300, unit: 'גרם', kosher: { owner_cert: 'הרב לנדא' }, offers: [{ chain: 'x', chain_name: 'רשת א', price: 9.9, promos: [{ ...deal, need: 2, unit_price: 7.5 }] }, { chain: 'y', chain_name: 'רשת ב', price: 8.9 }] },
+      { q: 2, barcode: '5002', name: 'במבה 80 גרם', names: '', qty: 80, unit: 'גרם', kosher: {}, offers: [{ chain: 'x', chain_name: 'רשת א', price: 4.5, promos: [{ ...deal, everyone: false, club: 'club', need: 1, unit_price: 2.5 }] }, { chain: 'y', chain_name: 'רשת ב', price: 4.9 }] },
+      { q: 3, barcode: '5003', name: 'שמן זית 750 מ"ל', names: '', qty: 750, unit: 'מ"ל', kosher: {}, offers: [{ chain: 'x', chain_name: 'רשת א', price: 50 }, { chain: 'y', chain_name: 'רשת ב', price: 25 }] }
+    ]) }));
+    await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+    await page.click('.shop-prices-cta button');
+    await page.locator('.pp-hero').waitFor();
+    await page.locator('.pp-set summary').click();
+    await page.locator('.price-item', { hasText: 'קרקרים' }).first().locator('.pp-row-h').click();
+    // (Run through the test tool: the site's security policy rightly refuses
+    // an injected script tag.)
+    await page.evaluate(AXE);
+    await page.waitForTimeout(700);
+    const v = await page.evaluate(async () => (await window.axe.run(document.querySelector('.price-panel'), { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] }, resultTypes: ['violations'] })).violations.map((x) => x.id + ': ' + x.nodes.slice(0, 3).map((n) => n.target.join(' ') + ' ' + (n.failureSummary || '').split('\n').slice(1, 2).join('')).join(' | ')));
+    assert.deepEqual(v, []);
+    await page.close();
+    assert.deepEqual(errors, []);
+  });
+}

@@ -1334,7 +1334,7 @@ body.chat-open { overflow: hidden; }
 .chip-no { color: var(--danger); }
 .price-cert-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .price-pref-certs { font-size: 13.5px; }
-.kosher small { font-weight: 600; opacity: .85; }
+.kosher small { font-weight: 600; }
 .kosher-fits { background: var(--income-tint); color: var(--income); }
 .kosher-other { background: var(--surface-2); color: var(--muted); }
 .kosher-free { background: var(--surface-2); color: var(--muted); }

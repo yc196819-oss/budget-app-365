@@ -317,7 +317,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
         return html`<details class="pp-two"><summary>בשתי רשתות: <b class="num">${fmt(t.total)}</b>, עוד <b class="num">${fmt(t.saved)}</b> פחות</summary>
           <span>ב${t.b.name}: ${names(t.atB).join(', ')}</span><span>ב${t.a.name}: כל השאר</span></details>`; })()}
       ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת הרשת היקרה ביותר בהשוואה</span>`}
-      <div class="pp-bars" role="list" aria-label="הסל בכל רשת">${top.map((c) => html`<button type="button" role="listitem" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
+      <div class="pp-bars" role="group" aria-label="הסל בכל רשת: לבחור רשת">${top.map((c) => html`<button type="button" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
         <span class="pp-bar-n">${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span>
         <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i>${c.gap > 0 && html`<b class="pp-bar-gap" style=${'width:' + Math.round((c.gap / most) * 100) + '%'}></b>`}</span>
         <span class="pp-bar-v num">${fmt(c.total)}</span>
