@@ -667,3 +667,21 @@ for (const scheme of ['light', 'dark']) {
     assert.deepEqual(errors, []);
   });
 }
+
+test('a long list (90 items, a family before a holiday): searched in parts of up to 40, and every item gets its prices', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = Array.from({ length: 90 }, (_, i) => ({ id: 's' + i, household_id: d.hid, name: i === 0 ? 'חלב 3%' : 'מוצר ' + i, qty: null, aisle: 'other', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }));
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+  }, OWNER);
+  const { calls, cat } = await priceRoutes(page);
+  // Made-up products, one for each item.
+  for (let i = 1; i < 90; i++) cat['מוצר ' + i] = [{ barcode: String(9000 + i), name: 'מוצר ' + i + ' 1 ק"ג', names: '', qty: 1, unit: 'ק"ג', offers: [{ chain: 'x', chain_name: 'רשת א', price: 10 }, { chain: 'y', chain_name: 'רשת ב', price: 11 }], kosher: {} }];
+  await page.click('.shop-prices-cta button');
+  await page.locator('.pp-hero').waitFor();
+  assert.equal(calls.search.length, 3, 'three parts');
+  assert.ok(calls.search.every((q) => q.length <= 40));
+  assert.equal(calls.search.flat().length, 90, 'each item once');
+  assert.match(await page.locator('.price-count').textContent(), /יש מחיר: 90 מתוך 90/);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
