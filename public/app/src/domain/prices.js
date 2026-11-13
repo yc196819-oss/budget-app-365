@@ -524,6 +524,25 @@ export function twoChains(rows, { min = 15, top = 6 } = {}) {
   return out;
 }
 
+// The list to take to one chain, as text to send to whoever goes shopping:
+// each item, the product to take there and what it costs, and what that
+// chain does not have.
+//   row: a chain's row from basket(); items: [{ id, name, qty }].
+export function chainListText(row, items) {
+  const money = (n) => '₪' + (Math.round(n * 100) / 100).toFixed(2);
+  const lines = [];
+  const missing = [];
+  for (const it of items) {
+    const l = row.lines.find((x) => x.id === it.id);
+    if (!l) continue;
+    if (!l.product) { missing.push(it.name); continue; }
+    const z = sizeText(sizeOfProduct(l.product));
+    lines.push('☐ ' + it.name + (it.qty ? ' ' + it.qty : '') + ': ' + l.product.name + (z && !l.product.name.includes(z) ? ' ' + z : '') + ' · ' + money(l.cost != null ? l.cost : l.price) + (l.promo ? ' (במבצע)' : ''));
+  }
+  return ['רשימה לקנייה ב' + row.name + (row.store ? ' (' + row.store + ')' : '') + ': בערך ' + money(row.total), '', ...lines,
+    ...(missing.length ? ['', 'אין ב' + row.name + ': ' + missing.join(', ')] : []), '', 'מ"התקציב שלנו"'].join('\n');
+}
+
 // Chains that do not sell every day: shown with what to know, and when one
 // of them is the cheapest, the cheapest of the always-open chains too.
 export const CHAIN_NOTES = {

@@ -120,3 +120,16 @@ test('round 11: with an area, only the chains with a branch near it, even when t
   assert.deepEqual(nearby(cat, true, [])['חלב'][0].offers, [], 'no branch near: not the far general price');
   assert.equal(nearby(cat, false), cat, 'no area chosen: every chain');
 });
+
+test('round 16: the list to take to one chain, as text to send', async () => {
+  const { chainListText } = await import('../public/app/src/domain/prices.js');
+  const row = { name: 'רשת א', store: 'סניף בדוי', total: 27.4, lines: [
+    { id: '1', product: { name: 'חלב 3% 1 ליטר', qty: 1, unit: 'ליטר' }, price: 6.2, cost: 12.4 },
+    { id: '2', product: { name: 'קרקרים 300 גרם', qty: 300, unit: 'גרם' }, price: 9.9, cost: 15, promo: { need: 2 } },
+    { id: '3', product: null }] };
+  const t = chainListText(row, [{ id: '1', name: 'חלב 3%', qty: '×2' }, { id: '2', name: 'קרקרים', qty: '×2' }, { id: '3', name: 'קפה' }]);
+  assert.match(t, /^רשימה לקנייה ברשת א \(סניף בדוי\): בערך ₪27\.40/);
+  assert.match(t, /☐ חלב 3% ×2: חלב 3% 1 ליטר · ₪12\.40/);
+  assert.match(t, /☐ קרקרים ×2: קרקרים 300 גרם · ₪15\.00 \(במבצע\)/);
+  assert.match(t, /אין ברשת א: קפה/);
+});

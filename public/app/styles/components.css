@@ -1678,6 +1678,8 @@ body.chat-open { overflow: hidden; }
 .pp-two { font-size: 13.5px; color: #F4D9A6; margin-top: 2px; }
 .pp-two summary { cursor: pointer; }
 .pp-two span { display: block; color: #F6E7CC; line-height: 1.55; margin-top: 2px; }
+.pp-send { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13.5px; color: #F6E7CC; margin-top: 4px; }
+.pp-send .btn-text { color: #F4D9A6; font-weight: 800; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; }
 .pp-deals { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #F4D9A6; margin-top: 2px; }
 .pp-more { display: grid; gap: 8px; padding: 0 0 14px; animation: admin-rise .3s var(--out, ease) both; }
 .pp-chosen { font-size: 12.5px; font-weight: 800; color: var(--income); padding: 0 6px; }

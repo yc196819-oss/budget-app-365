@@ -606,6 +606,9 @@ test('two chains: when splitting the list between two saves enough, the hero say
   assert.match(await two.locator('summary').textContent(), /בשתי רשתות: ₪45\.00, עוד ₪20\.00 פחות/);
   await two.locator('summary').click();
   assert.match(await two.textContent(), /ברשת א: קפה.*ברשת ב: כל השאר/, 'the cheapest single chain is B; only the coffee moves to A');
+  // The chosen chain's list, ready to send to whoever goes shopping.
+  const wa = decodeURIComponent(await page.locator('.pp-send a').getAttribute('href'));
+  assert.match(wa, /רשימה לקנייה ברשת ב.*☐ קפה: קפה 200 גרם · ₪40\.00.*☐ שמן זית: שמן זית 750 מ"ל · ₪25\.00/s);
   await page.close();
   assert.deepEqual(errors, []);
 });

@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
@@ -317,6 +317,8 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
         return html`<details class="pp-two"><summary>בשתי רשתות: <b class="num">${fmt(t.total)}</b>, עוד <b class="num">${fmt(t.saved)}</b> פחות</summary>
           <span>ב${t.b.name}: ${names(t.atB).join(', ')}</span><span>ב${t.a.name}: כל השאר</span></details>`; })()}
       ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת הרשת היקרה ביותר בהשוואה</span>`}
+      ${(() => { const text = chainListText(shown, open); const copy = async () => { try { await navigator.clipboard.writeText(text); showToast('הרשימה של ' + shown.name + ' הועתקה'); track('price_list_copy'); } catch (_e) { showToast('לא הצלחנו להעתיק.'); } };
+        return html`<div class="pp-send"><span>לשלוח למי שהולך לקנות:</span><a class="btn-text" href=${'https://wa.me/?text=' + encodeURIComponent(text)} target="_blank" rel="noopener" onClick=${() => track('price_list_wa')}>וואטסאפ</a><button type="button" class="btn-text" onClick=${copy}>להעתיק</button></div>`; })()}
       <div class="pp-bars" role="group" aria-label="הסל בכל רשת: לבחור רשת">${top.map((c) => html`<button type="button" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
         <span class="pp-bar-n">${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span>
         <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i>${c.gap > 0 && html`<b class="pp-bar-gap" style=${'width:' + Math.round((c.gap / most) * 100) + '%'}></b>`}</span>
