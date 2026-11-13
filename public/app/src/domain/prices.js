@@ -98,17 +98,29 @@ function sizeOf(qty, unitText) {
 }
 // The size written in the product's name, when the file has none: "300
 // גרם", "1.5 ל'", "6*40 גרם" (a pack of six), "12 יח'".
-const NAME_SIZE = /(\d+(?:[.,]\d+)?)\s*(?:[*xX×]\s*(\d+(?:[.,]\d+)?))?\s*(ק"ג|ק״ג|קג|קילו|גרם|גר'|גר|ג'|מ"ל|מ״ל|מל|ליטר|ל'|יח'|יחידות)(?![א-ת])/;
+const NAME_SIZE = /(\d+(?:[.,]\d+)?)\s*(?:[*xX×]\s*(\d+(?:[.,]\d+)?))?\s*(ק"ג|ק״ג|קג|קילו|גרם|גר'|גר|ג'|מ"ל|מ״ל|מל|ליטר|ל'|יח'|יחידות|יח)(?![א-ת])/;
 function sizeFromName(name) {
   const m = NAME_SIZE.exec(String(name || ''));
   if (!m) return null;
   const n = Number(m[1].replace(',', '.')) * (m[2] ? Number(m[2].replace(',', '.')) : 1);
   return sizeOf(n, m[3]);
 }
+// A pack of several ("שישייה", "רביעיות") priced as one package: its size is
+// all of them. Not when the name already says how many times how much
+// ("4 * 140 גרם"): that size is the whole pack already.
+const PACK = [[/שישי(?:י)?ה|שישיות/, 6], [/חמישי(?:י)?ה|חמישיות/, 5], [/רביעי(?:י)?ה|רביעיות/, 4], [/שלישי(?:י)?ה|שלישיות/, 3]];
+function packOf(name) {
+  const n = String(name || '');
+  if (/\d\s*[*xX×]\s*\d/.test(n)) return 1;
+  for (const [re, k] of PACK) if (re.test(n)) return k;
+  return 1;
+}
 export function size(qty, unitText, name) {
-  const a = sizeOf(qty, unitText);
+  let a = sizeOf(qty, unitText);
   // "1 unit" in the file says nothing; the name's weight or volume does.
-  if (name && (!a || (a.unit === 'unit' && a.qty <= 1))) { const b = sizeFromName(name); if (b) return b; }
+  if (name && (!a || (a.unit === 'unit' && a.qty <= 1))) { const b = sizeFromName(name); if (b) a = b; }
+  const k = name ? packOf(name) : 1;
+  if (k > 1 && a && !(a.unit === 'unit' && a.qty <= 1)) return { ...a, qty: a.qty * k };
   return a;
 }
 // A product's size: from the file, or else from its name.
@@ -153,15 +165,19 @@ export function score(query, product) {
 
 // ── a product's prices and kashrut ──
 // The cheapest price of a product at any chain, and per unit of size.
-// A chain's price that cannot be right: under 30 agorot, or under a fifth of
+// A chain's price that cannot be right: under 30 agorot, under a fifth of
 // what the other chains ask for the same product (a price per 100 grams
-// written as the price of the package).
+// written as the price of the package), or far above it (the price of a
+// whole crate written as the price of a kilo of bananas: ₪55 where another
+// chain asks ₪7.90).
 export function validOffers(product) {
   const all = (product.offers || []).filter((o) => o.price >= 0.3);
-  if (all.length < 3) return all;
+  if (all.length < 2) return all;
   const sorted = all.map((o) => o.price).sort((a, b) => a - b);
+  if (all.length === 2) return sorted[1] > sorted[0] * 3 ? all.filter((o) => o.price === sorted[0]) : all;
   const median = sorted[Math.floor(sorted.length / 2)];
-  return all.filter((o) => o.price >= median * 0.2);
+  const low = sorted[Math.floor((sorted.length - 1) / 2)];
+  return all.filter((o) => o.price >= median * 0.2 && o.price <= low * 2.5);
 }
 export function bestPrice(product) {
   const offers = validOffers(product);
@@ -201,12 +217,22 @@ export function allowed(product, pref) {
 // person means by "עגבניות", "בצל", "תה" or "עוף" unless they typed it.
 // Words that make a product a special kind of the thing typed: a person who
 // writes "קפה" or "קמח" means the ordinary one, not capsules or pizza flour.
-const SPECIAL = /קפסול|מחית|ללא גל|פיצה|כוסמין|אורגני|ללא גלוטן|גלוטן|(^|\s)GO(\s|$)|חלבון|פרוטאין|לקישוט|דיאט|לייט|זירו|ספריי|מיני(\s|$)|לתינוק|תינוקות|ללא לקטוז|קטו(\s|$)|טבעוני/i;
+const SPECIAL = /קפסול|מחית|ללא גל|פיצה|כוסמין|אורגני|ללא גלוטן|גלוטן|(^|\s)GO(\s|$)|חלבון|פרוטאין|לקישוט|דיאט|לייט|זירו|ספריי|מיני(\s|$)|לתינוק|תינוקות|ללא לקטוז|קטו(\s|$)|טבעוני|(^|\s)מלאה?(\s|$)|סושי|סטיקי/i;
+// A flavour or an addition ("חמוץ חריף", "עם לימון", "נוגט"): still the
+// product, but the plain one comes first when the list says just "במבה".
+const FLAVOUR = /חריף|חמוץ|במילוי|נוגט|ברביקיו|צ['׳]?דר|(^|\s)עם(\s|$)|יום הולדת|מתובל|לימון|פלפל|שום|בצל|שמיר|זעתר|קינואה|ג['׳]?ינג['׳]?ר|מאנצ/;
+const FLAVOUR_ALL = new RegExp(FLAVOUR.source, 'g');
+export function flavoured(name, query) {
+  const found = String(name || '').match(FLAVOUR_ALL);
+  if (!found) return false;
+  // Asked for one of its flavours: it is what they want.
+  return !found.some((f) => String(query || '').includes(f.trim()));
+}
 export function special(name, query) {
   const n = String(name || '').match(SPECIAL);
   return !!n && !String(query || '').toLowerCase().includes(n[0].trim().toLowerCase());
 }
-const MADE = /סיידר|מרוסק|חתוכ|מקולפ|במלח|בחומץ|חמוצ|מטוגן|קפוא|מצופ|בציפוי|צ['׳]?יפס|ציפס|שוקולד|במילוי|ממולא|בטעם|פקק|נאט|מיקרו|רסק|ממרח|סלט|שניצל|נקניק|פסטרמה|צונגו|קציצ|מעושן|משומר|שימורי|מיובש|פירה|רוטב|מתוק|חטיף|עוגיות|מאפה|גלידה|נגיסי|אצבעות|פרוס|מקורמל|פריכי|קרם|קוביות|מיקס|ירוק|קצוץ|קצוצ|מוקפא|מיץ|משקה|נקטר|(^|\s)מלח(\s|$)|(^|\s)חומץ(\s|$)|(^|\s)קר(\s|$)/;
+const MADE = /סיידר|קורנישון|כבוש|מרוסק|חתוכ|מקולפ|במלח|בחומץ|חמוצ|מטוגן|קפוא|מצופ|בציפוי|צ['׳]?יפס|ציפס|שוקולד|במילוי|ממולא|בטעם|פקק|נאט|מיקרו|רסק|ממרח|סלט|שניצל|נקניק|פסטרמה|צונגו|קציצ|מעושן|משומר|שימורי|מיובש|פירה|רוטב|מתוק|חטיף|עוגיות|מאפה|גלידה|נגיסי|אצבעות|פרוס|מקורמל|פריכי|קרם|קוביות|מיקס|ירוק|קצוץ|קצוצ|מוקפא|מיץ|משקה|נקטר|(^|\s)מלח(\s|$)|(^|\s)חומץ(\s|$)|(^|\s)קר(\s|$)/;
 export function madeFrom(name, query) {
   const n = String(name || '').match(MADE);
   return !!n && !String(query || '').includes(n[0].trim());
@@ -269,12 +295,19 @@ export function choose(query, products, pref = 'any', { keep, strict = false } =
   // chain is compared on the same thing.
   const usualSize = (() => {
     const w = new Map();
-    for (const x of close) { const z = sizeOfProduct(x.p); if (z && z.unit === mainUnit) { const k = Math.round(z.qty * 100) / 100; w.set(k, (w.get(k) || 0) + sold(x)); } }
-    const top = [...w.entries()].sort((a, b) => b[1] - a[1])[0];
-    return top ? top[0] : null;
+    // (from the plain products, when there are: the usual size of "במבה" is
+    // the plain one's, not the flavours').
+    const plain = close.filter((x) => !flavoured(x.p.name, query));
+    for (const x of plain.length ? plain : close) { const z = sizeOfProduct(x.p); if (z && z.unit === mainUnit) { const k = Math.round(z.qty * 100) / 100; w.set(k, (w.get(k) || 0) + sold(x)); } }
+    const all = [...w.entries()].sort((a, b) => b[1] - a[1]);
+    // No size more usual than another (each sold once): none is "the usual".
+    if (!all.length || (all[1] && all[1][1] === all[0][1])) return null;
+    return all[0][0];
   })();
   const usual = (x) => { const z = sizeOfProduct(x.p); if (!z || z.unit !== mainUnit || !usualSize) return false; const r = z.qty / usualSize; return r >= 0.8 && r <= 1.25; };
   const byPrice = (a, b) => {
+    const af = flavoured(a.p.name, query), bf = flavoured(b.p.name, query);
+    if (af !== bf) return af ? 1 : -1;
     const au = usual(a), bu = usual(b);
     if (au !== bu) return au ? -1 : 1;
     const am = unitOf(a) === mainUnit, bm = unitOf(b) === mainUnit;
@@ -344,7 +377,7 @@ export function basket(choices, qtyOf = () => 1) {
     if (o.store && !stores.has(o.chain)) stores.set(o.chain, o.store);
   }
   const rows = [...chains.entries()].map(([chain, name]) => {
-    let total = 0, missing = 0, swaps = 0;
+    let total = 0, missing = 0, swaps = 0, gap = 0;
     const lines = [];
     for (const c of picks) {
       const q = qtyOf(c);
@@ -357,9 +390,11 @@ export function basket(choices, qtyOf = () => 1) {
         const po = r && offerAt(p, chain);
         if (po && (!best || po.price * r < best.price)) best = { product: p, price: Math.round(po.price * r * 100) / 100, paid: po.price };
       }
-      if (best) { total += best.price * q; swaps++; lines.push({ id: c.id, product: best.product, price: best.paid, swap: true }); } else { missing++; lines.push({ id: c.id, product: null, price: null, swap: false }); }
+      if (best) { total += best.price * q; swaps++; lines.push({ id: c.id, product: best.product, price: best.paid, swap: true }); } else { missing++; const b = bestPrice(c.pick); gap += b ? b.price * q : 0; lines.push({ id: c.id, product: null, price: null, swap: false }); }
     }
-    return { chain, name, store: stores.get(chain) || null, total: Math.round(total * 100) / 100, missing, swaps, lines };
+    return { chain, name, store: stores.get(chain) || null, total: Math.round(total * 100) / 100, missing, swaps, lines,
+      // About what the missing products add, at their cheapest elsewhere.
+      gap: Math.round(gap * 100) / 100 };
   });
   return rows.sort((a, b) => a.missing - b.missing || a.total - b.total);
 }

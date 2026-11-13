@@ -244,6 +244,7 @@ test('prices: the household picks the certifiers it relies on once, then every i
   // The total of a chain that has not got everything says so, and what.
   assert.match(await page.locator('.pp-hero .pp-missing').textContent(), /בלי מוצר אחד שאין ברשת ב: קפה/);
   assert.match(await page.locator('.pp-bar', { hasText: 'רשת ב' }).textContent(), /בלי מוצר אחד/);
+  assert.equal(await page.locator('.pp-bar', { hasText: 'רשת ב' }).locator('.pp-bar-gap').count(), 1, 'what the missing coffee would add, striped');
   await page.close();
   assert.deepEqual(errors, []);
 });

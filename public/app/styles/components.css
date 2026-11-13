@@ -1206,6 +1206,8 @@ body.chat-open { overflow: hidden; }
 .price-pref { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .price-pref .seg { background: var(--surface-2); flex: 1; max-width: 360px; }
 .price-pref .seg button { height: 32px; font-size: 13.5px; }
+.price-area .pp-area-edit { margin-inline-start: auto; }
+.pp-area-note { flex-basis: 100%; font-size: 13px; line-height: 1.5; margin-top: -6px; }
 .price-pref-pick { display: grid; gap: 8px; }
 .price-pref-btn { display: grid; gap: 2px; text-align: start; border: 1px solid var(--line); cursor: pointer; color: var(--text); font: inherit; padding: 12px 14px; }
 .price-pref-btn:hover { border-color: var(--accent); }
@@ -1618,7 +1620,9 @@ body.chat-open { overflow: hidden; }
 .pp-bar:hover { background: #ffffff0d; }
 .pp-bar.on { background: #ffffff17; }
 .pp-bar-n { font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pp-bar-t { height: 6px; border-radius: 6px; background: #ffffff14; overflow: hidden; }
+.pp-bar-t { display: flex; height: 6px; border-radius: 6px; background: #ffffff14; overflow: hidden; }
+/* What the missing products would add: striped, not counted in the price. */
+.pp-bar-gap { display: block; height: 100%; background: repeating-linear-gradient(-45deg, #ffffff40 0 3px, transparent 3px 6px); }
 .pp-bar-t i { display: block; height: 100%; border-radius: 6px; background: #ffffff55; transform-origin: right; animation: pp-grow .7s var(--out, ease) both; }
 .pp-bar.on .pp-bar-t i, .pp-bar:first-child .pp-bar-t i { background: var(--fx-gold); }
 .pp-bar-v { font-size: 14px; font-weight: 800; }

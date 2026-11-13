@@ -200,7 +200,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
 
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
   const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
-    : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><span class="muted">· ${!area.stores.length ? 'לא נמצאו סניפים קרובים, משווים במחירים הכלליים' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לשנות</button></div>`
+    : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לשנות</button><small class="muted pp-area-note">${!area.stores.length ? 'לא נמצאו סניפים קרובים, משווים במחירים הכלליים' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</small></div>`
       : html`<div class="price-pref price-area"><span class="muted">מחירים כלליים, לא לפי האזור שלכם.</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לבחור אזור</button></div>`;
 
   if (pref === undefined || area === undefined) return html`<section class="card stack price-panel">${head}<span class="muted">רגע…</span></section>`;
@@ -220,7 +220,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   const shown = chains.find((c) => c.chain === chainSel) || best;
   const save = saving(chains);
   const top = chains.slice(0, 5);
-  const most = top.length ? Math.max(...top.map((c) => c.total)) : 0;
+  const most = top.length ? Math.max(...top.map((c) => c.total + (c.gap || 0))) : 0;
   const lineAt = (c) => shown && shown.lines.find((l) => l.id === c.id);
   // When most of the list is not verified yet, the note above says it once
   // instead of a tag on every line.
@@ -238,7 +238,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
       ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת הרשת היקרה ביותר בהשוואה</span>`}
       <div class="pp-bars" role="list" aria-label="הסל בכל רשת">${top.map((c) => html`<button type="button" role="listitem" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
         <span class="pp-bar-n">${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span>
-        <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i></span>
+        <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i>${c.gap > 0 && html`<b class="pp-bar-gap" style=${'width:' + Math.round((c.gap / most) * 100) + '%'}></b>`}</span>
         <span class="pp-bar-v num">${fmt(c.total)}</span>
         ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
       </button>`)}</div>
@@ -246,7 +246,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
     <div class="pp-set">${prefRow}${areaRow}
       <label class="pp-strict"><input type="checkbox" checked=${strict} onChange=${(e) => setStrictPref(e.currentTarget.checked)} /> רק מוצרים שהכשרות שלהם אומתה</label></div>
     ${unverified > 0 && html`<p class="pp-note-k" role="note"><${Icon} name="shield" size=${16} /><span>${unverified === 1 ? 'במוצר אחד' : 'ב' + unverified + ' מוצרים'} הכשרות עוד לא סומנה אצלנו. המחיר מחושב, ובחנות כדאי לבדוק את החותמת. סימון אחד שלכם ("מה כתוב על האריזה") עוזר לכל המשפחות.</span></p>`}
-    <span class="muted price-count">יש מחיר: ${priced} מתוך ${open.length}${unsure ? ' · ' + unsure + ' מחכים לבחירה שלכם' : ''}${fresh ? ' · ' + fresh + ' נמכרים במשקל' : ''}${looking ? ' · מחפשים עוד ' + looking + '…' : ''}</span>
+    <span class="muted price-count">יש מחיר: ${priced} מתוך ${open.length}${unsure ? ' · ' + unsure + ' מחכים לבחירה שלכם' : ''}${fresh ? ' · ' + (fresh === 1 ? 'אחד נמכר' : fresh + ' נמכרים') + ' במשקל' : ''}${looking ? ' · מחפשים עוד ' + looking + '…' : ''}</span>
     <ul class="price-list pp-list">
       ${choices.map((c) => { const item = open.find((i) => i.id === c.id); const expanded = openId === c.id || (c.status === 'unsure' && openId !== 'x:' + c.id); const at = lineAt(c); const paid = lastPaid(item.name, receipts); const p = (at && at.product) || c.pick; return html`<li key=${c.id} class=${'price-item pp-row is-' + c.status + (expanded ? ' open' : '')}>
         <button type="button" class="pp-row-h" aria-expanded=${expanded} onClick=${() => setOpenId(expanded ? 'x:' + c.id : c.id)} disabled=${!c.options.length}>
