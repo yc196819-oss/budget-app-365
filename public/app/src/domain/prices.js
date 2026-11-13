@@ -337,9 +337,28 @@ function hintFits(p, pref) {
   return rank(certLevel(c)) >= rank(pref);
 }
 
+// What to look for when the list says it in the singular, or as the chains
+// do not write it: the chains sell "ביצים", "עגבניות", "לחמניות".
+const AS_SOLD = [
+  [/^ביצה$/, 'ביצים'], [/^עגבני(?:י)?ה$/, 'עגבניות'], [/^לחמני(?:י)?ה$/, 'לחמניות'], [/^פיתה$/, 'פיתות'],
+  [/^נקניקי(?:י)?ה$/, 'נקניקיות'], [/^תפוח$/, 'תפוחים'], [/^תפוח אדמה$/, 'תפוחי אדמה'], [/^בננות$/, 'בננה'],
+  [/^מלפפונים$/, 'מלפפון'], [/^גזרים$/, 'גזר'], [/^בצלים$/, 'בצל'], [/^חלות$/, 'חלה'], [/^לימונים$/, 'לימון'],
+  [/^קוטג['׳]?$/, "קוטג'"], [/^שמנת מתוקה$/, 'שמנת להקצפה']
+];
+// A chain's name as people know it: some old rows say "Osher Ad (אושר עד)".
+export function chainHe(name) {
+  const m = /^[A-Za-z][^(]*\(([^)]+)\)\s*$/.exec(String(name || '').trim());
+  return m ? m[1].trim() : name;
+}
+export function searchTerm(name) {
+  const n = String(name || '').trim().replace(/\s+/g, ' ');
+  for (const [re, to] of AS_SOLD) if (re.test(n)) return to;
+  return n;
+}
+
 // The whole list at once (20 items or 200): one choice per item.
 export function chooseAll(items, catalog, pref = 'any', { strict = false } = {}) {
-  return items.map((it) => ({ id: it.id, ...choose(it.name, catalog[it.name] || [], pref, { keep: it.barcode, strict }) }));
+  return items.map((it) => ({ id: it.id, ...choose(searchTerm(it.name), catalog[it.name] || [], pref, { keep: it.barcode, strict }), query: it.name }));
 }
 
 // With the family's area set: only the chains with a branch near it, at

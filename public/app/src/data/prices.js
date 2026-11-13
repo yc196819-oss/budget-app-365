@@ -1,6 +1,6 @@
 import { sb } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
-import { certLevel, isCert } from '../domain/prices.js';
+import { certLevel, isCert, searchTerm, chainHe } from '../domain/prices.js';
 
 // Prices for the shopping list: matched in our own catalog first (one call
 // for the whole list), and only what is missing is asked of the price
@@ -10,12 +10,14 @@ import { certLevel, isCert } from '../domain/prices.js';
 export async function searchPrices(names) {
   const list = [...new Set(names.map((n) => String(n || '').trim()).filter(Boolean))].slice(0, 300);
   if (!list.length) return {};
-  const { data, error } = await sb.rpc('price_search', { p_queries: list });
+  // Searched as the chains write it ("ביצה" as "ביצים"), kept under the
+  // name on the list.
+  const { data, error } = await sb.rpc('price_search', { p_queries: list.map(searchTerm) });
   if (error) throw error;
   const out = Object.fromEntries(list.map((n) => [n, []]));
   for (const r of data || []) {
     const name = list[r.q - 1];
-    if (name) out[name].push({ ...r, names: String(r.names || '').split(' | ').filter(Boolean) });
+    if (name) out[name].push({ ...r, names: String(r.names || '').split(' | ').filter(Boolean), offers: (r.offers || []).map((o) => (o && o.chain_name ? { ...o, chain_name: chainHe(o.chain_name) } : o)) });
   }
   return out;
 }

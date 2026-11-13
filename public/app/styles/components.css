@@ -1206,7 +1206,7 @@ body.chat-open { overflow: hidden; }
 .price-pref { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .price-pref .seg { background: var(--surface-2); flex: 1; max-width: 360px; }
 .price-pref .seg button { height: 32px; font-size: 13.5px; }
-.price-area .pp-area-edit { margin-inline-start: auto; }
+.price-pref .pp-area-edit { margin-inline-start: auto; }
 .pp-area-note { flex-basis: 100%; font-size: 13px; line-height: 1.5; margin-top: -6px; }
 .price-pref-pick { display: grid; gap: 8px; }
 .price-pref-btn { display: grid; gap: 2px; text-align: start; border: 1px solid var(--line); cursor: pointer; color: var(--text); font: inherit; padding: 12px 14px; }

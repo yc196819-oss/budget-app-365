@@ -32,9 +32,13 @@ function Kosher({ p }) {
   return html`<span class="kosher kosher-unknown">כשרות לא אומתה${hint ? ' · בשם כתוב: ' + hint : ' · לבדוק על האריזה'}</span>`;
 }
 // "What does the package say?": one tap, and it helps every family.
-function Mark({ p, onVote, label = 'מה כתוב על האריזה?' }) {
+// Closed until tapped: a list of products does not show twelve buttons under
+// each one.
+function Mark({ p, onVote, label = 'מה כתוב על האריזה?', open: startOpen = false }) {
   const mine = p.kosher && p.kosher.mine_cert;
-  return html`<span class="price-vote"><small class="muted">${mine ? 'סימנתם: ' + mine + '. לשנות:' : label}</small>${CERT_NAMES.map((c) => html`<button type="button" class=${'chip' + (c === NOT_KOSHER ? ' chip-no' : '')} key=${c} aria-pressed=${mine === c} onClick=${() => onVote(p, c)}>${c}</button>`)}</span>`;
+  const [open, setOpen] = useState(startOpen);
+  if (!open) return html`<button type="button" class="btn-text price-vote-open" aria-expanded="false" onClick=${() => setOpen(true)}>${mine ? 'סימנתם: ' + mine + ' · לשנות' : label + ' לסמן'}</button>`;
+  return html`<span class="price-vote"><small class="muted">${mine ? 'סימנתם: ' + mine + '. לשנות:' : label}</small>${CERT_NAMES.map((c) => html`<button type="button" class=${'chip' + (c === NOT_KOSHER ? ' chip-no' : '')} key=${c} aria-pressed=${mine === c} onClick=${() => { setOpen(false); onVote(p, c); }}>${c}</button>`)}</span>`;
 }
 // The certifiers the family relies on: several can be picked.
 function CertPicker({ initial, onSave, onAny, onCancel }) {
@@ -111,6 +115,9 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel }) {
 
 export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   const open = items.filter((i) => !i.cleared_at && !i.done);
+  // While the prices are open, the advisor's floating button would sit on
+  // the prices column: it steps aside.
+  useEffect(() => { document.body.classList.add('pp-on'); return () => document.body.classList.remove('pp-on'); }, []);
   const [pref, setPref] = useState(undefined);
   const [catalog, setCatalog] = useState(null);
   const [err, setErr] = useState('');
@@ -196,7 +203,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
     <button type="button" class="icon-btn" aria-label="לסגור את השוואת המחירים" onClick=${onClose}><${Icon} name="x" size=${16} /></button></div>`;
   const prefRow = editPref ? html`<${CertPicker} initial=${pref} onSave=${choosePref} onAny=${() => choosePref('any')} onCancel=${() => setEditPref(false)} />`
     : html`<div class="price-pref"><span class="muted">כשרות:</span><b class="price-pref-certs">${Array.isArray(pref) ? pref.join(' · ') : 'בלי העדפה'}</b>
-      <button type="button" class="btn-text" onClick=${() => setEditPref(true)}>לשנות</button></div>`;
+      <button type="button" class="btn-text pp-area-edit" onClick=${() => setEditPref(true)}>לשנות</button></div>`;
 
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
   const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
@@ -262,7 +269,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
           <ul class="price-opts">${c.options.map((o) => html`<li key=${o.barcode}><${Product} p=${o}>
             ${c.pick && o.barcode === c.pick.barcode ? html`<span class="pp-chosen">נבחר</span>` : html`<button type="button" class="btn btn-ghost price-pick" onClick=${() => pick(item, o)}>לבחור</button>`}</${Product}>
             ${!certOf(o) && !nonFood(o) && html`<${Mark} p=${o} onVote=${vote} />`}</li>`)}</ul>
-          ${c.pick && certOf(c.pick) && !nonFood(c.pick) && (voteId === c.id ? html`<${Mark} p=${c.pick} onVote=${vote} />` : html`<button type="button" class="btn-text price-vote-open" onClick=${() => setVoteId(c.id)}>הכשרות לא נכונה?</button>`)}
+          ${c.pick && certOf(c.pick) && !nonFood(c.pick) && (voteId === c.id ? html`<${Mark} p=${c.pick} onVote=${vote} open />` : html`<button type="button" class="btn-text price-vote-open" onClick=${() => setVoteId(c.id)}>הכשרות לא נכונה?</button>`)}
         </div>`}
       </li>`; })}
     </ul>

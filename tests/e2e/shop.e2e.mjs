@@ -225,6 +225,9 @@ test('prices: the household picks the certifiers it relies on once, then every i
   assert.match(await eggs.textContent(), /ביצים L 12.*כשרות לא אומתה/);
   assert.match(await page.locator('.pp-note-k').textContent(), /מוצר אחד.*לבדוק את החותמת/);
   await eggs.locator('.pp-row-h').click();
+  assert.equal(await eggs.locator('.price-vote .chip').count(), 0, 'the certifiers stay closed until asked');
+  assert.equal(await page.locator('.ask-fab').isVisible(), false, 'the advisor button does not cover the prices');
+  await eggs.locator('.price-vote-open', { hasText: 'מה כתוב על האריזה' }).first().click();
   await eggs.locator('.price-vote .chip:has-text("הרב לנדא")').click();
   for (let i = 0; i < 50 && !db.tables.kosher_votes.length; i++) await page.waitForTimeout(100);
   assert.deepEqual(db.tables.kosher_votes.map((v) => [v.barcode, v.cert, v.level]), [['2001', 'הרב לנדא', 'mehadrin']]);
