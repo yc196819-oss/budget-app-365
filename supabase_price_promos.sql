@@ -28,6 +28,11 @@ create index if not exists price_promos_barcode on public.price_promos (barcode)
 alter table public.price_prefs add column if not exists clubs text[] not null default '{}' check (cardinality(clubs) <= 80);
 -- Chains open on Shabbat that a family with a Haredi kashrut brought back into its comparison.
 alter table public.price_prefs add column if not exists chains_shown text[] not null default '{}' check (cardinality(chains_shown) <= 40);
+-- Only well-formed values ('rami-levy:club', 'tiv-taam'): written by the family's own app, checked here too.
+alter table public.price_prefs drop constraint if exists price_prefs_clubs_shape;
+alter table public.price_prefs add constraint price_prefs_clubs_shape check (array_to_string(clubs, ',') ~ '^([a-z0-9-]{1,40}:(club|card)(,[a-z0-9-]{1,40}:(club|card))*)?$');
+alter table public.price_prefs drop constraint if exists price_prefs_chains_shape;
+alter table public.price_prefs add constraint price_prefs_chains_shape check (array_to_string(chains_shown, ',') ~ '^([a-z0-9-]{1,40}(,[a-z0-9-]{1,40})*)?$');
 alter table public.price_promos enable row level security;
 
 -- price_search: as before, and each chain's offer carries its deals
