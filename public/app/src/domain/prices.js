@@ -292,7 +292,7 @@ export function basket(choices, qtyOf = () => 1) {
 // Chains that do not sell every day: shown with what to know, and when one
 // of them is the cheapest, the cheapest of the always-open chains too.
 export const CHAIN_NOTES = {
-  'mishnat-yosef': { short: 'מכירה פעם בשבוע', text: 'משנת יוסף מוכרת במוקדי מכירה פעם בשבוע, ולא בחנות שפתוחה כל יום. המחיר הוא של יום המכירה.', url: null }
+  'mishnat-yosef': { short: 'מכירה פעם בשבוע', text: 'משנת יוסף מוכרת במוקדי מכירה פעם בשבוע, ולא בחנות שפתוחה כל יום. המחיר הוא של יום המכירה.', url: 'https://mishnatyosef.org/' }
 };
 export const chainNote = (chain) => CHAIN_NOTES[chain] || null;
 // The cheapest chain that is open every day, when the cheapest is not.
