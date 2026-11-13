@@ -125,7 +125,14 @@ export function size(qty, unitText, name) {
   return a;
 }
 // A product's size: from the file, or else from its name.
-export const sizeOfProduct = (p) => (p ? size(p.qty, p.unit, p.name) : null);
+// (Remembered per product: a long list asks for it thousands of times.)
+const SIZES = new WeakMap();
+export const sizeOfProduct = (p) => {
+  if (!p) return null;
+  if (typeof p !== 'object') return size(p.qty, p.unit, p.name);
+  if (!SIZES.has(p)) SIZES.set(p, size(p.qty, p.unit, p.name));
+  return SIZES.get(p);
+};
 export function sizeText(s) {
   if (!s) return '';
   if (s.unit === 'l') return s.qty < 1 ? Math.round(s.qty * 1000) + ' מ"ל' : s.qty + ' ליטר';
@@ -136,8 +143,17 @@ export function sizeText(s) {
 // ── matching what was typed to product names ──
 const clean = (s) => String(s || '').toLowerCase().replace(/[״"׳'`,.()\-+/\\*]/g, ' ').replace(/\s+/g, ' ').trim();
 const STOP = new Set(['של', 'עם', 'בטעם', 'את', 'ה']);
+// (Remembered: the same names are split thousands of times on a long list.)
+const WORDS_SEEN = new Map();
 export function words(s) {
-  return clean(s).split(' ').filter((w) => w && !STOP.has(w));
+  const k = String(s || '');
+  let w = WORDS_SEEN.get(k);
+  if (!w) {
+    if (WORDS_SEEN.size > 20000) WORDS_SEEN.clear();
+    w = clean(k).split(' ').filter((x) => x && !STOP.has(x));
+    WORDS_SEEN.set(k, w);
+  }
+  return w;
 }
 // A typed word is found in a name if a name word starts with it, or with it
 // after one Hebrew prefix letter ("החלב", "וחלב").
@@ -171,7 +187,19 @@ export function score(query, product) {
 // written as the price of the package), or far above it (the price of a
 // whole crate written as the price of a kilo of bananas: ₪55 where another
 // chain asks ₪7.90).
+const VALID = new WeakMap();
 export function validOffers(product) {
+  const offers = product && product.offers;
+  if (offers && typeof offers === 'object') {
+    const had = VALID.get(offers);
+    if (had) return had;
+    const v = validOffersOf(product);
+    VALID.set(offers, v);
+    return v;
+  }
+  return validOffersOf(product);
+}
+function validOffersOf(product) {
   const all = (product.offers || []).filter((o) => o.price >= 0.3);
   if (all.length < 2) return all;
   const sorted = all.map((o) => o.price).sort((a, b) => a - b);
@@ -259,6 +287,9 @@ export const isFresh = (query) => FRESH.has(aisleOf(query)) && !MADE.test(String
 // sell the picked one (the same kashrut standing as the pick).
 export function choose(query, products, pref = 'any', { keep, strict = false } = {}) {
   const fresh = isFresh(query);
+  // The same for every product: worked out once.
+  const qWords = words(query);
+  const byWeight = fresh && (aisleOf(query) === 'produce' || BY_WEIGHT.test(qWords.join(' ')));
   const scored = products.map((p) => {
     const made = madeFrom(p.name, query);
     // Fruit or vegetables in liters are a drink.
@@ -267,7 +298,7 @@ export function choose(query, products, pref = 'any', { keep, strict = false } =
     // Fruit and vegetables: what is sold by the kilo, not a small pack.
     const sz = fresh ? sizeOfProduct(p) : null;
     // and only what is named for it first ("תפוחים ירוקים", not "סיידר תפוחים").
-    const pack = fresh && (aisleOf(query) === 'produce' || BY_WEIGHT.test(words(query).join(' '))) && ((sz && !(sz.unit === 'kg' && sz.qty >= 0.9)) || !hit(words(query)[0], words(p.name).slice(0, 1)));
+    const pack = byWeight && ((sz && !(sz.unit === 'kg' && sz.qty >= 0.9)) || !hit(qWords[0], words(p.name).slice(0, 1)));
     // (A pack of fruit or vegetables is left out: no plain one means "sold
     // by weight", not a cake that has apples in its name.)
     const odd = special(p.name, query);

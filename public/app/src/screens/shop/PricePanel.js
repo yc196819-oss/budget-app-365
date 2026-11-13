@@ -155,6 +155,9 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   const [editClubs, setEditClubs] = useState(false);
   // Chains open on Shabbat brought back by a family with a Haredi kashrut.
   const [shownChains, setShownChains] = useState([]);
+  // The comparison worked out again only when what it depends on changed
+  // (not when a row opens or a chain is tapped): a long list on a slow phone.
+  const memo = useRef({ key: null });
   const [strict, setStrict] = useState(() => readLocal('price:strict:' + hid, '') === '1');
   const setStrictPref = (v) => { setStrict(v); writeLocal('price:strict:' + hid, v ? '1' : ''); };
   // The family's area: undefined while loading, null when not chosen.
@@ -259,9 +262,13 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   if (!open.length) return html`<section class="card stack price-panel">${head}${prefRow}${areaRow}<span class="muted">אין מה להשוות: הרשימה ריקה או שהכול כבר נקנה.</span></section>`;
   if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${areaRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
 
-  const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), withoutChains(nearby(catalog, !!(area && area.stores.length)), hiddenChains(pref, shownChains)), pref, { strict });
   const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty, c.pick);
-  const chains = basket(choices, qtyOf, new Date(), clubs);
+  const memoKey = [catalog, area, pref, strict, shownChains, clubs, open.map((i) => i.id + '|' + i.name + '|' + (i.barcode || '') + '|' + (i.qty || '')).join('§')];
+  if (!memo.current.key || memoKey.some((k, n) => k !== memo.current.key[n])) {
+    const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), withoutChains(nearby(catalog, !!(area && area.stores.length)), hiddenChains(pref, shownChains)), pref, { strict });
+    memo.current = { key: memoKey, choices, chains: basket(choices, qtyOf, new Date(), clubs) };
+  }
+  const { choices, chains } = memo.current;
   // "Which clubs do you have?": each chain in the comparison, its club and its credit card.
   const clubName = (c) => { const [k, kind] = c.split(':'); const r = chains.find((x) => x.chain === k); return (r ? r.name : k) + (kind === 'card' ? ' (אשראי)' : ''); };
   const clubsRow = editClubs ? html`<${ClubPicker} chains=${chains} initial=${clubs} onSave=${(n) => { saveClubs(n); setEditClubs(false); }} onCancel=${() => setEditClubs(false)} />`
