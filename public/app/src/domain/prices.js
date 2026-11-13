@@ -421,9 +421,13 @@ export function withoutChains(catalog, hidden) {
 // With the family's area set: only the chains with a branch near it, at
 // that branch's price (the server already put it in). A product no branch
 // nearby sells keeps no price.
-export function nearby(catalog, on) {
+//   on: the family chose an area; stores: its nearby branches (one per chain).
+// A chain with no branch near them is not compared at all, even when that
+// leaves nothing: a far branch is not a price they can pay.
+export function nearby(catalog, on, stores = null) {
   if (!on) return catalog;
-  return Object.fromEntries(Object.entries(catalog || {}).map(([n, list]) => [n, (list || []).map((p) => ({ ...p, offers: (p.offers || []).filter((o) => o.local) }))]));
+  const near = stores ? new Set(stores.map((s) => s.chain)) : null;
+  return Object.fromEntries(Object.entries(catalog || {}).map(([n, list]) => [n, (list || []).map((p) => ({ ...p, offers: (p.offers || []).filter((o) => (near ? near.has(o.chain) : o.local)) }))]));
 }
 
 // Another product that can stand for the picked one at a chain: the same

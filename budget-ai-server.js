@@ -2114,8 +2114,10 @@ async function runFreeLoad() {
     // Prices of a chain that left (or a product it stopped selling) older
     // than two weeks are not shown as today's price.
     await supabaseAdmin.from('price_offers').delete().lt('seen_at', new Date(Date.now() - 14 * 86400000).toISOString());
-    // Deals that are over.
+    // Deals that are over, and deals of a branch no longer read (a family
+    // moved): not shown as today's.
     await supabaseAdmin.from('price_promos').delete().lt('ends_at', new Date().toISOString()).then(() => {}, () => {});
+    await supabaseAdmin.from('price_promos').delete().lt('seen_at', new Date(Date.now() - 3 * 86400000).toISOString()).then(() => {}, () => {});
   } catch (err) {
     seedJob.error = String(err.message || err).slice(0, 200);
     console.error('free price load failed:', seedJob.error);
@@ -2154,8 +2156,10 @@ async function refreshAreas() {
   let n = 0;
   for (const a of areas) {
     const near = area.nearestStores(stores || [], { code: a.city_code, hood: a.hood }, { maxKm: a.max_km || 25 });
-    if (!near.length) continue;
+    // No branch near any more (a chain closed one): the old ones go too, so
+    // a far branch is never compared as if it were near.
     await supabaseAdmin.from('household_stores').delete().eq('household_id', a.household_id);
+    if (!near.length) { n++; continue; }
     await supabaseAdmin.from('household_stores').insert(near.map((x) => ({ household_id: a.household_id, chain: x.chain, store_id: x.store_id, chain_name: x.chain_name, name: x.name, address: x.address, city: x.city, km: x.km, kind: x.kind })));
     n++;
   }
@@ -2225,9 +2229,12 @@ app.post('/api/prices/area', requireAuth, async (req, res) => {
     const maxKm = Math.min(50, Math.max(5, Math.round((Number(req.body && req.body.max_km) || 25) / 5) * 5));
     const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
     const near = area.nearestStores(stores || [], { code: at.code, hood }, { maxKm });
-    await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: at.code, city: at.name, hood, max_km: maxKm, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
-    await supabaseAdmin.from('household_stores').delete().eq('household_id', hid);
-    if (near.length) await supabaseAdmin.from('household_stores').insert(near.map((n) => ({ household_id: hid, chain: n.chain, store_id: n.store_id, chain_name: n.chain_name, name: n.name, address: n.address, city: n.city, km: n.km, kind: n.kind })));
+    // Each write checked: "saved" is said only when it was.
+    const w1 = await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: at.code, city: at.name, hood, max_km: maxKm, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+    if (w1.error) throw new Error(w1.error.message);
+    const w2 = await supabaseAdmin.from('household_stores').delete().eq('household_id', hid);
+    if (w2.error) throw new Error(w2.error.message);
+    if (near.length) { const w3 = await supabaseAdmin.from('household_stores').insert(near.map((n) => ({ household_id: hid, chain: n.chain, store_id: n.store_id, chain_name: n.chain_name, name: n.name, address: n.address, city: n.city, km: n.km, kind: n.kind }))); if (w3.error) throw new Error(w3.error.message); }
     loadLocal(null, near).catch((e) => console.error('local prices failed:', e.message));
     return res.json({ area: { city_code: at.code, city: at.name, hood, max_km: maxKm }, stores: near });
   } catch (err) {

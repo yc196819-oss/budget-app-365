@@ -111,3 +111,12 @@ test('round 9: a name with a bare count does not decide the usual size; a taste 
   const iceCream = [P('1', 'גלידה בטעם קרמל 500 גרם', 500, 'גרם', [19.9, 21]), P('2', 'גלידה חלב 264 גרם', 264, 'גרם', [34.9, 35])];
   assert.equal(choose('גלידה', iceCream, 'any').pick.barcode, '1', 'one plain ice cream does not push the rest away');
 });
+
+test('round 11: with an area, only the chains with a branch near it, even when that is none', async () => {
+  const { nearby } = await import('../public/app/src/domain/prices.js');
+  const cat = { 'חלב': [P('1', 'חלב 1 ליטר', 1, 'ליטר', [6])] };
+  cat['חלב'][0].offers = [{ chain: 'near', price: 6 }, { chain: 'far', price: 5 }];
+  assert.deepEqual(nearby(cat, true, [{ chain: 'near' }])['חלב'][0].offers.map((o) => o.chain), ['near']);
+  assert.deepEqual(nearby(cat, true, [])['חלב'][0].offers, [], 'no branch near: not the far chain\\'s general price');
+  assert.equal(nearby(cat, false), cat, 'no area chosen: every chain');
+});

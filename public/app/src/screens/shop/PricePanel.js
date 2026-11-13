@@ -267,7 +267,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
     <small class="muted pp-area-note">לחיצה מחזירה אותה להשוואה.</small></div>`;
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
   const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
-    : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לשנות</button><small class="muted pp-area-note">${!area.stores.length ? 'לא נמצאו סניפים קרובים, משווים במחירים הכלליים' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</small></div>`
+    : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לשנות</button><small class="muted pp-area-note">${!area.stores.length ? 'אין סניף של אף רשת עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</small></div>`
       : html`<div class="price-pref price-area"><span class="muted">מחירים כלליים, לא לפי האזור שלכם.</span><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לבחור אזור</button></div>`;
 
   if (pref === undefined || area === undefined) return html`<section class="card stack price-panel">${head}<span class="muted">רגע…</span></section>`;
@@ -280,7 +280,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty, c.pick);
   const memoKey = [catalog, area, pref, strict, shownChains, clubs, open.map((i) => i.id + '|' + i.name + '|' + (i.barcode || '') + '|' + (i.qty || '')).join('§')];
   if (!memo.current.key || memoKey.some((k, n) => k !== memo.current.key[n])) {
-    const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), withoutChains(nearby(catalog, !!(area && area.stores.length)), hiddenChains(pref, shownChains)), pref, { strict });
+    const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), withoutChains(nearby(catalog, !!area, area ? area.stores : null), hiddenChains(pref, shownChains)), pref, { strict });
     memo.current = { key: memoKey, choices, chains: basket(choices, qtyOf, new Date(), clubs) };
   }
   const { choices, chains } = memo.current;
@@ -323,7 +323,8 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
         <span class="pp-bar-v num">${fmt(c.total)}</span>
         ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
       </button>`)}</div>
-    </div>` : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
+    </div>` : area && !area.stores.length ? html`<div class="pp-empty"><b>אין סניף של אף רשת עד ${area.max_km || 25} ק"מ מ${area.city}</b><span class="muted">רשת רחוקה לא נכנסת להשוואה, כי לא באמת קונים בה. אפשר להגדיל את המרחק.</span><button type="button" class="btn btn-ghost" style="justify-self:start" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></div>`
+      : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
     <details class="pp-set" open=${setOpen || editPref || editArea || editClubs} onToggle=${(e) => setSetOpen(e.currentTarget.open)}>
       <summary class="pp-set-sum"><${Icon} name="sliders" size=${15} /><span><b>הגדרות ההשוואה</b><small class="muted">${[Array.isArray(pref) ? (pref.length > 1 ? pref[0] + ' ועוד ' + (pref.length - 1) : pref[0]) : 'בלי העדפת כשרות', area ? area.city : 'מחירים כלליים', clubs.size ? (clubs.size === 1 ? 'מועדון אחד' : clubs.size + ' מועדונים') : '', strict ? 'רק כשרות שאומתה' : ''].filter(Boolean).join(' · ')}</small></span></summary>
       ${prefRow}${areaRow}${clubsRow}${shabbatRow}

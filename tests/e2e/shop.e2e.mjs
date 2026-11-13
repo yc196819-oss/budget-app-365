@@ -17,7 +17,9 @@ async function open(width = 1280, setup = () => {}, email = null) {
   db.tables.households = [{ id: db.hid, shop_area: null }];
   // The family's area is set (made-up), so the price tests start at the list.
   db.tables.household_area = [{ household_id: db.hid, city_code: '2610', city: 'בית שמש', hood: null }];
-  db.tables.household_stores = [];
+  // A branch near them at each made-up chain (a chain with no branch near
+  // is not compared at all).
+  db.tables.household_stores = ['x', 'y', 'mishnat-yosef', 'tiv-taam'].map((chain, i) => ({ household_id: db.hid, chain, chain_name: chain, store_id: String(i + 1), name: 'סניף בדוי', city: 'בית שמש', km: 1, kind: 'city' }));
   setup(db);
   const errors = collectErrors(page);
   await mockSupabase(page, db);
@@ -601,6 +603,25 @@ test('two chains: when splitting the list between two saves enough, the hero say
   assert.match(await two.locator('summary').textContent(), /בשתי רשתות: ₪45\.00, עוד ₪20\.00 פחות/);
   await two.locator('summary').click();
   assert.match(await two.textContent(), /ברשת א: קפה.*ברשת ב: כל השאר/, 'the cheapest single chain is B; only the coffee moves to A');
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('an area with no branch of any chain near it: no far chain is compared, and the distance can be widened', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+    d.tables.household_area = [{ household_id: d.hid, city_code: '2610', city: 'בית שמש', hood: null, max_km: 10 }];
+    d.tables.household_stores = [];
+  }, OWNER);
+  await priceRoutes(page);
+  await page.click('.shop-prices-cta button');
+  const empty = page.locator('.pp-empty');
+  await empty.waitFor();
+  assert.match(await empty.textContent(), /אין סניף של אף רשת עד 10 ק"מ מבית שמש/);
+  assert.equal(await page.locator('.pp-bar').count(), 0, 'no far chain');
+  await empty.locator('button', { hasText: 'להגדיל את המרחק' }).click();
+  await page.locator('.price-area-pick').waitFor();
   await page.close();
   assert.deepEqual(errors, []);
 });
