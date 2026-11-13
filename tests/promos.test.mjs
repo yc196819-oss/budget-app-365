@@ -139,3 +139,12 @@ test('every chain\'s file shape: a deal with its products directly under it (no 
   const [row] = promoRows(parsePromoFile(file), REG, { now: NOW });
   assert.deepEqual([row.need, row.unit_price], [2, 5], 'the quantity and price from the deal itself');
 });
+
+test('a deal of thousands of products is read fast (each deal\'s fields once, not per product)', () => {
+  const many = Array.from({ length: 4000 }, (_, i) => item(String(7290100000000 + i), { price: 5, rate: 10 })).join('');
+  const file = '<Root><Promotions>' + Array.from({ length: 5 }, (_, k) => promo({ id: 'big' + k, text: 'מגוון', items: many })).join('') + '</Promotions></Root>';
+  const t = Date.now();
+  const p = parsePromoFile(file);
+  assert.equal(p.reduce((n, d) => n + d.items.length, 0), 20000);
+  assert.ok(Date.now() - t < 2000, 'under two seconds (it took ' + (Date.now() - t) + 'ms)');
+});

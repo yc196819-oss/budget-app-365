@@ -4,7 +4,15 @@
 // how many must be bought ("2 ב-15"), until when, and the products. Read
 // here into one row per product and deal. Pure.
 
-const tag = (s, t) => { const m = new RegExp('<' + t + '>([\\s\\S]*?)</' + t + '>', 'i').exec(s); return m ? m[1].trim() : ''; };
+// A tag's text. (Each tag's pattern made once: a big branch's file has
+// thousands of deals, and making it anew each time took half a minute.)
+const TAGS = new Map();
+const tag = (s, t) => {
+  let re = TAGS.get(t);
+  if (!re) { re = new RegExp('<' + t + '>([^<]*)</' + t + '>', 'i'); TAGS.set(t, re); }
+  const m = re.exec(s);
+  return m ? m[1].trim() : '';
+};
 const unescape = (s) => String(s || '').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 // A number, or null when nothing is written (an empty tag is not 0).
 const num = (s) => { const t = String(s == null ? '' : s).trim(); if (!t) return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
@@ -37,6 +45,14 @@ function parsePromoFile(xml) {
   while ((m = re.exec(String(xml || '')))) {
     const p = m[1];
     const club = tag(p, 'ClubID') || tag(p, 'ClubId');
+    // The deal's own fields, read once (a deal of a thousand products was
+    // read again for each of them: half a minute for one branch's file).
+    const head = p.split(/<PromotionItem>/i)[0];
+    const dealMin = num(tag(head, 'MinQty'));
+    const dealMax = num(tag(head, 'MaxQty'));
+    const dealPrice = num(tag(head, 'DiscountedPrice'));
+    const dealRate = num(tag(head, 'DiscountRate'));
+    const dealWeighted = tag(head, 'IsWeightedPromo') === '1';
     const items = [];
     const ri = /<PromotionItem>([\s\S]*?)<\/PromotionItem>/gi;
     let x;
@@ -46,11 +62,11 @@ function parsePromoFile(xml) {
       if (!/^[0-9]{8,14}$/.test(barcode)) continue;
       items.push({
         barcode,
-        minQty: num(tag(it, 'MinQty')) || num(tag(p, 'MinQty')) || 1,
-        maxQty: num(tag(it, 'MaxQty')) || num(tag(p, 'MaxQty')) || null,
-        price: num(tag(it, 'DiscountedPrice')) ?? num(tag(p, 'DiscountedPrice')),
-        rate: num(tag(it, 'DiscountRate')) ?? num(tag(p, 'DiscountRate')),
-        weighted: tag(it, 'bIsWeighted') === '1' || tag(p, 'IsWeightedPromo') === '1'
+        minQty: num(tag(it, 'MinQty')) || dealMin || 1,
+        maxQty: num(tag(it, 'MaxQty')) || dealMax || null,
+        price: num(tag(it, 'DiscountedPrice')) ?? dealPrice,
+        rate: num(tag(it, 'DiscountRate')) ?? dealRate,
+        weighted: tag(it, 'bIsWeighted') === '1' || dealWeighted
       });
     }
     if (!items.length) continue;
