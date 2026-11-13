@@ -14,6 +14,7 @@ const learn = require('./server/learn');
 const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
 const account = require('./server/account');
+const cleanup = require('./server/cleanup');
 const twa = require('./server/twa');
 const tripsAi = require('./server/trips');
 const legal = require('./server/legal');
@@ -2246,6 +2247,69 @@ app.post('/api/prices/images', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('price images failed:', err.message);
     return res.json({ images: {} });
+  }
+});
+// Every morning (pg_cron job "account-cleanup"): empty accounts nobody uses
+// (no transactions, nobody else in the household, no sign-in for 3 months)
+// are told two weeks before (by email, unless they asked for none), then
+// deleted the way "delete my account" deletes them. Never the owner's.
+// Without the account_cleanup table nothing is deleted.
+app.post('/api/cron/cleanup', async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    if (!(await checkCronSecret(req))) return res.status(401).json({ error: 'unauthorized' });
+    const { data: marks, error: markErr } = await supabaseAdmin.from('account_cleanup').select('user_id,warned_at,deleted_at');
+    if (markErr) return res.status(503).json({ error: 'no account_cleanup table' });
+    const users = [];
+    for (let page = 1; page < 50; page++) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
+      if (error) throw error;
+      users.push(...(data.users || []));
+      if ((data.users || []).length < 200) break;
+    }
+    const { data: mems } = await allRows(() => supabaseAdmin.from('memberships').select('user_id,household_id,display_name').order('user_id'));
+    const { data: quiet } = await allRows(() => supabaseAdmin.from('mail_prefs').select('user_id').eq('news', false).order('user_id'));
+    const quietIds = new Set((quiet || []).map((q) => q.user_id));
+    const byHome = new Map();
+    for (const m of mems || []) byHome.set(m.household_id, [...(byHome.get(m.household_id) || []), m.user_id]);
+    const txsOf = new Map();
+    const homeTxs = async (hid) => {
+      if (!txsOf.has(hid)) { const { count } = await supabaseAdmin.from('transactions').select('id', { count: 'exact', head: true }).eq('household_id', hid); txsOf.set(hid, count || 0); }
+      return txsOf.get(hid);
+    };
+    const rows = [];
+    for (const u of users) {
+      const homes = (mems || []).filter((m) => m.user_id === u.id).map((m) => m.household_id);
+      let txs = 0, partners = 0;
+      for (const hid of homes) { txs += await homeTxs(hid); partners += (byHome.get(hid) || []).filter((x) => x !== u.id).length; }
+      rows.push({ id: u.id, email: u.email, name: ops.firstName(((mems || []).find((m) => m.user_id === u.id) || {}).display_name || ''), lastSeen: new Date(u.last_sign_in_at || u.created_at).getTime(), txs, partners, quiet: quietIds.has(u.id), keep: isOwnerEmail(u.email) });
+    }
+    const warned = new Map((marks || []).filter((m) => m.warned_at && !m.deleted_at).map((m) => [m.user_id, new Date(m.warned_at).getTime()]));
+    const plan = cleanup.cleanupPlan(rows, warned);
+    const dry = !!(req.body && req.body.dry);
+    const out = { warn: plan.warn.length, remove: plan.remove.length, warned: 0, removed: 0, errors: [], dry };
+    if (dry) return res.json(out);
+    for (const u of plan.warn) {
+      try {
+        if (!u.quiet && u.email && mailStatus().ready) {
+          await sendMailWithFallback({ to: u.email, ...cleanup.warningMail({ name: u.name, date: cleanup.deleteDate(), link: appLinkOf(req) }) });
+        }
+        await supabaseAdmin.from('account_cleanup').upsert({ user_id: u.id, warned_at: new Date().toISOString(), deleted_at: null }, { onConflict: 'user_id' });
+        out.warned++;
+      } catch (e) { out.errors.push('warn: ' + String(e.message || e).slice(0, 60)); }
+    }
+    for (const u of plan.remove) {
+      try {
+        await account.deleteAccount(supabaseAdmin, u.id);
+        await supabaseAdmin.from('account_cleanup').upsert({ user_id: u.id, deleted_at: new Date().toISOString() }, { onConflict: 'user_id' });
+        out.removed++;
+      } catch (e) { out.errors.push('delete: ' + String(e.message || e).slice(0, 60)); }
+    }
+    console.log('account cleanup:', JSON.stringify(out));
+    return res.json(out);
+  } catch (err) {
+    console.error('account cleanup failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
   }
 });
 // Every night (pg_cron job "prices-nightly"): today's prices from the chains.
