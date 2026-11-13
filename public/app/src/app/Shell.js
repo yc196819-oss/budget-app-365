@@ -7,6 +7,7 @@ import { tabLabel } from '../domain/routes.js';
 import { dateLabel, initials } from '../domain/format.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
 import { Icon } from '../components/Icon.js';
+import { IS_DEMO } from '../lib/supabase.js';
 import { BottomNav } from '../components/BottomNav.js';
 import { Sidebar } from '../components/Sidebar.js';
 import { AdvisorRail } from '../components/AdvisorRail.js';
@@ -212,6 +213,7 @@ export function Shell({ tab, session }) {
     <div class=${'shell' + (desktop && navMini ? ' nav-mini' : '') + (desktop && !railOn ? ' no-rail' : '') + (floating && floatOpen ? ' float-open' : '')}>
       <${Sidebar} mini=${navMini} onMini=${() => setMini(!navMini)} tab=${tab} badges=${{ ...badges, profile: answers }} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => openImport(null) : null} onLearn=${() => setOverlay('learn')} onProfile=${() => { setProfileView('main'); setOverlay('profile'); }} />
       <main class="shell-main">
+        ${IS_DEMO && html`<div class="demo-bar" role="note">חשבון הדמו · מה שמשנים כאן נשמר בחשבון הדמו<button type="button" onClick=${() => window.close()}>לסגור את הלשונית</button></div>`}
         <header class="topbar">
           <div class="topbar-title"><small>${dateLabel(new Date())}${data.refreshing && data.status === 'ready' ? html` <span class="refreshing" role="status"><span class="spinner" aria-hidden="true"></span> מתעדכן…</span>` : ''}</small><h1>${title}</h1></div>
           <div class="topbar-actions">

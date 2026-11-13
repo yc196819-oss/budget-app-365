@@ -101,3 +101,8 @@ export const priceSample = (input) => api('/api/admin/prices/sample', { method: 
 export const priceRun = (runId) => api('/api/admin/prices/sample/' + encodeURIComponent(runId));
 export const testMonthlyMail = () => api('/api/admin/monthly-mail/test', { method: 'POST' });
 export const sendMonthlyMail = () => api('/api/admin/monthly-mail/send', { method: 'POST' });
+
+// The demo household (owner only): a session for a new tab, and its data
+// rebuilt up to today.
+export const demoSession = () => api('/api/admin/demo/session', { method: 'POST', body: {} });
+export const demoRefresh = () => api('/api/admin/demo/refresh', { method: 'POST', body: {} });

@@ -134,7 +134,7 @@ test('owner dashboard: only for the owner, with active people, return rate and f
   const s = page.locator('.admin-stats');
   // A main screen with a button for each part, on a computer too; never sideways scrolling.
   await s.locator('.admin-tool').first().waitFor();
-  assert.deepEqual(await s.locator('.admin-tool b').allTextContents(), ['פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
+  assert.deepEqual(await s.locator('.admin-tool b').allTextContents(), ['פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'חשבון הדמו', 'מצב המערכת']);
   assert.equal(await s.locator('.per-user').count(), 0);
   await s.locator('.admin-tool:has-text("מצב המערכת")').click();
   assert.match(await s.textContent(), /boom/);
@@ -572,7 +572,7 @@ test('owner on a phone: the main screen has the numbers and a button for each pa
   await page.click('text=לוח בעלים');
   const s = page.locator('.admin-stats');
   await s.locator('.admin-hub').waitFor();
-  assert.deepEqual((await s.locator('.admin-hub-btn b').allTextContents()), ['שאלו את הנתונים', 'פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
+  assert.deepEqual((await s.locator('.admin-hub-btn b').allTextContents()), ['שאלו את הנתונים', 'פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'חשבון הדמו', 'מצב המערכת']);
   // The numbers come a moment after the buttons (while they load, "טוען…").
   await s.locator('.admin-kpi').first().waitFor();
   // The numbers count up to their value.
@@ -620,7 +620,7 @@ test('owner dashboard, part two: a greeting, what is happening now, a month char
   // A record of the month: today is the busiest of 30 days.
   assert.match(await s.locator('.admin-record').textContent(), /שיא חודשי: 9 פעילים היום/);
   // Tools are tiles; each part opens on its own page.
-  assert.deepEqual(await s.locator('.admin-tool b').allTextContents(), ['פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'מצב המערכת']);
+  assert.deepEqual(await s.locator('.admin-tool b').allTextContents(), ['פניות', 'פעילות ומשתמשים', 'מיילים', 'מחירי סופר', 'חשבון הדמו', 'מצב המערכת']);
   // A question: the answer shows, and the stats sent along are whitelisted on the server.
   await s.locator('.admin-ask-chips .chip').first().click();
   await s.locator('.admin-ask-answer:has-text("השבוע נרשמו 5.")').waitFor();
