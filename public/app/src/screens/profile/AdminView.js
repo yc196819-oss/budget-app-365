@@ -93,6 +93,23 @@ function PriceReachCard() {
 }
 
 
+// While the chains load: a cart rolling along the way, a product dropping
+// into it for each chain done, and the chain being read now.
+function CartLoader({ pct, done, current }) {
+  const items = Math.min(done, 8);
+  return html`<div class="cart-load" role="img" aria-label=${'טוען מחירים' + (current ? ': ' + current : '')}>
+    <div class="cart-road"><span class="cart-go" style=${'inset-inline-start:calc(' + Math.min(96, Math.max(0, pct)) + '% - 34px)'}>
+      <svg viewBox="0 0 64 52" width="64" height="52" aria-hidden="true">
+        <g class="cart-goods">${Array.from({ length: items }, (_, i) => html`<rect key=${i} x=${16 + (i % 4) * 9} y=${18 - Math.floor(i / 4) * 8} width="8" height="8" rx="2" class=${'cart-good g' + (i % 4)} />`)}</g>
+        <rect x="14" y="26" width="0" height="0" rx="2" class="cart-drop" />
+        <path d="M4 8h8l6 26h32l6-18H15" class="cart-body" />
+        <g class="cart-wheel" style="transform-origin:22px 43px"><circle cx="22" cy="43" r="5" /><path d="M22 38v10M17 43h10" /></g>
+        <g class="cart-wheel" style="transform-origin:46px 43px"><circle cx="46" cy="43" r="5" /><path d="M46 38v10M41 43h10" /></g>
+      </svg></span><span class="cart-line" style=${'width:' + Math.min(100, Math.max(0, pct)) + '%'}></span></div>
+    <span class="cart-now">${current ? 'עכשיו בסל: ' + current : 'יוצאים לקניות…'}</span>
+  </div>`;
+}
+
 // The catalog, loaded on the server part by part (what most families buy,
 // then what families looked for and did not find). It goes on when this
 // screen is closed; the card shows where it is, from the database itself.
@@ -119,12 +136,13 @@ function SeedCard() {
       <span><b class="num">${st.chains}</b><small class="muted">רשתות</small></span>
       <span><b class="num">${st.wanted}</b><small class="muted">חיפשו ולא נמצאו</small></span>
     </div>`}
-    ${st && st.running && html`<div class="price-seed-run"><span class="price-seed-bar"><i style=${'width:' + Math.round(((st.part - 0.5) / Math.max(1, st.parts)) * 100) + '%'}></i></span>
+    ${st && st.running && html`<${CartLoader} pct=${Math.round(((st.part - 0.5) / Math.max(1, st.parts)) * 100)} done=${(st.chainsDone || []).filter((c) => !c.error).length} current=${st.current} />`}
+    ${st && st.running && html`<div class="price-seed-run">
       <span role="status">${st.free ? 'טוען רשת ' + st.part + ' מתוך ' + st.parts : 'טוען חלק ' + st.part + ' מתוך ' + st.parts}… נשמרו עד עכשיו ${st.added.toLocaleString('he-IL')} מוצרים</span></div>`}
     ${st && !st.running && st.endedAt && html`<span class="muted" style="font-size:13px">הטעינה האחרונה הסתיימה: נוספו ${st.added} מוצרים${st.cost ? ' · עלות $' + Number(st.cost).toFixed(2) : ''}.</span>`}
     ${st && st.error && html`<span role="alert" style="color:var(--danger)">${st.error}</span>`}
     ${err && html`<span role="alert" style="color:var(--danger)">${err}</span>`}
-    ${st && st.chainsDone && st.chainsDone.length > 0 && html`<ul class="price-seed-chains">${st.chainsDone.map((c) => html`<li key=${c.key} class=${c.error ? 'bad' : 'ok'}><span>${c.error ? '✕' : '✓'} ${c.name}</span><small class="muted">${c.error ? 'לא נטען' : c.count.toLocaleString('he-IL') + ' מוצרים'}</small></li>`)}</ul>`}
+    ${st && st.chainsDone && st.chainsDone.length > 0 && html`<ul class="price-seed-chains">${st.chainsDone.map((c) => html`<li key=${c.key} class=${c.error ? 'bad' : 'ok'}><span>${c.error ? '✕' : '✓'} ${c.name}</span><small class="muted">${c.error ? 'לא נטען: ' + c.error : c.count.toLocaleString('he-IL') + ' מוצרים'}</small></li>`)}</ul>`}
     ${!(st && st.running) && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${start}>${st && st.products ? 'לעדכן מחירים מהרשתות עכשיו (חינם)' : 'לטעון מחירים מהרשתות (חינם)'}</button>`}
   </div>`;
 }

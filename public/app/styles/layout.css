@@ -48,11 +48,15 @@
 }
 
 /* sheets and dialogs */
-.scrim { position: fixed; inset: 0; z-index: 20; background: var(--scrim); animation: fade-in .25s ease; }
+.scrim { position: fixed; inset: 0; z-index: 20; background: var(--scrim); animation: fade-in .25s ease; touch-action: none; overscroll-behavior: contain; }
+/* While a sheet is open the page behind it does not move (lib/scrollLock.js). */
+html.sheet-open, html.sheet-open body, html.sheet-open .shell-main { overflow: hidden !important; overscroll-behavior: none; }
 .sheet {
   position: fixed; inset-inline: 0; bottom: 0; z-index: 21; max-height: 88vh; max-height: 88dvh; overflow-y: auto;
   background: var(--bg); border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 10px 18px 26px;
   display: flex; flex-direction: column; gap: 14px; animation: sheet-in .4s cubic-bezier(.22, 1, .36, 1);
+  /* Scrolling past the sheet's end stays in the sheet. */
+  overscroll-behavior: contain;
 }
 /* A long sheet scrolls; its parts keep their height instead of being squeezed. */
 .sheet > * { flex-shrink: 0; }

@@ -63,6 +63,8 @@ test('several items in one line with Enter, sorted by department, only the keybo
   await page.locator('.shop-item', { hasText: 'לחם' }).locator('input[type=checkbox]').focus();
   await page.keyboard.press('Space');
   await page.waitForSelector('.shop-item.done');
+  // The screen marks it at once; the save reaches the database a moment later.
+  for (let i = 0; i < 30 && !db.tables.shopping_items.find((x) => x.name === 'לחם').done; i++) await page.waitForTimeout(100);
   assert.equal(db.tables.shopping_items.find((i) => i.name === 'לחם').done, true);
   assert.deepEqual(errors, []);
   await page.close();
