@@ -117,6 +117,6 @@ test('round 11: with an area, only the chains with a branch near it, even when t
   const cat = { 'חלב': [P('1', 'חלב 1 ליטר', 1, 'ליטר', [6])] };
   cat['חלב'][0].offers = [{ chain: 'near', price: 6 }, { chain: 'far', price: 5 }];
   assert.deepEqual(nearby(cat, true, [{ chain: 'near' }])['חלב'][0].offers.map((o) => o.chain), ['near']);
-  assert.deepEqual(nearby(cat, true, [])['חלב'][0].offers, [], 'no branch near: not the far chain\\'s general price');
+  assert.deepEqual(nearby(cat, true, [])['חלב'][0].offers, [], 'no branch near: not the far general price');
   assert.equal(nearby(cat, false), cat, 'no area chosen: every chain');
 });
