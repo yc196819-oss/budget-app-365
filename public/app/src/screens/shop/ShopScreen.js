@@ -13,6 +13,8 @@ import { track } from '../../lib/telemetry.js';
 import { go } from '../../lib/go.js';
 import { PricePanel, PriceTeaser } from './PricePanel.js';
 import { AdvisorList } from './AdvisorList.js';
+import { Receipts } from './Receipts.js';
+import { loadReceipts } from '../../data/receipts.js';
 
 // The food budget of this month, from the goals tab: the category named
 // food (אוכל / מזון) or the one holding the supermarket.
@@ -28,6 +30,8 @@ function foodBudget(data, today) {
   return { name: food.name, budget, spent, left: budget - spent };
 }
 
+
+const AISLE_ICON = { produce: 'leaf', bakery: 'bread', dairy: 'milk', meat: 'fish', dry: 'jar', frozen: 'snow', drinks: 'cup', clean: 'drop', care: 'drop', baby: 'baby', other: 'cart' };
 
 // What this tab is for, the first time (and again from "מה זה?"): not just a
 // list, help to spend less at the supermarket.
@@ -59,7 +63,9 @@ export function ShopScreen({ data, owner = false }) {
   const [intro, setIntro] = useState(() => !readLocal(INTRO_KEY, ''));
   const [prices, setPrices] = useState(false);
   const [advisor, setAdvisor] = useState(false);
+  const [receipts, setReceipts] = useState([]);
   const closeIntro = () => { writeLocal(INTRO_KEY, '1'); setIntro(false); };
+  useEffect(() => { if (owner && data.hid) loadReceipts(data.hid).then(setReceipts).catch(() => setReceipts([])); }, [data.hid, owner]);
   useEffect(() => { if (data.hid) getArea(data.hid).then((a) => setAreaText(a)).catch(() => setAreaText('')); }, [data.hid]);
 
   if (shop.status === 'loading' || data.status !== 'ready') return html`<${Loading} label="טוען את הרשימה…" />`;
@@ -139,10 +145,10 @@ export function ShopScreen({ data, owner = false }) {
       </form>
       ${owner && html`<button type="button" class="card adv-cta" onClick=${() => { setAdvisor(true); track('shop_advisor_open'); }}><span class="adv-spark" aria-hidden="true"><${Icon} name="spark" size=${18} /></span><span><b>היועץ ממליץ: רשימה לשבוע</b><small class="muted">לפי מה שאתם קונים בדרך כלל ומספר הנפשות בבית. עורכים ומוסיפים בלחיצה.</small></span><span aria-hidden="true">‹</span></button>`}
       ${owner && advisor && html`<${AdvisorList} items=${items} people=${data.people} onClose=${() => setAdvisor(false)} onAdd=${(list) => add(list, 'advisor').then(() => track('shop_advisor_add'))} />`}
-      ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
+      ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} receipts=${receipts} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}
       ${groups.map((g) => html`<div class="shop-group" key=${g.aisle}>
-        <h2 class="shop-aisle">${g.label}</h2>
+        <h2 class="shop-aisle"><${Icon} name=${AISLE_ICON[g.aisle] || 'cart'} size=${15} stroke=${1.8} />${g.label}<span class="shop-aisle-n">${g.items.filter((i) => !i.done).length || ''}</span></h2>
         <div class="card shop-items">
           ${g.items.map((i) => html`<div class=${'shop-item' + (i.done ? ' done' : '')} key=${i.id}>
             <label class="shop-check"><input type="checkbox" checked=${i.done} onChange=${() => toggle(i)} aria-label=${(i.done ? 'בוטל סימון: ' : 'נקנה: ') + i.name} /><span class="shop-name">${i.name}</span></label>
@@ -172,6 +178,9 @@ export function ShopScreen({ data, owner = false }) {
         <span class="muted" style="font-size:13px">${fb.left < 0 ? 'עברתם את התקציב ל' + fb.name + ' ב-' + money(-fb.left) : 'מתוך ' + money(fb.budget) + ' ל' + fb.name + ' · הוצאתם ' + money(fb.spent)}</span>
         ${fb.left > 0 && html`<span class="shop-week">כדי לעמוד בתקציב: עד <b class="num">${money(perWeek(fb.left))}</b> לשבוע עד סוף החודש</span>`}
       </div>`}
+      ${owner && html`<${Receipts} hid=${data.hid} receipts=${receipts}
+        onSaved=${(out) => { if (out.saved) setReceipts((r) => [out.saved, ...r]); if (out.history.length) shop.patch((all) => [...all, ...out.history.filter((h) => !all.some((a) => a.id === h.id))]); }}
+        onAddToList=${(list) => add(list, 'receipt')} />`}
       ${prev.length > 0 && html`<div class="card stack" style="gap:8px">
         <b>הרשימה מהפעם הקודמת</b>
         <span class="muted" style="font-size:14px;line-height:1.5">${prev.slice(0, 6).map((i) => i.name).join(', ')}${prev.length > 6 ? ' ועוד ' + (prev.length - 6) : ''}</span>
@@ -181,12 +190,12 @@ export function ShopScreen({ data, owner = false }) {
         <b>מה שאתם קונים בדרך כלל</b>
         <div class="chips">${usualList.map((n) => html`<button type="button" class="chip" onClick=${() => add([{ name: n, qty: null, aisle: aisleOf(n) }], 'reuse')}>+ ${n}</button>`)}</div>
       </div>`}
-      <form class="card stack shop-area" style="gap:8px" onSubmit=${saveArea}>
+      ${!owner && html`<form class="card stack shop-area" style="gap:8px" onSubmit=${saveArea}>
         <b>איפה אתם קונים?</b>
         <span class="muted" style="font-size:14px;line-height:1.5">עיר או שכונה. בהמשך נשתמש בזה כדי להראות מחירים מהסניפים הקרובים אליכם.</span>
         <span style="display:flex;gap:8px"><input class="input" value=${area || ''} onInput=${(e) => setAreaText(e.target.value)} maxLength="60" aria-label="עיר או שכונה" placeholder="למשל: בית שמש, רמת ג׳" style="flex:1;min-width:0" />
         <button type="submit" class="btn btn-ghost" style="width:auto">לשמור</button></span>
-      </form>
+      </form>`}
     </aside>
   </div>`;
 }

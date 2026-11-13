@@ -40,7 +40,13 @@ test('the family\'s certifiers decide what is chosen by itself; non-food needs n
   const r = choose('חלב 3%', [a, b, c, unknown], mine);
   assert.equal(r.status, 'auto');
   assert.equal(r.pick.barcode, '1', 'the cheapest they rely on, though others are cheaper');
-  assert.equal(choose('חלב 3%', [b, unknown], mine).status, 'unsure');
+  // Nothing confirmed: the unknown one is priced, marked unverified (never
+  // the one known to have another kashrut); strict households wait instead.
+  const u = choose('חלב 3%', [b, unknown], mine);
+  assert.equal(u.status, 'unverified');
+  assert.equal(u.pick.barcode, '4');
+  assert.equal(choose('חלב 3%', [b, unknown], mine, { strict: true }).status, 'unsure');
+  assert.equal(choose('חלב 3%', [b, c], mine).status, 'unsure', 'only other or no kashrut: nothing picked');
   // Non-food: chosen at any certifier.
   assert.ok(nonFood({ name: 'נוזל כלים לימון 750 מ"ל' }));
   assert.ok(!nonFood({ name: 'לימון' }));
@@ -57,5 +63,5 @@ test('with the family\'s area: only the chains with a branch near it, and the br
   const near = nearby(cat, true);
   assert.deepEqual(near['חלב 3%'][0].offers.map((o) => o.chain), ['x'], 'the far chain is left out');
   const b = basket([choose('חלב 3%', near['חלב 3%'], 'any')]);
-  assert.deepEqual(b, [{ chain: 'x', name: 'רשת א', store: 'סניף בדוי', total: 6.4, missing: 0 }]);
+  assert.deepEqual(b.map(({ lines, ...r }) => r), [{ chain: 'x', name: 'רשת א', store: 'סניף בדוי', total: 6.4, missing: 0, swaps: 0 }]);
 });

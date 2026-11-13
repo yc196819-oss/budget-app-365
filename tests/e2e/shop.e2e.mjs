@@ -47,7 +47,7 @@ test('several items in one line with Enter, sorted by department, only the keybo
   await page.locator('.shop-add .input').fill('חלב, 2 ביצים, לחם ועגבניות');
   await page.keyboard.press('Enter');
   await page.waitForSelector('.shop-item');
-  assert.deepEqual(await page.locator('.shop-aisle').allTextContents(), ['ירקות ופירות', 'מאפים', 'מוצרי חלב']);
+  assert.deepEqual((await page.locator('.shop-aisle').allTextContents()).map((t) => t.replace(/\d+$/, '')), ['ירקות ופירות', 'מאפים', 'מוצרי חלב']);
   assert.equal(await page.locator('.shop-item').count(), 4);
   assert.match(await page.locator('.shop-item', { hasText: 'ביצים' }).textContent(), /×2/);
   assert.equal(db.tables.shopping_items.length, 4);
@@ -217,10 +217,14 @@ test('prices: the household picks the certifiers it relies on once, then every i
   assert.match(await page.locator('.price-pref:not(.price-area)').textContent(), /בד"ץ העדה החרדית · הרב לנדא/);
   // Milk: the one with their certifier, though the other (another certifier) is cheaper.
   const milk = page.locator('.price-item', { hasText: 'חלב 3%' }).first();
-  assert.match(await milk.textContent(), /נבחר אוטומטית.*חלב 3% בשקית.*✓ בד"ץ העדה החרדית · מתאים לכם.*סימנו 3 משפחות.*₪6\.20/);
-  // Eggs: the certifier is not known, so the household chooses or marks what the package says.
+  assert.match(await milk.textContent(), /חלב 3% בשקית.*בד"ץ העדה החרדית/);
+  assert.equal(await milk.locator('.pp-tag.t-cert.fits').count(), 1, 'their certifier, marked as fitting');
+  // Eggs: nobody marked the kashrut yet: priced, marked "not verified", and
+  // the household can say what the package shows.
   const eggs = page.locator('.price-item', { hasText: 'ביצים' }).first();
-  assert.match(await eggs.textContent(), /בחרו מוצר.*כשרות לא ידועה/);
+  assert.match(await eggs.textContent(), /ביצים L 12.*כשרות לא אומתה/);
+  assert.match(await page.locator('.pp-note-k').textContent(), /מוצר אחד.*לבדוק את החותמת/);
+  await eggs.locator('.pp-row-h').click();
   await eggs.locator('.price-vote .chip:has-text("הרב לנדא")').click();
   for (let i = 0; i < 50 && !db.tables.kosher_votes.length; i++) await page.waitForTimeout(100);
   assert.deepEqual(db.tables.kosher_votes.map((v) => [v.barcode, v.cert, v.level]), [['2001', 'הרב לנדא', 'mehadrin']]);
@@ -229,8 +233,14 @@ test('prices: the household picks the certifiers it relies on once, then every i
   assert.deepEqual(calls.fetch[0].queries, ['קפה']);
   await page.waitForSelector('.price-item.is-auto:has-text("קפה נמס")', { timeout: 15000 });
   // The whole list at each chain, cheapest first (milk counted twice).
-  const best = await page.locator('.price-chain.best').textContent();
-  assert.match(best, /הכי זול₪48\.30רשת א/);
+  await page.waitForSelector('.pp-hero:has-text("₪48.30")');
+  assert.match(await page.locator('.pp-hero').textContent(), /₪48\.30ברשת א.*הכי משתלם/);
+  assert.match(await page.locator('.pp-bar').first().textContent(), /רשת א₪48\.30/);
+  assert.match(await milk.textContent(), /₪6\.20/, 'the price at the chain shown');
+  // Another chain: its own total and what it has not got.
+  await page.locator('.pp-bar', { hasText: 'רשת ב' }).click();
+  assert.match(await page.locator('.pp-hero').textContent(), /ברשת ב/);
+  assert.match(await page.locator('.price-item', { hasText: 'קפה' }).textContent(), /אין ברשת ב/);
   await page.close();
   assert.deepEqual(errors, []);
 });
@@ -258,7 +268,7 @@ test('prices: a product shows its photo from the open product database, or the s
   assert.match(await milk.locator('.price-img img').getAttribute('src'), /^https:\/\/images\.openfoodfacts\.org\//);
   // Eggs have no photo: the dairy sign instead.
   const eggs = page.locator('.price-item', { hasText: 'ביצים' }).first();
-  assert.equal((await eggs.locator('.price-img.sign').first().textContent()).trim(), '🥛');
+  assert.equal(await eggs.locator('.price-img.sign svg').count(), 1, 'a line icon, not an emoji');
   // Asked once, for what is on screen.
   assert.equal(asked.length, 1);
   assert.deepEqual([...asked[0]].sort(), ['1001', '1002', '2001']);
@@ -304,10 +314,9 @@ test('prices: the family says only where it lives; the nearest branch at every c
   assert.match(await page.locator('.price-area').textContent(), /סניף אחד עד 10 ק"מ/);
   assert.deepEqual(asked, [{ hid: db.hid, city_code: '2610', hood: 'רמת בית שמש א', max_km: 10 }]);
   // Only the chain with a branch near them, at that branch's price, with its name.
-  const chains = page.locator('.price-chain');
-  await page.waitForSelector('.price-chain.best:has-text("₪6.00")');
-  assert.equal(await chains.count(), 1, 'the far chain is not compared');
-  assert.match(await chains.first().textContent(), /רשת א.*סניף נחל דולב/);
+  await page.waitForSelector('.pp-hero:has-text("₪6.00")');
+  assert.equal(await page.locator('.pp-bar').count(), 1, 'the far chain is not compared');
+  assert.match(await page.locator('.pp-hero').textContent(), /ברשת א.*סניף נחל דולב/);
   await page.close();
   assert.deepEqual(errors, []);
 });
@@ -337,7 +346,7 @@ test('prices: changing the product for an item is remembered on the list', async
   const item = page.locator('.price-item').first();
   await item.waitFor();
   assert.match(await item.textContent(), /חלב 3% קרטון/, 'no preference: the cheapest');
-  await item.locator('button:has-text("להחליף מוצר")').click();
+  await item.locator('.pp-row-h').click();
   await item.locator('.price-opts li', { hasText: 'חלב 3% בשקית' }).locator('.price-pick').click();
   await page.waitForSelector('.price-item.is-chosen:has-text("חלב 3% בשקית")');
   assert.equal(db.tables.shopping_items[0].barcode, '1001');
@@ -400,4 +409,70 @@ test('people who are not the owner do not see the advisor\'s week yet', async ()
   await page.waitForSelector('.shop-add');
   assert.equal(await page.locator('.adv-cta').count(), 0);
   await page.close();
+});
+
+test('a receipt photo: read, checked by the family, saved; the list learns what they buy and the comparison shows what they paid', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+    d.tables.shop_receipts = [];
+  }, OWNER);
+  await priceRoutes(page);
+  const sent = [];
+  // Made-up receipt.
+  await page.route('**/api/receipts/scan', (r) => {
+    sent.push(JSON.parse(r.request().postData()));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ store: 'סופר לדוגמה', date: '2026-11-06', total: 31.7, items: [
+      { name: 'חלב 3% בשקית 1 ליטר', qty: 2, price: 11.8 }, { name: 'לחם אחיד פרוס', qty: 1, price: 7.4 }, { name: 'שוקולד מריר', qty: 1, price: 12.5 }] }) });
+  });
+  const card = page.locator('.rcpt-card');
+  await card.waitFor();
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await card.locator('input[type=file]').setInputFiles({ name: 'receipt.png', mimeType: 'image/png', buffer: PNG });
+  const sheet = page.locator('.sheet', { hasText: 'מה קראנו מהקבלה' });
+  await sheet.waitFor();
+  assert.equal(sent[0].mimeType, 'image/jpeg', 'made smaller on the device, as a JPEG');
+  assert.equal(sent[0].hid, db.hid);
+  assert.match(await sheet.textContent(), /סופר לדוגמה.*6\.11\.26.*חלב 3% בשקית 1 ליטר.*×2.*₪11\.80/s);
+  // The chocolate was a gift: not part of what this home buys.
+  await sheet.locator('label', { hasText: 'שוקולד' }).locator('input').uncheck();
+  assert.match(await sheet.locator('.rcpt-sum').textContent(), /2 שורות.*₪19\.20/);
+  await sheet.locator('button:has-text("לשמור 2 מוצרים")').click();
+  await page.waitForSelector('.toast:has-text("נשמרו 2 מוצרים")');
+  const learned = db.tables.shopping_items.filter((i) => i.cleared_at);
+  assert.deepEqual(learned.map((i) => [i.name, i.qty, i.done]), [['חלב 3% בשקית', '×2', true], ['לחם אחיד פרוס', null, true]]);
+  assert.ok(learned.every((i) => i.cleared_at.startsWith('2026-11-06')), 'bought on the receipt\'s date');
+  assert.equal(db.tables.shop_receipts.length, 1);
+  assert.equal(db.tables.shop_receipts[0].items.length, 2);
+  // "What you usually buy" knows the bread now (the milk is on the list already).
+  await page.waitForSelector('.chips .chip:has-text("לחם אחיד פרוס")');
+  assert.match(await card.textContent(), /קבלה אחת.*סופר לדוגמה/);
+  // And the price comparison: what they paid for milk, per unit.
+  await page.click('.shop-prices-cta button');
+  const milk = page.locator('.price-item', { hasText: 'חלב 3%' }).first();
+  await milk.waitFor();
+  assert.match(await milk.locator('.pp-tag.t-paid').textContent(), /שילמתם ₪5\.90 בסופר לדוגמה/);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('a photo that is not a receipt says so, and nothing is saved', async () => {
+  const { page, db, errors } = await open(390, (d) => { d.tables.shop_receipts = []; }, OWNER);
+  await page.route('**/api/receipts/scan', (r) => r.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ error: 'זו לא נראית כמו קבלה. נסו לצלם את הקבלה עצמה, ישר ובאור טוב.' }) }));
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await page.locator('.rcpt-card input[type=file]').setInputFiles({ name: 'cat.png', mimeType: 'image/png', buffer: PNG });
+  await page.waitForSelector('.rcpt-card [role=alert]:has-text("לא נראית כמו קבלה")');
+  assert.equal(db.tables.shop_receipts.length, 0);
+  assert.equal(await page.locator('.sheet').count(), 0);
+  await page.close();
+  // The failed request itself is logged by the browser; nothing else.
+  assert.deepEqual(errors.filter((e) => !/422/.test(e)), []);
+});
+
+test('receipts are for the owner for now: others do not see the card', async () => {
+  const { page, errors } = await open(390);
+  await page.waitForSelector('.price-teaser');
+  assert.equal(await page.locator('.rcpt-card').count(), 0);
+  await page.close();
+  assert.deepEqual(errors, []);
 });

@@ -1,7 +1,9 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeText, count } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeText, count } from '../../domain/prices.js';
+import { lastPaid } from '../../domain/receipts.js';
+import { readLocal, writeLocal } from '../../lib/storage.js';
 import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces } from '../../data/prices.js';
 import { aisleOf } from '../../domain/shopping.js';
 import { showToast } from '../../lib/toast.js';
@@ -24,10 +26,10 @@ function Kosher({ p }) {
     const who = c.by === 'owner' ? 'אושר על ידינו' : c.by === 'open' ? 'מהמאגר הפתוח' : 'סימנו ' + c.n + (c.n === 1 ? ' משפחה' : ' משפחות');
     if (c.cert === NOT_KOSHER) return html`<span class="kosher kosher-none">לא כשר · ${who}</span>`;
     const fits = MINE.includes(c.cert);
-    return html`<span class=${'kosher ' + (fits ? 'kosher-fits' : 'kosher-other')}>${fits ? '✓ ' : ''}${c.cert}${fits ? ' · מתאים לכם' : ' · לא ברשימה שלכם'} <small>(${who})</small></span>`;
+    return html`<span class=${'kosher ' + (fits ? 'kosher-fits' : 'kosher-other')}>${c.cert}${fits ? ' · מתאים לכם' : ' · לא ברשימה שלכם'} <small>(${who})</small></span>`;
   }
   const hint = certFromText(p.name);
-  return html`<span class="kosher kosher-unknown">כשרות לא ידועה${hint ? ' (בשם כתוב: ' + hint + ')' : ''}</span>`;
+  return html`<span class="kosher kosher-unknown">כשרות לא אומתה${hint ? ' · בשם כתוב: ' + hint : ' · לבדוק על האריזה'}</span>`;
 }
 // "What does the package say?": one tap, and it helps every family.
 function Mark({ p, onVote, label = 'מה כתוב על האריזה?' }) {
@@ -48,13 +50,13 @@ function CertPicker({ initial, onSave, onAny, onCancel }) {
   </div>`;
 }
 
-// The product's photo (from the open product database), or the sign of its
-// department when it has none.
-const SIGN = { produce: '🥬', bakery: '🍞', dairy: '🥛', meat: '🍗', dry: '🥫', frozen: '🧊', drinks: '🥤', clean: '🧽', care: '🧴', baby: '🍼', other: '🛒' };
+// The product's photo (from the open product database), or the line icon of
+// its department when it has none.
+const SIGN = { produce: 'leaf', bakery: 'bread', dairy: 'milk', meat: 'fish', dry: 'jar', frozen: 'snow', drinks: 'cup', clean: 'drop', care: 'drop', baby: 'baby', other: 'cart' };
 let IMAGES = {};
-function Photo({ p }) {
-  const url = IMAGES[p.barcode];
-  return url ? html`<span class="price-img"><img src=${url} alt="" loading="lazy" /></span>` : html`<span class="price-img sign" aria-hidden="true">${SIGN[aisleOf(p.name)] || SIGN.other}</span>`;
+function Photo({ p, name }) {
+  const url = p && IMAGES[p.barcode];
+  return url ? html`<span class="price-img"><img src=${url} alt="" loading="lazy" /></span>` : html`<span class="price-img sign" aria-hidden="true"><${Icon} name=${SIGN[aisleOf((p && p.name) || name)] || 'cart'} size=${18} stroke=${1.7} /></span>`;
 }
 
 function Product({ p, children }) {
@@ -107,7 +109,7 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel }) {
   </div>`;
 }
 
-export function PricePanel({ hid, items, onClose, onPicked }) {
+export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   const open = items.filter((i) => !i.cleared_at && !i.done);
   const [pref, setPref] = useState(undefined);
   const [catalog, setCatalog] = useState(null);
@@ -119,6 +121,9 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
   const [openId, setOpenId] = useState(null);
   const [voteId, setVoteId] = useState(null);
   const [editPref, setEditPref] = useState(false);
+  const [chainSel, setChainSel] = useState(null);
+  const [strict, setStrict] = useState(() => readLocal('price:strict:' + hid, '') === '1');
+  const setStrictPref = (v) => { setStrict(v); writeLocal('price:strict:' + hid, v ? '1' : ''); };
   // The family's area: undefined while loading, null when not chosen.
   const [area, setAreaState] = useState(undefined);
   const [editArea, setEditArea] = useState(false);
@@ -195,7 +200,7 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
 
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
   const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
-    : area ? html`<div class="price-pref price-area"><span class="muted">📍</span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><span class="muted">· ${area.stores.length === 1 ? 'סניף אחד' : area.stores.length + ' סניפים'} עד ${area.max_km || 25} ק"מ</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לשנות</button></div>`
+    : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><span class="muted">· ${!area.stores.length ? 'לא נמצאו סניפים קרובים, משווים במחירים הכלליים' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לשנות</button></div>`
       : html`<div class="price-pref price-area"><span class="muted">מחירים כלליים, לא לפי האזור שלכם.</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לבחור אזור</button></div>`;
 
   if (pref === undefined || area === undefined) return html`<section class="card stack price-panel">${head}<span class="muted">רגע…</span></section>`;
@@ -204,37 +209,57 @@ export function PricePanel({ hid, items, onClose, onPicked }) {
   if (!open.length) return html`<section class="card stack price-panel">${head}${prefRow}${areaRow}<span class="muted">אין מה להשוות: הרשימה ריקה או שהכול כבר נקנה.</span></section>`;
   if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${areaRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
 
-  const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), nearby(catalog, !!(area && area.stores.length)), pref);
+  const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), nearby(catalog, !!(area && area.stores.length)), pref, { strict });
   const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty);
   const chains = basket(choices, qtyOf);
   const priced = choices.filter((c) => c.pick).length;
   const unsure = choices.filter((c) => c.status === 'unsure').length;
+  const unverified = choices.filter((c) => c.status === 'unverified').length;
+  const fresh = choices.filter((c) => c.status === 'fresh').length;
   const best = chains[0];
+  const shown = chains.find((c) => c.chain === chainSel) || best;
+  const save = saving(chains);
+  const top = chains.slice(0, 5);
+  const most = top.length ? Math.max(...top.map((c) => c.total)) : 0;
+  const lineAt = (c) => shown && shown.lines.find((l) => l.id === c.id);
+  const STATE = { auto: 'נבחר לבד', chosen: 'בחרתם', unverified: 'כשרות לא אומתה', unsure: 'בחרו מוצר', fresh: 'במשקל: לא בהשוואה' };
   return html`<section class="card stack price-panel">
-    ${head}${prefRow}${areaRow}
-    ${best && html`<div class="price-chains" aria-label="הרשימה בכל רשת">
-      ${chains.slice(0, 4).map((c, i) => html`<div class=${'price-chain' + (i === 0 ? ' best' : '')} key=${c.chain}>
-        <small>${i === 0 ? 'הכי זול' : c.name}</small><b class="num">${fmt(c.total)}</b>${i === 0 && html`<small>${c.name}</small>`}${c.store && html`<small class="faint price-chain-store">${c.store}</small>`}
-        ${c.missing > 0 && html`<small class="faint">חסרים ${c.missing}</small>`}</div>`)}
-    </div>`}
-    <span class="muted price-count">נמצא מחיר ל-${priced} מתוך ${open.length} מוצרים${unsure ? ' · ' + unsure + ' מחכים לבחירה שלכם' : ''}${looking ? ' · מחפשים עכשיו עוד ' + looking + '…' : ''}</span>
-    <ul class="price-list">
-      ${choices.map((c) => { const item = open.find((i) => i.id === c.id); const expanded = openId === c.id; return html`<li key=${c.id} class=${'price-item is-' + c.status}>
-        <div class="price-item-head"><b>${item.name}</b>${item.qty && html`<span class="shop-qty">${item.qty}</span>`}
-          <span class="price-state">${c.status === 'auto' ? 'נבחר אוטומטית' : c.status === 'chosen' ? 'בחרתם' : c.status === 'unsure' ? 'בחרו מוצר' : looking ? 'מחפשים…' : queued ? 'עוד לא בקטלוג: נוסיף בקרוב' : 'לא נמצא מחיר'}</span></div>
-        ${c.pick && html`<${Product} p=${c.pick} />`}
-        ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל לא ידוע שהכשרות שלהם היא מהרשימה שלכם. בחרו מוצר, או סמנו מה כתוב על האריזה:</span>`}
-        ${c.options.length > 0 && (c.status === 'unsure' || expanded) && html`<ul class="price-opts">${c.options.map((p) => html`<li key=${p.barcode}><${Product} p=${p}>
-          <button type="button" class="btn btn-ghost price-pick" onClick=${() => pick(item, p)}>לבחור</button></${Product}>
-          ${!certOf(p) && !nonFood(p) && html`<${Mark} p=${p} onVote=${vote} />`}</li>`)}</ul>`}
-        ${c.pick && html`<span class="price-actions">
-          ${c.options.length > 1 && html`<button type="button" class="btn-text" aria-expanded=${expanded} onClick=${() => setOpenId(expanded ? null : c.id)}>${expanded ? 'לסגור' : 'להחליף מוצר (' + (c.options.length - 1) + ')'}</button>`}
-          ${!nonFood(c.pick) && (voteId === c.id ? html`<${Mark} p=${c.pick} onVote=${vote} />`
-            : html`<button type="button" class="btn-text price-vote-open" onClick=${() => setVoteId(c.id)}>${c.pick.kosher && c.pick.kosher.mine_cert ? 'סימנתם: ' + c.pick.kosher.mine_cert + ' · לשנות' : certOf(c.pick) ? 'הכשרות לא נכונה?' : 'לסמן כשרות'}</button>`)}
-        </span>`}
+    ${head}
+    ${best ? html`<div class="pp-hero">
+      <span class="pp-eye">הסל שלכם · ${priced} מוצרים</span>
+      <span class="pp-big num">${fmt(shown.total)}</span>
+      <span class="pp-at">ב${shown.name}${shown.store ? html` <small>· ${shown.store}</small>` : ''}${shown === best ? html` <em class="pp-best">הכי משתלם</em>` : ''}</span>
+      ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת הרשת היקרה ביותר בהשוואה</span>`}
+      <div class="pp-bars" role="list" aria-label="הסל בכל רשת">${top.map((c) => html`<button type="button" role="listitem" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
+        <span class="pp-bar-n">${c.name}</span>
+        <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i></span>
+        <span class="pp-bar-v num">${fmt(c.total)}</span>
+        ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'חסרים ' + c.missing : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
+      </button>`)}</div>
+    </div>` : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
+    <div class="pp-set">${prefRow}${areaRow}
+      <label class="pp-strict"><input type="checkbox" checked=${strict} onChange=${(e) => setStrictPref(e.currentTarget.checked)} /> רק מוצרים שהכשרות שלהם אומתה</label></div>
+    ${unverified > 0 && html`<p class="pp-note-k" role="note"><${Icon} name="shield" size=${16} /><span>${unverified === 1 ? 'במוצר אחד' : 'ב' + unverified + ' מוצרים'} הכשרות עוד לא סומנה אצלנו. המחיר מחושב, ובחנות כדאי לבדוק את החותמת. סימון אחד שלכם ("מה כתוב על האריזה") עוזר לכל המשפחות.</span></p>`}
+    <span class="muted price-count">יש מחיר: ${priced} מתוך ${open.length}${unsure ? ' · ' + unsure + ' מחכים לבחירה שלכם' : ''}${fresh ? ' · ' + fresh + ' נמכרים במשקל' : ''}${looking ? ' · מחפשים עוד ' + looking + '…' : ''}</span>
+    <ul class="price-list pp-list">
+      ${choices.map((c) => { const item = open.find((i) => i.id === c.id); const expanded = openId === c.id || (c.status === 'unsure' && openId !== 'x:' + c.id); const at = lineAt(c); const paid = lastPaid(item.name, receipts); const p = (at && at.product) || c.pick; return html`<li key=${c.id} class=${'price-item pp-row is-' + c.status + (expanded ? ' open' : '')}>
+        <button type="button" class="pp-row-h" aria-expanded=${expanded} onClick=${() => setOpenId(expanded ? 'x:' + c.id : c.id)} disabled=${!c.options.length}>
+          <${Photo} p=${p} name=${item.name} />
+          <span class="pp-row-t"><b>${item.name}${item.qty ? html` <small class="shop-qty">${item.qty}</small>` : ''}</b>
+            <small class="muted">${p ? p.name + (sizeText(size(p.qty, p.unit)) ? ' · ' + sizeText(size(p.qty, p.unit)) : '') : c.status === 'fresh' ? 'פירות, ירקות ובשר נמכרים במשקל, במחיר של הסניף' : looking ? 'מחפשים…' : queued ? 'עוד לא בקטלוג: נוסיף בקרוב' : c.status === 'unsure' ? 'יש מוצרים, אבל לא בכשרות שבחרתם' : 'לא נמצא מחיר'}</small>
+            <span class="pp-tags">${p && !nonFood(p) && certOf(p) && html`<span class=${'pp-tag t-cert' + (MINE.includes(certOf(p).cert) ? ' fits' : '')}>${certOf(p).cert}</span>`}${c.status !== 'auto' ? html`<span class=${'pp-tag t-' + c.status}>${STATE[c.status] || 'אין מחיר'}</span>` : ''}${at && at.swap && html`<span class="pp-tag t-swap">מוצר דומה ב${shown.name}</span>`}${at && !at.product && c.pick && html`<span class="pp-tag t-miss">אין ב${shown.name}</span>`}${paid && html`<span class="pp-tag t-paid">שילמתם ${fmt(paid.price)}${paid.store ? ' ב' + paid.store : ''}</span>`}</span></span>
+          <span class="pp-row-p">${at && at.price ? html`<b class="num">${fmt(at.price)}</b>` : c.pick && bestPrice(c.pick) ? html`<b class="num">${fmt(bestPrice(c.pick).price)}</b><small class="muted">${bestPrice(c.pick).chainName}</small>` : html`<b class="faint">—</b>`}</span>
+        </button>
+        ${expanded && html`<div class="pp-more">
+          ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל לא ידוע שהכשרות שלהם מהרשימה שלכם. בחרו מוצר, או סמנו מה כתוב על האריזה:</span>`}
+          <ul class="price-opts">${c.options.map((o) => html`<li key=${o.barcode}><${Product} p=${o}>
+            ${c.pick && o.barcode === c.pick.barcode ? html`<span class="pp-chosen">נבחר</span>` : html`<button type="button" class="btn btn-ghost price-pick" onClick=${() => pick(item, o)}>לבחור</button>`}</${Product}>
+            ${!certOf(o) && !nonFood(o) && html`<${Mark} p=${o} onVote=${vote} />`}</li>`)}</ul>
+          ${c.pick && certOf(c.pick) && !nonFood(c.pick) && (voteId === c.id ? html`<${Mark} p=${c.pick} onVote=${vote} />` : html`<button type="button" class="btn-text price-vote-open" onClick=${() => setVoteId(c.id)}>הכשרות לא נכונה?</button>`)}
+        </div>`}
       </li>`; })}
     </ul>
-    <p class="faint price-note">המחירים מהקבצים הרשמיים שהרשתות מפרסמות, מסניף אחד בכל רשת. בסניף שלכם המחיר יכול להיות מעט שונה. הכשרות לפי מה שמשפחות סימנו, המאגר הפתוח ואישור שלנו, ולכן תמיד כדאי לבדוק את החותמת על המוצר.</p>
+    <p class="faint price-note">המחירים מהקבצים הרשמיים שהרשתות מפרסמות${area && area.stores.length ? ', מהסניף הקרוב אליכם בכל רשת' : ', מסניף אחד בכל רשת'}. רשת שאין בה בדיוק אותו מוצר מקבלת את המוצר הדומה הזול שלה באותו גודל, ורואים את זה ליד המוצר. הכשרות לפי מה שמשפחות סימנו, המאגר הפתוח ואישור שלנו, ולכן תמיד כדאי לבדוק את החותמת.</p>
   </section>`;
 }
 

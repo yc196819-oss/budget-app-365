@@ -15,6 +15,7 @@ const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
 const account = require('./server/account');
 const cleanup = require('./server/cleanup');
+const receipts = require('./server/receipts');
 const twa = require('./server/twa');
 const tripsAi = require('./server/trips');
 const legal = require('./server/legal');
@@ -2216,6 +2217,26 @@ app.post('/api/admin/prices/load', requireAuth, async (req, res) => {
 // barcode: asked once a month at most for each product, kept in the
 // catalog, with the kashrut certifier its labels name, when they name one.
 // Up to 12 new lookups a call; the rest come next time.
+// A receipt photo from the shopping tab: read by the AI into the store, the
+// date and the lines bought. The photo is not kept; the family checks the
+// lines and saves them (to its own list history) from the app.
+app.post('/api/receipts/scan', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  try {
+    const { hid, fileData, mimeType } = req.body || {};
+    if (!(await isHouseholdMember(req.authUserId, String(hid || '')))) return res.status(403).json({ error: 'not allowed' });
+    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'בקרוב!' });
+    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'קריאת קבלות לא זמינה כרגע.' });
+    if (!fileData || !/^image\/(png|jpe?g|webp)$/i.test(String(mimeType || ''))) return res.status(400).json({ error: 'צריך תמונה (JPG או PNG).' });
+    const ai = await generateWithFallback({ prompt: receipts.PROMPT, text: '', fileData, mimeType, effort: 'low', maxTokens: 8000, json: true, model: ANTHROPIC_FILES_MODEL });
+    const r = receipts.parseReceipt(ai.output);
+    if (r.error === 'not_receipt') return res.status(422).json({ error: 'זו לא נראית כמו קבלה. נסו לצלם את הקבלה עצמה, ישר ובאור טוב.' });
+    if (r.error) return res.status(422).json({ error: 'לא הצלחנו לקרוא את הקבלה. נסו לצלם שוב, קרוב יותר ובאור טוב.' });
+    return res.json(r);
+  } catch (err) {
+    reportServerError(err, 'POST /api/receipts/scan');
+    return res.status(err.statusCode || 502).json({ error: 'לא הצלחנו לקרוא את הקבלה כרגע. נסו שוב בעוד דקה.' });
+  }
+});
 app.post('/api/prices/images', requireAuth, async (req, res) => {
   try {
     // Photos are extra: without the database, simply none.
