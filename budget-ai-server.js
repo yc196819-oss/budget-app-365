@@ -2034,6 +2034,7 @@ async function runAndWait(input) {
 const pricefiles = require('./server/pricefiles');
 // The free load: each chain's own full price file (the transparency law),
 // one chain at a time (one file in memory at a time), saved by barcode.
+const RETRY_WAIT_MS = Number(process.env.PRICE_RETRY_WAIT_MS || 180000);
 async function runFreeLoad() {
   Object.assign(seedJob, { running: true, part: 0, parts: pricefiles.CHAINS.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null, free: true, chainsDone: [] });
   try {
@@ -2052,6 +2053,24 @@ async function runFreeLoad() {
       seedJob.added += error ? 0 : r.count;
       seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error });
       console.log('prices:', r.key, r.count, error || 'ok');
+    }
+    // A site that did not answer at all (a few minutes down at night) gets
+    // one more try at the end, a few minutes later. A site that refuses us
+    // (403) or has no files would only fail again.
+    const again = prices.retryLater(seedJob.chainsDone);
+    if (again.length) {
+      await new Promise((ok) => setTimeout(ok, RETRY_WAIT_MS));
+      for (const key of again) {
+        seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
+        const [r] = await pricefiles.allChains(fetch, { only: [key] });
+        if (r.error || !r.rows.length) continue;
+        let error = null;
+        await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
+        const at = seedJob.chainsDone.findIndex((c) => c.key === key);
+        seedJob.chainsDone[at] = { key: r.key, name: r.name, count: r.count, error, retried: true };
+        if (!error) seedJob.added += r.count;
+        console.log('prices (again):', r.key, r.count, error || 'ok');
+      }
     }
     // Every chain's branches, then the branches families live near (their
     // chain's prices read back from the catalog).
