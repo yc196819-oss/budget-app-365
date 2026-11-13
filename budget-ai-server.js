@@ -16,6 +16,15 @@ const fx = require('./server/fx');
 const account = require('./server/account');
 const cleanup = require('./server/cleanup');
 const receipts = require('./server/receipts');
+const demo = require('./server/demo');
+// The chains' price sites: some answer slowly at first (a busy server, or an
+// address the network cannot reach before it tries the next). Their own
+// connection: up to 30 seconds to connect instead of 10, an IPv4 address
+// first, and the next address tried quickly.
+const undici = require('undici');
+const priceAgent = new undici.Agent({ connect: { timeout: 30000, autoSelectFamily: true, autoSelectFamilyAttemptTimeout: 500 }, headersTimeout: 120000, bodyTimeout: 300000 });
+const priceFetch = (url, opts = {}) => undici.fetch(url, { ...opts, dispatcher: priceAgent });
+require('dns').setDefaultResultOrder('ipv4first');
 const twa = require('./server/twa');
 const tripsAi = require('./server/trips');
 const legal = require('./server/legal');
@@ -1886,7 +1895,7 @@ const prices = require('./server/prices');
 app.get('/api/admin/prices/reach', requireAuth, async (req, res) => {
   try {
     if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
-    return res.json({ at: new Date().toISOString(), sites: await prices.probeAll(fetch) });
+    return res.json({ at: new Date().toISOString(), sites: await prices.probeAll(priceFetch) });
   } catch (err) {
     console.error('price reach failed:', err.message);
     return res.status(500).json({ error: 'failed' });
@@ -2045,9 +2054,9 @@ async function runFreeLoad() {
     for (const key of keys) {
       seedJob.part++;
       seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
-      let [r] = await pricefiles.allChains(fetch, { only: [key] });
+      let [r] = await pricefiles.allChains(priceFetch, { only: [key] });
       // A chain that failed (a site busy for a moment) is asked once more.
-      if (r.error) { await new Promise((ok) => setTimeout(ok, 5000)); [r] = await pricefiles.allChains(fetch, { only: [key] }); }
+      if (r.error) { await new Promise((ok) => setTimeout(ok, 5000)); [r] = await pricefiles.allChains(priceFetch, { only: [key] }); }
       let error = r.error || null;
       if (r.rows.length) await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
       seedJob.added += error ? 0 : r.count;
@@ -2062,7 +2071,7 @@ async function runFreeLoad() {
       await new Promise((ok) => setTimeout(ok, RETRY_WAIT_MS));
       for (const key of again) {
         seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
-        const [r] = await pricefiles.allChains(fetch, { only: [key] });
+        const [r] = await pricefiles.allChains(priceFetch, { only: [key] });
         if (r.error || !r.rows.length) continue;
         let error = null;
         await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
@@ -2096,7 +2105,7 @@ const area = require('./server/area');
 async function saveStores() {
   for (const c of pricefiles.CHAINS) {
     try {
-      const list = await pricefiles.chainStores(fetch, c);
+      const list = await pricefiles.chainStores(priceFetch, c);
       const at = new Date().toISOString();
       // One row per branch number: a chain that lists a number twice made
       // the whole save fail before (and its branches were never kept).
@@ -2154,7 +2163,7 @@ async function loadLocal(rows = null, only = null) {
         const base = general.get(w.chain);
         const at = new Date().toISOString();
         const diff = new Map();
-        for (const x of await pricefiles.storePrices(fetch, chain, w.store_id)) {
+        for (const x of await pricefiles.storePrices(priceFetch, chain, w.store_id)) {
           const g = base.get(x.barcode);
           if (g != null && Math.abs(g - x.price) >= 0.01 && (!diff.has(x.barcode) || x.price < diff.get(x.barcode))) diff.set(x.barcode, x.price);
         }
@@ -2390,6 +2399,85 @@ app.post('/api/cron/prices', async (req, res) => {
     return res.json({ started: true });
   } catch (err) {
     return res.status(500).json({ error: 'failed' });
+  }
+});
+// ── the demo household, for the owner ──
+// Opened from the owner's screen without a password, and its data rebuilt
+// to show what the app does today. Only the account named by DEMO_EMAIL,
+// and only if its household is marked as a demo ("הדגמה" in its name).
+const DEMO_EMAIL = String(process.env.DEMO_EMAIL || 'demo.family@budgetapp-demo.com').toLowerCase();
+async function demoAccount() {
+  const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const user = ((list && list.users) || []).find((u) => String(u.email || '').toLowerCase() === DEMO_EMAIL);
+  if (!user) return null;
+  const { data: m } = await supabaseAdmin.from('memberships').select('household_id').eq('user_id', user.id).maybeSingle();
+  if (!m) return null;
+  const { data: hh } = await supabaseAdmin.from('households').select('id,name').eq('id', m.household_id).maybeSingle();
+  if (!hh || !/הדגמה|demo/i.test(String(hh.name || ''))) return null;
+  return { user, hid: hh.id, name: hh.name };
+}
+// A session of the demo account for the owner's new tab (nothing is sent by
+// email: the link is made and used here).
+app.post('/api/admin/demo/session', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const acc = await demoAccount();
+    if (!acc) return res.status(404).json({ error: 'לא מצאנו את חשבון הדמו.' });
+    const { data: link, error } = await supabaseAdmin.auth.admin.generateLink({ type: 'magiclink', email: acc.user.email });
+    if (error || !link || !link.properties) throw new Error((error && error.message) || 'no link');
+    // A client of its own: verifying here must not change the admin client's session.
+    const once = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: v, error: vErr } = await once.auth.verifyOtp({ token_hash: link.properties.hashed_token, type: 'magiclink' });
+    if (vErr || !v || !v.session) throw new Error((vErr && vErr.message) || 'no session');
+    const x = v.session;
+    return res.json({ session: { access_token: x.access_token, refresh_token: x.refresh_token, token_type: x.token_type, expires_in: x.expires_in, expires_at: x.expires_at, user: x.user }, name: acc.name });
+  } catch (err) {
+    reportServerError(err, 'POST /api/admin/demo/session');
+    return res.status(500).json({ error: 'לא הצלחנו לפתוח את חשבון הדמו. נסו שוב.' });
+  }
+});
+// The demo data again, up to today: a year of money, the shopping list,
+// the area and a receipt. Only the demo household's rows are touched.
+app.post('/api/admin/demo/refresh', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const acc = await demoAccount();
+    if (!acc) return res.status(404).json({ error: 'לא מצאנו את חשבון הדמו.' });
+    const hid = acc.hid;
+    const today = new Date();
+    const [{ data: categories }, { data: accounts }, { data: cards }] = await Promise.all([
+      supabaseAdmin.from('categories').select('id,name,parent_id').eq('household_id', hid),
+      supabaseAdmin.from('bank_accounts').select('id,name').eq('household_id', hid).order('created_at'),
+      supabaseAdmin.from('credit_cards').select('id,name,bank_account_id').eq('household_id', hid).order('created_at')
+    ]);
+    const david = (accounts || []).find((a) => /דוד/.test(a.name)) || (accounts || [])[0];
+    const michal = (accounts || []).find((a) => /מיכל/.test(a.name)) || (accounts || [])[1] || david;
+    const cardOf = (a) => (cards || []).find((c) => a && c.bank_account_id === a.id) || (cards || [])[0];
+    const txs = demo.buildTransactions({ today, categories: categories || [], accounts: [david, michal], cards: [cardOf(david), cardOf(michal)], userId: acc.user.id }).map((t) => ({ ...t, household_id: hid }));
+    const must = (r) => { if (r.error) throw new Error(r.error.message); return r; };
+    must(await supabaseAdmin.from('transactions').delete().eq('household_id', hid));
+    for (let i = 0; i < txs.length; i += 500) must(await supabaseAdmin.from('transactions').insert(txs.slice(i, i + 500)));
+    must(await supabaseAdmin.from('shopping_items').delete().eq('household_id', hid));
+    must(await supabaseAdmin.from('shopping_items').insert(demo.buildShopping({ today }).map((r) => ({ ...r, household_id: hid, added_by: acc.user.id }))));
+    await supabaseAdmin.from('households').update({ people: 5 }).eq('id', hid);
+    await supabaseAdmin.from('price_prefs').upsert({ household_id: hid, kosher: 'mehadrin', certs: ['בד"ץ העדה החרדית', 'בד"ץ בית יוסף'], updated_at: today.toISOString() }, { onConflict: 'household_id' });
+    // Their area: Beit Shemesh, and the branch nearest them at every chain.
+    const home = area.place('2610');
+    if (home) {
+      await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: home.code, city: home.name, hood: 'רמת בית שמש א', max_km: 15, updated_at: today.toISOString() }, { onConflict: 'household_id' });
+      const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
+      const near = area.nearestStores(stores || [], { code: home.code, hood: 'רמת בית שמש א' }, { maxKm: 15 });
+      await supabaseAdmin.from('household_stores').delete().eq('household_id', hid);
+      if (near.length) await supabaseAdmin.from('household_stores').insert(near.map((n) => ({ household_id: hid, chain: n.chain, store_id: n.store_id, chain_name: n.chain_name, name: n.name, address: n.address, city: n.city, km: n.km, kind: n.kind })));
+    }
+    await supabaseAdmin.from('shop_receipts').delete().eq('household_id', hid);
+    await supabaseAdmin.from('shop_receipts').insert({ household_id: hid, created_by: acc.user.id, ...demo.buildReceipt({ today }) });
+    return res.json({ ok: true, transactions: txs.length, name: acc.name });
+  } catch (err) {
+    reportServerError(err, 'POST /api/admin/demo/refresh');
+    return res.status(500).json({ error: 'רענון נתוני הדמו נכשל: ' + String(err.message || err).slice(0, 80) });
   }
 });
 app.get('/api/admin/prices/load', requireAuth, async (req, res) => {

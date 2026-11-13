@@ -2,7 +2,7 @@ import { html } from '../../lib/html.js';
 import { Icon } from '../../components/Icon.js';
 import { api } from '../../lib/api.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminAsk, adminReengage, testMonthlyMail, sendMonthlyMail, priceReach } from '../../data/account.js';
+import { adminStats, adminLive, adminAsk, adminReengage, testMonthlyMail, sendMonthlyMail, priceReach, demoSession, demoRefresh } from '../../data/account.js';
 import { MailBoard } from './MailBoard.js';
 import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
@@ -321,6 +321,38 @@ export function adminKpis(s) {
   return { tiles, summary: parts.join('. ') + '.' };
 }
 
+// The demo household: opened in a new tab without a password (the owner
+// stays signed in here), and its data rebuilt to show the app as it is today.
+function DemoCard() {
+  const [busy, setBusy] = useState('');
+  const open = async () => {
+    // The tab is opened on the click itself (a tab opened later is blocked).
+    const w = window.open('about:blank', '_blank');
+    setBusy('open');
+    try {
+      const r = await demoSession();
+      const enc = btoa(unescape(encodeURIComponent(JSON.stringify(r.session)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const url = '/app/?demo=1#demo=' + enc;
+      if (w) w.location.href = url; else location.href = url;
+    } catch (e) { if (w) w.close(); showToast(e.message || 'לא הצלחנו לפתוח את חשבון הדמו.'); }
+    setBusy('');
+  };
+  const refresh = async () => {
+    setBusy('refresh');
+    try { const r = await demoRefresh(); showToast('נתוני הדמו עודכנו: ' + r.transactions + ' תנועות עד היום'); } catch (e) { showToast(e.message || 'הרענון נכשל.'); }
+    setBusy('');
+  };
+  return html`<div class="card stack demo-card">
+    <b>משפחת לוי (הדגמה)</b>
+    <span class="muted" style="font-size:14px;line-height:1.55">נפתח בלשונית חדשה, בלי סיסמה. אתה נשאר מחובר לחשבון שלך כאן. מה שמשנים שם נשמר בחשבון הדמו.</span>
+    <div class="demo-acts">
+      <button type="button" class="btn" disabled=${!!busy} onClick=${open}><${Icon} name="popout" size=${17} />${busy === 'open' ? 'פותחים…' : 'לפתוח את חשבון הדמו'}</button>
+      <button type="button" class="btn btn-ghost" disabled=${!!busy} onClick=${refresh}>${busy === 'refresh' ? 'מרעננים…' : 'לרענן את הנתונים עד היום'}</button>
+    </div>
+    <small class="faint">הרענון בונה מחדש שנה של תנועות עד היום (משכורות, סופר, הוצאות קבועות לבדיקה, העברה בין החשבונות, החזר בביט, הפקדה להשקעה), רשימת קניות, אזור בבית שמש וקבלה לדוגמה. היעדים, ההשקעות וההלוואות נשארים.</small>
+  </div>`;
+}
+
 export function AdminView({ onBack }) {
   const [s, setS] = useState(undefined);
   const [live, setLive] = useState(null);
@@ -383,6 +415,7 @@ export function AdminView({ onBack }) {
     ${back && back.campaigns && html`<${MailBoard} back=${back} setBack=${setBack} />`}
     ${back && html`<${MonthlyMailCard} />`}` },
     { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים מהרשתות, ואישור כשרות', body: () => html`${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceReachCard} />`}` },
+    { key: 'demo', icon: 'together', title: 'חשבון הדמו', sub: 'לפתוח בלי סיסמה, ולרענן את הנתונים', body: () => html`<${DemoCard} />` },
     { key: 'system', icon: 'wrench', title: 'מצב המערכת', sub: s ? 'תקלות השבוע: ' + s.errors.week : 'תקלות ומה שבור', body: () => html`${s && html`
       <div class="card stack"><b>תקלות השבוע: <span class="num">${s.errors.week}</span></b>
         ${s.errors.top.map((e) => html`<div style="font-size:13px"><b class="num">${e.count}×</b> ${e.message}<div class="faint" style="font-size:11px">${e.path || ''}</div></div>`)}</div>`}` }
