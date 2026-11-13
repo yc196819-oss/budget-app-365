@@ -97,3 +97,17 @@ test('round 8: a list pasted from a message: bullets, numbering and emoji are no
   const { parseItems } = await import('../public/app/src/domain/shopping.js');
   assert.deepEqual(parseItems('רשימה לשבת:\n1. חלב 3%\n2. ביצים x2\n• לחם 🍞').map((i) => [i.name, i.qty]), [['חלב 3%', null], ['ביצים', '×2'], ['לחם', null]], 'a whole message: the heading left out');
 });
+
+test('round 9: a name with a bare count does not decide the usual size; a taste counts only when there are plain ones', async () => {
+  const { choose } = await import('../public/app/src/domain/prices.js');
+  const water = [
+    P('1', 'מים מינרליים 0.75 ל\' (6)', 0.75, 'ליטר', [14.9, 15, 15.5, 16, 16.5, 17]),
+    P('2', 'מים מינרליים 750 מ"ל', 750, 'מ"ל', [8.9, 9, 9.5]),
+    P('3', 'מים מינרליים 1.5 ל\'', 1.5, 'ליטר', [3.5, 3.6, 3.9, 4])
+  ];
+  assert.equal(choose('מים מינרליים', water, 'any').pick.barcode, '3');
+  const chocolate = [P('1', 'שוקולד פרה חלב קורנפלקס 100 גרם', 100, 'גרם', [8.5, 9]), P('2', 'שוקולד חלב 100 גרם', 100, 'גרם', [8.9, 9.2]), P('3', 'שוקולד מריר 100 גרם', 100, 'גרם', [9.9, 10])];
+  assert.equal(choose('שוקולד', chocolate, 'any').pick.barcode, '2');
+  const iceCream = [P('1', 'גלידה בטעם קרמל 500 גרם', 500, 'גרם', [19.9, 21]), P('2', 'גלידה חלב 264 גרם', 264, 'גרם', [34.9, 35])];
+  assert.equal(choose('גלידה', iceCream, 'any').pick.barcode, '1', 'one plain ice cream does not push the rest away');
+});

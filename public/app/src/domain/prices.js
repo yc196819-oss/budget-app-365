@@ -249,7 +249,7 @@ export function allowed(product, pref) {
 const SPECIAL = /קפסול|מחית|ללא גל|פיצה|כוסמין|אורגני|ללא גלוטן|גלוטן|(^|\s)GO(\s|$)|חלבון|פרוטאין|לקישוט|דיאט|לייט|זירו|ספריי|מיני(\s|$)|לתינוק|תינוקות|ללא לקטוז|קטו(\s|$)|טבעוני|(^|\s)מלאה?(\s|$)|סושי|סטיקי/i;
 // A flavour or an addition ("חמוץ חריף", "עם לימון", "נוגט"): still the
 // product, but the plain one comes first when the list says just "במבה".
-const FLAVOUR = /חריף|חמוץ|במילוי|נוגט|ברביקיו|צ['׳]?דר|(^|\s)עם(\s|$)|יום הולדת|מתובל|לימון|פלפל|שום|בצל|שמיר|זעתר|קינואה|ג['׳]?ינג['׳]?ר|מאנצ/;
+const FLAVOUR = /נענע|קמומיל|לואיזה|פירות יער|פיצפוצי|פצפוצ|קורנפלקס|אוראו|עוגיות|אגוזי|שקדים|חריף|חמוץ|במילוי|נוגט|ברביקיו|צ['׳]?דר|(^|\s)עם(\s|$)|יום הולדת|מתובל|לימון|פלפל|שום|בצל|שמיר|זעתר|קינואה|ג['׳]?ינג['׳]?ר|מאנצ/;
 const FLAVOUR_ALL = new RegExp(FLAVOUR.source, 'g');
 export function flavoured(name, query) {
   const found = String(name || '').match(FLAVOUR_ALL);
@@ -329,7 +329,9 @@ export function choose(query, products, pref = 'any', { keep, strict = false } =
     const w = new Map();
     // (from the plain products, when there are: the usual size of "במבה" is
     // the plain one's, not the flavours').
-    const plain = close.filter((x) => !flavoured(x.p.name, query));
+    // A name ending in a bare count ("מי עדן 0.75 ל' (6)") may be priced as
+    // one bottle or as the six: it does not say what the usual size is.
+    const plain = close.filter((x) => !flavoured(x.p.name, query) && !/\(\s*\d{1,2}\s*\)\s*$/.test(x.p.name));
     for (const x of plain.length ? plain : close) { const z = sizeOfProduct(x.p); if (z && z.unit === mainUnit) { const k = Math.round(z.qty * 100) / 100; w.set(k, (w.get(k) || 0) + sold(x)); } }
     const all = [...w.entries()].sort((a, b) => b[1] - a[1]);
     // No size more usual than another (each sold once): none is "the usual".
@@ -337,8 +339,11 @@ export function choose(query, products, pref = 'any', { keep, strict = false } =
     return all[0][0];
   })();
   const usual = (x) => { const z = sizeOfProduct(x.p); if (!z || z.unit !== mainUnit || !usualSize) return false; const r = z.qty / usualSize; return r >= 0.8 && r <= 1.25; };
+  // The plain one first, when there really are plain ones (every ice cream
+  // has a taste: then the taste does not count).
+  const plainCount = close.filter((x) => !flavoured(x.p.name, query)).length;
   const byPrice = (a, b) => {
-    const af = flavoured(a.p.name, query), bf = flavoured(b.p.name, query);
+    const af = plainCount >= 2 && flavoured(a.p.name, query), bf = plainCount >= 2 && flavoured(b.p.name, query);
     if (af !== bf) return af ? 1 : -1;
     const au = usual(a), bu = usual(b);
     if (au !== bu) return au ? -1 : 1;
