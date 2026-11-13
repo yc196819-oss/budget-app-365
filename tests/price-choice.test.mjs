@@ -51,7 +51,7 @@ test('the automatic choice: the cheapest product the household\'s kashrut allows
 });
 
 test('nothing confirmed for a strict household: marked unsure, never guessed', () => {
-  const r = choose('חלב 3%', [milkBig], 'mehadrin');
+  const r = choose('חלב 3%', [milkBig], 'mehadrin', { strict: true });
   assert.equal(r.status, 'unsure');
   assert.equal(r.pick, null);
   assert.equal(r.options[0].barcode, '1003', 'still shown to choose from');
@@ -81,8 +81,9 @@ test('a list of 200 items gets all its choices at once, quickly', () => {
 test('the list at each chain: cheapest first, and what each chain is missing', () => {
   const choices = [choose('חלב 3%', [milkA], 'any'), choose('חלב 3%', [milkB], 'any')];
   const b = basket(choices, () => 2);
-  assert.deepEqual(b[0], { chain: 'x', name: 'רשת א', store: null, total: 24.2, missing: 0 });
-  assert.deepEqual(b[1], { chain: 'y', name: 'רשת ב', store: null, total: 13.8, missing: 1 });
+  const plain = ({ lines, ...r }) => r;
+  assert.deepEqual(plain(b[0]), { chain: 'x', name: 'רשת א', store: null, total: 24.2, missing: 0, swaps: 0 });
+  assert.deepEqual(plain(b[1]), { chain: 'y', name: 'רשת ב', store: null, total: 13.8, missing: 1, swaps: 0 });
   assert.equal(count('×3'), 3);
   assert.equal(count('2 ק"ג'), 1);
 });

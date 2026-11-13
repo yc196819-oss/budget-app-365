@@ -15,6 +15,7 @@ const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
 const account = require('./server/account');
 const cleanup = require('./server/cleanup');
+const receipts = require('./server/receipts');
 const twa = require('./server/twa');
 const tripsAi = require('./server/trips');
 const legal = require('./server/legal');
@@ -2055,6 +2056,7 @@ async function runFreeLoad() {
     // Every chain's branches, then the branches families live near (their
     // chain's prices read back from the catalog).
     await saveStores().catch((e) => console.error('stores failed:', e.message));
+    await refreshAreas().catch((e) => console.error('areas refresh failed:', e.message));
     await loadLocal(null).catch((e) => console.error('local prices failed:', e.message));
     // Prices of a chain that left (or a product it stopped selling) older
     // than two weeks are not shown as today's price.
@@ -2077,10 +2079,32 @@ async function saveStores() {
     try {
       const list = await pricefiles.chainStores(fetch, c);
       const at = new Date().toISOString();
-      const rows = list.map((x) => ({ chain: c.key, chain_name: c.name, store_id: x.store_id, name: x.name, address: x.address, city: x.city, seen_at: at }));
-      for (let i = 0; i < rows.length; i += 500) await supabaseAdmin.from('price_stores').upsert(rows.slice(i, i + 500), { onConflict: 'chain,store_id' });
+      // One row per branch number: a chain that lists a number twice made
+      // the whole save fail before (and its branches were never kept).
+      const rows = area.uniqueStores(list).map((x) => ({ chain: c.key, chain_name: c.name, store_id: x.store_id, name: x.name, address: x.address, city: x.city, seen_at: at }));
+      for (let i = 0; i < rows.length; i += 500) {
+        const { error } = await supabaseAdmin.from('price_stores').upsert(rows.slice(i, i + 500), { onConflict: 'chain,store_id' });
+        if (error) throw new Error(error.message);
+      }
     } catch (e) { console.error('stores of ' + c.key + ':', e.message); }
   }
+}
+// Every family's nearest branches again, after the branch lists changed: a
+// chain that opened a branch near them (or a chain added to the app) shows
+// without them saving their area again.
+async function refreshAreas() {
+  const { data: areas } = await supabaseAdmin.from('household_area').select('household_id,city_code,hood,max_km').limit(5000);
+  if (!areas || !areas.length) return 0;
+  const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
+  let n = 0;
+  for (const a of areas) {
+    const near = area.nearestStores(stores || [], { code: a.city_code, hood: a.hood }, { maxKm: a.max_km || 25 });
+    if (!near.length) continue;
+    await supabaseAdmin.from('household_stores').delete().eq('household_id', a.household_id);
+    await supabaseAdmin.from('household_stores').insert(near.map((x) => ({ household_id: a.household_id, chain: x.chain, store_id: x.store_id, chain_name: x.chain_name, name: x.name, address: x.address, city: x.city, km: x.km, kind: x.kind })));
+    n++;
+  }
+  return n;
 }
 // The prices at the branches families live near: kept only where a branch
 // differs from its chain's general price (so the catalog stays small).
@@ -2216,6 +2240,26 @@ app.post('/api/admin/prices/load', requireAuth, async (req, res) => {
 // barcode: asked once a month at most for each product, kept in the
 // catalog, with the kashrut certifier its labels name, when they name one.
 // Up to 12 new lookups a call; the rest come next time.
+// A receipt photo from the shopping tab: read by the AI into the store, the
+// date and the lines bought. The photo is not kept; the family checks the
+// lines and saves them (to its own list history) from the app.
+app.post('/api/receipts/scan', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  try {
+    const { hid, fileData, mimeType } = req.body || {};
+    if (!(await isHouseholdMember(req.authUserId, String(hid || '')))) return res.status(403).json({ error: 'not allowed' });
+    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'בקרוב!' });
+    if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'קריאת קבלות לא זמינה כרגע.' });
+    if (!fileData || !/^image\/(png|jpe?g|webp)$/i.test(String(mimeType || ''))) return res.status(400).json({ error: 'צריך תמונה (JPG או PNG).' });
+    const ai = await generateWithFallback({ prompt: receipts.PROMPT, text: '', fileData, mimeType, effort: 'low', maxTokens: 8000, json: true, model: ANTHROPIC_FILES_MODEL });
+    const r = receipts.parseReceipt(ai.output);
+    if (r.error === 'not_receipt') return res.status(422).json({ error: 'זו לא נראית כמו קבלה. נסו לצלם את הקבלה עצמה, ישר ובאור טוב.' });
+    if (r.error) return res.status(422).json({ error: 'לא הצלחנו לקרוא את הקבלה. נסו לצלם שוב, קרוב יותר ובאור טוב.' });
+    return res.json(r);
+  } catch (err) {
+    reportServerError(err, 'POST /api/receipts/scan');
+    return res.status(err.statusCode || 502).json({ error: 'לא הצלחנו לקרוא את הקבלה כרגע. נסו שוב בעוד דקה.' });
+  }
+});
 app.post('/api/prices/images', requireAuth, async (req, res) => {
   try {
     // Photos are extra: without the database, simply none.
