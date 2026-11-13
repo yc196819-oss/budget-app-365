@@ -66,3 +66,13 @@ test('what you paid last time: the newest receipt that has it, per unit', () => 
   assert.equal(receiptsSummary(receipts).last.store, 'רשת חדשה');
   assert.equal(receiptsSummary(receipts).lines, 3);
 });
+
+test('what you paid last time: only for the same kind of product as the one compared', async () => {
+  const { lastPaid } = await import('../public/app/src/domain/receipts.js');
+  const rec = [{ store: 'סופר לדוגמה', bought_on: '2026-11-06', items: [{ name: 'שמן זית 750 מ"ל', qty: 1, price: 29.9 }, { name: 'חלב 3% 1 ליטר', qty: 2, price: 11.8 }] }];
+  const canola = { name: 'שמן קנולה 1 ליטר', qty: 1, unit: 'ליטר', offers: [{ chain: 'x', price: 8.9 }] };
+  const milk = { name: 'חלב 3% 1 ליטר', qty: 1, unit: 'ליטר', offers: [{ chain: 'x', price: 6.2 }] };
+  assert.equal(lastPaid('שמן', rec, canola), null, 'olive oil is not what was paid for canola');
+  assert.equal(lastPaid('שמן', rec).price, 29.9, 'with nothing to compare to, as before');
+  assert.equal(lastPaid('חלב', rec, milk).price, 5.9, 'the same milk: shown');
+});

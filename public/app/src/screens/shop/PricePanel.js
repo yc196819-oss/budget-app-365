@@ -332,7 +332,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
     ${unverified > 0 && html`<p class="pp-note-k" role="note"><${Icon} name="shield" size=${16} /><span>${unverified === 1 ? 'במוצר אחד' : 'ב-' + unverified + ' מוצרים'} הכשרות עוד לא סומנה אצלנו. המחיר מחושב, ובחנות כדאי לבדוק את החותמת. סימון אחד שלכם ("מה כתוב על האריזה") עוזר לכל המשפחות.</span></p>`}
     <span class="muted price-count">יש מחיר: ${priced} מתוך ${open.length}${unsure ? ' · ' + unsure + ' מחכים לבחירה שלכם' : ''}${fresh ? ' · ' + (fresh === 1 ? 'אחד נמכר' : fresh + ' נמכרים') + ' במשקל' : ''}${looking ? ' · מחפשים עוד ' + looking + '…' : ''}</span>
     <ul class="price-list pp-list">
-      ${choices.map((c) => { const item = open.find((i) => i.id === c.id); const expanded = openId === c.id || (c.status === 'unsure' && openId !== 'x:' + c.id); const at = lineAt(c); const paid = lastPaid(item.name, receipts); const p = (at && at.product) || c.pick; return html`<li key=${c.id} class=${'price-item pp-row is-' + c.status + (expanded ? ' open' : '')}>
+      ${choices.map((c) => { const item = open.find((i) => i.id === c.id); const expanded = openId === c.id || (c.status === 'unsure' && openId !== 'x:' + c.id); const at = lineAt(c); const paid = lastPaid(item.name, receipts, c.pick); const p = (at && at.product) || c.pick; return html`<li key=${c.id} class=${'price-item pp-row is-' + c.status + (expanded ? ' open' : '')}>
         <button type="button" class="pp-row-h" aria-expanded=${expanded} onClick=${() => setOpenId(expanded ? 'x:' + c.id : c.id)} disabled=${!c.options.length}>
           <${Photo} p=${p} name=${item.name} />
           <span class="pp-row-t"><b>${item.name}${item.qty ? html` <small class="shop-qty">${item.qty}</small>` : ''}</b>
