@@ -214,7 +214,7 @@ test('prices: the household picks the certifiers it relies on once, then every i
   assert.equal(db.tables.price_prefs[0].kosher, 'mehadrin');
   await page.waitForSelector('.price-item');
   assert.deepEqual(calls.search[0], ['חלב 3%', 'ביצים', 'קפה'], 'the whole list in one search');
-  assert.match(await page.locator('.price-pref:not(.price-area):not(.pp-clubs-row)').textContent(), /בד"ץ העדה החרדית · הרב לנדא/);
+  assert.match(await page.locator('.price-pref:not(.price-area):not(.pp-clubs-row):not(.pp-shabbat-row)').textContent(), /בד"ץ העדה החרדית · הרב לנדא/);
   // Milk: the one with their certifier, though the other (another certifier) is cheaper.
   const milk = page.locator('.price-item', { hasText: 'חלב 3%' }).first();
   assert.match(await milk.textContent(), /חלב 3% בשקית.*בד"ץ העדה החרדית/);
@@ -550,6 +550,29 @@ test('deals: one anyone gets is in the total, a club deal is only shown, and the
   await page.locator('.pp-clubs .btn-primary').click();
   await page.waitForSelector('.pp-hero:has-text("₪19.50")');
   assert.deepEqual(db.tables.price_prefs[0].clubs, []);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('a Haredi kashrut: a chain open on Shabbat is not in the comparison until the family brings it back', async () => {
+  let db;
+  const { page, errors } = await open(390, (d) => {
+    db = d;
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'mehadrin', certs: ['הרב לנדא'] }];
+  }, OWNER);
+  // Made-up prices: the chain open on Shabbat is the cheapest.
+  await page.route('**/rest/v1/rpc/price_search', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ q: 1, barcode: '1001', name: 'חלב 3% בשקית', names: '', qty: 1, unit: 'ליטר', kosher: { owner_cert: 'הרב לנדא' },
+    offers: [{ chain: 'tiv-taam', chain_name: 'טיב טעם', price: 5.1 }, { chain: 'x', chain_name: 'רשת א', price: 6.2 }] }]) }));
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+  await page.click('.shop-prices-cta button');
+  const hero = page.locator('.pp-hero');
+  await hero.waitFor();
+  assert.match(await hero.textContent(), /₪6\.20ברשת א/);
+  assert.equal(await page.locator('.pp-bar', { hasText: 'טיב טעם' }).count(), 0);
+  await page.locator('.pp-shabbat-row .chip', { hasText: 'טיב טעם' }).click();
+  await page.waitForSelector('.pp-hero:has-text("₪5.10")');
+  assert.deepEqual(db.tables.price_prefs[0].chains_shown, ['tiv-taam']);
   await page.close();
   assert.deepEqual(errors, []);
 });

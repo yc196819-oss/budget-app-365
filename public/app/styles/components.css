@@ -1661,6 +1661,7 @@ body.chat-open { overflow: hidden; }
 .pp-tag.t-deal-off { border-style: dashed; font-weight: 600; }
 .pp-club-ask { margin: -6px 0 10px; padding-inline-start: 54px; }
 .pp-club-ask .btn-text { font-size: 13px; padding: 2px 0; color: var(--accent); }
+.pp-shabbat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .pp-club-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .pp-club-list li { display: flex; align-items: center; gap: 6px; }
 .pp-club-list li > span { flex: 1; font-weight: 700; font-size: 14px; }

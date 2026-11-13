@@ -28,3 +28,17 @@ test('round 3: a chain\'s old English name shows in Hebrew', () => {
   assert.equal(chainHe('רמי לוי'), 'רמי לוי');
   assert.equal(chainHe('מעיין 2000'), 'מעיין 2000');
 });
+
+test('a Haredi kashrut: chains open on Shabbat are left out, unless the family brings one back', async () => {
+  const { haredi, hiddenChains, withoutChains } = await import('../public/app/src/domain/prices.js');
+  assert.equal(haredi(['בד"ץ העדה החרדית']), true);
+  assert.equal(haredi(['רבנות', 'רבנות מהדרין']), false);
+  assert.equal(haredi('any'), false);
+  assert.deepEqual(hiddenChains(['הרב לנדא']), ['tiv-taam', 'yellow', 'dor-alon']);
+  assert.deepEqual(hiddenChains(['הרב לנדא'], ['tiv-taam']), ['yellow', 'dor-alon']);
+  assert.deepEqual(hiddenChains(['רבנות']), []);
+  const cat = { 'חלב': [P('1', 'חלב 1 ליטר', 1, 'ליטר', [6]) ] };
+  cat['חלב'][0].offers = [{ chain: 'tiv-taam', price: 5 }, { chain: 'rami-levy', price: 6 }];
+  assert.deepEqual(withoutChains(cat, ['tiv-taam'])['חלב'][0].offers.map((o) => o.chain), ['rami-levy']);
+  assert.equal(withoutChains(cat, []), cat);
+});

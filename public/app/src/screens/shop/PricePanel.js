@@ -1,11 +1,11 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
-import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces, getClubs, setClubs } from '../../data/prices.js';
+import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces, getClubs, setClubs, getChainsShown, setChainsShown } from '../../data/prices.js';
 import { aisleOf } from '../../domain/shopping.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
@@ -41,6 +41,7 @@ function Mark({ p, onVote, label = 'מה כתוב על האריזה?', open: sta
   if (!open) return html`<button type="button" class="btn-text price-vote-open" aria-expanded="false" onClick=${() => setOpen(true)}>${mine ? 'סימנתם: ' + mine + ' · לשנות' : label + ' לסמן'}</button>`;
   return html`<span class="price-vote"><small class="muted">${mine ? 'סימנתם: ' + mine + '. לשנות:' : label}</small>${CERT_NAMES.map((c) => html`<button type="button" class=${'chip' + (c === NOT_KOSHER ? ' chip-no' : '')} key=${c} aria-pressed=${mine === c} onClick=${() => { setOpen(false); onVote(p, c); }}>${c}</button>`)}</span>`;
 }
+const CHAIN_LABEL = { 'tiv-taam': 'טיב טעם', 'yellow': 'יילו', 'dor-alon': 'דור אלון' };
 // The clubs the family has: for each chain in the comparison, its customers
 // club and its credit card. Their deals then count in that chain's total.
 function ClubPicker({ chains, initial, onSave, onCancel }) {
@@ -152,6 +153,8 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   // The chains whose club or credit card the family has ('rami-levy:club').
   const [clubs, setClubsState] = useState(() => new Set());
   const [editClubs, setEditClubs] = useState(false);
+  // Chains open on Shabbat brought back by a family with a Haredi kashrut.
+  const [shownChains, setShownChains] = useState([]);
   const [strict, setStrict] = useState(() => readLocal('price:strict:' + hid, '') === '1');
   const setStrictPref = (v) => { setStrict(v); writeLocal('price:strict:' + hid, v ? '1' : ''); };
   // The family's area: undefined while loading, null when not chosen.
@@ -163,6 +166,13 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => { getKosherPref(hid).then((k) => setPref(k)).catch(() => setPref(null)); }, [hid]);
   useEffect(() => { getClubs(hid).then((c) => setClubsState(new Set(c))).catch(() => {}); }, [hid]);
+  useEffect(() => { getChainsShown(hid).then(setShownChains).catch(() => {}); }, [hid]);
+  const flipChain = async (key) => {
+    const before = shownChains;
+    const next = before.includes(key) ? before.filter((k) => k !== key) : [...before, key];
+    setShownChains(next);
+    try { await setChainsShown(hid, next); } catch (_e) { setShownChains(before); showToast('לא נשמר. נסו שוב.'); }
+  };
   const saveClubs = async (next, toast) => {
     const before = clubs;
     setClubsState(next);
@@ -234,6 +244,10 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
     : html`<div class="price-pref"><span class="muted">כשרות:</span><b class="price-pref-certs">${Array.isArray(pref) ? pref.join(' · ') : 'בלי העדפה'}</b>
       <button type="button" class="btn-text pp-area-edit" onClick=${() => setEditPref(true)}>לשנות</button></div>`;
 
+  // For a Haredi kashrut: the chains open on Shabbat, left out; a tap brings one back.
+  const shabbatRow = haredi(pref) && html`<div class="price-pref pp-shabbat-row"><span class="muted">רשתות שפתוחות בשבת, לא בהשוואה:</span>
+    <span class="pp-shabbat-chips">${Object.keys(SHABBAT_CHAINS).map((k) => html`<button type="button" class="chip" key=${k} aria-pressed=${shownChains.includes(k)} title=${SHABBAT_CHAINS[k]} onClick=${() => flipChain(k)}>${CHAIN_LABEL[k]}${shownChains.includes(k) ? ' · מוצגת' : ''}</button>`)}</span>
+    <small class="muted pp-area-note">לחיצה על רשת מחזירה אותה להשוואה.</small></div>`;
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
   const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
     : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לשנות</button><small class="muted pp-area-note">${!area.stores.length ? 'לא נמצאו סניפים קרובים, משווים במחירים הכלליים' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</small></div>`
@@ -245,7 +259,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   if (!open.length) return html`<section class="card stack price-panel">${head}${prefRow}${areaRow}<span class="muted">אין מה להשוות: הרשימה ריקה או שהכול כבר נקנה.</span></section>`;
   if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${areaRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
 
-  const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), nearby(catalog, !!(area && area.stores.length)), pref, { strict });
+  const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), withoutChains(nearby(catalog, !!(area && area.stores.length)), hiddenChains(pref, shownChains)), pref, { strict });
   const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty);
   const chains = basket(choices, qtyOf, new Date(), clubs);
   // "Which clubs do you have?": each chain in the comparison, its club and its credit card.
@@ -285,7 +299,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
         ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
       </button>`)}</div>
     </div>` : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
-    <div class="pp-set">${prefRow}${areaRow}${clubsRow}
+    <div class="pp-set">${prefRow}${areaRow}${clubsRow}${shabbatRow}
       <label class="pp-strict"><input type="checkbox" checked=${strict} onChange=${(e) => setStrictPref(e.currentTarget.checked)} /> רק מוצרים שהכשרות שלהם אומתה</label></div>
     ${unverified > 0 && html`<p class="pp-note-k" role="note"><${Icon} name="shield" size=${16} /><span>${unverified === 1 ? 'במוצר אחד' : 'ב' + unverified + ' מוצרים'} הכשרות עוד לא סומנה אצלנו. המחיר מחושב, ובחנות כדאי לבדוק את החותמת. סימון אחד שלכם ("מה כתוב על האריזה") עוזר לכל המשפחות.</span></p>`}
     <span class="muted price-count">יש מחיר: ${priced} מתוך ${open.length}${unsure ? ' · ' + unsure + ' מחכים לבחירה שלכם' : ''}${fresh ? ' · ' + (fresh === 1 ? 'אחד נמכר' : fresh + ' נמכרים') + ' במשקל' : ''}${looking ? ' · מחפשים עוד ' + looking + '…' : ''}</span>

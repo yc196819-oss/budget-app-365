@@ -49,6 +49,17 @@ export async function getClubs(hid) {
   if (error || !data) return [];
   return (data.clubs || []).filter((c) => /^[a-z0-9-]{1,40}:(club|card)$/.test(c));
 }
+// Chains open on Shabbat the family brought back into its comparison.
+export async function getChainsShown(hid) {
+  const { data, error } = await sb.from('price_prefs').select('chains_shown').eq('household_id', hid).maybeSingle();
+  if (error || !data) return [];
+  return (data.chains_shown || []).filter((c) => /^[a-z0-9-]{1,40}$/.test(c));
+}
+export async function setChainsShown(hid, chains) {
+  const list = [...new Set((chains || []).filter((c) => /^[a-z0-9-]{1,40}$/.test(c)))].slice(0, 40);
+  const { error } = await sb.from('price_prefs').upsert({ household_id: hid, chains_shown: list, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+  if (error) throw error;
+}
 export async function setClubs(hid, clubs) {
   const list = [...new Set((clubs || []).filter((c) => /^[a-z0-9-]{1,40}:(club|card)$/.test(c)))].slice(0, 80);
   const { error } = await sb.from('price_prefs').upsert({ household_id: hid, clubs: list, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });

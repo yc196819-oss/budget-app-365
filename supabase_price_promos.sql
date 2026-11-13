@@ -26,6 +26,8 @@ create table if not exists public.price_promos (
 create index if not exists price_promos_barcode on public.price_promos (barcode);
 -- The chains whose club (or credit card) the family has: 'rami-levy:club', 'shufersal:card'.
 alter table public.price_prefs add column if not exists clubs text[] not null default '{}' check (cardinality(clubs) <= 80);
+-- Chains open on Shabbat that a family with a Haredi kashrut brought back into its comparison.
+alter table public.price_prefs add column if not exists chains_shown text[] not null default '{}' check (cardinality(chains_shown) <= 40);
 alter table public.price_promos enable row level security;
 
 -- price_search: as before, and each chain's offer carries its deals

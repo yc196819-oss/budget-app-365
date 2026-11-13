@@ -362,6 +362,27 @@ export function chooseAll(items, catalog, pref = 'any', { strict = false } = {})
   return items.map((it) => ({ id: it.id, ...choose(searchTerm(it.name), catalog[it.name] || [], pref, { keep: it.barcode, strict }), query: it.name }));
 }
 
+// Chains a family that relies on a Haredi kashrut does not shop at: open on
+// Shabbat, or selling non-kosher food too. For such a family they are left
+// out of the comparison from the start; it can bring any of them back.
+export const SHABBAT_CHAINS = {
+  'tiv-taam': 'פתוחה בשבת ומוכרת גם לא כשר',
+  'yellow': 'חנויות נוחות בתחנות דלק, פתוחות בשבת',
+  'dor-alon': 'חנויות נוחות בתחנות דלק, פתוחות בשבת'
+};
+// A Haredi kashrut: a certifier other than the Rabbinate.
+export const haredi = (pref) => Array.isArray(pref) && pref.some((c) => c !== 'רבנות' && c !== 'רבנות מהדרין');
+// The chains left out for this family (`shown`: the ones it brought back).
+export function hiddenChains(pref, shown = []) {
+  return haredi(pref) ? Object.keys(SHABBAT_CHAINS).filter((k) => !shown.includes(k)) : [];
+}
+// The catalog without those chains' prices.
+export function withoutChains(catalog, hidden) {
+  if (!hidden || !hidden.length) return catalog;
+  const out = new Set(hidden);
+  return Object.fromEntries(Object.entries(catalog || {}).map(([n, list]) => [n, (list || []).map((p) => ({ ...p, offers: (p.offers || []).filter((o) => !out.has(o.chain)) }))]));
+}
+
 // With the family's area set: only the chains with a branch near it, at
 // that branch's price (the server already put it in). A product no branch
 // nearby sells keeps no price.
