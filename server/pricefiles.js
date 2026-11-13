@@ -204,6 +204,38 @@ async function laibList(fetchFn, chain, kind) {
 // Hazi Hinam: an HTML page of links by day (50 a page; full price files
 // come after the hourly ones, so a few pages are read).
 async function haziList(fetchFn, chain, kind) {
+  // The shop's page refuses some servers (403); the files themselves are in
+  // the chain's public file store, which can list them by itself.
+  try { return await haziPage(fetchFn, chain, kind); } catch (e) {
+    const list = await haziStore(fetchFn, chain, kind).catch(() => []);
+    if (list.length) return list;
+    throw e;
+  }
+}
+// The file store's own list (Azure): names, sizes and times, newest first.
+function parseBlobList(xml) {
+  return [...String(xml).matchAll(/<Blob>([\s\S]*?)<\/Blob>/g)].map((m) => {
+    const b = m[1];
+    const tag = (t) => ((b.match(new RegExp('<' + t + '>([^<]*)</' + t + '>')) || [])[1] || '');
+    return { name: tag('Name'), size: (Number(tag('Content-Length')) || 0) / 1024, at: Date.parse(tag('Last-Modified')) || 0, next: null };
+  }).filter((f) => /^[\w.-]+$/.test(f.name));
+}
+async function haziStore(fetchFn, chain, kind) {
+  const files = [];
+  let marker = '';
+  for (let i = 0; i < 10; i++) {
+    const xml = await text(fetchFn, HAZI_FILES + '?' + new URLSearchParams({ restype: 'container', comp: 'list', prefix: kind, maxresults: '5000', ...(marker ? { marker } : {}) }));
+    files.push(...parseBlobList(xml));
+    marker = (xml.match(/<NextMarker>([^<]+)<\/NextMarker>/) || [])[1] || '';
+    if (!marker) break;
+  }
+  // The newest day's files only (a day after the newest one at most).
+  const newest = Math.max(0, ...files.map((f) => f.at));
+  return files.filter((f) => isKind(kind)(f.name) && f.at >= newest - 86400000)
+    .sort((a, b) => b.at - a.at)
+    .map((f) => ({ name: f.name, url: HAZI_FILES + f.name, size: f.size }));
+}
+async function haziPage(fetchFn, chain, kind) {
   const out = [];
   for (const day of [ilDay(), ilDay(new Date(Date.now() - 86400000))]) {
     for (let p = 1; p <= 15; p++) {
@@ -237,9 +269,21 @@ async function carrefourList(fetchFn, chain, kind) {
 // Super-Pharm: an HTML table, filtered by kind on the server, newest first.
 async function superpharmList(fetchFn, chain, kind) {
   const html = await text(fetchFn, SUPERPHARM + '/?' + new URLSearchParams({ 'Category-equals': kind }));
-  return [...html.matchAll(/href="(\/Download\/([\w.-]+)\?bucketName=[\w-]+)"/g)]
+  const list = [...html.matchAll(/href="(\/Download\/([\w.-]+)\?bucketName=[\w-]+)"/g)]
     .filter((m) => isKind(kind)(m[2]))
     .map((m) => ({ name: m[2], url: SUPERPHARM + unescape(m[1]), size: 0 }));
+  // Nothing found: say what the page held, so the owner's screen shows why.
+  if (!list.length) throw new Error('no files: ' + pageHint(html));
+  return list;
+}
+// What a page that had no files looks like, in a few words: its size, its
+// title, and how many links it has (and to where).
+function pageHint(html) {
+  const t = String(html || '');
+  const title = ((t.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || '').trim().slice(0, 40);
+  const links = [...t.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+  const gz = links.filter((l) => /\.gz|download/i.test(l)).slice(0, 1)[0] || '';
+  return [Math.round(t.length / 1024) + 'KB', title && '"' + title + '"', links.length + ' links', gz && 'e.g. ' + gz.slice(0, 50)].filter(Boolean).join(', ');
 }
 const OWN_LIST = { laib: laibList, hazi: haziList, carrefour: carrefourList, superpharm: superpharmList };
 const ownList = (fetchFn, chain, kind) => OWN_LIST[chain.site](fetchFn, chain, kind);
@@ -364,4 +408,4 @@ async function storePrices(fetchFn, chain, storeId) {
   return parsePriceFile(await site.get(f), chain);
 }
 
-module.exports = { parsePriceFile, parseStores, storeOfFile, shufersal, cerberus, bina, own, ownList, allChains, chainStores, storePrices, CERBERUS, BINA, OWN, CHAINS };
+module.exports = { parseBlobList, haziList, superpharmList, pageHint, parsePriceFile, parseStores, storeOfFile, shufersal, cerberus, bina, own, ownList, allChains, chainStores, storePrices, CERBERUS, BINA, OWN, CHAINS };

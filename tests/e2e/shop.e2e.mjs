@@ -491,6 +491,8 @@ test('a chain that sells once a week: marked in the comparison, and the cheapest
   await hero.waitFor();
   assert.match(await hero.textContent(), /₪5\.10במשנת יוסף.*פעם בשבוע.*בחנות שפתוחה כל יום: הכי משתלם ברשת ב, ₪5\.90/);
   assert.match(await page.locator('.pp-bar', { hasText: 'משנת יוסף' }).textContent(), /מכירה פעם בשבוע/);
+  assert.equal(await hero.locator('.pp-weekly a').getAttribute('href'), 'https://mishnatyosef.org/');
+  assert.equal(await hero.locator('.pp-weekly a').getAttribute('target'), '_blank');
   await hero.locator('.pp-always').click();
   assert.match(await hero.textContent(), /₪5\.90ברשת ב/);
   assert.equal(await hero.locator('.pp-weekly').count(), 0);
