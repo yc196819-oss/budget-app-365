@@ -2066,6 +2066,8 @@ async function runFreeLoad() {
   seedJob.running = false;
   seedJob.current = null;
   seedJob.endedAt = new Date().toISOString();
+  // Kept, so how each chain did can be read the next morning (no table: skipped).
+  await supabaseAdmin.from('price_load_runs').insert({ started_at: seedJob.startedAt, ended_at: seedJob.endedAt, added: seedJob.added, error: seedJob.error, chains: seedJob.chainsDone }).then(() => {}, () => {});
 }
 // ── prices by the family's area ──
 const area = require('./server/area');
