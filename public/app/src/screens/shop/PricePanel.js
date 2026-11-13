@@ -62,11 +62,11 @@ function ClubPicker({ chains, initial, onSave, onCancel }) {
   </div>`;
 }
 // The certifiers the family relies on: several can be picked.
-function CertPicker({ initial, onSave, onAny, onCancel }) {
+function CertPicker({ initial, onSave, onAny, onCancel, step }) {
   const [sel, setSel] = useState(() => new Set(Array.isArray(initial) ? initial : []));
   const flip = (c) => setSel((s) => { const n = new Set(s); n.has(c) ? n.delete(c) : n.add(c); return n; });
   return html`<div class="stack price-certs">
-    <b>על איזו כשרות אתם סומכים?</b>
+    ${step && html`<small class="pp-step">${step}</small>`}<b>על איזו כשרות אתם סומכים?</b>
     <span class="muted" style="line-height:1.55">אפשר לסמן כמה. לכל מוצר ברשימה ייבחר לבד הזול ביותר באחת מהן. מוצר שהכשרות שלו לא ידועה לא ייבחר לבד: תראו אותו, ותוכלו לסמן מה כתוב על האריזה.</span>
     <div class="price-cert-chips" role="group" aria-label="כשרויות">${CERTS.map((c) => html`<button type="button" class="chip" key=${c.name} aria-pressed=${sel.has(c.name)} onClick=${() => flip(c.name)}>${c.name}</button>`)}</div>
     <div class="price-cert-actions"><button type="button" class="btn btn-primary" style="width:auto" disabled=${!sel.size} onClick=${() => onSave(CERTS.map((c) => c.name).filter((c) => sel.has(c)))}>לשמור${sel.size ? ' (' + sel.size + ')' : ''}</button>
@@ -97,7 +97,7 @@ function Product({ p, children }) {
 // Where the family lives: a settlement (chosen from the list as they type)
 // and a neighborhood if they want. No chain, no branch: we find the branch
 // near them at every chain.
-function AreaPicker({ hid, initial, onDone, onSkip, onCancel }) {
+function AreaPicker({ hid, initial, onDone, onSkip, onCancel, step }) {
   const [q, setQ] = useState(initial ? initial.city : '');
   const [place, setPlace] = useState(initial ? { code: initial.city_code, name: initial.city } : null);
   const [hood, setHood] = useState((initial && initial.hood) || '');
@@ -118,7 +118,7 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel }) {
     setBusy(false);
   };
   return html`<div class="stack price-area-pick">
-    <b>איפה אתם גרים?</b>
+    ${step && html`<small class="pp-step">${step}</small>`}<b>איפה אתם גרים?</b>
     <span class="muted" style="line-height:1.55">רק יישוב, ושכונה אם רוצים. לא צריך לבחור רשת או סניף: נמצא לבד את הסניף הקרוב אליכם בכל רשת, ונשווה במחירים שלו.</span>
     <label class="price-area-field"><span>יישוב</span><input class="input" value=${q} placeholder="למשל: בית שמש" autocomplete="off" aria-label="יישוב" onInput=${(e) => { setQ(e.currentTarget.value); setPlace(null); }} /></label>
     ${list.length > 0 && html`<ul class="price-area-list" role="listbox" aria-label="יישובים">${list.map((p) => html`<li key=${p.code}><button type="button" role="option" onClick=${() => { setPlace(p); setQ(p.name); setList([]); }}>${p.name}</button></li>`)}</ul>`}
@@ -139,6 +139,13 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   // While the prices are open, the advisor's floating button would sit on
   // the prices column: it steps aside.
   useEffect(() => { document.body.classList.add('pp-on'); return () => document.body.classList.remove('pp-on'); }, []);
+  // Opened: its start in view (the first question, or the total), not the
+  // list the person tapped from.
+  useEffect(() => {
+    const el = document.querySelector('.price-panel');
+    const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+  }, []);
   const [pref, setPref] = useState(undefined);
   const [catalog, setCatalog] = useState(null);
   const [err, setErr] = useState('');
@@ -158,6 +165,8 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   // The comparison worked out again only when what it depends on changed
   // (not when a row opens or a chain is tapped): a long list on a slow phone.
   const memo = useRef({ key: null });
+  // The comparison's settings, folded into one line (open while one is edited).
+  const [setOpen, setSetOpen] = useState(false);
   const [strict, setStrict] = useState(() => readLocal('price:strict:' + hid, '') === '1');
   const setStrictPref = (v) => { setStrict(v); writeLocal('price:strict:' + hid, v ? '1' : ''); };
   // The family's area: undefined while loading, null when not chosen.
@@ -254,11 +263,12 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
   const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
     : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לשנות</button><small class="muted pp-area-note">${!area.stores.length ? 'לא נמצאו סניפים קרובים, משווים במחירים הכלליים' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</small></div>`
-      : html`<div class="price-pref price-area"><span class="muted">מחירים כלליים, לא לפי האזור שלכם.</span><button type="button" class="btn-text" onClick=${() => setEditArea(true)}>לבחור אזור</button></div>`;
+      : html`<div class="price-pref price-area"><span class="muted">מחירים כלליים, לא לפי האזור שלכם.</span><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לבחור אזור</button></div>`;
 
   if (pref === undefined || area === undefined) return html`<section class="card stack price-panel">${head}<span class="muted">רגע…</span></section>`;
-  if (!pref) return html`<section class="card stack price-panel">${head}<${CertPicker} onSave=${choosePref} onAny=${() => choosePref('any')} /></section>`;
-  if (!area && !skipArea) return html`<section class="card stack price-panel">${head}<${AreaPicker} hid=${hid} onDone=${areaDone} onSkip=${() => setSkipArea(true)} /></section>`;
+  // A first visit: two short questions, said as such, then the result.
+  if (!pref) return html`<section class="card stack price-panel">${head}<${CertPicker} step=${!area ? 'שאלה 1 מתוך 2' : null} onSave=${choosePref} onAny=${() => choosePref('any')} /></section>`;
+  if (!area && !skipArea) return html`<section class="card stack price-panel">${head}<${AreaPicker} step="שאלה אחרונה" hid=${hid} onDone=${areaDone} onSkip=${() => setSkipArea(true)} /></section>`;
   if (!open.length) return html`<section class="card stack price-panel">${head}${prefRow}${areaRow}<span class="muted">אין מה להשוות: הרשימה ריקה או שהכול כבר נקנה.</span></section>`;
   if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${areaRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
 
@@ -309,9 +319,11 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
         ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
       </button>`)}</div>
     </div>` : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
-    <div class="pp-set">${prefRow}${areaRow}${clubsRow}${shabbatRow}
-      <label class="pp-strict"><input type="checkbox" checked=${strict} onChange=${(e) => setStrictPref(e.currentTarget.checked)} /> רק מוצרים שהכשרות שלהם אומתה</label></div>
-    ${unverified > 0 && html`<p class="pp-note-k" role="note"><${Icon} name="shield" size=${16} /><span>${unverified === 1 ? 'במוצר אחד' : 'ב' + unverified + ' מוצרים'} הכשרות עוד לא סומנה אצלנו. המחיר מחושב, ובחנות כדאי לבדוק את החותמת. סימון אחד שלכם ("מה כתוב על האריזה") עוזר לכל המשפחות.</span></p>`}
+    <details class="pp-set" open=${setOpen || editPref || editArea || editClubs} onToggle=${(e) => setSetOpen(e.currentTarget.open)}>
+      <summary class="pp-set-sum"><${Icon} name="sliders" size=${15} /><span><b>הגדרות ההשוואה</b><small class="muted">${[Array.isArray(pref) ? (pref.length > 1 ? pref[0] + ' ועוד ' + (pref.length - 1) : pref[0]) : 'בלי העדפת כשרות', area ? area.city : 'מחירים כלליים', clubs.size ? (clubs.size === 1 ? 'מועדון אחד' : clubs.size + ' מועדונים') : '', strict ? 'רק כשרות שאומתה' : ''].filter(Boolean).join(' · ')}</small></span></summary>
+      ${prefRow}${areaRow}${clubsRow}${shabbatRow}
+      <label class="pp-strict"><input type="checkbox" checked=${strict} onChange=${(e) => setStrictPref(e.currentTarget.checked)} /> רק מוצרים שהכשרות שלהם אומתה</label></details>
+    ${unverified > 0 && html`<p class="pp-note-k" role="note"><${Icon} name="shield" size=${16} /><span>${unverified === 1 ? 'במוצר אחד' : 'ב-' + unverified + ' מוצרים'} הכשרות עוד לא סומנה אצלנו. המחיר מחושב, ובחנות כדאי לבדוק את החותמת. סימון אחד שלכם ("מה כתוב על האריזה") עוזר לכל המשפחות.</span></p>`}
     <span class="muted price-count">יש מחיר: ${priced} מתוך ${open.length}${unsure ? ' · ' + unsure + ' מחכים לבחירה שלכם' : ''}${fresh ? ' · ' + (fresh === 1 ? 'אחד נמכר' : fresh + ' נמכרים') + ' במשקל' : ''}${looking ? ' · מחפשים עוד ' + looking + '…' : ''}</span>
     <ul class="price-list pp-list">
       ${choices.map((c) => { const item = open.find((i) => i.id === c.id); const expanded = openId === c.id || (c.status === 'unsure' && openId !== 'x:' + c.id); const at = lineAt(c); const paid = lastPaid(item.name, receipts); const p = (at && at.product) || c.pick; return html`<li key=${c.id} class=${'price-item pp-row is-' + c.status + (expanded ? ' open' : '')}>

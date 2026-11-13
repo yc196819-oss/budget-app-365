@@ -54,7 +54,8 @@ const PATHS = {
   cup: 'M6 4h12l-1.5 16a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1zM6.5 9h11',
   drop: 'M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z',
   baby: 'M12 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM7 21v-6a5 5 0 0 1 10 0v6M10 13h.01M14 13h.01',
-  tag: 'M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9zM8 8h.01'
+  tag: 'M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9zM8 8h.01',
+  sliders: 'M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4'
 };
 
 export function Icon({ name, size = 20, stroke = 2 }) {

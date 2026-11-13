@@ -1605,7 +1605,7 @@ body.chat-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .cart-go, .cart-wheel, .cart-drop { animation: none; } .cart-drop { display: none; } }
 
 /* ── Shopping tab, premium pass: the price panel as a warm ledger ── */
-.price-panel { border: 1px solid var(--line); background: var(--surface); }
+.price-panel { border: 1px solid var(--line); background: var(--surface); scroll-margin-top: 12px; }
 .pp-hero { position: relative; overflow: hidden; display: grid; gap: 2px; border-radius: 24px; padding: 18px 18px 14px; color: #FBF4EA; background: radial-gradient(120% 130% at 100% 0, #5a3412 0, #2a1d14 55%, #17110c 100%); box-shadow: 0 12px 30px rgba(40, 24, 10, .22); }
 .pp-hero::after { content: ''; position: absolute; inset: auto -60px -120px auto; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle, #E9A35B2e, transparent 70%); pointer-events: none; }
 .pp-eye { font-size: 13px; font-weight: 700; letter-spacing: .02em; color: #F3C88F; }
@@ -1630,6 +1630,14 @@ body.chat-open { overflow: hidden; }
 @keyframes pp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .pp-empty { display: grid; gap: 4px; padding: 14px; border-radius: var(--radius-m); background: var(--surface-2); }
 .pp-set { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-m); background: var(--surface-2); }
+.pp-set-sum { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; color: var(--muted); }
+.pp-set-sum::-webkit-details-marker { display: none; }
+.pp-set-sum span { flex: 1; display: grid; gap: 1px; min-width: 0; }
+.pp-set-sum b { color: var(--text); font-size: 14px; }
+.pp-set-sum small { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-set-sum::after { content: '⌄'; font-size: 16px; transition: transform .2s; }
+.pp-set[open] > .pp-set-sum { margin-bottom: 6px; }
+.pp-set[open] > .pp-set-sum::after { transform: rotate(180deg); }
 .pp-set .price-pref { font-size: 14px; }
 .pp-pin { display: inline-flex; color: var(--accent); }
 .pp-strict { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); cursor: pointer; }
@@ -1661,6 +1669,7 @@ body.chat-open { overflow: hidden; }
 .pp-tag.t-deal-off { border-style: dashed; font-weight: 600; }
 .pp-club-ask { margin: -6px 0 10px; padding-inline-start: 54px; }
 .pp-club-ask .btn-text { font-size: 13px; padding: 2px 0; color: var(--accent); }
+.pp-step { font-size: 12.5px; font-weight: 800; letter-spacing: .02em; color: var(--accent); }
 .pp-shabbat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .pp-club-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .pp-club-list li { display: flex; align-items: center; gap: 6px; }
