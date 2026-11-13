@@ -127,3 +127,15 @@ test('clubs: a club deal counts at the chains where the family is in the club', 
   assert.equal(promoCost(offer, 1, NOW, new Set(['rami-levy:club'])).cost, 8, 'a club at another chain does not count here');
   assert.equal(blockText('card', card), 'בכרטיס האשראי של הרשת');
 });
+
+test('a deal by weight ("קלמנטינה ב-4.9 לק"ג"): the price of a kilo, and one is enough', () => {
+  const file = '<Root><Promotions>' + promo({ id: '20', text: 'קלמנטינה ב4.9 מוגבל ל3', limit: 3, items: item('7290000000073', { min: '0.010', max: 3, price: 4.9, rate: 12.5, w: 1 }) }) + '</Promotions></Root>';
+  const [row] = promoRows(parsePromoFile(file), new Map([['7290000000073', 5.6]]), { now: NOW });
+  assert.deepEqual([row.need, row.unit_price, row.max_qty], [1, 4.9, 3]);
+});
+
+test('every chain\'s file shape: a deal with its products directly under it (no groups) is read too', () => {
+  const file = '<Root><Promotions><Promotion><PromotionID>30</PromotionID><PromotionDescription>2 ב-10</PromotionDescription><PromotionEndDateTime>2026-12-05T23:59:00</PromotionEndDateTime><ClubID>0</ClubID><AdditionalIsCoupon>0</AdditionalIsCoupon><MinQty>2</MinQty><DiscountedPrice>10</DiscountedPrice><PromotionItems><PromotionItem><ItemCode>7290000000011</ItemCode></PromotionItem></PromotionItems></Promotion></Promotions></Root>';
+  const [row] = promoRows(parsePromoFile(file), REG, { now: NOW });
+  assert.deepEqual([row.need, row.unit_price], [2, 5], 'the quantity and price from the deal itself');
+});

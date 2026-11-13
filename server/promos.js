@@ -6,7 +6,8 @@
 
 const tag = (s, t) => { const m = new RegExp('<' + t + '>([\\s\\S]*?)</' + t + '>', 'i').exec(s); return m ? m[1].trim() : ''; };
 const unescape = (s) => String(s || '').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-const num = (s) => { const n = Number(String(s || '').trim()); return Number.isFinite(n) ? n : null; };
+// A number, or null when nothing is written (an empty tag is not 0).
+const num = (s) => { const t = String(s == null ? '' : s).trim(); if (!t) return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
 // Who gets a deal that is not for everyone, from the file's words:
 //   'club'  — the chain's customers club (free to join),
 //   'card'  — the chain's credit card,
