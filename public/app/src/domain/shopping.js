@@ -39,11 +39,20 @@ const UNITS = ['ק"ג', 'קג', 'קילו', 'גרם', 'ליטר', 'ל\'', 'יח\
 
 // One item from a few typed words: "2 ביצים", "ביצים x2", "שתי תבניות ביצים",
 // "1 ק"ג עגבניות" -> { name, qty }.
+// A line pasted from a message: its bullet, numbering ("1.", "2)"), check
+// marks and emoji are not part of the name.
+export function cleanLine(text) {
+  return norm(String(text || '')
+    .replace(/\p{Extended_Pictographic}|[\u2600-\u27BF\uFE0F\u200d]/gu, ' ')
+    .replace(/^\s*(?:[-–—•*·▪◦●○■□☐✓→>]+\s*|\d{1,2}\s*[.)]\s+)/, '')
+    .replace(/[,;.]+\s*$/, ''));
+}
 export function parseItem(text) {
-  let t = norm(text).replace(/^(ו|גם)\s*/, '');
+  let t = cleanLine(text).replace(/^(ו|גם)\s*/, '');
   if (!t) return null;
   let qty = null;
-  let m = /^(\d+(?:[.,]\d+)?)\s*(.*)$/.exec(t);
+  // (A number that is a percent is part of the name: "3% חלב".)
+  let m = /^(\d+(?:[.,]\d+)?)(?!\s*%)\s*(.*)$/.exec(t);
   if (m && m[2]) { qty = m[1]; t = m[2]; }
   else {
     m = /^(.*?)\s*[x×*]\s*(\d+)$/.exec(t) || /^(.*?)\s+(\d+)$/.exec(t);
@@ -68,6 +77,8 @@ export function parseItem(text) {
 // Several items in one line: "חלב, 2 ביצים ולחם".
 export function parseItems(text) {
   return String(text || '')
+    // A heading line ("רשימה לשבת:") is not an item.
+    .split('\n').filter((l) => !/:\s*$/.test(l.trim())).join('\n')
     .split(/[,\n،;]|\s+ו(?=[א-ת]{2,})|\s+וגם\s+/)
     .map(parseItem)
     .filter(Boolean)

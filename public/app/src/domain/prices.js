@@ -383,7 +383,8 @@ export function chainHe(name) {
   return m ? m[1].trim() : name;
 }
 export function searchTerm(name) {
-  const n = String(name || '').trim().replace(/\s+/g, ' ');
+  // (Without emoji, bullets or numbering an older line may still carry.)
+  const n = String(name || '').replace(/\p{Extended_Pictographic}|[\u2600-\u27BF\uFE0F\u200d]/gu, ' ').replace(/^\s*(?:[-–—•*·▪◦●○■□☐✓→>]+\s*|\d{1,2}\s*[.)]\s+)/, '').replace(/[,;.]+\s*$/, '').trim().replace(/\s+/g, ' ');
   for (const [re, to] of AS_SOLD) if (re.test(n)) return to;
   return n;
 }

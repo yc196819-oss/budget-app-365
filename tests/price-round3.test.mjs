@@ -81,3 +81,19 @@ test('round 4: the list split between two chains, when it saves enough', async (
   assert.deepEqual([t.a.chain, t.b.chain, t.total, t.saved, t.atB], ['a', 'b', 170, 30, ['1']], 'item 1 at B, the rest at A; the weekly chain not suggested');
   assert.equal(twoChains(rows, { min: 40 }), null, 'not worth it');
 });
+
+test('round 8: a list pasted from a message: bullets, numbering and emoji are not part of the name', async () => {
+  const { parseItem } = await import('../public/app/src/domain/shopping.js');
+  const { searchTerm } = await import('../public/app/src/domain/prices.js');
+  assert.deepEqual(parseItem('1. חלב'), { name: 'חלב', qty: null }, 'numbering is not a quantity');
+  assert.deepEqual(parseItem('2) ביצים'), { name: 'ביצים', qty: null });
+  assert.deepEqual(parseItem('• לחם'), { name: 'לחם', qty: null });
+  assert.deepEqual(parseItem('🥛 חלב'), { name: 'חלב', qty: null });
+  assert.deepEqual(parseItem('✅ קמח,'), { name: 'קמח', qty: null });
+  assert.deepEqual(parseItem('3% חלב'), { name: '3% חלב', qty: null }, 'a percent is part of the name');
+  assert.deepEqual(parseItem('2 חלב'), { name: 'חלב', qty: '×2' }, 'a quantity still is');
+  assert.equal(searchTerm('🥛 חלב'), 'חלב', 'a line saved before: searched without its emoji');
+  assert.equal(searchTerm('- ביצה'), 'ביצים');
+  const { parseItems } = await import('../public/app/src/domain/shopping.js');
+  assert.deepEqual(parseItems('רשימה לשבת:\n1. חלב 3%\n2. ביצים x2\n• לחם 🍞').map((i) => [i.name, i.qty]), [['חלב 3%', null], ['ביצים', '×2'], ['לחם', null]], 'a whole message: the heading left out');
+});
