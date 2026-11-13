@@ -85,8 +85,8 @@ test('the list at each chain: cheapest first, and what each chain is missing', (
   const choices = [choose('חלב 3%', [milkA], 'any'), choose('חלב 3%', [milkB], 'any')];
   const b = basket(choices, () => 2);
   const plain = ({ lines, ...r }) => r;
-  assert.deepEqual(plain(b[0]), { chain: 'x', name: 'רשת א', store: null, total: 24.2, missing: 0, swaps: 0, gap: 0 });
-  assert.deepEqual(plain(b[1]), { chain: 'y', name: 'רשת ב', store: null, total: 13.8, missing: 1, swaps: 0, gap: 11.8 });
+  assert.deepEqual(plain(b[0]), { chain: 'x', name: 'רשת א', store: null, total: 24.2, missing: 0, swaps: 0, gap: 0, saved: 0 });
+  assert.deepEqual(plain(b[1]), { chain: 'y', name: 'רשת ב', store: null, total: 13.8, missing: 1, swaps: 0, gap: 11.8, saved: 0 });
   assert.equal(count('×3'), 3);
   assert.equal(count('2 ק"ג'), 1);
 });

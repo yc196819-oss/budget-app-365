@@ -506,3 +506,35 @@ test('a chain that sells once a week: marked in the comparison, and the cheapest
   await page.close();
   assert.deepEqual(errors, []);
 });
+
+test('deals: one anyone gets is in the total, a club deal is only shown, and the policy is written', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [
+      { id: 's1', household_id: d.hid, name: 'קרקרים', qty: '×2', aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null },
+      { id: 's2', household_id: d.hid, name: 'במבה', qty: null, aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }
+    ];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+  }, OWNER);
+  // Made-up prices and deals.
+  const end = '2026-12-05T21:59:00Z';
+  const deal = { everyone: true, coupon: false, min_buy: 0, ends_at: end };
+  await page.route('**/rest/v1/rpc/price_search', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+    { q: 1, barcode: '5001', name: 'קרקרים 300 גרם', names: '', qty: 300, unit: 'גרם', kosher: {}, offers: [
+      { chain: 'x', chain_name: 'רשת א', price: 9.9, promos: [{ ...deal, need: 2, unit_price: 7.5 }] }, { chain: 'y', chain_name: 'רשת ב', price: 8.9 }] },
+    { q: 2, barcode: '5002', name: 'במבה 80 גרם', names: '', qty: 80, unit: 'גרם', kosher: {}, offers: [
+      { chain: 'x', chain_name: 'רשת א', price: 4.5, promos: [{ ...deal, everyone: false, need: 1, unit_price: 2.5 }] }, { chain: 'y', chain_name: 'רשת ב', price: 4.9 }] }
+  ]) }));
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+  await page.click('.shop-prices-cta button');
+  const hero = page.locator('.pp-hero');
+  await hero.waitFor();
+  // Chain A: two crackers for ₪15 (anyone gets it) and Bamba at ₪4.50 (the club price is not counted): ₪19.50.
+  assert.match(await hero.textContent(), /₪19\.50ברשת א.*כולל ₪4\.80 הנחה במבצעים/);
+  const crackers = page.locator('.price-item', { hasText: 'קרקרים' }).first();
+  assert.match(await crackers.textContent(), /מבצע: 2 ב-₪15 · עד 5\.12/);
+  assert.match(await crackers.textContent(), /₪15\.00₪19\.80/, 'the line in the deal, the regular price struck out');
+  assert.match(await page.locator('.price-item', { hasText: 'במבה' }).first().textContent(), /מבצע ₪2\.50 למועדון בלבד \(לא בסכום\)/);
+  assert.match(await page.locator('.price-note').textContent(), /מבצע נכלל בסכום רק כשכל אחד מקבל אותו/);
+  await page.close();
+  assert.deepEqual(errors, []);
+});

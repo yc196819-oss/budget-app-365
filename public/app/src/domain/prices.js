@@ -1,4 +1,5 @@
 import { aisleOf } from './shopping.js';
+import { promoCost } from './promos.js';
 
 // Supermarket prices: from what a person typed ("חלב 3%") to one exact
 // product (by barcode), chosen automatically as the cheapest one at the
@@ -387,7 +388,10 @@ const offerAt = (p, chain) => validOffers(p).find((o) => o.chain === chain);
 // does sell is counted (a "swap", shown as such), so a chain is not left out
 // for selling milk under another barcode. Only what has nothing equivalent
 // counts as missing. Each row has its lines: what to buy there and for how much.
-export function basket(choices, qtyOf = () => 1) {
+// A chain's deal is counted by our deals policy (promos.js): only one anyone
+// gets, on today, with enough on the list; any other is kept on the line to
+// show. `saved`: what the counted deals take off the chain's total.
+export function basket(choices, qtyOf = () => 1, now = new Date()) {
   const picks = choices.filter((c) => c.pick);
   const chains = new Map();
   const stores = new Map();
@@ -396,22 +400,35 @@ export function basket(choices, qtyOf = () => 1) {
     if (o.store && !stores.has(o.chain)) stores.set(o.chain, o.store);
   }
   const rows = [...chains.entries()].map(([chain, name]) => {
-    let total = 0, missing = 0, swaps = 0, gap = 0;
+    let total = 0, missing = 0, swaps = 0, gap = 0, saved = 0;
     const lines = [];
     for (const c of picks) {
       const q = qtyOf(c);
       const o = offerAt(c.pick, chain);
-      if (o) { total += o.price * q; lines.push({ id: c.id, product: c.pick, price: o.price, swap: false }); continue; }
+      if (o) {
+        const d = promoCost(o, q, now);
+        total += d.cost; saved += d.saved;
+        lines.push({ id: c.id, product: c.pick, price: o.price, cost: d.cost, promo: d.promo, other: d.other, swap: false });
+        continue;
+      }
       let best = null;
       for (const p of c.pool || []) {
         if (p.barcode === c.pick.barcode) continue;
         const r = equivalent(c.pick, p);
         const po = r && offerAt(p, chain);
-        if (po && (!best || po.price * r < best.price)) best = { product: p, price: Math.round(po.price * r * 100) / 100, paid: po.price };
+        if (!po) continue;
+        // Counted for the picked size (a bigger package is not "dearer").
+        const d = promoCost(po, q, now);
+        const each = Math.round((d.cost / q) * r * 100) / 100;
+        if (!best || each < best.price) best = { product: p, price: each, paid: po.price, d };
       }
-      if (best) { total += best.price * q; swaps++; lines.push({ id: c.id, product: best.product, price: best.paid, swap: true }); } else { missing++; const b = bestPrice(c.pick); gap += b ? b.price * q : 0; lines.push({ id: c.id, product: null, price: null, swap: false }); }
+      if (best) {
+        total += best.price * q; swaps++; saved += best.d.saved;
+        lines.push({ id: c.id, product: best.product, price: best.paid, cost: best.d.cost, promo: best.d.promo, other: best.d.other, swap: true });
+      } else { missing++; const b = bestPrice(c.pick); gap += b ? b.price * q : 0; lines.push({ id: c.id, product: null, price: null, swap: false }); }
     }
     return { chain, name, store: stores.get(chain) || null, total: Math.round(total * 100) / 100, missing, swaps, lines,
+      saved: Math.round(saved * 100) / 100,
       // About what the missing products add, at their cheapest elsewhere.
       gap: Math.round(gap * 100) / 100 };
   });

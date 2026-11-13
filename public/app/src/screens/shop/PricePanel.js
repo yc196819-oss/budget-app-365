@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
+import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces } from '../../data/prices.js';
 import { aisleOf } from '../../domain/shopping.js';
@@ -242,6 +243,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
       ${chainNote(shown.chain) && html`<span class="pp-weekly"><${Icon} name="calendar" size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
       ${shown === best && bestAlways(chains) && html`<button type="button" class="pp-always" onClick=${() => setChainSel(bestAlways(chains).chain)}>בחנות שפתוחה כל יום: הכי משתלם ב${bestAlways(chains).name}, <b class="num">${fmt(bestAlways(chains).total)}</b></button>`}
       ${shown.missing > 0 && html`<span class="pp-missing">בלי ${shown.missing === 1 ? 'מוצר אחד שאין' : shown.missing + ' מוצרים שאין'} ב${shown.name}: ${shown.lines.filter((l) => !l.product).map((l) => (open.find((i) => i.id === l.id) || {}).name).filter(Boolean).slice(0, 4).join(', ')}${shown.missing > 4 ? ' ועוד' : ''}</span>`}
+      ${shown.saved > 0 && html`<span class="pp-deals"><${Icon} name="tag" size=${15} />כולל <b class="num">${fmt(shown.saved)}</b> הנחה במבצעים שכל אחד מקבל</span>`}
       ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת הרשת היקרה ביותר בהשוואה</span>`}
       <div class="pp-bars" role="list" aria-label="הסל בכל רשת">${top.map((c) => html`<button type="button" role="listitem" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
         <span class="pp-bar-n">${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span>
@@ -260,9 +262,11 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
           <${Photo} p=${p} name=${item.name} />
           <span class="pp-row-t"><b>${item.name}${item.qty ? html` <small class="shop-qty">${item.qty}</small>` : ''}</b>
             <small class="muted">${p ? p.name + (sizeText(sizeOfProduct(p)) ? ' · ' + sizeText(sizeOfProduct(p)) : '') : c.status === 'fresh' ? 'פירות, ירקות ובשר נמכרים במשקל, במחיר של הסניף' : looking ? 'מחפשים…' : queued ? 'עוד לא בקטלוג: נוסיף בקרוב' : c.status === 'unsure' ? 'יש מוצרים, אבל לא בכשרות שבחרתם' : 'לא נמצא מחיר'}</small>
-            <span class="pp-tags">${p && !nonFood(p) && certOf(p) && html`<span class=${'pp-tag t-cert' + (MINE.includes(certOf(p).cert) ? ' fits' : '')}>${certOf(p).cert}</span>`}${c.status !== 'auto' && !(c.status === 'unverified' && quietK) ? html`<span class=${'pp-tag t-' + c.status}>${STATE[c.status] || 'אין מחיר'}</span>` : ''}${at && at.swap && html`<span class="pp-tag t-swap">מוצר דומה ב${shown.name}</span>`}${at && !at.product && c.pick && html`<span class="pp-tag t-miss">אין ב${shown.name}</span>`}${paid && html`<span class="pp-tag t-paid">שילמתם ${fmt(paid.price)}${paid.store ? ' ב' + paid.store : ''}</span>`}</span></span>
+            <span class="pp-tags">${p && !nonFood(p) && certOf(p) && html`<span class=${'pp-tag t-cert' + (MINE.includes(certOf(p).cert) ? ' fits' : '')}>${certOf(p).cert}</span>`}${c.status !== 'auto' && !(c.status === 'unverified' && quietK) ? html`<span class=${'pp-tag t-' + c.status}>${STATE[c.status] || 'אין מחיר'}</span>` : ''}${at && at.swap && html`<span class="pp-tag t-swap">מוצר דומה ב${shown.name}</span>`}${at && !at.product && c.pick && html`<span class="pp-tag t-miss">אין ב${shown.name}</span>`}${at && at.promo && html`<span class="pp-tag t-deal">מבצע: ${promoText(at.promo, at.price)}</span>`}${at && !at.promo && at.other && html`<span class="pp-tag t-deal-off">${offText(at.other)}</span>`}${paid && html`<span class="pp-tag t-paid">שילמתם ${fmt(paid.price)}${paid.store ? ' ב' + paid.store : ''}</span>`}</span></span>
           <span class="pp-row-p">${(() => { const n = qtyOf(c); const one = at && at.price ? at.price : c.pick && bestPrice(c.pick) ? bestPrice(c.pick).price : null; const where = !(at && at.price) && c.pick && bestPrice(c.pick) ? bestPrice(c.pick).chainName : '';
-            return one === null ? html`<b class="faint">—</b>` : html`<b class="num">${fmt(one * n)}</b>${n > 1 ? html`<small class="muted">${n} × ${fmt(one)}</small>` : ''}${where ? html`<small class="muted">${where}</small>` : ''}`; })()}</span>
+            // With a deal counted: what the line costs in it, the regular price struck out.
+            const line = at && at.cost != null ? at.cost : one * n;
+            return one === null ? html`<b class="num faint">—</b>` : html`<b class="num">${fmt(line)}</b>${line < one * n - 0.009 ? html`<s class="muted num">${fmt(one * n)}</s>` : n > 1 ? html`<small class="muted">${n} × ${fmt(one)}</small>` : ''}${where ? html`<small class="muted">${where}</small>` : ''}`; })()}</span>
         </button>
         ${expanded && html`<div class="pp-more">
           ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל לא ידוע שהכשרות שלהם מהרשימה שלכם. בחרו מוצר, או סמנו מה כתוב על האריזה:</span>`}
@@ -273,7 +277,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
         </div>`}
       </li>`; })}
     </ul>
-    <p class="faint price-note">המחירים מהקבצים הרשמיים שהרשתות מפרסמות${area && area.stores.length ? ', מהסניף הקרוב אליכם בכל רשת' : ', מסניף אחד בכל רשת'}. רשת שאין בה בדיוק אותו מוצר מקבלת את המוצר הדומה הזול שלה באותו גודל, ורואים את זה ליד המוצר. הכשרות לפי מה שמשפחות סימנו, המאגר הפתוח ואישור שלנו, ולכן תמיד כדאי לבדוק את החותמת.</p>
+    <p class="faint price-note">המחירים מהקבצים הרשמיים שהרשתות מפרסמות${area && area.stores.length ? ', מהסניף הקרוב אליכם בכל רשת' : ', מסניף אחד בכל רשת'}. רשת שאין בה בדיוק אותו מוצר מקבלת את המוצר הדומה הזול שלה באותו גודל, ורואים את זה ליד המוצר. הכשרות לפי מה שמשפחות סימנו, המאגר הפתוח ואישור שלנו, ולכן תמיד כדאי לבדוק את החותמת. ${PROMO_POLICY}</p>
   </section>`;
 }
 

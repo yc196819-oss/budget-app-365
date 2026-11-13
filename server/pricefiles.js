@@ -104,7 +104,7 @@ async function shufersal(fetchFn) {
   const sizes = rows.map((r) => ({ url: unescape(r[1]), size: Number((r[0].match(/<td>([\d.]+)\s*KB<\/td>/i) || [])[1]) || 0 }));
   if (!sizes.length) throw new Error('no files');
   const best = sizes.sort((a, b) => b.size - a.size)[0];
-  return parsePriceFile(gunzip(await getBuf(fetchFn, best.url)), { key: 'shufersal', name: 'שופרסל' });
+  return withStore(parsePriceFile(gunzip(await getBuf(fetchFn, best.url)), { key: 'shufersal', name: 'שופרסל' }), fileName(best.url));
 }
 
 // The shared site: logged in by name; then its files can be listed (by
@@ -153,7 +153,7 @@ async function cerberus(fetchFn, chain) {
   const best = list.filter((f) => String(f.time || '').slice(0, 10) === day).sort((a, b) => (b.size || 0) - (a.size || 0))[0];
   const r = await call('/file/d' + (chain.dir || '') + '/' + encodeURIComponent(best.fname));
   if (!r.ok) throw new Error('HTTP ' + r.status);
-  return parsePriceFile(gunzip(Buffer.from(await r.arrayBuffer())), chain);
+  return withStore(parsePriceFile(gunzip(Buffer.from(await r.arrayBuffer())), chain), best.fname);
 }
 
 // The other shared site: the chain's list of full price files, the newest
@@ -174,7 +174,7 @@ async function bina(fetchFn, chain) {
     const link = JSON.parse((await getBuf(fetchFn, base + '/Download.aspx?FileNm=' + encodeURIComponent(name))).toString('utf8') || '[]');
     const url = String((Array.isArray(link) && link[0] && link[0].SPath) || '');
     if (url.toLowerCase().indexOf(base.toLowerCase() + '/') !== 0) throw new Error('no file link');
-    const rows = parsePriceFile(gunzip(await getBuf(fetchFn, url)), chain);
+    const rows = withStore(parsePriceFile(gunzip(await getBuf(fetchFn, url)), chain), name);
     if (rows.length > best.length) best = rows;
     if (best.length >= 500) break;
   }
@@ -301,7 +301,7 @@ async function own(fetchFn, chain) {
   const tries = sized ? list.slice(0, 60).sort((a, b) => b.size - a.size).slice(0, 2) : list.slice(0, 3);
   let best = [];
   for (const f of tries) {
-    const rows = parsePriceFile(gunzip(await getBuf(fetchFn, f.url, { headers: BROWSER })), chain);
+    const rows = withStore(parsePriceFile(gunzip(await getBuf(fetchFn, f.url, { headers: BROWSER })), chain), f.name);
     if (rows.length > best.length) best = rows;
     if (best.length >= 500) break;
   }
@@ -317,7 +317,7 @@ async function allChains(fetchFn, { only = null } = {}) {
     .filter((j) => !only || only.includes(j.key));
   const out = [];
   for (const j of jobs) {
-    try { const rows = await j.run(); out.push({ key: j.key, name: j.name, rows, count: rows.length }); } catch (e) { out.push({ key: j.key, name: j.name, rows: [], count: 0, error: (String(e.message || e) + (e.cause && e.cause.code ? ' (' + e.cause.code + ')' : '')).slice(0, 90) }); }
+    try { const rows = await j.run(); out.push({ key: j.key, name: j.name, rows, count: rows.length, storeId: rows.storeId || null }); } catch (e) { out.push({ key: j.key, name: j.name, rows: [], count: 0, error: (String(e.message || e) + (e.cause && e.cause.code ? ' (' + e.cause.code + ')' : '')).slice(0, 90) }); }
   }
   return out;
 }
@@ -341,11 +341,16 @@ function parseStores(xml) {
 // The branch number inside a price file's name: PriceFull<chain>-<sub>-<branch>-<date>…
 // or PriceFull<chain>-<branch>-<date>….
 function storeOfFile(name) {
-  const parts = String(name).replace(/^PriceFull/i, '').split('-');
+  const parts = String(name).replace(/^(PriceFull|PromoFull)/i, '').split('-');
   if (parts.length < 3) return null;
   const n = parts.length >= 5 ? parts[2] : parts[1];
   return /^\d{1,6}$/.test(n) ? String(Number(n)) : null;
 }
+// The file's name in an address ("…/PriceFull7290027600007-001-878-….gz?sv=…").
+const fileName = (url) => decodeURIComponent(String(url || '').split('?')[0].split('/').pop() || '');
+// The branch whose prices these are, kept on the rows (its deals are read
+// from the same branch).
+function withStore(rows, name) { rows.storeId = storeOfFile(name); return rows; }
 const newestOf = (files, stamp) => files.slice().sort((a, b) => stamp(b).localeCompare(stamp(a)))[0] || null;
 const fileStamp = (n) => (String(n).match(/-(\d{8})-?(\d{4,6})/) || []).slice(1).join('');
 
@@ -383,32 +388,39 @@ async function binaFile(fetchFn, base, name) {
   return getBuf(fetchFn, url);
 }
 
-// One branch's full price file: the newest of that branch.
-async function storePrices(fetchFn, chain, storeId) {
+// One branch's newest full file of a kind ('PriceFull' or 'PromoFull'), as text.
+async function storeFile(fetchFn, chain, storeId, kind = 'PriceFull') {
   const id = String(Number(storeId));
+  const isIt = (n) => new RegExp('^' + kind + '[\\w.-]+$', 'i').test(n);
   if (chain.key === 'shufersal') {
-    const html = (await getBuf(fetchFn, SHUF + '/FileObject/UpdateCategory?catID=2&storeId=' + encodeURIComponent(id) + '&page=1')).toString('utf8');
-    const link = (html.match(/href="(https:\/\/pricesprodpublic[^"]+PriceFull[^"]+)"/) || [])[1];
+    const html = (await getBuf(fetchFn, SHUF + '/FileObject/UpdateCategory?catID=' + (kind === 'PromoFull' ? 4 : 2) + '&storeId=' + encodeURIComponent(id) + '&page=1')).toString('utf8');
+    const link = (html.match(new RegExp('href="(https:\\/\\/pricesprodpublic[^"]+' + kind + '[^"]+)"')) || [])[1];
     if (!link) throw new Error('no file for branch');
-    return parsePriceFile(gunzip(await getBuf(fetchFn, unescape(link))), chain);
+    return gunzip(await getBuf(fetchFn, unescape(link)));
   }
   if (chain.site) {
     // Newest first where the site says so; otherwise by the time in the name.
-    const f = newestOf((await ownList(fetchFn, chain, 'PriceFull')).filter((x) => storeOfFile(x.name) === id), (x) => fileStamp(x.name));
+    const f = newestOf((await ownList(fetchFn, chain, kind)).filter((x) => storeOfFile(x.name) === id), (x) => fileStamp(x.name));
     if (!f) throw new Error('no file for branch');
-    return parsePriceFile(gunzip(await getBuf(fetchFn, f.url, { headers: BROWSER })), chain);
+    return gunzip(await getBuf(fetchFn, f.url, { headers: BROWSER }));
   }
   if (chain.host) {
     const base = 'https://' + chain.host + '.binaprojects.com';
-    const list = JSON.parse((await getBuf(fetchFn, base + '/MainIO_Hok.aspx?' + new URLSearchParams({ _: chain.id, wReshet: 'הכל', WFileType: '4', WDate: '', WStore: '' }))).toString('utf8') || '[]');
-    const name = newestOf((Array.isArray(list) ? list : []).map((f) => String((f && f.FileNm) || '')).filter((n) => /^PriceFull[\w.-]+$/i.test(n) && storeOfFile(n) === id), fileStamp);
+    const list = JSON.parse((await getBuf(fetchFn, base + '/MainIO_Hok.aspx?' + new URLSearchParams({ _: chain.id, wReshet: 'הכל', WFileType: kind === 'PromoFull' ? '5' : '4', WDate: '', WStore: '' }))).toString('utf8') || '[]');
+    const name = newestOf((Array.isArray(list) ? list : []).map((f) => String((f && f.FileNm) || '')).filter((n) => isIt(n) && storeOfFile(n) === id), fileStamp);
     if (!name) throw new Error('no file for branch');
-    return parsePriceFile(gunzip(await binaFile(fetchFn, base, name)), chain);
+    return gunzip(await binaFile(fetchFn, base, name));
   }
   const site = await cerberusSession(fetchFn, chain);
-  const f = newestOf((await site.list('PriceFull')).map((x) => x.fname).filter((n) => storeOfFile(n) === id), fileStamp);
+  const f = newestOf((await site.list(kind)).map((x) => x.fname).filter((n) => storeOfFile(n) === id), fileStamp);
   if (!f) throw new Error('no file for branch');
-  return parsePriceFile(await site.get(f), chain);
+  return site.get(f);
 }
+// One branch's full price file: the newest of that branch.
+async function storePrices(fetchFn, chain, storeId) {
+  return parsePriceFile(await storeFile(fetchFn, chain, storeId, 'PriceFull'), chain);
+}
+// One branch's deals (the newest full deals file of that branch), as text.
+const storePromos = (fetchFn, chain, storeId) => storeFile(fetchFn, chain, storeId, 'PromoFull');
 
-module.exports = { parseBlobList, haziList, superpharmList, pageHint, parsePriceFile, parseStores, storeOfFile, shufersal, cerberus, bina, own, ownList, allChains, chainStores, storePrices, CERBERUS, BINA, OWN, CHAINS };
+module.exports = { storePromos, storeFile, fileName, parseBlobList, haziList, superpharmList, pageHint, parsePriceFile, parseStores, storeOfFile, shufersal, cerberus, bina, own, ownList, allChains, chainStores, storePrices, CERBERUS, BINA, OWN, CHAINS };

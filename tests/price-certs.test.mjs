@@ -63,5 +63,5 @@ test('with the family\'s area: only the chains with a branch near it, and the br
   const near = nearby(cat, true);
   assert.deepEqual(near['חלב 3%'][0].offers.map((o) => o.chain), ['x'], 'the far chain is left out');
   const b = basket([choose('חלב 3%', near['חלב 3%'], 'any')]);
-  assert.deepEqual(b.map(({ lines, ...r }) => r), [{ chain: 'x', name: 'רשת א', store: 'סניף בדוי', total: 6.4, missing: 0, swaps: 0, gap: 0 }]);
+  assert.deepEqual(b.map(({ lines, ...r }) => r), [{ chain: 'x', name: 'רשת א', store: 'סניף בדוי', total: 6.4, missing: 0, swaps: 0, gap: 0, saved: 0 }]);
 });

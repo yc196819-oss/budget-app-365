@@ -2041,6 +2041,27 @@ async function runAndWait(input) {
   return r.done ? r : { status: 'TIMED-OUT', items: [] };
 }
 const pricefiles = require('./server/pricefiles');
+const promos = require('./server/promos');
+// A branch's deals (the chain's official deals file, from the branch whose
+// prices were just read), saved over the branch's deals from before.
+// sid '' is the branch of the chain's general prices. Before the deals table
+// is in the database, nothing is saved (and nothing else stops).
+async function savePromos(chainKey, storeId, priceRows, sid = '') {
+  const chain = pricefiles.CHAINS.find((c) => c.key === chainKey);
+  if (!chain || !storeId || !priceRows || !priceRows.length) return 0;
+  const regular = new Map();
+  for (const r of priceRows) if (!regular.has(r.barcode) || r.price < regular.get(r.barcode)) regular.set(r.barcode, r.price);
+  const rows = promos.promoRows(promos.parsePromoFile(await pricefiles.storePromos(priceFetch, chain, storeId)), regular);
+  const at = new Date().toISOString();
+  const { error } = await supabaseAdmin.from('price_promos').delete().eq('chain', chainKey).eq('store_id', sid);
+  if (error) throw new Error(error.message);
+  const out = rows.map((r) => ({ ...r, chain: chainKey, store_id: sid, seen_at: at }));
+  for (let i = 0; i < out.length; i += 1000) {
+    const { error: e } = await supabaseAdmin.from('price_promos').insert(out.slice(i, i + 1000));
+    if (e) throw new Error(e.message);
+  }
+  return out.length;
+}
 // The free load: each chain's own full price file (the transparency law),
 // one chain at a time (one file in memory at a time), saved by barcode.
 const RETRY_WAIT_MS = Number(process.env.PRICE_RETRY_WAIT_MS || 180000);
@@ -2060,7 +2081,10 @@ async function runFreeLoad() {
       let error = r.error || null;
       if (r.rows.length) await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
       seedJob.added += error ? 0 : r.count;
-      seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error });
+      // The same branch's deals; a chain whose deals fail keeps its prices.
+      let deals = null;
+      if (!error && r.rows.length) deals = await savePromos(r.key, r.storeId, r.rows).catch((e) => { console.error('deals ' + r.key + ':', e.message); return null; });
+      seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error, deals });
       console.log('prices:', r.key, r.count, error || 'ok');
     }
     // A site that did not answer at all (a few minutes down at night) gets
@@ -2075,8 +2099,9 @@ async function runFreeLoad() {
         if (r.error || !r.rows.length) continue;
         let error = null;
         await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
+        const deals = error ? null : await savePromos(r.key, r.storeId, r.rows).catch(() => null);
         const at = seedJob.chainsDone.findIndex((c) => c.key === key);
-        seedJob.chainsDone[at] = { key: r.key, name: r.name, count: r.count, error, retried: true };
+        seedJob.chainsDone[at] = { key: r.key, name: r.name, count: r.count, error, deals, retried: true };
         if (!error) seedJob.added += r.count;
         console.log('prices (again):', r.key, r.count, error || 'ok');
       }
@@ -2089,6 +2114,8 @@ async function runFreeLoad() {
     // Prices of a chain that left (or a product it stopped selling) older
     // than two weeks are not shown as today's price.
     await supabaseAdmin.from('price_offers').delete().lt('seen_at', new Date(Date.now() - 14 * 86400000).toISOString());
+    // Deals that are over.
+    await supabaseAdmin.from('price_promos').delete().lt('ends_at', new Date().toISOString()).then(() => {}, () => {});
   } catch (err) {
     seedJob.error = String(err.message || err).slice(0, 200);
     console.error('free price load failed:', seedJob.error);
@@ -2163,7 +2190,10 @@ async function loadLocal(rows = null, only = null) {
         const base = general.get(w.chain);
         const at = new Date().toISOString();
         const diff = new Map();
-        for (const x of await pricefiles.storePrices(priceFetch, chain, w.store_id)) {
+        const branch = await pricefiles.storePrices(priceFetch, chain, w.store_id);
+        // The branch's own deals (they differ between branches).
+        await savePromos(w.chain, w.store_id, branch, String(w.store_id)).catch((e) => console.error('deals ' + w.chain + '/' + w.store_id + ':', e.message));
+        for (const x of branch) {
           const g = base.get(x.barcode);
           if (g != null && Math.abs(g - x.price) >= 0.01 && (!diff.has(x.barcode) || x.price < diff.get(x.barcode))) diff.set(x.barcode, x.price);
         }
