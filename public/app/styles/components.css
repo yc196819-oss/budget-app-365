@@ -1666,6 +1666,9 @@ body.chat-open { overflow: hidden; }
 .pp-club-list li { display: flex; align-items: center; gap: 6px; }
 .pp-club-list li > span { flex: 1; font-weight: 700; font-size: 14px; }
 .pp-row-p s { font-size: 11.5px; }
+.pp-two { font-size: 13.5px; color: #F4D9A6; margin-top: 2px; }
+.pp-two summary { cursor: pointer; }
+.pp-two span { display: block; color: #F6E7CC; line-height: 1.55; margin-top: 2px; }
 .pp-deals { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #F4D9A6; margin-top: 2px; }
 .pp-more { display: grid; gap: 8px; padding: 0 0 14px; animation: admin-rise .3s var(--out, ease) both; }
 .pp-chosen { font-size: 12.5px; font-weight: 800; color: var(--income); padding: 0 6px; }

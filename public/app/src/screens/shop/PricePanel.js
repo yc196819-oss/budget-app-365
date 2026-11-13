@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
@@ -41,7 +41,7 @@ function Mark({ p, onVote, label = 'מה כתוב על האריזה?', open: sta
   if (!open) return html`<button type="button" class="btn-text price-vote-open" aria-expanded="false" onClick=${() => setOpen(true)}>${mine ? 'סימנתם: ' + mine + ' · לשנות' : label + ' לסמן'}</button>`;
   return html`<span class="price-vote"><small class="muted">${mine ? 'סימנתם: ' + mine + '. לשנות:' : label}</small>${CERT_NAMES.map((c) => html`<button type="button" class=${'chip' + (c === NOT_KOSHER ? ' chip-no' : '')} key=${c} aria-pressed=${mine === c} onClick=${() => { setOpen(false); onVote(p, c); }}>${c}</button>`)}</span>`;
 }
-const CHAIN_LABEL = { 'tiv-taam': 'טיב טעם', 'yellow': 'יילו', 'dor-alon': 'דור אלון' };
+const CHAIN_LABEL = { 'tiv-taam': 'טיב טעם' };
 // The clubs the family has: for each chain in the comparison, its customers
 // club and its credit card. Their deals then count in that chain's total.
 function ClubPicker({ chains, initial, onSave, onCancel }) {
@@ -245,9 +245,9 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
       <button type="button" class="btn-text pp-area-edit" onClick=${() => setEditPref(true)}>לשנות</button></div>`;
 
   // For a Haredi kashrut: the chains open on Shabbat, left out; a tap brings one back.
-  const shabbatRow = haredi(pref) && html`<div class="price-pref pp-shabbat-row"><span class="muted">רשתות שפתוחות בשבת, לא בהשוואה:</span>
+  const shabbatRow = haredi(pref) && html`<div class="price-pref pp-shabbat-row"><span class="muted">פתוחה בשבת, לא בהשוואה:</span>
     <span class="pp-shabbat-chips">${Object.keys(SHABBAT_CHAINS).map((k) => html`<button type="button" class="chip" key=${k} aria-pressed=${shownChains.includes(k)} title=${SHABBAT_CHAINS[k]} onClick=${() => flipChain(k)}>${CHAIN_LABEL[k]}${shownChains.includes(k) ? ' · מוצגת' : ''}</button>`)}</span>
-    <small class="muted pp-area-note">לחיצה על רשת מחזירה אותה להשוואה.</small></div>`;
+    <small class="muted pp-area-note">לחיצה מחזירה אותה להשוואה.</small></div>`;
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
   const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
     : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לשנות</button><small class="muted pp-area-note">${!area.stores.length ? 'לא נמצאו סניפים קרובים, משווים במחירים הכלליים' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</small></div>`
@@ -260,7 +260,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${areaRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
 
   const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), withoutChains(nearby(catalog, !!(area && area.stores.length)), hiddenChains(pref, shownChains)), pref, { strict });
-  const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty);
+  const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty, c.pick);
   const chains = basket(choices, qtyOf, new Date(), clubs);
   // "Which clubs do you have?": each chain in the comparison, its club and its credit card.
   const clubName = (c) => { const [k, kind] = c.split(':'); const r = chains.find((x) => x.chain === k); return (r ? r.name : k) + (kind === 'card' ? ' (אשראי)' : ''); };
@@ -288,9 +288,12 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
       <span class="pp-big num">${fmt(shown.total)}</span>
       <span class="pp-at">ב${shown.name}${shown.store ? html` <small>· ${shown.store}</small>` : ''}${shown === best ? html` <em class="pp-best">הכי משתלם</em>` : ''}</span>
       ${chainNote(shown.chain) && html`<span class="pp-weekly"><${Icon} name="calendar" size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
-      ${shown === best && bestAlways(chains) && html`<button type="button" class="pp-always" onClick=${() => setChainSel(bestAlways(chains).chain)}>בחנות שפתוחה כל יום: הכי משתלם ב${bestAlways(chains).name}, <b class="num">${fmt(bestAlways(chains).total)}</b></button>`}
+      ${shown === best && bestAlways(chains) && html`<button type="button" class="pp-always" onClick=${() => setChainSel(bestAlways(chains).chain)}>${chainNote(best.chain).alt || 'בחנות שפתוחה כל יום'}: הכי משתלם ב${bestAlways(chains).name}, <b class="num">${fmt(bestAlways(chains).total)}</b></button>`}
       ${shown.missing > 0 && html`<span class="pp-missing">בלי ${shown.missing === 1 ? 'מוצר אחד שאין' : shown.missing + ' מוצרים שאין'} ב${shown.name}: ${shown.lines.filter((l) => !l.product).map((l) => (open.find((i) => i.id === l.id) || {}).name).filter(Boolean).slice(0, 4).join(', ')}${shown.missing > 4 ? ' ועוד' : ''}</span>`}
       ${shown.saved > 0 && html`<span class="pp-deals"><${Icon} name="tag" size=${15} />כולל <b class="num">${fmt(shown.saved)}</b> הנחה במבצעים שכל אחד מקבל</span>`}
+      ${shown === best && (() => { const t = twoChains(chains); if (!t) return ''; const names = (ids) => ids.map((id) => (open.find((i) => i.id === id) || {}).name).filter(Boolean);
+        return html`<details class="pp-two"><summary>בשתי רשתות: <b class="num">${fmt(t.total)}</b>, עוד <b class="num">${fmt(t.saved)}</b> פחות</summary>
+          <span>ב${t.b.name}: ${names(t.atB).join(', ')}</span><span>ב${t.a.name}: כל השאר</span></details>`; })()}
       ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת הרשת היקרה ביותר בהשוואה</span>`}
       <div class="pp-bars" role="list" aria-label="הסל בכל רשת">${top.map((c) => html`<button type="button" role="listitem" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
         <span class="pp-bar-n">${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span>

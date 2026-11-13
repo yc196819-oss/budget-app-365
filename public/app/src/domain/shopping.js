@@ -53,6 +53,11 @@ export function parseItem(text) {
       if (WORDS[w[0]] && w.length > 1) { qty = String(WORDS[w[0]]); t = w.slice(1).join(' '); }
     }
   }
+  // A size at the end: "חלב 3% 2 ליטר" → "חלב 3%", 2 ליטר.
+  if (!qty) {
+    const e = /^(.+?)\s+(\d+(?:[.,]\d+)?)\s*(ק"ג|קג|קילו|גרם|ליטר|ל'|יח'|יחידות)$/.exec(t);
+    if (e) return { name: norm(e[1]).slice(0, 80), qty: (e[2] + ' ' + e[3].replace('קג', 'ק"ג').replace('קילו', 'ק"ג')).slice(0, 20) };
+  }
   const unit = UNITS.find((u) => t.startsWith(u + ' '));
   if (unit) { qty = (qty || '1') + ' ' + unit.replace('קג', 'ק"ג').replace('קילו', 'ק"ג'); t = t.slice(unit.length + 1); }
   else if (qty) qty = '×' + qty;

@@ -366,9 +366,7 @@ export function chooseAll(items, catalog, pref = 'any', { strict = false } = {})
 // Shabbat, or selling non-kosher food too. For such a family they are left
 // out of the comparison from the start; it can bring any of them back.
 export const SHABBAT_CHAINS = {
-  'tiv-taam': 'פתוחה בשבת ומוכרת גם לא כשר',
-  'yellow': 'חנויות נוחות בתחנות דלק, פתוחות בשבת',
-  'dor-alon': 'חנויות נוחות בתחנות דלק, פתוחות בשבת'
+  'tiv-taam': 'פתוחה בשבת ומוכרת גם לא כשר'
 };
 // A Haredi kashrut: a certifier other than the Rabbinate.
 export const haredi = (pref) => Array.isArray(pref) && pref.some((c) => c !== 'רבנות' && c !== 'רבנות מהדרין');
@@ -456,10 +454,42 @@ export function basket(choices, qtyOf = () => 1, now = new Date(), clubs = null)
   return rows.sort((a, b) => a.missing - b.missing || a.total - b.total);
 }
 
+// Out of the box: the list split between two chains. Many families pass two
+// supermarkets anyway; each item is bought where it is cheaper of the two.
+// Only worth saying when it saves at least `min` shekels (and 4%) against the
+// cheapest single chain, and leaves out no more than it does. Chains with a
+// note (once a week, a fuel station shop) are not suggested.
+//   → { a, b, total, saved, atB: [item ids bought at b] } or null.
+export function twoChains(rows, { min = 15, top = 6 } = {}) {
+  const best = rows[0];
+  if (!best) return null;
+  const pool = rows.filter((r) => !chainNote(r.chain)).slice(0, top);
+  const costOf = (r, id) => { const l = r.lines.find((x) => x.id === id); return l && l.product && l.cost != null ? l.cost : null; };
+  let out = null;
+  for (let i = 0; i < pool.length; i++) for (let j = i + 1; j < pool.length; j++) {
+    const a = pool[i], b = pool[j];
+    let total = 0, missing = 0;
+    const atB = [];
+    for (const l of a.lines) {
+      const x = costOf(a, l.id), y = costOf(b, l.id);
+      if (x == null && y == null) { missing++; continue; }
+      if (x == null || (y != null && y < x)) { total += y; atB.push(l.id); } else total += x;
+    }
+    total = Math.round(total * 100) / 100;
+    if (missing > best.missing || !atB.length || atB.length === a.lines.length) continue;
+    const saved = Math.round((best.total - total) * 100) / 100;
+    if (saved >= min && saved >= best.total * 0.04 && (!out || saved > out.saved)) out = { a, b, total, saved, atB };
+  }
+  return out;
+}
+
 // Chains that do not sell every day: shown with what to know, and when one
 // of them is the cheapest, the cheapest of the always-open chains too.
 export const CHAIN_NOTES = {
-  'mishnat-yosef': { short: 'מכירה פעם בשבוע', text: 'משנת יוסף מוכרת במוקדי מכירה פעם בשבוע, ולא בחנות שפתוחה כל יום. המחיר הוא של יום המכירה.', url: 'https://mishnatyosef.org/' }
+  'mishnat-yosef': { short: 'מכירה פעם בשבוע', text: 'משנת יוסף מוכרת במוקדי מכירה פעם בשבוע, ולא בחנות שפתוחה כל יום. המחיר הוא של יום המכירה.', url: 'https://mishnatyosef.org/', alt: 'בחנות שפתוחה כל יום' },
+  // Convenience stores at fuel stations: for a small top-up, not the big shopping.
+  'yellow': { short: 'חנות בתחנת דלק', text: 'יילו היא חנות נוחות בתחנת דלק: טובה לקנייה קטנה, פחות לקנייה הגדולה.', alt: 'בסופרמרקט' },
+  'dor-alon': { short: 'חנות בתחנת דלק', text: 'דור אלון היא חנויות נוחות בתחנות דלק: טובות לקנייה קטנה, פחות לקנייה הגדולה.', alt: 'בסופרמרקט' }
 };
 export const chainNote = (chain) => CHAIN_NOTES[chain] || null;
 // The cheapest chain that is open every day, when the cheapest is not.
@@ -477,8 +507,22 @@ export function saving(rows) {
   return Math.round((full[full.length - 1].total - full[0].total) * 100) / 100;
 }
 
-// How many units a list line asks for ("×2" → 2, "2 ק"ג" → 1 package).
-export function count(qtyText) {
-  const m = /^×(\d+)$/.exec(String(qtyText || '').trim());
-  return m ? Math.min(99, Number(m[1])) : 1;
+// How many packages a list line asks for: "×2" → 2, "3 יח'" or "2 חבילות"
+// → that many; "2 ליטר" of a liter carton → 2, "1.5 ק"ג" of a 500 gram
+// pack → 3 (with the product picked, so its size is known); else 1.
+const PIECES = /^(יח'?|יחידות|יחידה|חבילות|חבילה|בקבוקים|בקבוק|שקיות|שקית|קופסאות|קופסה|מגשים|מגש|תבניות|תבנית)$/;
+export function count(qtyText, product = null) {
+  const t = String(qtyText || '').trim();
+  let m = /^×\s*(\d+)$/.exec(t);
+  if (m) return Math.max(1, Math.min(99, Number(m[1])));
+  m = /^(\d+(?:[.,]\d+)?)\s*(.*)$/.exec(t);
+  if (!m) return 1;
+  const n = Number(m[1].replace(',', '.'));
+  const unit = m[2].trim();
+  if (!unit) return Math.max(1, Math.min(99, Math.round(n)));
+  if (PIECES.test(unit)) return Math.max(1, Math.min(99, Math.round(n)));
+  const want = size(n, unit);
+  const has = product ? sizeOfProduct(product) : null;
+  if (!want || !has || want.unit !== has.unit || want.unit === 'unit' || !(has.qty > 0)) return 1;
+  return Math.max(1, Math.min(99, Math.ceil(want.qty / has.qty - 0.05)));
 }

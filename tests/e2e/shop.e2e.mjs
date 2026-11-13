@@ -576,3 +576,27 @@ test('a Haredi kashrut: a chain open on Shabbat is not in the comparison until t
   await page.close();
   assert.deepEqual(errors, []);
 });
+
+test('two chains: when splitting the list between two saves enough, the hero says how and what goes where', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [
+      { id: 's1', household_id: d.hid, name: 'קפה', qty: null, aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null },
+      { id: 's2', household_id: d.hid, name: 'שמן זית', qty: null, aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }
+    ];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+  }, OWNER);
+  // Made-up prices: coffee is cheap at A, olive oil at B.
+  await page.route('**/rest/v1/rpc/price_search', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+    { q: 1, barcode: '6001', name: 'קפה 200 גרם', names: '', qty: 200, unit: 'גרם', kosher: {}, offers: [{ chain: 'x', chain_name: 'רשת א', price: 20 }, { chain: 'y', chain_name: 'רשת ב', price: 40 }] },
+    { q: 2, barcode: '6002', name: 'שמן זית 750 מ"ל', names: '', qty: 750, unit: 'מ"ל', kosher: {}, offers: [{ chain: 'x', chain_name: 'רשת א', price: 50 }, { chain: 'y', chain_name: 'רשת ב', price: 25 }] }
+  ]) }));
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+  await page.click('.shop-prices-cta button');
+  const two = page.locator('.pp-two');
+  await two.waitFor();
+  assert.match(await two.locator('summary').textContent(), /בשתי רשתות: ₪45\.00, עוד ₪20\.00 פחות/);
+  await two.locator('summary').click();
+  assert.match(await two.textContent(), /ברשת א: קפה.*ברשת ב: כל השאר/, 'the cheapest single chain is B; only the coffee moves to A');
+  await page.close();
+  assert.deepEqual(errors, []);
+});
