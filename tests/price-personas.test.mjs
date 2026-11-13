@@ -72,3 +72,12 @@ test('sizes written with the base the chain prices by', () => {
   assert.equal(equivalent({ qty: 1, unit: 'ליטר' }, { qty: 200, unit: 'מיליליטר' }), 0);
   assert.equal(equivalent({ qty: 1, unit: 'ליטר' }, { qty: 1, unit: 'קילוגרם' }), 0);
 });
+
+test('a chain that sells once a week is marked, and the cheapest always-open chain is named too', async () => {
+  const { chainNote, bestAlways } = await import('../public/app/src/domain/prices.js');
+  assert.match(chainNote('mishnat-yosef').text, /פעם בשבוע/);
+  assert.equal(chainNote('rami-levy'), null);
+  const rows = [{ chain: 'mishnat-yosef', total: 90, missing: 0 }, { chain: 'x', total: 99, missing: 1 }, { chain: 'y', total: 101, missing: 0 }];
+  assert.equal(bestAlways(rows).chain, 'y', 'the same number missing as the cheapest');
+  assert.equal(bestAlways([{ chain: 'y', total: 1, missing: 0 }, rows[0]]), null, 'the cheapest is open every day');
+});

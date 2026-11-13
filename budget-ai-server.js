@@ -2056,6 +2056,7 @@ async function runFreeLoad() {
     // Every chain's branches, then the branches families live near (their
     // chain's prices read back from the catalog).
     await saveStores().catch((e) => console.error('stores failed:', e.message));
+    await refreshAreas().catch((e) => console.error('areas refresh failed:', e.message));
     await loadLocal(null).catch((e) => console.error('local prices failed:', e.message));
     // Prices of a chain that left (or a product it stopped selling) older
     // than two weeks are not shown as today's price.
@@ -2078,10 +2079,32 @@ async function saveStores() {
     try {
       const list = await pricefiles.chainStores(fetch, c);
       const at = new Date().toISOString();
-      const rows = list.map((x) => ({ chain: c.key, chain_name: c.name, store_id: x.store_id, name: x.name, address: x.address, city: x.city, seen_at: at }));
-      for (let i = 0; i < rows.length; i += 500) await supabaseAdmin.from('price_stores').upsert(rows.slice(i, i + 500), { onConflict: 'chain,store_id' });
+      // One row per branch number: a chain that lists a number twice made
+      // the whole save fail before (and its branches were never kept).
+      const rows = area.uniqueStores(list).map((x) => ({ chain: c.key, chain_name: c.name, store_id: x.store_id, name: x.name, address: x.address, city: x.city, seen_at: at }));
+      for (let i = 0; i < rows.length; i += 500) {
+        const { error } = await supabaseAdmin.from('price_stores').upsert(rows.slice(i, i + 500), { onConflict: 'chain,store_id' });
+        if (error) throw new Error(error.message);
+      }
     } catch (e) { console.error('stores of ' + c.key + ':', e.message); }
   }
+}
+// Every family's nearest branches again, after the branch lists changed: a
+// chain that opened a branch near them (or a chain added to the app) shows
+// without them saving their area again.
+async function refreshAreas() {
+  const { data: areas } = await supabaseAdmin.from('household_area').select('household_id,city_code,hood,max_km').limit(5000);
+  if (!areas || !areas.length) return 0;
+  const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
+  let n = 0;
+  for (const a of areas) {
+    const near = area.nearestStores(stores || [], { code: a.city_code, hood: a.hood }, { maxKm: a.max_km || 25 });
+    if (!near.length) continue;
+    await supabaseAdmin.from('household_stores').delete().eq('household_id', a.household_id);
+    await supabaseAdmin.from('household_stores').insert(near.map((x) => ({ household_id: a.household_id, chain: x.chain, store_id: x.store_id, chain_name: x.chain_name, name: x.name, address: x.address, city: x.city, km: x.km, kind: x.kind })));
+    n++;
+  }
+  return n;
 }
 // The prices at the branches families live near: kept only where a branch
 // differs from its chain's general price (so the catalog stays small).

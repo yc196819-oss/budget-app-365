@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeText, count } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeText, count } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces } from '../../data/prices.js';
@@ -229,9 +229,11 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
       <span class="pp-eye">הסל שלכם · ${priced} מוצרים</span>
       <span class="pp-big num">${fmt(shown.total)}</span>
       <span class="pp-at">ב${shown.name}${shown.store ? html` <small>· ${shown.store}</small>` : ''}${shown === best ? html` <em class="pp-best">הכי משתלם</em>` : ''}</span>
+      ${chainNote(shown.chain) && html`<span class="pp-weekly"><${Icon} name="calendar" size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
+      ${shown === best && bestAlways(chains) && html`<button type="button" class="pp-always" onClick=${() => setChainSel(bestAlways(chains).chain)}>בחנות שפתוחה כל יום: הכי משתלם ב${bestAlways(chains).name}, <b class="num">${fmt(bestAlways(chains).total)}</b></button>`}
       ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת הרשת היקרה ביותר בהשוואה</span>`}
       <div class="pp-bars" role="list" aria-label="הסל בכל רשת">${top.map((c) => html`<button type="button" role="listitem" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
-        <span class="pp-bar-n">${c.name}</span>
+        <span class="pp-bar-n">${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span>
         <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i></span>
         <span class="pp-bar-v num">${fmt(c.total)}</span>
         ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'חסרים ' + c.missing : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}

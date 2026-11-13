@@ -476,3 +476,24 @@ test('receipts are for the owner for now: others do not see the card', async () 
   await page.close();
   assert.deepEqual(errors, []);
 });
+
+test('a chain that sells once a week: marked in the comparison, and the cheapest always-open chain is named', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+  }, OWNER);
+  // Made-up prices.
+  await page.route('**/rest/v1/rpc/price_search', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ q: 1, barcode: '1001', name: 'חלב 3% בשקית', names: '', qty: 1, unit: 'ליטר', kosher: {},
+    offers: [{ chain: 'mishnat-yosef', chain_name: 'משנת יוסף', price: 5.1 }, { chain: 'x', chain_name: 'רשת א', price: 6.2 }, { chain: 'y', chain_name: 'רשת ב', price: 5.9 }] }]) }));
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+  await page.click('.shop-prices-cta button');
+  const hero = page.locator('.pp-hero');
+  await hero.waitFor();
+  assert.match(await hero.textContent(), /₪5\.10במשנת יוסף.*פעם בשבוע.*בחנות שפתוחה כל יום: הכי משתלם ברשת ב, ₪5\.90/);
+  assert.match(await page.locator('.pp-bar', { hasText: 'משנת יוסף' }).textContent(), /מכירה פעם בשבוע/);
+  await hero.locator('.pp-always').click();
+  assert.match(await hero.textContent(), /₪5\.90ברשת ב/);
+  assert.equal(await hero.locator('.pp-weekly').count(), 0);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
