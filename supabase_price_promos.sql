@@ -15,6 +15,7 @@ create table if not exists public.price_promos (
   unit_price numeric not null check (unit_price >= 0 and unit_price < 100000),
   max_qty numeric,
   everyone boolean not null default true,
+  club text check (club is null or club in ('club', 'card')),   -- not for everyone: the chain's customers club, or its credit card
   coupon boolean not null default false,
   min_buy numeric not null default 0,
   starts_at timestamptz,
@@ -23,6 +24,8 @@ create table if not exists public.price_promos (
   primary key (chain, store_id, barcode, promo_id)
 );
 create index if not exists price_promos_barcode on public.price_promos (barcode);
+-- The chains whose club (or credit card) the family has: 'rami-levy:club', 'shufersal:card'.
+alter table public.price_prefs add column if not exists clubs text[] not null default '{}' check (cardinality(clubs) <= 80);
 alter table public.price_promos enable row level security;
 
 -- price_search: as before, and each chain's offer carries its deals
@@ -57,7 +60,7 @@ AS $function$
         'price', coalesce((select so.price from public.price_store_offers so where so.chain = o.chain and so.store_id = m.store_id and so.barcode = o.barcode), o.price),
         'seen_at', o.seen_at, 'store', m.name, 'local', m.store_id is not null,
         'promos', coalesce((select jsonb_agg(jsonb_build_object('text', pr.text, 'need', pr.need, 'unit_price', pr.unit_price, 'max_qty', pr.max_qty,
-              'everyone', pr.everyone, 'coupon', pr.coupon, 'min_buy', pr.min_buy, 'starts_at', pr.starts_at, 'ends_at', pr.ends_at) order by pr.unit_price)
+              'everyone', pr.everyone, 'club', pr.club, 'coupon', pr.coupon, 'min_buy', pr.min_buy, 'starts_at', pr.starts_at, 'ends_at', pr.ends_at) order by pr.unit_price)
             from (select * from public.price_promos pr
                   where pr.chain = o.chain and pr.barcode = o.barcode and (pr.ends_at is null or pr.ends_at > now())
                     and pr.store_id = (case when m.store_id is not null and exists (select 1 from public.price_promos x where x.chain = o.chain and x.store_id = m.store_id limit 1) then m.store_id else '' end)

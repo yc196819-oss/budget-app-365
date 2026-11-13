@@ -391,7 +391,7 @@ const offerAt = (p, chain) => validOffers(p).find((o) => o.chain === chain);
 // A chain's deal is counted by our deals policy (promos.js): only one anyone
 // gets, on today, with enough on the list; any other is kept on the line to
 // show. `saved`: what the counted deals take off the chain's total.
-export function basket(choices, qtyOf = () => 1, now = new Date()) {
+export function basket(choices, qtyOf = () => 1, now = new Date(), clubs = null) {
   const picks = choices.filter((c) => c.pick);
   const chains = new Map();
   const stores = new Map();
@@ -406,7 +406,7 @@ export function basket(choices, qtyOf = () => 1, now = new Date()) {
       const q = qtyOf(c);
       const o = offerAt(c.pick, chain);
       if (o) {
-        const d = promoCost(o, q, now);
+        const d = promoCost(o, q, now, clubs);
         total += d.cost; saved += d.saved;
         lines.push({ id: c.id, product: c.pick, price: o.price, cost: d.cost, promo: d.promo, other: d.other, swap: false });
         continue;
@@ -418,7 +418,7 @@ export function basket(choices, qtyOf = () => 1, now = new Date()) {
         const po = r && offerAt(p, chain);
         if (!po) continue;
         // Counted for the picked size (a bigger package is not "dearer").
-        const d = promoCost(po, q, now);
+        const d = promoCost(po, q, now, clubs);
         const each = Math.round((d.cost / q) * r * 100) / 100;
         if (!best || each < best.price) best = { product: p, price: each, paid: po.price, d };
       }

@@ -41,6 +41,19 @@ export async function setKosherPref(hid, pref) {
   const { error } = await sb.from('price_prefs').upsert({ household_id: hid, kosher, certs, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
   if (error) throw error;
 }
+// The chains whose customers club or credit card the family has
+// ('rami-levy:club', 'shufersal:card'): their deals count for them. Before the
+// database has the column, none.
+export async function getClubs(hid) {
+  const { data, error } = await sb.from('price_prefs').select('clubs').eq('household_id', hid).maybeSingle();
+  if (error || !data) return [];
+  return (data.clubs || []).filter((c) => /^[a-z0-9-]{1,40}:(club|card)$/.test(c));
+}
+export async function setClubs(hid, clubs) {
+  const list = [...new Set((clubs || []).filter((c) => /^[a-z0-9-]{1,40}:(club|card)$/.test(c)))].slice(0, 80);
+  const { error } = await sb.from('price_prefs').upsert({ household_id: hid, clubs: list, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+  if (error) throw error;
+}
 // This household's word on a product: the certifier its package shows (one
 // per household).
 export async function voteKosher(hid, barcode, cert) {

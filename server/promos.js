@@ -7,6 +7,23 @@
 const tag = (s, t) => { const m = new RegExp('<' + t + '>([\\s\\S]*?)</' + t + '>', 'i').exec(s); return m ? m[1].trim() : ''; };
 const unescape = (s) => String(s || '').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 const num = (s) => { const n = Number(String(s || '').trim()); return Number.isFinite(n) ? n : null; };
+// Who gets a deal that is not for everyone, from the file's words:
+//   'club'  — the chain's customers club (free to join),
+//   'card'  — the chain's credit card,
+//   'staff' — the chain's employees, or anything else no family is (never counted).
+// A deal for "the club or the credit card" is the club's (a club member gets it).
+function clubKind(text) {
+  const t = unescape(text);
+  const alts = t.split(/[|&]/).map((x) => x.replace(/[()"=\d-]/g, ' ').trim()).filter(Boolean);
+  const isStaff = (a) => /עובד|בעלים|סיטונא|טסט|עמות|לקוח גדול|רכבים/.test(a);
+  const isCard = (a) => /אשראי|ישראכרט|ויזה|מאסטר|כרטיס/.test(a);
+  const isClub = (a) => /מועדון|לקוחות|חבר/.test(a) && !isStaff(a) && !isCard(a);
+  // Ways of paying after "&" ("ישראכרט מגנטי", "עיגול אגורות") are not who gets it.
+  const who = t.split('&')[0].split('|').map((x) => x.replace(/[()"=\d-]/g, ' ').trim()).filter(Boolean);
+  if ((who.length ? who : alts).some(isClub)) return 'club';
+  if ((who.length ? who : alts).some(isCard)) return 'card';
+  return 'staff';
+}
 const when = (s) => { const v = String(s || '').trim(); if (!/^\d{4}-\d{2}-\d{2}/.test(v)) return null; const d = new Date(v.slice(0, 19) + '+02:00'); return Number.isNaN(d.getTime()) ? null : d.toISOString(); };
 
 // The file into deals, each with its products: [{ id, text, everyone,
@@ -42,6 +59,7 @@ function parsePromoFile(xml) {
       // Everyone: no club and no credit card ("0", or nothing written).
       // ("0 - כלל הלקוחות" at Shufersal; a club is "2 - מועדון אשראי…").
       everyone: club === '' || /^0(\s|-|$)/.test(club),
+      club: club === '' || /^0(\s|-|$)/.test(club) ? null : clubKind(club),
       coupon: tag(p, 'AdditionalIsCoupon') === '1',
       minBuy: num(tag(p, 'MinPurchaseAmount')) || 0,
       starts: when(tag(p, 'PromotionStartDateTime') || tag(p, 'PromotionStartDate')),
@@ -65,7 +83,8 @@ function promoRows(promos, regular, { now = new Date() } = {}) {
   const rows = [];
   const today = now.getTime();
   for (const p of promos || []) {
-    if (p.gift || (p.ends && new Date(p.ends).getTime() < today)) continue;
+    // A gift, a deal that is over, or one only the chain's employees get.
+    if (p.gift || (p.ends && new Date(p.ends).getTime() < today) || p.club === 'staff') continue;
     for (const it of p.items) {
       const reg = regular.get(it.barcode);
       if (!(reg > 0) || !(it.price >= 0)) continue;
@@ -88,6 +107,7 @@ function promoRows(promos, regular, { now = new Date() } = {}) {
         // how many times the deal is given: "2 ב-48, up to 4" is twice).
         max_qty: it.maxQty || (p.limit ? p.limit * need : null),
         everyone: p.everyone,
+        club: p.club || null,
         coupon: p.coupon,
         min_buy: p.minBuy || 0,
         starts_at: p.starts,
@@ -101,4 +121,4 @@ function promoRows(promos, regular, { now = new Date() } = {}) {
   return [...seen.values()];
 }
 
-module.exports = { parsePromoFile, promoRows };
+module.exports = { parsePromoFile, promoRows, clubKind };

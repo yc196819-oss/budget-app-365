@@ -1659,6 +1659,11 @@ body.chat-open { overflow: hidden; }
 /* A deal counted in the total; a deal shown that is not (club, coupon, more to buy). */
 .pp-tag.t-deal { background: var(--accent-tint); border-color: transparent; color: var(--accent); }
 .pp-tag.t-deal-off { border-style: dashed; font-weight: 600; }
+.pp-club-ask { margin: -6px 0 10px; padding-inline-start: 54px; }
+.pp-club-ask .btn-text { font-size: 13px; padding: 2px 0; color: var(--accent); }
+.pp-club-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pp-club-list li { display: flex; align-items: center; gap: 6px; }
+.pp-club-list li > span { flex: 1; font-weight: 700; font-size: 14px; }
 .pp-row-p s { font-size: 11.5px; }
 .pp-deals { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #F4D9A6; margin-top: 2px; }
 .pp-more { display: grid; gap: 8px; padding: 0 0 14px; animation: admin-rise .3s var(--out, ease) both; }

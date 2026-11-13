@@ -214,7 +214,7 @@ test('prices: the household picks the certifiers it relies on once, then every i
   assert.equal(db.tables.price_prefs[0].kosher, 'mehadrin');
   await page.waitForSelector('.price-item');
   assert.deepEqual(calls.search[0], ['חלב 3%', 'ביצים', 'קפה'], 'the whole list in one search');
-  assert.match(await page.locator('.price-pref:not(.price-area)').textContent(), /בד"ץ העדה החרדית · הרב לנדא/);
+  assert.match(await page.locator('.price-pref:not(.price-area):not(.pp-clubs-row)').textContent(), /בד"ץ העדה החרדית · הרב לנדא/);
   // Milk: the one with their certifier, though the other (another certifier) is cheaper.
   const milk = page.locator('.price-item', { hasText: 'חלב 3%' }).first();
   assert.match(await milk.textContent(), /חלב 3% בשקית.*בד"ץ העדה החרדית/);
@@ -508,7 +508,9 @@ test('a chain that sells once a week: marked in the comparison, and the cheapest
 });
 
 test('deals: one anyone gets is in the total, a club deal is only shown, and the policy is written', async () => {
+  let db;
   const { page, errors } = await open(390, (d) => {
+    db = d;
     d.tables.shopping_items = [
       { id: 's1', household_id: d.hid, name: 'קרקרים', qty: '×2', aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null },
       { id: 's2', household_id: d.hid, name: 'במבה', qty: null, aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }
@@ -522,7 +524,7 @@ test('deals: one anyone gets is in the total, a club deal is only shown, and the
     { q: 1, barcode: '5001', name: 'קרקרים 300 גרם', names: '', qty: 300, unit: 'גרם', kosher: {}, offers: [
       { chain: 'x', chain_name: 'רשת א', price: 9.9, promos: [{ ...deal, need: 2, unit_price: 7.5 }] }, { chain: 'y', chain_name: 'רשת ב', price: 8.9 }] },
     { q: 2, barcode: '5002', name: 'במבה 80 גרם', names: '', qty: 80, unit: 'גרם', kosher: {}, offers: [
-      { chain: 'x', chain_name: 'רשת א', price: 4.5, promos: [{ ...deal, everyone: false, need: 1, unit_price: 2.5 }] }, { chain: 'y', chain_name: 'רשת ב', price: 4.9 }] }
+      { chain: 'x', chain_name: 'רשת א', price: 4.5, promos: [{ ...deal, everyone: false, club: 'club', need: 1, unit_price: 2.5 }] }, { chain: 'y', chain_name: 'רשת ב', price: 4.9 }] }
   ]) }));
   await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
   await page.click('.shop-prices-cta button');
@@ -534,7 +536,20 @@ test('deals: one anyone gets is in the total, a club deal is only shown, and the
   assert.match(await crackers.textContent(), /מבצע: 2 ב-₪15 · עד 5\.12/);
   assert.match(await crackers.textContent(), /₪15\.00₪19\.80/, 'the line in the deal, the regular price struck out');
   assert.match(await page.locator('.price-item', { hasText: 'במבה' }).first().textContent(), /מבצע ₪2\.50 למועדון בלבד \(לא בסכום\)/);
-  assert.match(await page.locator('.price-note').textContent(), /מבצע נכלל בסכום רק כשכל אחד מקבל אותו/);
+  assert.match(await page.locator('.price-note').textContent(), /מבצע נכלל בסכום כשכל אחד מקבל אותו, או כשהוא של מועדון/);
+  // "I'm in the club": saved for the household, and the club deal counts.
+  assert.match(await page.locator('.price-pref', { hasText: 'מועדונים' }).textContent(), /לא סימנתם/);
+  await page.locator('.pp-club-ask button', { hasText: 'אני במועדון של רשת א' }).click();
+  await page.waitForSelector('.pp-hero:has-text("₪17.50")');
+  assert.deepEqual(db.tables.price_prefs[0].clubs, ['x:club']);
+  assert.match(await page.locator('.price-pref', { hasText: 'מועדונים' }).textContent(), /רשת א/);
+  assert.equal(await page.locator('.pp-club-ask').count(), 0);
+  // And from the list of chains: off again.
+  await page.locator('.price-pref', { hasText: 'מועדונים' }).locator('button', { hasText: 'לשנות' }).click();
+  await page.locator('.pp-club-list li', { hasText: 'רשת א' }).locator('.chip', { hasText: 'מועדון' }).click();
+  await page.locator('.pp-clubs .btn-primary').click();
+  await page.waitForSelector('.pp-hero:has-text("₪19.50")');
+  assert.deepEqual(db.tables.price_prefs[0].clubs, []);
   await page.close();
   assert.deepEqual(errors, []);
 });

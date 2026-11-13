@@ -5,7 +5,7 @@ import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, be
 import { lastPaid } from '../../domain/receipts.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
-import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces } from '../../data/prices.js';
+import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces, getClubs, setClubs } from '../../data/prices.js';
 import { aisleOf } from '../../domain/shopping.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
@@ -40,6 +40,25 @@ function Mark({ p, onVote, label = 'מה כתוב על האריזה?', open: sta
   const [open, setOpen] = useState(startOpen);
   if (!open) return html`<button type="button" class="btn-text price-vote-open" aria-expanded="false" onClick=${() => setOpen(true)}>${mine ? 'סימנתם: ' + mine + ' · לשנות' : label + ' לסמן'}</button>`;
   return html`<span class="price-vote"><small class="muted">${mine ? 'סימנתם: ' + mine + '. לשנות:' : label}</small>${CERT_NAMES.map((c) => html`<button type="button" class=${'chip' + (c === NOT_KOSHER ? ' chip-no' : '')} key=${c} aria-pressed=${mine === c} onClick=${() => { setOpen(false); onVote(p, c); }}>${c}</button>`)}</span>`;
+}
+// The clubs the family has: for each chain in the comparison, its customers
+// club and its credit card. Their deals then count in that chain's total.
+function ClubPicker({ chains, initial, onSave, onCancel }) {
+  const [sel, setSel] = useState(() => new Set(initial));
+  const [all, setAll] = useState(false);
+  const flip = (k) => setSel((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  // The cheapest chains for this list first (and any already marked); the rest on request.
+  const list = all ? chains : chains.filter((c, i) => i < 6 || sel.has(c.chain + ':club') || sel.has(c.chain + ':card'));
+  return html`<div class="stack price-certs pp-clubs">
+    <b>באילו רשתות אתם במועדון?</b>
+    <span class="muted" style="line-height:1.55">מבצעים של מועדון או של כרטיס האשראי של הרשת ייכנסו לסכום רק ברשתות שתסמנו.</span>
+    <ul class="pp-club-list">${list.map((c) => html`<li key=${c.chain}><span>${c.name}</span>
+      <button type="button" class="chip" aria-pressed=${sel.has(c.chain + ':club')} onClick=${() => flip(c.chain + ':club')}>מועדון</button>
+      <button type="button" class="chip" aria-pressed=${sel.has(c.chain + ':card')} onClick=${() => flip(c.chain + ':card')}>כרטיס אשראי</button></li>`)}</ul>
+    ${!all && list.length < chains.length && html`<button type="button" class="btn-text" style="justify-self:start" onClick=${() => setAll(true)}>כל הרשתות (${chains.length})</button>`}
+    <div class="price-cert-actions"><button type="button" class="btn btn-primary" style="width:auto" onClick=${() => onSave(sel)}>לשמור</button>
+      <button type="button" class="btn-text" onClick=${onCancel}>ביטול</button></div>
+  </div>`;
 }
 // The certifiers the family relies on: several can be picked.
 function CertPicker({ initial, onSave, onAny, onCancel }) {
@@ -130,6 +149,9 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   const [voteId, setVoteId] = useState(null);
   const [editPref, setEditPref] = useState(false);
   const [chainSel, setChainSel] = useState(null);
+  // The chains whose club or credit card the family has ('rami-levy:club').
+  const [clubs, setClubsState] = useState(() => new Set());
+  const [editClubs, setEditClubs] = useState(false);
   const [strict, setStrict] = useState(() => readLocal('price:strict:' + hid, '') === '1');
   const setStrictPref = (v) => { setStrict(v); writeLocal('price:strict:' + hid, v ? '1' : ''); };
   // The family's area: undefined while loading, null when not chosen.
@@ -140,6 +162,12 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => { getKosherPref(hid).then((k) => setPref(k)).catch(() => setPref(null)); }, [hid]);
+  useEffect(() => { getClubs(hid).then((c) => setClubsState(new Set(c))).catch(() => {}); }, [hid]);
+  const saveClubs = async (next, toast) => {
+    const before = clubs;
+    setClubsState(next);
+    try { await setClubs(hid, [...next]); track('price_clubs'); if (toast) showToast(toast); } catch (_e) { setClubsState(before); showToast('לא נשמר. נסו שוב.'); }
+  };
 
   const names = open.map((i) => i.name);
   const search = async () => {
@@ -219,7 +247,12 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
 
   const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), nearby(catalog, !!(area && area.stores.length)), pref, { strict });
   const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty);
-  const chains = basket(choices, qtyOf);
+  const chains = basket(choices, qtyOf, new Date(), clubs);
+  // "Which clubs do you have?": each chain in the comparison, its club and its credit card.
+  const clubName = (c) => { const [k, kind] = c.split(':'); const r = chains.find((x) => x.chain === k); return (r ? r.name : k) + (kind === 'card' ? ' (אשראי)' : ''); };
+  const clubsRow = editClubs ? html`<${ClubPicker} chains=${chains} initial=${clubs} onSave=${(n) => { saveClubs(n); setEditClubs(false); }} onCancel=${() => setEditClubs(false)} />`
+    : html`<div class="price-pref pp-clubs-row"><span class="muted">מועדונים:</span><b class="price-pref-certs">${clubs.size ? [...clubs].map(clubName).join(' · ') : 'לא סימנתם'}</b>
+      <button type="button" class="btn-text pp-area-edit" onClick=${() => setEditClubs(true)}>${clubs.size ? 'לשנות' : 'לסמן'}</button></div>`;
   const priced = choices.filter((c) => c.pick).length;
   const unsure = choices.filter((c) => c.status === 'unsure').length;
   const unverified = choices.filter((c) => c.status === 'unverified').length;
@@ -252,7 +285,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
         ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
       </button>`)}</div>
     </div>` : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
-    <div class="pp-set">${prefRow}${areaRow}
+    <div class="pp-set">${prefRow}${areaRow}${clubsRow}
       <label class="pp-strict"><input type="checkbox" checked=${strict} onChange=${(e) => setStrictPref(e.currentTarget.checked)} /> רק מוצרים שהכשרות שלהם אומתה</label></div>
     ${unverified > 0 && html`<p class="pp-note-k" role="note"><${Icon} name="shield" size=${16} /><span>${unverified === 1 ? 'במוצר אחד' : 'ב' + unverified + ' מוצרים'} הכשרות עוד לא סומנה אצלנו. המחיר מחושב, ובחנות כדאי לבדוק את החותמת. סימון אחד שלכם ("מה כתוב על האריזה") עוזר לכל המשפחות.</span></p>`}
     <span class="muted price-count">יש מחיר: ${priced} מתוך ${open.length}${unsure ? ' · ' + unsure + ' מחכים לבחירה שלכם' : ''}${fresh ? ' · ' + (fresh === 1 ? 'אחד נמכר' : fresh + ' נמכרים') + ' במשקל' : ''}${looking ? ' · מחפשים עוד ' + looking + '…' : ''}</span>
@@ -268,6 +301,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
             const line = at && at.cost != null ? at.cost : one * n;
             return one === null ? html`<b class="num faint">—</b>` : html`<b class="num">${fmt(line)}</b>${line < one * n - 0.009 ? html`<s class="muted num">${fmt(one * n)}</s>` : n > 1 ? html`<small class="muted">${n} × ${fmt(one)}</small>` : ''}${where ? html`<small class="muted">${where}</small>` : ''}`; })()}</span>
         </button>
+        ${at && !at.promo && at.other && (at.other.why === 'club' || at.other.why === 'card') && html`<div class="pp-club-ask"><button type="button" class="btn-text" onClick=${() => saveClubs(new Set([...clubs, shown.chain + ':' + at.other.why]), (at.other.why === 'card' ? 'מבצעי כרטיס האשראי של ' : 'מבצעי המועדון של ') + shown.name + ' נכללים עכשיו בסכום')}>${at.other.why === 'card' ? 'יש לי את כרטיס האשראי של ' + shown.name : 'אני במועדון של ' + shown.name}: לכלול את המבצע</button></div>`}
         ${expanded && html`<div class="pp-more">
           ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל לא ידוע שהכשרות שלהם מהרשימה שלכם. בחרו מוצר, או סמנו מה כתוב על האריזה:</span>`}
           <ul class="price-opts">${c.options.map((o) => html`<li key=${o.barcode}><${Product} p=${o}>

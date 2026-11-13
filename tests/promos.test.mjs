@@ -104,3 +104,26 @@ test('the basket: a chain\'s deal counted by the policy, another only shown', as
   const one = basket([{ id: 'x', pick: crackers, pool: [crackers] }], () => 1, NOW);
   assert.equal(one[0].chain, 'b', 'for one box, the deal does not apply: chain B is cheaper');
 });
+
+test('clubs: what the file says becomes club, credit card or employees', async () => {
+  const { clubKind } = require('../server/promos.js');
+  assert.equal(clubKind('1 - המועדון החדש'), 'club');
+  assert.equal(clubKind('2 - מועדון אשראי של הקמעונאי'), 'card');
+  assert.equal(clubKind('((2=מועדון לקוחות אשראי))&amp;(3=תווי זיכוי מימוש|3=עיגול אגורות)'), 'card', 'ways of paying after "&" are not who gets it');
+  assert.equal(clubKind('((1=מועדון שיווק השקמה|1=מועדון לקוחות אשראי))&amp;(3=ישראכרט מגנטי)'), 'club', 'the club or the card: a club member gets it');
+  assert.equal(clubKind('1 - מועדון עובדים'), 'staff');
+  const file = '<Root><Promotions><Promotion><PromotionID>1</PromotionID><PromotionDescription>לעובדים</PromotionDescription><PromotionEndDateTime>2026-12-05T23:59:00</PromotionEndDateTime><ClubID>1 - מועדון עובדים</ClubID><AdditionalIsCoupon>0</AdditionalIsCoupon><PromotionItems><PromotionItem><ItemCode>7290000000011</ItemCode><MinQty>1</MinQty><DiscountedPrice>5</DiscountedPrice></PromotionItem></PromotionItems></Promotion></Promotions></Root>';
+  assert.equal(promoRows(parsePromoFile(file), REG, { now: NOW }).length, 0, 'a deal only employees get is not kept');
+});
+
+test('clubs: a club deal counts at the chains where the family is in the club', () => {
+  const club = { need: 1, unit_price: 6, everyone: false, club: 'club', coupon: false, min_buy: 0 };
+  const card = { need: 1, unit_price: 5, everyone: false, club: 'card', coupon: false, min_buy: 0 };
+  const offer = { chain: 'tiv-taam', price: 8, promos: [club, card] };
+  assert.equal(promoCost(offer, 1, NOW).cost, 8, 'no club marked');
+  assert.equal(promoCost(offer, 1, NOW).other.why, 'card', 'the best one shown, with its reason');
+  assert.equal(promoCost(offer, 1, NOW, new Set(['tiv-taam:club'])).cost, 6);
+  assert.equal(promoCost(offer, 1, NOW, new Set(['tiv-taam:club', 'tiv-taam:card'])).cost, 5);
+  assert.equal(promoCost(offer, 1, NOW, new Set(['rami-levy:club'])).cost, 8, 'a club at another chain does not count here');
+  assert.equal(blockText('card', card), 'בכרטיס האשראי של הרשת');
+});
