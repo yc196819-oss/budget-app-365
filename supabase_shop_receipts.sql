@@ -1,5 +1,4 @@
--- NOT APPLIED YET (needs the owner's approval in the database tool). Until then
--- receipts still teach "what you usually buy"; only the prices paid wait.
+-- ALREADY APPLIED (2026-11-13).
 -- Receipts a household photographed in the shopping tab: the store, the date
 -- and what was bought (name, how many, the price paid). Used to learn what
 -- this household buys and what it paid, so the list and the price comparison
