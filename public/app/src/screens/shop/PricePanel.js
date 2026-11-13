@@ -141,13 +141,18 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   useEffect(() => { document.body.classList.add('pp-on'); return () => document.body.classList.remove('pp-on'); }, []);
   // Opened: its start in view (the first question, or the total), not the
   // list the person tapped from.
-  useEffect(() => {
+  const toStart = () => {
     const el = document.querySelector('.price-panel');
     const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (el && el.scrollIntoView) el.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
-  }, []);
+  };
+  useEffect(toStart, []);
   const [pref, setPref] = useState(undefined);
   const [catalog, setCatalog] = useState(null);
+  // And again when the prices arrive: before them the page may have been too
+  // short to scroll (a wide screen).
+  const arrived = useRef(false);
+  useEffect(() => { if (catalog && !arrived.current) { arrived.current = true; toStart(); } }, [catalog]);
   const [err, setErr] = useState('');
   const [looking, setLooking] = useState(0);
   // Items not in the catalog yet, written down for the next load (families
