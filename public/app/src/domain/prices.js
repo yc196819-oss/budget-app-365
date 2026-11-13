@@ -82,16 +82,37 @@ const UNITS = [
 ];
 // The chains' files often write the unit with the base they price by:
 // "100 גרם", "1 קילוגרם", "גרם 100". The number in the unit is not the size.
-export function size(qty, unitText) {
+// And the quantity is often in grams or milliliters while the unit says
+// kilo or liter ("1000" with "1 קילוגרם" is a kilo, not a thousand kilos).
+const UNIT_TEXT = (u) => String(u || '').replace(/''/g, '"').replace(/[\d.,\s]+/g, '');
+function sizeOf(qty, unitText) {
   const q = Number(String(qty ?? '').replace(',', '.'));
-  const u = String(unitText || '').trim().replace(/[\d.,\s]+/g, '');
-  const m = UNITS.find((x) => x.re.test(u));
+  const m = UNITS.find((x) => x.re.test(UNIT_TEXT(unitText)));
   if (!m || !(q > 0)) return null;
-  const out = { unit: m.unit, qty: Math.round(q * m.mul * 1000) / 1000 };
+  // A kilo or a liter of 20 and more is grams or milliliters.
+  const mul = m.mul === 1 && m.unit !== 'unit' && q >= 20 ? 0.001 : m.mul;
+  const out = { unit: m.unit, qty: Math.round(q * mul * 1000) / 1000 };
   // "1 gram" is a product sold by weight with no size, not a gram of it.
   if (out.unit === 'kg' && out.qty < 0.005) return null;
   return out;
 }
+// The size written in the product's name, when the file has none: "300
+// גרם", "1.5 ל'", "6*40 גרם" (a pack of six), "12 יח'".
+const NAME_SIZE = /(\d+(?:[.,]\d+)?)\s*(?:[*xX×]\s*(\d+(?:[.,]\d+)?))?\s*(ק"ג|ק״ג|קג|קילו|גרם|גר'|גר|ג'|מ"ל|מ״ל|מל|ליטר|ל'|יח'|יחידות)(?![א-ת])/;
+function sizeFromName(name) {
+  const m = NAME_SIZE.exec(String(name || ''));
+  if (!m) return null;
+  const n = Number(m[1].replace(',', '.')) * (m[2] ? Number(m[2].replace(',', '.')) : 1);
+  return sizeOf(n, m[3]);
+}
+export function size(qty, unitText, name) {
+  const a = sizeOf(qty, unitText);
+  // "1 unit" in the file says nothing; the name's weight or volume does.
+  if (name && (!a || (a.unit === 'unit' && a.qty <= 1))) { const b = sizeFromName(name); if (b) return b; }
+  return a;
+}
+// A product's size: from the file, or else from its name.
+export const sizeOfProduct = (p) => (p ? size(p.qty, p.unit, p.name) : null);
 export function sizeText(s) {
   if (!s) return '';
   if (s.unit === 'l') return s.qty < 1 ? Math.round(s.qty * 1000) + ' מ"ל' : s.qty + ' ליטר';
@@ -121,7 +142,9 @@ export function score(query, product) {
     const nw = words(name);
     if (!q.every((w) => hit(w, nw))) continue;
     let s = 1;
-    if (nw[0] && (nw[0] === q[0] || nw[0].startsWith(q[0]))) s += 1;
+    // The name starts with the first typed word (also after one prefix
+    // letter, and "וופלים" for "ופלים").
+    if (nw[0] && hit(q[0], [nw[0]])) s += 1;
     s += Math.max(0, 0.5 - (nw.length - q.length) * 0.05);
     best = Math.max(best, s);
   }
@@ -130,11 +153,21 @@ export function score(query, product) {
 
 // ── a product's prices and kashrut ──
 // The cheapest price of a product at any chain, and per unit of size.
+// A chain's price that cannot be right: under 30 agorot, or under a fifth of
+// what the other chains ask for the same product (a price per 100 grams
+// written as the price of the package).
+export function validOffers(product) {
+  const all = (product.offers || []).filter((o) => o.price >= 0.3);
+  if (all.length < 3) return all;
+  const sorted = all.map((o) => o.price).sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  return all.filter((o) => o.price >= median * 0.2);
+}
 export function bestPrice(product) {
-  const offers = (product.offers || []).filter((o) => o.price > 0);
+  const offers = validOffers(product);
   if (!offers.length) return null;
   const o = offers.reduce((a, b) => (b.price < a.price ? b : a));
-  const s = size(product.qty, product.unit);
+  const s = sizeOfProduct(product);
   return { price: o.price, chain: o.chain, chainName: o.chain_name || o.chain, perUnit: s && s.unit !== 'unit' ? o.price / s.qty : o.price / ((s && s.qty) || 1) };
 }
 // The confirmed level: the owner's word if given, otherwise what most
@@ -166,7 +199,14 @@ export function allowed(product, pref) {
 // A name that says the product was made from the thing typed ("עגבניות
 // מרוסקות", "בצל מטוגן", "תה בטעם אפרסק", "עוף טוב שניצל"): not what a
 // person means by "עגבניות", "בצל", "תה" or "עוף" unless they typed it.
-const MADE = /מרוסק|חתוכ|מקולפ|במלח|בחומץ|חמוצ|מטוגן|קפוא|מצופ|בציפוי|צ['׳]?יפס|ציפס|שוקולד|במילוי|ממולא|בטעם|פקק|נאט|מיקרו|רסק|ממרח|סלט|שניצל|נקניק|פסטרמה|צונגו|קציצ|מעושן|משומר|שימורי|מיובש|פירה|רוטב|מתוק|חטיף|עוגיות|מאפה|גלידה|נגיסי|אצבעות|פרוס|מקורמל|פריכי|קרם|קוביות|מיקס|ירוק|קצוץ|קצוצ|מוקפא|מיץ|משקה|נקטר|(^|\s)מלח(\s|$)|(^|\s)חומץ(\s|$)|(^|\s)קר(\s|$)/;
+// Words that make a product a special kind of the thing typed: a person who
+// writes "קפה" or "קמח" means the ordinary one, not capsules or pizza flour.
+const SPECIAL = /קפסול|מחית|ללא גל|פיצה|כוסמין|אורגני|ללא גלוטן|גלוטן|(^|\s)GO(\s|$)|חלבון|פרוטאין|לקישוט|דיאט|לייט|זירו|ספריי|מיני(\s|$)|לתינוק|תינוקות|ללא לקטוז|קטו(\s|$)|טבעוני/i;
+export function special(name, query) {
+  const n = String(name || '').match(SPECIAL);
+  return !!n && !String(query || '').toLowerCase().includes(n[0].trim().toLowerCase());
+}
+const MADE = /סיידר|מרוסק|חתוכ|מקולפ|במלח|בחומץ|חמוצ|מטוגן|קפוא|מצופ|בציפוי|צ['׳]?יפס|ציפס|שוקולד|במילוי|ממולא|בטעם|פקק|נאט|מיקרו|רסק|ממרח|סלט|שניצל|נקניק|פסטרמה|צונגו|קציצ|מעושן|משומר|שימורי|מיובש|פירה|רוטב|מתוק|חטיף|עוגיות|מאפה|גלידה|נגיסי|אצבעות|פרוס|מקורמל|פריכי|קרם|קוביות|מיקס|ירוק|קצוץ|קצוצ|מוקפא|מיץ|משקה|נקטר|(^|\s)מלח(\s|$)|(^|\s)חומץ(\s|$)|(^|\s)קר(\s|$)/;
 export function madeFrom(name, query) {
   const n = String(name || '').match(MADE);
   return !!n && !String(query || '').includes(n[0].trim());
@@ -175,6 +215,9 @@ export function madeFrom(name, query) {
 // chain's own codes: when no plain product matches, they are left out of the
 // comparison (marked so) rather than priced as a made product.
 const FRESH = new Set(['produce', 'meat']);
+// Meat and fish asked for plainly are sold by weight too ("עוף", not "חזה עוף
+// 500 גרם" or "שניצל").
+const BY_WEIGHT = /^(עוף|עוף שלם|בשר|בשר בקר|דגים|דג|הודו)$/;
 export const isFresh = (query) => FRESH.has(aisleOf(query)) && !MADE.test(String(query || ''));
 
 // ── the automatic choice for one item on the list ──
@@ -192,8 +235,16 @@ export function choose(query, products, pref = 'any', { keep, strict = false } =
   const scored = products.map((p) => {
     const made = madeFrom(p.name, query);
     // Fruit or vegetables in liters are a drink.
-    const drink = fresh && (size(p.qty, p.unit) || {}).unit === 'l';
-    return { p, s: made || drink ? (fresh ? 0 : score(query, p) - 0.7) : score(query, p), b: bestPrice(p) };
+    const drink = fresh && (sizeOfProduct(p) || {}).unit === 'l';
+    const s0 = made || drink ? (fresh ? 0 : score(query, p) - 0.7) : score(query, p);
+    // Fruit and vegetables: what is sold by the kilo, not a small pack.
+    const sz = fresh ? sizeOfProduct(p) : null;
+    // and only what is named for it first ("תפוחים ירוקים", not "סיידר תפוחים").
+    const pack = fresh && (aisleOf(query) === 'produce' || BY_WEIGHT.test(words(query).join(' '))) && ((sz && !(sz.unit === 'kg' && sz.qty >= 0.9)) || !hit(words(query)[0], words(p.name).slice(0, 1)));
+    // (A pack of fruit or vegetables is left out: no plain one means "sold
+    // by weight", not a cake that has apples in its name.)
+    const odd = special(p.name, query);
+    return { p, s: pack || (fresh && odd) ? 0 : s0 > 0 && odd ? s0 - 0.7 : s0, b: bestPrice(p) };
   }).filter((x) => x.s > 0 && x.b);
   if (!scored.length) return { query, status: fresh && products.length ? 'fresh' : 'none', pick: null, options: [], pool: [] };
   const top = Math.max(...scored.map((x) => x.s));
@@ -202,10 +253,34 @@ export function choose(query, products, pref = 'any', { keep, strict = false } =
   // the bread every supermarket has, not a rare one that is cheap per kilo
   // (or looks cheap because its size in the file is wrong).
   const near = scored.filter((x) => x.s >= top - 0.6);
-  const sold = (x) => (x.p.offers || []).filter((o) => o.price > 0).length;
+  const sold = (x) => validOffers(x.p).length;
   const most = Math.max(...near.map(sold));
   const close = most >= 4 ? near.filter((x) => sold(x) >= most * 0.5) : near;
-  const byPrice = (a, b) => a.b.perUnit - b.b.perUnit || a.b.price - b.b.price;
+  // Per liter, kilo or unit, only between products sized the same way (eggs
+  // per egg are not compared with flour per kilo); the rest by package price,
+  // after them.
+  const unitOf = (x) => (sizeOfProduct(x.p) || {}).unit || null;
+  const tally = new Map();
+  for (const x of near) { const u = unitOf(x); if (u) tally.set(u, (tally.get(u) || 0) + 1); }
+  const main = [...tally.entries()].sort((a, b) => b[1] - a[1])[0];
+  const mainUnit = main ? main[0] : null;
+  // The usual package (the size most of the chains' products come in, a
+  // liter of milk, a kilo of rice) before a bigger or smaller one, so every
+  // chain is compared on the same thing.
+  const usualSize = (() => {
+    const w = new Map();
+    for (const x of close) { const z = sizeOfProduct(x.p); if (z && z.unit === mainUnit) { const k = Math.round(z.qty * 100) / 100; w.set(k, (w.get(k) || 0) + sold(x)); } }
+    const top = [...w.entries()].sort((a, b) => b[1] - a[1])[0];
+    return top ? top[0] : null;
+  })();
+  const usual = (x) => { const z = sizeOfProduct(x.p); if (!z || z.unit !== mainUnit || !usualSize) return false; const r = z.qty / usualSize; return r >= 0.8 && r <= 1.25; };
+  const byPrice = (a, b) => {
+    const au = usual(a), bu = usual(b);
+    if (au !== bu) return au ? -1 : 1;
+    const am = unitOf(a) === mainUnit, bm = unitOf(b) === mainUnit;
+    if (am !== bm) return am ? -1 : 1;
+    return am ? a.b.perUnit - b.b.perUnit || a.b.price - b.b.price : a.b.price - b.b.price;
+  };
   const ok = close.filter((x) => allowed(x.p, pref)).sort(byPrice);
   const rest = near.filter((x) => !ok.includes(x));
   const options = [...ok, ...rest.filter((x) => allowed(x.p, pref)).sort(byPrice), ...rest.filter((x) => !allowed(x.p, pref)).sort(byPrice)].slice(0, 8).map((x) => x.p);
@@ -247,13 +322,13 @@ export function nearby(catalog, on) {
 // not a 200 ml one). Products with no size stand only for each other. The
 // price is counted for the picked size, so a bigger package is not "dearer".
 export function equivalent(pick, other) {
-  const a = size(pick.qty, pick.unit), b = size(other.qty, other.unit);
+  const a = sizeOfProduct(pick), b = sizeOfProduct(other);
   if (!a && !b) return 1;
   if (!a || !b || a.unit !== b.unit) return 0;
   const r = a.qty / b.qty;
   return r >= 0.8 && r <= 1.25 ? r : 0;
 }
-const offerAt = (p, chain) => (p.offers || []).find((o) => o.chain === chain && o.price > 0);
+const offerAt = (p, chain) => validOffers(p).find((o) => o.chain === chain);
 
 // What the list costs at each chain, cheapest chain first. At a chain that
 // does not sell the exact product picked, the cheapest equivalent product it
@@ -264,7 +339,7 @@ export function basket(choices, qtyOf = () => 1) {
   const picks = choices.filter((c) => c.pick);
   const chains = new Map();
   const stores = new Map();
-  for (const c of picks) for (const p of [c.pick, ...(c.pool || [])]) for (const o of p.offers || []) {
+  for (const c of picks) for (const p of [c.pick, ...(c.pool || [])]) for (const o of validOffers(p)) {
     if (o.price > 0 && !chains.has(o.chain)) chains.set(o.chain, o.chain_name || o.chain);
     if (o.store && !stores.has(o.chain)) stores.set(o.chain, o.store);
   }

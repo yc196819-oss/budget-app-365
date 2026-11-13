@@ -236,11 +236,14 @@ test('prices: the household picks the certifiers it relies on once, then every i
   await page.waitForSelector('.pp-hero:has-text("₪48.30")');
   assert.match(await page.locator('.pp-hero').textContent(), /₪48\.30ברשת א.*הכי משתלם/);
   assert.match(await page.locator('.pp-bar').first().textContent(), /רשת א₪48\.30/);
-  assert.match(await milk.textContent(), /₪6\.20/, 'the price at the chain shown');
+  assert.match(await milk.textContent(), /₪12\.40.*2 × ₪6\.20/, 'two cartons: the line\'s total, and the price of one');
   // Another chain: its own total and what it has not got.
   await page.locator('.pp-bar', { hasText: 'רשת ב' }).click();
   assert.match(await page.locator('.pp-hero').textContent(), /ברשת ב/);
   assert.match(await page.locator('.price-item', { hasText: 'קפה' }).textContent(), /אין ברשת ב/);
+  // The total of a chain that has not got everything says so, and what.
+  assert.match(await page.locator('.pp-hero .pp-missing').textContent(), /בלי מוצר אחד שאין ברשת ב: קפה/);
+  assert.match(await page.locator('.pp-bar', { hasText: 'רשת ב' }).textContent(), /בלי מוצר אחד/);
   await page.close();
   assert.deepEqual(errors, []);
 });

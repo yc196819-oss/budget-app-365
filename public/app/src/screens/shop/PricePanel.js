@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeText, count } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces } from '../../data/prices.js';
@@ -61,7 +61,7 @@ function Photo({ p, name }) {
 
 function Product({ p, children }) {
   const b = bestPrice(p);
-  const sz = sizeText(size(p.qty, p.unit));
+  const sz = sizeText(sizeOfProduct(p));
   return html`<div class="price-prod"><${Photo} p=${p} />
     <span class="price-prod-t"><b>${p.name}</b><small class="muted">${[p.maker, sz].filter(Boolean).join(' · ')}</small><${Kosher} p=${p} /></span>
     ${b && html`<span class="price-prod-p"><b class="num">${fmt(b.price)}</b><small class="muted">${b.chainName}</small></span>`}
@@ -222,6 +222,9 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   const top = chains.slice(0, 5);
   const most = top.length ? Math.max(...top.map((c) => c.total)) : 0;
   const lineAt = (c) => shown && shown.lines.find((l) => l.id === c.id);
+  // When most of the list is not verified yet, the note above says it once
+  // instead of a tag on every line.
+  const quietK = unverified > choices.length / 2;
   const STATE = { auto: 'נבחר לבד', chosen: 'בחרתם', unverified: 'כשרות לא אומתה', unsure: 'בחרו מוצר', fresh: 'במשקל: לא בהשוואה' };
   return html`<section class="card stack price-panel">
     ${head}
@@ -231,12 +234,13 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
       <span class="pp-at">ב${shown.name}${shown.store ? html` <small>· ${shown.store}</small>` : ''}${shown === best ? html` <em class="pp-best">הכי משתלם</em>` : ''}</span>
       ${chainNote(shown.chain) && html`<span class="pp-weekly"><${Icon} name="calendar" size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
       ${shown === best && bestAlways(chains) && html`<button type="button" class="pp-always" onClick=${() => setChainSel(bestAlways(chains).chain)}>בחנות שפתוחה כל יום: הכי משתלם ב${bestAlways(chains).name}, <b class="num">${fmt(bestAlways(chains).total)}</b></button>`}
+      ${shown.missing > 0 && html`<span class="pp-missing">בלי ${shown.missing === 1 ? 'מוצר אחד שאין' : shown.missing + ' מוצרים שאין'} ב${shown.name}: ${shown.lines.filter((l) => !l.product).map((l) => (open.find((i) => i.id === l.id) || {}).name).filter(Boolean).slice(0, 4).join(', ')}${shown.missing > 4 ? ' ועוד' : ''}</span>`}
       ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת הרשת היקרה ביותר בהשוואה</span>`}
       <div class="pp-bars" role="list" aria-label="הסל בכל רשת">${top.map((c) => html`<button type="button" role="listitem" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
         <span class="pp-bar-n">${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span>
         <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i></span>
         <span class="pp-bar-v num">${fmt(c.total)}</span>
-        ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'חסרים ' + c.missing : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
+        ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
       </button>`)}</div>
     </div>` : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
     <div class="pp-set">${prefRow}${areaRow}
@@ -248,9 +252,10 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
         <button type="button" class="pp-row-h" aria-expanded=${expanded} onClick=${() => setOpenId(expanded ? 'x:' + c.id : c.id)} disabled=${!c.options.length}>
           <${Photo} p=${p} name=${item.name} />
           <span class="pp-row-t"><b>${item.name}${item.qty ? html` <small class="shop-qty">${item.qty}</small>` : ''}</b>
-            <small class="muted">${p ? p.name + (sizeText(size(p.qty, p.unit)) ? ' · ' + sizeText(size(p.qty, p.unit)) : '') : c.status === 'fresh' ? 'פירות, ירקות ובשר נמכרים במשקל, במחיר של הסניף' : looking ? 'מחפשים…' : queued ? 'עוד לא בקטלוג: נוסיף בקרוב' : c.status === 'unsure' ? 'יש מוצרים, אבל לא בכשרות שבחרתם' : 'לא נמצא מחיר'}</small>
-            <span class="pp-tags">${p && !nonFood(p) && certOf(p) && html`<span class=${'pp-tag t-cert' + (MINE.includes(certOf(p).cert) ? ' fits' : '')}>${certOf(p).cert}</span>`}${c.status !== 'auto' ? html`<span class=${'pp-tag t-' + c.status}>${STATE[c.status] || 'אין מחיר'}</span>` : ''}${at && at.swap && html`<span class="pp-tag t-swap">מוצר דומה ב${shown.name}</span>`}${at && !at.product && c.pick && html`<span class="pp-tag t-miss">אין ב${shown.name}</span>`}${paid && html`<span class="pp-tag t-paid">שילמתם ${fmt(paid.price)}${paid.store ? ' ב' + paid.store : ''}</span>`}</span></span>
-          <span class="pp-row-p">${at && at.price ? html`<b class="num">${fmt(at.price)}</b>` : c.pick && bestPrice(c.pick) ? html`<b class="num">${fmt(bestPrice(c.pick).price)}</b><small class="muted">${bestPrice(c.pick).chainName}</small>` : html`<b class="faint">—</b>`}</span>
+            <small class="muted">${p ? p.name + (sizeText(sizeOfProduct(p)) ? ' · ' + sizeText(sizeOfProduct(p)) : '') : c.status === 'fresh' ? 'פירות, ירקות ובשר נמכרים במשקל, במחיר של הסניף' : looking ? 'מחפשים…' : queued ? 'עוד לא בקטלוג: נוסיף בקרוב' : c.status === 'unsure' ? 'יש מוצרים, אבל לא בכשרות שבחרתם' : 'לא נמצא מחיר'}</small>
+            <span class="pp-tags">${p && !nonFood(p) && certOf(p) && html`<span class=${'pp-tag t-cert' + (MINE.includes(certOf(p).cert) ? ' fits' : '')}>${certOf(p).cert}</span>`}${c.status !== 'auto' && !(c.status === 'unverified' && quietK) ? html`<span class=${'pp-tag t-' + c.status}>${STATE[c.status] || 'אין מחיר'}</span>` : ''}${at && at.swap && html`<span class="pp-tag t-swap">מוצר דומה ב${shown.name}</span>`}${at && !at.product && c.pick && html`<span class="pp-tag t-miss">אין ב${shown.name}</span>`}${paid && html`<span class="pp-tag t-paid">שילמתם ${fmt(paid.price)}${paid.store ? ' ב' + paid.store : ''}</span>`}</span></span>
+          <span class="pp-row-p">${(() => { const n = qtyOf(c); const one = at && at.price ? at.price : c.pick && bestPrice(c.pick) ? bestPrice(c.pick).price : null; const where = !(at && at.price) && c.pick && bestPrice(c.pick) ? bestPrice(c.pick).chainName : '';
+            return one === null ? html`<b class="faint">—</b>` : html`<b class="num">${fmt(one * n)}</b>${n > 1 ? html`<small class="muted">${n} × ${fmt(one)}</small>` : ''}${where ? html`<small class="muted">${where}</small>` : ''}`; })()}</span>
         </button>
         ${expanded && html`<div class="pp-more">
           ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל לא ידוע שהכשרות שלהם מהרשימה שלכם. בחרו מוצר, או סמנו מה כתוב על האריזה:</span>`}

@@ -1720,3 +1720,4 @@ body.chat-open { overflow: hidden; }
 .demo-acts .btn { width: auto; padding-inline: 16px; gap: 8px; }
 .demo-bar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; padding-top: calc(8px + env(safe-area-inset-top, 0px)); font-size: 14px; font-weight: 700; color: #2a1d14; background: var(--fx-gold); }
 .demo-bar button { background: #2a1d14; color: #FBF4EA; border: 0; border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.pp-missing { font-size: 13px; line-height: 1.5; color: #F6C3B5; margin-top: 2px; }
