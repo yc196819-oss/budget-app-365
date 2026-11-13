@@ -221,7 +221,9 @@ test('chains on their own sites: each list is read, the fullest branch taken, an
   const stores = zlib.gzipSync('<Root><Stores><Store><StoreID>97</StoreID><StoreName>סניף בדוי</StoreName><Address>רחוב בדוי 1</Address><City>עיר בדויה</City></Store></Stores></Root>');
   const ok = (b) => ({ ok: true, status: 200, arrayBuffer: async () => Buffer.from(b) });
   const no = { ok: false, status: 404, arrayBuffer: async () => Buffer.from('') };
-  for (const c of OWN) assert.ok(CHAINS.some((x) => x.key === c.key), c.key + ' is loaded (no password)');
+  // Set aside for now (they do not answer a server outside Israel): not in the night's load.
+  for (const c of OWN) assert.equal(CHAINS.some((x) => x.key === c.key), !c.paused, c.key);
+  assert.ok(OWN.every((c) => c.paused), 'all five are set aside for now');
   const by = (key) => OWN.find((c) => c.key === key);
 
   // Victory (and Mahsanei HaShuk): one JSON list of all files.
