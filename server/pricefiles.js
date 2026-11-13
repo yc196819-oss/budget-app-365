@@ -40,12 +40,15 @@ const BINA = [
 // Chains on a site of their own (no login). Each lists its files its own
 // way; list(fetchFn, kind) gives [{ name, url, size }] for 'PriceFull' or
 // 'Stores', the newest first where the site says so.
+// Set aside for now (paused): these sites do not answer our server, most
+// likely because they serve addresses in Israel only. Kept here to load
+// them again from a server in Israel later.
 const OWN = [
-  { key: 'victory', name: 'ויקטורי', site: 'laib', id: '7290696200003' },
-  { key: 'machsanei-hashuk', name: 'מחסני השוק', site: 'laib', id: '7290661400001' },
-  { key: 'hazi-hinam', name: 'חצי חינם', site: 'hazi', id: '7290700100008' },
-  { key: 'carrefour', name: 'קרפור', site: 'carrefour', id: '7290055700007' },
-  { key: 'super-pharm', name: 'סופר-פארם', site: 'superpharm', id: '7290172900007' }
+  { key: 'victory', name: 'ויקטורי', site: 'laib', id: '7290696200003', paused: true },
+  { key: 'machsanei-hashuk', name: 'מחסני השוק', site: 'laib', id: '7290661400001', paused: true },
+  { key: 'hazi-hinam', name: 'חצי חינם', site: 'hazi', id: '7290700100008', paused: true },
+  { key: 'carrefour', name: 'קרפור', site: 'carrefour', id: '7290055700007', paused: true },
+  { key: 'super-pharm', name: 'סופר-פארם', site: 'superpharm', id: '7290172900007', paused: true }
 ];
 const CERB = 'https://url.publishedprices.co.il';
 const SHUF = 'https://prices.shufersal.co.il';
@@ -307,7 +310,7 @@ async function own(fetchFn, chain) {
 
 // Every chain we can reach, in order: its rows, or why not (one failing
 // chain never stops the others).
-const ready = (c) => !c.passEnv || !!process.env[c.passEnv];
+const ready = (c) => (!c.passEnv || !!process.env[c.passEnv]) && !c.paused;
 const CHAINS = [{ key: 'shufersal', name: 'שופרסל' }, ...CERBERUS, ...BINA, ...OWN].filter(ready);
 async function allChains(fetchFn, { only = null } = {}) {
   const jobs = [{ key: 'shufersal', name: 'שופרסל', run: () => shufersal(fetchFn) }, ...CERBERUS.filter(ready).map((c) => ({ ...c, run: () => cerberus(fetchFn, c) })), ...BINA.map((c) => ({ ...c, run: () => bina(fetchFn, c) })), ...OWN.map((c) => ({ ...c, run: () => own(fetchFn, c) }))]
