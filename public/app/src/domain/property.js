@@ -5,7 +5,16 @@
 
 const r2 = (n) => Math.round(n * 100) / 100;
 // A number, or null when nothing is written (an empty field is not 0).
-const num = (v) => { const t = String(v == null ? '' : v).replace(/[,₪%\s]/g, ''); if (!t) return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
+// "1.65 מיליון" and "800 אלף" (or "800K") as people write them.
+const num = (v) => {
+  let t = String(v == null ? '' : v).replace(/[,₪%\s]/g, '');
+  if (!t) return null;
+  let mult = 1;
+  const word = /(מיליון|מליון|מ'|m)$|(אלף|אלפים|k)$/i.exec(t);
+  if (word) { mult = word[1] ? 1e6 : 1e3; t = t.slice(0, word.index); }
+  const n = Number(t);
+  return Number.isFinite(n) && t !== '' ? n * mult : null;
+};
 
 // ── the mortgage (a "Spitzer" loan: the same payment every month) ──
 
@@ -65,6 +74,8 @@ export function prepay(balance, yearlyRatePct, payment, sum) {
   const lower = { payment: lowerPayment, interest: interestLeft(left, yearlyRatePct, lowerPayment) };
   return {
     sum: r2(s),
+    // The whole balance: the mortgage is closed.
+    closes: s >= b - 0.5,
     shorter: { ...shorter, monthsSaved: Number.isFinite(before.months) ? before.months - shorter.months : null, interestSaved: r2(before.interest - shorter.interest) },
     lower: { ...lower, paymentDrop: r2((num(payment) || 0) - lowerPayment), interestSaved: r2(before.interest - lower.interest) }
   };
@@ -74,14 +85,16 @@ export function prepay(balance, yearlyRatePct, payment, sum) {
 export function mortgageView(m, today = new Date()) {
   if (!m || !(num(m.balance) > 0)) return null;
   const rate = num(m.rate) || 0;
+  // Without the rate, no end date or interest can be told (0% would be a nice lie).
+  const noRate = !(rate > 0);
   const payment = num(m.payment) || (num(m.months) ? monthlyPayment(m.balance, rate, m.months) : 0);
   const months = monthsLeft(m.balance, rate, payment);
   return {
-    balance: r2(num(m.balance)), rate, payment: r2(payment), months,
-    ends: endDate(months, today), split: split(m.balance, rate, payment),
-    interestLeft: interestLeft(m.balance, rate, payment),
+    balance: r2(num(m.balance)), rate, payment: r2(payment), months: noRate ? null : months, noRate,
+    ends: noRate ? null : endDate(months, today), split: split(m.balance, rate, payment),
+    interestLeft: noRate ? null : interestLeft(m.balance, rate, payment),
     // A payment that does not cover the interest: the balance grows.
-    growing: !Number.isFinite(months)
+    growing: !noRate && !Number.isFinite(months)
   };
 }
 
@@ -154,7 +167,9 @@ export function cleanProperty(input) {
   const costs = {};
   for (const c of COSTS) { const v = n(input && input.costs && input.costs[c.key]); if (v) costs[c.key] = v; }
   const mm = (input && input.mortgage) || {};
-  const rate = num(mm.rate);
+  let rate = num(mm.rate);
+  // "0.045" is 4.5% written as a fraction (no mortgage is at 0.05%).
+  if (rate > 0 && rate < 0.2) rate = Math.round(rate * 10000) / 100;
   const mortgage = n(mm.balance) ? { balance: n(mm.balance), rate: rate != null && rate >= 0 && rate < 30 ? rate : null, payment: n(mm.payment), months: n(mm.months) } : null;
   return {
     name: String((input && input.name) || '').trim().slice(0, 60) || 'הדירה',

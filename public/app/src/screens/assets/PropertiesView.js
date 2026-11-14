@@ -6,10 +6,11 @@ import { Loading } from '../../components/Loading.js';
 
 const signed = (v) => (v < 0 ? '−' : '') + money(Math.abs(v));
 const monthYear = (ym) => (ym ? ym.slice(5, 7) + '/' + ym.slice(0, 4) : '');
+const monthsWord = (m) => (m === 1 ? 'חודש' : m === 2 ? 'חודשיים' : m + ' חודשים');
 const yearsText = (months) => {
   const y = Math.floor(months / 12), m = months % 12;
-  if (!y) return m + ' חודשים';
-  return (y === 1 ? 'שנה' : y === 2 ? 'שנתיים' : y + ' שנים') + (m ? ' ו-' + m + ' חודשים' : '');
+  if (!y) return monthsWord(m);
+  return (y === 1 ? 'שנה' : y === 2 ? 'שנתיים' : y + ' שנים') + (m ? ' ו' + monthsWord(m) : '');
 };
 const pct = (v) => (v == null ? '—' : v.toFixed(1) + '%');
 
@@ -54,7 +55,7 @@ function PropertyCard({ p, today, txs, accounts, onEdit }) {
     </div>
     <div class="prop-boxes">
       <div><small>שווי</small><b class="num">${v.value ? money(v.value) : '—'}</b></div>
-      <div><small>${m ? 'שלכם (בלי המשכנתא)' : 'שלכם'}</small><b class="num">${v.value ? money(v.equity) : '—'}</b></div>
+      <div><small>${m ? 'שלכם (בלי המשכנתא)' : 'שלכם'}</small><b class="num" style=${v.equity < 0 ? 'color:var(--danger)' : ''}>${v.value ? signed(v.equity) : '—'}</b></div>
     </div>
 
     ${flows && html`<span class="muted prop-from" style="font-size:13px">${flows.months
@@ -94,19 +95,23 @@ function MortgageBlock({ m }) {
     <dl class="prop-lines">
       <div><dt>נשאר לשלם</dt><dd class="num">${money(m.balance)}</dd></div>
       <div><dt>ריבית</dt><dd class="num">${m.rate ? m.rate + '%' : '—'}</dd></div>
-      ${!m.growing && html`<div><dt>נגמרת</dt><dd class="num">${monthYear(m.ends)} (עוד ${yearsText(m.months)})</dd></div>
+      ${!m.growing && !m.noRate && html`<div><dt>נגמרת</dt><dd class="num">${monthYear(m.ends)} (עוד ${yearsText(m.months)})</dd></div>
         <div><dt>ריבית שעוד תשולם</dt><dd class="num">${money(m.interestLeft)}</dd></div>`}
     </dl>
-    ${m.growing
+    ${m.noRate
+      ? html`<div class="prop-note" role="note">חסרה הריבית. בלי הריבית אי אפשר לדעת מתי המשכנתא נגמרת וכמה ריבית עוד תשולם. היא כתובה בדוח השנתי מהבנק (אם יש כמה מסלולים, אפשר לכתוב ממוצע).</div>`
+      : m.growing
       ? html`<div class="prop-note" role="alert">ההחזר (${money(m.payment)}) לא מכסה אפילו את הריבית (${money(m.split.interest)} בחודש), אז החוב גדל. כדאי לבדוק את המספרים מול הבנק.</div>`
       : html`<div class="stack" style="gap:4px">
           <span class="muted" style="font-size:13px">מההחזר החודשי: ${money(m.split.interest)} ריבית, ${money(m.split.principal)} מקטינים את החוב</span>
           <span class="bar prop-split" role="img" aria-label=${share + '% מההחזר הולכים לריבית'}><span style=${'width:' + share + '%'}></span></span>
         </div>`}
-    ${!m.growing && html`<details class="prop-prepay" open=${open} onToggle=${(e) => setOpen(e.currentTarget.open)}>
+    ${!m.growing && !m.noRate && html`<details class="prop-prepay" open=${open} onToggle=${(e) => setOpen(e.currentTarget.open)}>
       <summary>מה אם נחזיר סכום עכשיו?</summary>
       <label class="field"><span>סכום להחזיר (₪)</span><input class="input num" inputmode="decimal" value=${sum} onInput=${(e) => setSum(e.target.value)} placeholder="למשל: 100,000" /></label>
-      ${what && html`<div class="prop-options" aria-live="polite">
+      ${what && what.closes && html`<div class="prop-options" aria-live="polite"><div class="card"><b>המשכנתא נסגרת כולה</b><span>אין יותר החזר של ${money(m.payment)} בחודש</span><span>חוסכים בערך <b class="num">${money(what.shorter.interestSaved)}</b> ריבית</span></div>
+        <span class="faint" style="font-size:12px">הבנק עשוי לגבות עמלת פירעון מוקדם. כדאי לבקש ממנו את הסכום המדויק לפני.</span></div>`}
+      ${what && !what.closes && html`<div class="prop-options" aria-live="polite">
         <div class="card"><b>לקצר את התקופה</b><span>אותו החזר, נגמרת ${what.shorter.monthsSaved > 0 ? yearsText(what.shorter.monthsSaved) + ' מוקדם יותר' : 'כמעט באותו זמן'}</span><span>חוסכים בערך <b class="num">${money(what.shorter.interestSaved)}</b> ריבית</span></div>
         <div class="card"><b>להקטין את ההחזר</b><span>אותו סוף, ההחזר יורד ב-<b class="num">${money(what.lower.paymentDrop)}</b> בחודש</span><span>חוסכים בערך <b class="num">${money(what.lower.interestSaved)}</b> ריבית</span></div>
         <span class="faint" style="font-size:12px">הבנק עשוי לגבות עמלת פירעון מוקדם. כדאי לבקש ממנו את הסכום המדויק לפני.</span>

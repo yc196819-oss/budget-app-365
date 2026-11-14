@@ -149,3 +149,23 @@ test('an apartment run through its own account: the rent and costs from there, t
   assert.equal(accountFlows(tx, null), null);
   assert.equal(accountFlows([], 'apt', { today: TODAY }).months, 0);
 });
+
+test('round 1: what people really type, and the edges', () => {
+  // Without the rate: no made-up end date or "₪0 interest".
+  const nr = mortgageView({ balance: 500000, payment: 3000 }, TODAY);
+  assert.equal(nr.noRate, true);
+  assert.equal(nr.ends, null);
+  assert.equal(nr.interestLeft, null);
+  assert.equal(nr.growing, false);
+  // A mortgage bigger than the apartment: what is theirs is below zero.
+  assert.equal(propertyView({ value: 900000, mortgage: { balance: 1000000, rate: 5, payment: 6000 } }, TODAY).equity, -100000);
+  // "1.65 מיליון", "5 אלף", "800K", and a rate written as a fraction.
+  const p = cleanProperty({ value: '1.65 מיליון', rent: '5 אלף', mortgage: { balance: '800K', rate: '0.045', payment: '4,500' } });
+  assert.equal(p.value, 1650000);
+  assert.equal(p.rent, 5000);
+  assert.deepEqual(p.mortgage, { balance: 800000, rate: 4.5, payment: 4500, months: null });
+  assert.equal(cleanProperty({ mortgage: { balance: 1, rate: '4.6' } }).mortgage.rate, 4.6, 'a usual rate is kept as is');
+  // Paying back all of it closes the mortgage.
+  assert.equal(prepay(100000, 5, 2000, 200000).closes, true);
+  assert.equal(prepay(100000, 5, 2000, 50000).closes, false);
+});
