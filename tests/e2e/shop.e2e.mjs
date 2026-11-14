@@ -706,3 +706,22 @@ test('online and in the shop are two prices: the chain online is compared on its
   await page.close();
   assert.deepEqual(errors, []);
 });
+
+test('no shop near the family but chains online: only those, and it says why', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+    d.tables.household_area = [{ household_id: d.hid, city_code: '2610', city: 'בית שמש', hood: null, max_km: 10 }];
+    d.tables.household_stores = [];
+  }, OWNER);
+  await page.route('**/rest/v1/rpc/price_search', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ q: 1, barcode: '1001', name: 'חלב 3% בשקית', names: '', qty: 1, unit: 'ליטר', kosher: {},
+    offers: [{ chain: 'x-online', chain_name: 'רשת א אונליין', price: 5.4 }, { chain: 'x', chain_name: 'רשת א', price: 6.2 }] }]) }));
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+  await page.click('.shop-prices-cta button');
+  const hero = page.locator('.pp-hero');
+  await hero.waitFor();
+  assert.match(await hero.textContent(), /אין חנות של אף רשת עד 10 ק"מ מבית שמש, ולכן מוצגות רק רשתות אונליין/);
+  assert.equal(await page.locator('.pp-bar').count(), 1, 'the far shop is not compared');
+  await page.close();
+  assert.deepEqual(errors, []);
+});
