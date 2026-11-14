@@ -391,7 +391,8 @@ export function searchTerm(name) {
   // (Without emoji, bullets or numbering an older line may still carry.)
   const n = String(name || '').replace(/\p{Extended_Pictographic}|[\u2600-\u27BF\uFE0F\u200d]/gu, ' ').replace(/^\s*(?:[-–—•*·▪◦●○■□☐✓→>]+\s*|\d{1,2}\s*[.)]\s+)/, '').replace(/[,;.]+\s*$/, '').trim().replace(/\s+/g, ' ');
   for (const [re, to] of AS_SOLD) if (re.test(n)) return to;
-  return n;
+  // "חד פעמיות" as the chains write it: "חד פעמי", "חד"פ" (both start "חד").
+  return n.replace(/(^|\s)חד[\s-]*פעמי(?:ות|ים|ת)?(?=\s|$)/g, '$1חד').replace(/(^|\s)ח["״]פ(?=\s|$)/g, '$1חד');
 }
 
 // A looser search when the item as written finds nothing: without what a

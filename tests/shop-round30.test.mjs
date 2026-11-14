@@ -20,3 +20,11 @@ test('round 30: what found nothing is searched again, looser', () => {
   assert.equal(looser('חלב'), null, 'nothing to loosen');
   assert.equal(looser('חומוס צבר'), null, 'two words are kept');
 });
+
+test('round 31: disposables as the chains write them', async () => {
+  const { searchTerm } = await import('../public/app/src/domain/prices.js');
+  assert.equal(searchTerm('כוסות חד פעמיות'), 'כוסות חד');
+  assert.equal(searchTerm('צלחות חד-פעמיות'), 'צלחות חד');
+  assert.equal(searchTerm('מגשים ח"פ'), 'מגשים חד');
+  assert.equal(searchTerm('חלב'), 'חלב');
+});
