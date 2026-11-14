@@ -2096,7 +2096,8 @@ async function runFreeLoad() {
       for (const key of again) {
         seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
         const [r] = await pricefiles.allChains(priceFetch, { only: [key] });
-        if (r.error || !r.rows.length) continue;
+        // Failed again: said so, so the morning check knows it was tried.
+        if (r.error || !r.rows.length) { const at = seedJob.chainsDone.findIndex((c) => c.key === key); if (at >= 0) seedJob.chainsDone[at] = { ...seedJob.chainsDone[at], retried: true, error: (r.error || 'no rows') + ' (גם בניסיון הנוסף)' }; continue; }
         let error = null;
         await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
         const deals = error ? null : await savePromos(r.key, r.storeId, r.rows).catch(() => null);

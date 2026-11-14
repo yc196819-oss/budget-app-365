@@ -149,8 +149,13 @@ async function cerberus(fetchFn, chain) {
   const dir = await call('/file/json/dir', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form({ sEcho: '1', iColumns: '5', iDisplayStart: '0', iDisplayLength: '100000', sSearch: 'PriceFull', cd: chain.dir || '/', csrftoken: t2 }) });
   const list = ((await dir.json().catch(() => ({}))).aaData || []).filter((f) => /^PriceFull/i.test(f.fname || ''));
   if (!list.length) throw new Error('no files');
-  const day = list.map((f) => String(f.time || '').slice(0, 10)).sort().pop();
-  const best = list.filter((f) => String(f.time || '').slice(0, 10) === day).sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+  // The biggest branch of the last day and a half: at night only a few
+  // branches have today's file yet, and the biggest of those may be a small
+  // one (Rami Levy loaded 5,300 products instead of 14,000).
+  const at = (f) => Date.parse(String(f.time || '').replace(' ', 'T')) || 0;
+  const newest = Math.max(...list.map(at));
+  const recent = list.filter((f) => at(f) >= newest - 36 * 3600000);
+  const best = (recent.length ? recent : list).sort((a, b) => (b.size || 0) - (a.size || 0))[0];
   const r = await call('/file/d' + (chain.dir || '') + '/' + encodeURIComponent(best.fname));
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return withStore(parsePriceFile(gunzip(Buffer.from(await r.arrayBuffer())), chain), best.fname);
