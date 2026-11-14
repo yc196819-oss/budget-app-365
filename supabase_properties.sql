@@ -1,7 +1,7 @@
 -- Apartments and their mortgages: an apartment the family owns besides its
 -- home (or its home too), what it brings in and costs, and the mortgage on
 -- it. The household's own rows only (my_households()), like the rest of the
--- data. Safe to run again.
+-- data. Applied 2026-11-14. Safe to run again.
 
 create table if not exists public.properties (
   id uuid primary key default gen_random_uuid(),

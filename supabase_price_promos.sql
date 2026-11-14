@@ -3,7 +3,7 @@
 -- prices are the chain's general prices; a family's nearby branch has its
 -- own number. Filled by the server every night; read only through
 -- price_search (security definer), so the table has no policies.
--- NOT APPLIED YET. Safe to run again.
+-- Applied 2026-11-14 (price_search since replaced by supabase_price_search_fast.sql). Safe to run again.
 
 create table if not exists public.price_promos (
   chain text not null,
