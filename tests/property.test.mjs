@@ -169,3 +169,14 @@ test('round 1: what people really type, and the edges', () => {
   assert.equal(prepay(100000, 5, 2000, 200000).closes, true);
   assert.equal(prepay(100000, 5, 2000, 50000).closes, false);
 });
+
+test('round 2: rent is found among the lines a real account has, not benefits or interest', () => {
+  const tx = [];
+  const add = (d, a, m) => tx.push({ type: 'income', amount: a, description: d, tx_date: m + '-05' });
+  for (const m of ['2026-08', '2026-09', '2026-10']) {
+    add('העברה מ-כהן משה 4471', 5200, m); add('קצבת ילדים', 1100, m); add('פנסיה מקפת', 3200, m);
+    add('דמי אבטלה', 4000, m); add('הפקדת שיק', 3500, m); add('ריבית זכות', 1500, m); add('מענק עבודה', 1200, m);
+    add('שכר דירה לוי', 3900, m);
+  }
+  assert.deepEqual(rentCandidates(tx).map((x) => x.who), ['שכר דירה לוי', 'העברה מ-כהן משה', 'הפקדת שיק']);
+});

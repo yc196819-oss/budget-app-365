@@ -144,7 +144,8 @@ export function rentCandidates(transactions, { months = 4, minAmount = 1000 } = 
   for (const t of transactions || []) {
     if (t.type !== 'income' || !(num(t.amount) >= minAmount)) continue;
     const who = String(t.description || '').replace(/\d+/g, '').replace(/\s+/g, ' ').trim();
-    if (!who || /משכורת|שכר עבודה|ביטוח לאומי|קצבה|החזר מס|העברה מחשבון/.test(who)) continue;
+    // Not rent: salary, benefits and allowances, a pension, interest, refunds.
+    if (!who || /משכורת|שכר עבודה|ביטוח לאומי|ב\.?ל\.?א|קצב|גמלה|גימלה|אבטלה|הבטחת הכנסה|מענק|פנסי|ריבית|דיבידנד|החזר|העברה מחשבון|מילואים|דמי לידה/.test(who)) continue;
     const g = groups.get(who) || { who, months: new Set(), amounts: [] };
     g.months.add(String(t.tx_date).slice(0, 7));
     g.amounts.push(num(t.amount));
@@ -158,7 +159,9 @@ export function rentCandidates(transactions, { months = 4, minAmount = 1000 } = 
     if (sorted.some((a) => Math.abs(a - mid) > mid * 0.15)) continue;
     out.push({ who: g.who, amount: r2(mid), months: g.months.size });
   }
-  return out.sort((a, b) => b.months - a.months || b.amount - a.amount);
+  // Said to be rent ("שכר דירה", "שכירות") first, then a person's transfer, then the rest (a check, Bit).
+  const rank = (x) => (/שכר דירה|שכ"ד|שכירות|דירה/.test(x.who) ? 0 : /שיק|צ'ק|bit|ביט|פייבוקס|paybox|מזומן/i.test(x.who) ? 2 : 1);
+  return out.sort((a, b) => rank(a) - rank(b) || b.months - a.months || b.amount - a.amount);
 }
 
 // What a family typed, made safe to keep: numbers as numbers, nothing else.
