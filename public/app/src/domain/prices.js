@@ -577,10 +577,15 @@ export function bestAlways(rows) {
 // What the cheapest chain saves against the dearest of the chains that have
 // everything (or the same number missing): the saving in shekels, 0 when
 // there is nothing to compare.
+// Against the middle of the chains with as much of the list (not the dearest:
+// a fuel station shop or a dear online shop would make it look bigger than
+// what a family really saves by choosing).
 export function saving(rows) {
   const full = rows.filter((r) => r.missing === (rows[0] ? rows[0].missing : 0));
-  if (full.length < 2) return 0;
-  return Math.round((full[full.length - 1].total - full[0].total) * 100) / 100;
+  if (full.length < 3) return full.length === 2 ? Math.round((full[1].total - full[0].total) * 100) / 100 : 0;
+  const totals = full.map((r) => r.total).sort((a, b) => a - b);
+  const mid = totals.length % 2 ? totals[(totals.length - 1) / 2] : (totals[totals.length / 2 - 1] + totals[totals.length / 2]) / 2;
+  return Math.max(0, Math.round((mid - full[0].total) * 100) / 100);
 }
 
 // How many packages a list line asks for: "×2" → 2, "3 יח'" or "2 חבילות"
