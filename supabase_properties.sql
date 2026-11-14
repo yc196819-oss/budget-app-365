@@ -19,8 +19,11 @@ create table if not exists public.properties (
   mortgage jsonb check (mortgage is null or (jsonb_typeof(mortgage) = 'object' and pg_column_size(mortgage) < 2000)),
   -- The name the rent comes in under in the account, when the family chose one.
   rent_payer text check (char_length(rent_payer) <= 80),
+  -- The bank account the apartment is run through (rent in, costs out), when it has its own.
+  account_id uuid references public.bank_accounts(id) on delete set null,
   created_at timestamptz not null default now()
 );
+alter table public.properties add column if not exists account_id uuid references public.bank_accounts(id) on delete set null;
 create index if not exists properties_household_idx on public.properties (household_id, created_at);
 alter table public.properties enable row level security;
 
