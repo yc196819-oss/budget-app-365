@@ -7,13 +7,16 @@ import { certLevel, isCert, searchTerm, chainHe, looser } from '../domain/prices
 // service through the server.
 
 // The products for every item on the list, as { [typed name]: [products] }.
+// Items per request: 15 take ~3 seconds in the database at most (40 took
+// ~8, the limit of a signed-in request).
+const PART = 15;
 export async function searchPrices(names) {
   const list = [...new Set(names.map((n) => String(n || '').trim()).filter(Boolean))].slice(0, 300);
   if (!list.length) return {};
   // Searched as the chains write it ("ביצה" as "ביצים"), each term once, and
   // kept under the name on the list.
   const terms = [...new Set(list.map(searchTerm))];
-  // A long list in parts of 40, four at a time: one huge request could pass
+  // A long list in parts of 15, four at a time: one huge request could pass
   // the database's time limit, and a part that fails is asked once more.
   const ask = async (part) => {
     for (let tries = 0; ; tries++) {
@@ -25,7 +28,7 @@ export async function searchPrices(names) {
   const found = new Map(terms.map((t) => [t, []]));
   const run = async (list, into) => {
     const ps = [];
-    for (let i = 0; i < list.length; i += 40) ps.push(list.slice(i, i + 40));
+    for (let i = 0; i < list.length; i += PART) ps.push(list.slice(i, i + PART));
     for (let i = 0; i < ps.length; i += 4) {
       const got = await Promise.all(ps.slice(i, i + 4).map(ask));
       got.forEach((rows, k) => {
