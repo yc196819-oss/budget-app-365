@@ -208,3 +208,21 @@ test('the home screen: an apartment\'s own account is kept out of the family\'s 
   assert.notEqual(counted, without, 'an account that is not an apartment\'s counts as the family\'s');
   assert.equal(linked, without, 'the apartment\'s plumber is not the family\'s spending');
 });
+
+for (const scheme of ['light', 'dark']) {
+  test('the apartment form passes WCAG AA (' + scheme + ', phone)', async () => {
+    const { page, errors } = await open({ scheme, setup: (d) => {
+      d.tables.properties = [{ ...RENTED, account_id: null }];
+      for (const m of ['08', '09', '10']) d.tables.transactions.push({ id: 'w' + m, household_id: 'h1', type: 'income', amount: 5200, description: 'העברה מ כהן משה', tx_date: '2026-' + m + '-03', category_id: null, created_at: '2026-' + m + '-03T10:00:00Z' });
+    } });
+    await page.locator('.prop-card').waitFor();
+    await page.click('button[aria-label="עריכה: הדירה בבית שמש"]');
+    await page.locator('.prop-form').waitFor();
+    await page.evaluate(AXE);
+    await page.waitForTimeout(500);
+    const v = await page.evaluate(async () => (await window.axe.run(document.querySelector('.prop-form'), { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] }, resultTypes: ['violations'] })).violations.map((x) => x.id + ': ' + x.nodes.slice(0, 3).map((n) => n.target.join(' ') + ' ' + (n.failureSummary || '').split('\n').slice(1, 2).join('')).join(' | ')));
+    assert.deepEqual(v, []);
+    assert.deepEqual(errors, []);
+    await page.close();
+  });
+}
