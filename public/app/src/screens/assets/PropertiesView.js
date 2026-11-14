@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useState } from 'preact/hooks';
 import { money } from '../../domain/format.js';
-import { propertyView, prepay, accountFlows, withAccount, RENT_EXEMPT_ABOUT } from '../../domain/property.js';
+import { propertyView, prepay, accountFlows, withAccount, parseAmount, RENT_EXEMPT_ABOUT } from '../../domain/property.js';
 import { Loading } from '../../components/Loading.js';
 
 const signed = (v) => (v < 0 ? '−' : '') + money(Math.abs(v));
@@ -87,7 +87,7 @@ function PropertyCard({ p, today, txs, accounts, onEdit }) {
 function MortgageBlock({ m }) {
   const [sum, setSum] = useState('');
   const [open, setOpen] = useState(false);
-  const n = Number(String(sum).replace(/[,₪\s]/g, ''));
+  const n = parseAmount(sum) || 0;
   const what = open && n > 0 && !m.growing ? prepay(m.balance, m.rate, m.payment, n) : null;
   const share = m.payment > 0 ? Math.round((Math.min(m.split.interest, m.payment) / m.payment) * 100) : 0;
   return html`<div class="prop-mortgage stack">

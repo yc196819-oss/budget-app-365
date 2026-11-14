@@ -4,6 +4,8 @@
 // to a check, it does not decide.
 
 const r2 = (n) => Math.round(n * 100) / 100;
+// A sum as people type it ("100,000", "1.65 מיליון", "800 אלף"), or null.
+export const parseAmount = (v) => num(v);
 // A number, or null when nothing is written (an empty field is not 0).
 // "1.65 מיליון" and "800 אלף" (or "800K") as people write them.
 const num = (v) => {

@@ -226,3 +226,24 @@ for (const scheme of ['light', 'dark']) {
     await page.close();
   });
 }
+
+test('a mortgage without its rate asks for it; paying it all back closes it', async () => {
+  const { page, errors } = await open({ setup: (d) => {
+    d.tables.properties = [
+      { id: 'n1', household_id: 'h1', name: 'הדירה בצפת', home: false, rented: true, value: 900000, rent: 3300, costs: {}, mortgage: { balance: 1000000, rate: null, payment: 5500, months: null }, created_at: '2026-11-01T10:00:00Z' },
+      { id: 'n2', household_id: 'h1', name: 'הדירה בחיפה', home: false, rented: true, value: 1400000, rent: 4300, costs: {}, mortgage: { balance: 100000, rate: 5, payment: 2000, months: null }, created_at: '2026-11-02T10:00:00Z' }
+    ];
+  } });
+  await page.locator('.prop-card').first().waitFor();
+  const safed = page.locator('.prop-card', { hasText: 'הדירה בצפת' });
+  assert.match(await safed.textContent(), /חסרה הריבית/);
+  assert.doesNotMatch(await safed.textContent(), /נגמרת[0-9]|הולכים לקרן/);
+  assert.match(await safed.locator('.prop-boxes').textContent(), /−₪100,000/, 'below zero');
+  assert.equal(await safed.locator('.prop-prepay').count(), 0);
+  const haifa = page.locator('.prop-card', { hasText: 'הדירה בחיפה' });
+  await haifa.locator('.prop-prepay summary').click();
+  await haifa.locator('.prop-prepay input').fill('1.65 מיליון');
+  assert.match(await haifa.locator('.prop-options').textContent(), /המשכנתא נסגרת כולה/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
