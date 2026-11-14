@@ -3,8 +3,12 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const { CHAINS, probeOne, probeAll } = createRequire(import.meta.url)('../server/prices.js');
 
-test('every chain site is https and has a Hebrew name', () => {
-  assert.ok(CHAINS.length >= 8);
+test('every chain site is https and has a Hebrew name; the sites we load from are checked, the chains set aside are said so', async () => {
+  assert.ok(CHAINS.length >= 7);
+  assert.deepEqual(CHAINS.filter((c) => !c.paused).map((c) => c.key), ['shufersal', 'cerberus', 'bina']);
+  const out = await probeAll(async () => ({ status: 200 }));
+  assert.ok(out.filter((x) => x.paused).every((x) => !x.ok && x.paused), 'set aside: not asked, not a failure');
+  assert.equal(out.filter((x) => x.ok).length, 3);
   for (const c of CHAINS) { assert.match(c.url, /^https:\/\//); assert.match(c.name, /[א-ת]/); }
 });
 
