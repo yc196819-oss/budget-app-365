@@ -71,3 +71,8 @@ test('online on the server: kept apart from the shop, and not retried on its own
   const r = prices.catalogRows([{ barcode: '7290000000011', itemName: 'חלב', price: 5, chainKey: 'rami-levy-online', chainName: 'רמי לוי אונליין' }, { barcode: '7290000000011', itemName: 'חלב', price: 6, chainKey: 'rami-levy', chainName: 'רמי לוי' }]);
   assert.deepEqual(r.offers.map((o) => [o.chain, o.price]).sort(), [['rami-levy', 6], ['rami-levy-online', 5]]);
 });
+
+test('online: a delivery price not confirmed for a chain is said as about', () => {
+  assert.match(chainNote('rami-levy-online').text, /כולל משלוח של ₪35\.90\./);
+  assert.match(chainNote('shuk-hair-online').text, /בערך ₪35\.90 \(לא אימתנו/);
+});

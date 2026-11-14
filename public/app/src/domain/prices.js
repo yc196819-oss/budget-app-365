@@ -566,7 +566,8 @@ export const baseChain = (chain) => String(chain || '').replace(/-online$/, '');
 export const DELIVERY = { fee: 35.9, sure: ['rami-levy', 'shufersal'] };
 export const deliveryOf = (chain) => (isOnlineChain(chain) ? { fee: DELIVERY.fee, sure: DELIVERY.sure.includes(baseChain(chain)) } : null);
 const ONLINE_NOTE = { icon: 'cart', short: 'אונליין · כולל משלוח', text: 'זה המחיר באתר ההזמנות של הרשת, כולל משלוח של ₪35.90. ייתכן סכום מינימום להזמנה.', alt: 'בחנות' };
-export const chainNote = (chain) => CHAIN_NOTES[chain] || (isOnlineChain(chain) ? ONLINE_NOTE : null);
+// (A delivery price not confirmed for that chain is said as "about".)
+export const chainNote = (chain) => CHAIN_NOTES[chain] || (isOnlineChain(chain) ? (deliveryOf(chain).sure ? ONLINE_NOTE : { ...ONLINE_NOTE, text: ONLINE_NOTE.text.replace('משלוח של ₪35.90', 'משלוח של בערך ₪35.90 (לא אימתנו את המחיר ברשת הזו)') }) : null);
 // The cheapest chain that is open every day, when the cheapest is not.
 export function bestAlways(rows) {
   if (!rows.length || !chainNote(rows[0].chain)) return null;

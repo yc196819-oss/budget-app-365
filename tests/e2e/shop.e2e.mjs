@@ -700,7 +700,7 @@ test('online and in the shop are two prices: the chain online is compared on its
   const hero = page.locator('.pp-hero');
   await hero.waitFor();
   // 20 × ₪3.40 + ₪35.90 delivery = ₪103.90, against 20 × ₪5.90 = ₪118 in the shop.
-  assert.match(await hero.textContent(), /₪103\.90ברשת א אונליין.*כולל משלוח של ₪35\.90.*בחנות: הכי משתלם ברשת ב, ₪118\.00/);
+  assert.match(await hero.textContent(), /₪103\.90ברשת א אונליין.*כולל משלוח של בערך ₪35\.90.*בחנות: הכי משתלם ברשת ב, ₪118\.00/, 'a made-up chain: its delivery price is said as about');
   assert.match(await page.locator('.pp-bar', { hasText: 'רשת א אונליין' }).textContent(), /אונליין · כולל משלוח.*כולל משלוח בערך ₪35\.90/);
   assert.equal(await page.locator('.pp-bar').count(), 3, 'the shop and the online shop: two bars, and the other chain');
   await page.close();
