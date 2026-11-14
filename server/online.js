@@ -5,7 +5,7 @@
 
 // A branch that is the chain's online shop, by its name. ("משלוחים" alone is
 // a kiosk that delivers, not an online shop.)
-const ONLINE = /אונליין|און\s*ליין|online|אינטרנט/i;
+const ONLINE = /אונליין|און\s*ליין|online|אינטרנט|וולט|wolt/i;
 const isOnline = (name) => ONLINE.test(String(name || ''));
 
 // The online chain's key and name, from the chain's.

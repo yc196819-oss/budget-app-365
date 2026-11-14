@@ -14,6 +14,7 @@ test('online: a branch named as the online shop is one, a kiosk that delivers is
   assert.ok(online.isOnline('שופרסל ONLINE'));
   assert.ok(online.isOnline('און ליין - ראש פינה'));
   assert.ok(!online.isOnline('עין שמר משלוחים'));
+  assert.ok(online.isOnline('וולט- ת"א דיזינגוף סנטר'), 'a delivery-app branch');
   assert.deepEqual(online.onlineStores([{ chain: 'a', store_id: '39', name: 'מרלוג אינטרנט' }, { chain: 'a', store_id: '1', name: 'סניף' }]), { a: ['39'] });
   assert.equal(online.onlineKey('rami-levy'), 'rami-levy-online');
   assert.equal(online.onlineName('רמי לוי'), 'רמי לוי אונליין');
