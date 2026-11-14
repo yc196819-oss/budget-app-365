@@ -158,3 +158,13 @@ test('deal times are Israel\'s clock (winter +2, summer +3), and the end is said
   assert.equal(promoText({ need: 1, unit_price: 5, ends_at: '2026-11-14T21:59:00Z' }, null, now), '₪5 · עד מחר');
   assert.equal(promoText({ need: 1, unit_price: 5, ends_at: '2026-11-14T22:30:00Z' }, null, now), '₪5 · עד 15.11', 'after midnight in Israel is the next day');
 });
+
+test('the other deals file shape: products as <Item>, the date and hour apart, the club under <Clubs>', () => {
+  const file = '<Root><Promotions count="1"><Promotion><PromotionId>910</PromotionId><PromotionDescription>2 יח\' ב-30</PromotionDescription><PromotionStartDate>2026-11-11</PromotionStartDate><PromotionStartHour>00:00:00</PromotionStartHour><PromotionEndDate>2026-11-21</PromotionEndDate><PromotionEndHour>23:59:00</PromotionEndHour><DiscountRate>0.00</DiscountRate><MinQty>2</MinQty><MAXQTY>0</MAXQTY><DiscountedPrice>30</DiscountedPrice><AdditionalRestrictions><AdditionalIsCoupon>0</AdditionalIsCoupon><Clubs><ClubId>0</ClubId></Clubs></AdditionalRestrictions><PromotionItems count="1"><Item><ItemCode>7290000000011</ItemCode><IsGiftItem>0</IsGiftItem></Item></PromotionItems></Promotion></Promotions></Root>';
+  const [d] = parsePromoFile(file);
+  assert.equal(d.items.length, 1);
+  assert.equal(d.everyone, true);
+  assert.equal(d.ends, '2026-11-21T21:59:00.000Z', '23:59 in Israel on the 21st');
+  const [row] = promoRows([d], new Map([['7290000000011', 19.9]]), { now: NOW });
+  assert.deepEqual([row.need, row.unit_price, row.max_qty], [2, 15, null]);
+});

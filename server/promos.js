@@ -39,6 +39,13 @@ function israelOffset(utcGuess) {
   const m = /GMT([+-]\d+)/.exec((parts.find((x) => x.type === 'timeZoneName') || {}).value || '');
   return m ? Number(m[1]) : 2;
 }
+// A date with its hour, when they come apart ("2026-11-21", "23:59:00").
+function joinHour(date, hour, fallback = '00:00:00') {
+  const d = String(date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  const h = String(hour || '').trim().slice(0, 8);
+  return d + 'T' + (/^\d{2}:\d{2}(:\d{2})?$/.test(h) ? (h.length === 5 ? h + ':00' : h) : fallback);
+}
 const when = (s) => {
   const v = String(s || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}/.test(v)) return null;
@@ -61,17 +68,19 @@ function parsePromoFile(xml) {
     const club = tag(p, 'ClubID') || tag(p, 'ClubId');
     // The deal's own fields, read once (a deal of a thousand products was
     // read again for each of them: half a minute for one branch's file).
-    const head = p.split(/<PromotionItem>/i)[0];
+    const head = p.split(/<PromotionItem>|<PromotionItems/i)[0];
     const dealMin = num(tag(head, 'MinQty'));
     const dealMax = num(tag(head, 'MaxQty'));
     const dealPrice = num(tag(head, 'DiscountedPrice'));
     const dealRate = num(tag(head, 'DiscountRate'));
     const dealWeighted = tag(head, 'IsWeightedPromo') === '1';
     const items = [];
-    const ri = /<PromotionItem>([\s\S]*?)<\/PromotionItem>/gi;
+    // (Most files write each product as <PromotionItem>; some, like Rami
+    // Levy's online shop, as <Item>.)
+    const ri = /<PromotionItem>([\s\S]*?)<\/PromotionItem>|<Item>([\s\S]*?)<\/Item>/gi;
     let x;
     while ((x = ri.exec(p))) {
-      const it = x[1];
+      const it = x[1] || x[2] || '';
       const barcode = tag(it, 'ItemCode').replace(/\D/g, '');
       if (!/^[0-9]{8,14}$/.test(barcode)) continue;
       items.push({
@@ -93,8 +102,9 @@ function parsePromoFile(xml) {
       club: club === '' || /^0(\s|-|$)/.test(club) ? null : clubKind(club),
       coupon: tag(p, 'AdditionalIsCoupon') === '1',
       minBuy: num(tag(p, 'MinPurchaseAmount')) || 0,
-      starts: when(tag(p, 'PromotionStartDateTime') || tag(p, 'PromotionStartDate')),
-      ends: when(tag(p, 'PromotionEndDateTime') || tag(p, 'PromotionEndDate')),
+      // (A date and its hour may be written apart: "2026-11-21" and "23:59:00".)
+      starts: when(tag(head, 'PromotionStartDateTime') || joinHour(tag(head, 'PromotionStartDate'), tag(head, 'PromotionStartHour'))),
+      ends: when(tag(head, 'PromotionEndDateTime') || joinHour(tag(head, 'PromotionEndDate'), tag(head, 'PromotionEndHour'), '23:59:00')),
       gift: tag(p, 'IsGiftItem') === '1' && items.every((i) => !(i.price > 0)),
       limit: num(tag(p, 'RedemptionLimit')) || null,
       items
