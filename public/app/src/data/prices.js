@@ -1,6 +1,6 @@
 import { sb } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
-import { certLevel, isCert } from '../domain/prices.js';
+import { certLevel, isCert, searchTerm, chainHe } from '../domain/prices.js';
 
 // Prices for the shopping list: matched in our own catalog first (one call
 // for the whole list), and only what is missing is asked of the price
@@ -10,14 +10,32 @@ import { certLevel, isCert } from '../domain/prices.js';
 export async function searchPrices(names) {
   const list = [...new Set(names.map((n) => String(n || '').trim()).filter(Boolean))].slice(0, 300);
   if (!list.length) return {};
-  const { data, error } = await sb.rpc('price_search', { p_queries: list });
-  if (error) throw error;
-  const out = Object.fromEntries(list.map((n) => [n, []]));
-  for (const r of data || []) {
-    const name = list[r.q - 1];
-    if (name) out[name].push({ ...r, names: String(r.names || '').split(' | ').filter(Boolean) });
+  // Searched as the chains write it ("ביצה" as "ביצים"), each term once, and
+  // kept under the name on the list.
+  const terms = [...new Set(list.map(searchTerm))];
+  // A long list in parts of 40, four at a time: one huge request could pass
+  // the database's time limit, and a part that fails is asked once more.
+  const parts = [];
+  for (let i = 0; i < terms.length; i += 40) parts.push(terms.slice(i, i + 40));
+  const ask = async (part) => {
+    for (let tries = 0; ; tries++) {
+      const { data, error } = await sb.rpc('price_search', { p_queries: part });
+      if (!error) return data || [];
+      if (tries >= 1) throw error;
+    }
+  };
+  const found = new Map(terms.map((t) => [t, []]));
+  for (let i = 0; i < parts.length; i += 4) {
+    const got = await Promise.all(parts.slice(i, i + 4).map(ask));
+    got.forEach((rows, k) => {
+      const part = parts[i + k];
+      for (const r of rows) {
+        const term = part[r.q - 1];
+        if (term) found.get(term).push({ ...r, names: String(r.names || '').split(' | ').filter(Boolean), offers: (r.offers || []).map((o) => (o && o.chain_name ? { ...o, chain_name: chainHe(o.chain_name) } : o)) });
+      }
+    });
   }
-  return out;
+  return Object.fromEntries(list.map((n) => [n, found.get(searchTerm(n)) || []]));
 }
 
 // Ask the service for items with nothing in our catalog; then check on it.
@@ -37,6 +55,30 @@ export async function setKosherPref(hid, pref) {
   const certs = Array.isArray(pref) ? pref.filter(isCert) : [];
   const kosher = !certs.length ? 'any' : certs.every((c) => certLevel(c) === 'regular') ? 'regular' : 'mehadrin';
   const { error } = await sb.from('price_prefs').upsert({ household_id: hid, kosher, certs, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+  if (error) throw error;
+}
+// The chains whose customers club or credit card the family has
+// ('rami-levy:club', 'shufersal:card'): their deals count for them. Before the
+// database has the column, none.
+export async function getClubs(hid) {
+  const { data, error } = await sb.from('price_prefs').select('clubs').eq('household_id', hid).maybeSingle();
+  if (error || !data) return [];
+  return (data.clubs || []).filter((c) => /^[a-z0-9-]{1,40}:(club|card)$/.test(c));
+}
+// Chains open on Shabbat the family brought back into its comparison.
+export async function getChainsShown(hid) {
+  const { data, error } = await sb.from('price_prefs').select('chains_shown').eq('household_id', hid).maybeSingle();
+  if (error || !data) return [];
+  return (data.chains_shown || []).filter((c) => /^[a-z0-9-]{1,40}$/.test(c));
+}
+export async function setChainsShown(hid, chains) {
+  const list = [...new Set((chains || []).filter((c) => /^[a-z0-9-]{1,40}$/.test(c)))].slice(0, 40);
+  const { error } = await sb.from('price_prefs').upsert({ household_id: hid, chains_shown: list, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+  if (error) throw error;
+}
+export async function setClubs(hid, clubs) {
+  const list = [...new Set((clubs || []).filter((c) => /^[a-z0-9-]{1,40}:(club|card)$/.test(c)))].slice(0, 80);
+  const { error } = await sb.from('price_prefs').upsert({ household_id: hid, clubs: list, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
   if (error) throw error;
 }
 // This household's word on a product: the certifier its package shows (one

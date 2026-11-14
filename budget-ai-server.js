@@ -2041,6 +2041,51 @@ async function runAndWait(input) {
   return r.done ? r : { status: 'TIMED-OUT', items: [] };
 }
 const pricefiles = require('./server/pricefiles');
+const promos = require('./server/promos');
+// A branch's deals (the chain's official deals file, from the branch whose
+// prices were just read), saved over the branch's deals from before.
+// sid '' is the branch of the chain's general prices. Before the deals table
+// is in the database, nothing is saved (and nothing else stops).
+//   saveAs: the key the deals are kept under (a chain's online shop is read
+//   from the chain's site but compared as "<chain>-online").
+async function savePromos(chainKey, storeId, priceRows, sid = '', saveAs = null) {
+  const chain = pricefiles.CHAINS.find((c) => c.key === chainKey);
+  const key = saveAs || chainKey;
+  if (!chain || !storeId || !priceRows || !priceRows.length) return 0;
+  const regular = new Map();
+  for (const r of priceRows) if (!regular.has(r.barcode) || r.price < regular.get(r.barcode)) regular.set(r.barcode, r.price);
+  const rows = promos.promoRows(promos.parsePromoFile(await pricefiles.storePromos(priceFetch, chain, storeId)), regular);
+  const at = new Date().toISOString();
+  const { error } = await supabaseAdmin.from('price_promos').delete().eq('chain', key).eq('store_id', sid);
+  if (error) throw new Error(error.message);
+  const out = rows.map((r) => ({ ...r, chain: key, store_id: sid, seen_at: at }));
+  for (let i = 0; i < out.length; i += 1000) {
+    const { error: e } = await supabaseAdmin.from('price_promos').insert(out.slice(i, i + 1000));
+    if (e) throw new Error(e.message);
+  }
+  return out.length;
+}
+const online = require('./server/online');
+// A chain's online shop: its online warehouse's full price file (the first
+// that has a real catalog), kept as "<chain>-online" with its own deals.
+async function loadOnline(key, storeIds) {
+  const chain = pricefiles.CHAINS.find((c) => c.key === key);
+  const okey = online.onlineKey(key);
+  const name = online.onlineName(chain ? chain.name : key);
+  if (!chain) return { key: okey, name, count: 0, error: 'no chain' };
+  let last = 'no file';
+  for (const sid of storeIds.slice(0, 3)) {
+    try {
+      const rows = await pricefiles.storePrices(priceFetch, chain, sid);
+      if (rows.length < 200) { last = 'small (' + rows.length + ')'; continue; }
+      await saveCatalog(online.asOnline(rows, chain));
+      const deals = await savePromos(key, sid, rows, '', okey).catch(() => null);
+      console.log('prices:', okey, rows.length, 'ok');
+      return { key: okey, name, count: rows.length, error: null, deals, online: true };
+    } catch (e) { last = String(e.message || e).slice(0, 60); }
+  }
+  return { key: okey, name, count: 0, error: last, online: true };
+}
 // The free load: each chain's own full price file (the transparency law),
 // one chain at a time (one file in memory at a time), saved by barcode.
 const RETRY_WAIT_MS = Number(process.env.PRICE_RETRY_WAIT_MS || 180000);
@@ -2048,20 +2093,29 @@ async function runFreeLoad() {
   Object.assign(seedJob, { running: true, part: 0, parts: pricefiles.CHAINS.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null, free: true, chainsDone: [] });
   try {
     const keys = pricefiles.CHAINS.map((c) => c.key);
+    // Each chain's online warehouse (from the branch lists): not taken as its
+    // shop branch, and read as "<chain> אונליין", a chain of its own.
+    const { data: storeNames } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,store_id,name').order('chain').order('store_id'));
+    const onlineMap = online.onlineStores(storeNames || []);
     // Each chain is saved as soon as it is read, and let go: holding every
     // chain's file until the end ran the server out of memory at night,
     // and then nothing was saved.
     for (const key of keys) {
       seedJob.part++;
       seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
-      let [r] = await pricefiles.allChains(priceFetch, { only: [key] });
+      let [r] = await pricefiles.allChains(priceFetch, { only: [key], avoid: onlineMap });
       // A chain that failed (a site busy for a moment) is asked once more.
-      if (r.error) { await new Promise((ok) => setTimeout(ok, 5000)); [r] = await pricefiles.allChains(priceFetch, { only: [key] }); }
+      if (r.error) { await new Promise((ok) => setTimeout(ok, 5000)); [r] = await pricefiles.allChains(priceFetch, { only: [key], avoid: onlineMap }); }
       let error = r.error || null;
       if (r.rows.length) await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
       seedJob.added += error ? 0 : r.count;
-      seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error });
+      // The same branch's deals; a chain whose deals fail keeps its prices.
+      let deals = null;
+      if (!error && r.rows.length) deals = await savePromos(r.key, r.storeId, r.rows).catch((e) => { console.error('deals ' + r.key + ':', e.message); return null; });
+      seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error, deals });
       console.log('prices:', r.key, r.count, error || 'ok');
+      // Its online shop, when it has one: a price of its own.
+      if (onlineMap[key]) seedJob.chainsDone.push(await loadOnline(key, onlineMap[key]));
     }
     // A site that did not answer at all (a few minutes down at night) gets
     // one more try at the end, a few minutes later. A site that refuses us
@@ -2071,12 +2125,14 @@ async function runFreeLoad() {
       await new Promise((ok) => setTimeout(ok, RETRY_WAIT_MS));
       for (const key of again) {
         seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
-        const [r] = await pricefiles.allChains(priceFetch, { only: [key] });
-        if (r.error || !r.rows.length) continue;
+        const [r] = await pricefiles.allChains(priceFetch, { only: [key], avoid: onlineMap });
+        // Failed again: said so, so the morning check knows it was tried.
+        if (r.error || !r.rows.length) { const at = seedJob.chainsDone.findIndex((c) => c.key === key); if (at >= 0) seedJob.chainsDone[at] = { ...seedJob.chainsDone[at], retried: true, error: (r.error || 'no rows') + ' (גם בניסיון הנוסף)' }; continue; }
         let error = null;
         await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
+        const deals = error ? null : await savePromos(r.key, r.storeId, r.rows).catch(() => null);
         const at = seedJob.chainsDone.findIndex((c) => c.key === key);
-        seedJob.chainsDone[at] = { key: r.key, name: r.name, count: r.count, error, retried: true };
+        seedJob.chainsDone[at] = { key: r.key, name: r.name, count: r.count, error, deals, retried: true };
         if (!error) seedJob.added += r.count;
         console.log('prices (again):', r.key, r.count, error || 'ok');
       }
@@ -2089,6 +2145,10 @@ async function runFreeLoad() {
     // Prices of a chain that left (or a product it stopped selling) older
     // than two weeks are not shown as today's price.
     await supabaseAdmin.from('price_offers').delete().lt('seen_at', new Date(Date.now() - 14 * 86400000).toISOString());
+    // Deals that are over, and deals of a branch no longer read (a family
+    // moved): not shown as today's.
+    await supabaseAdmin.from('price_promos').delete().lt('ends_at', new Date().toISOString()).then(() => {}, () => {});
+    await supabaseAdmin.from('price_promos').delete().lt('seen_at', new Date(Date.now() - 3 * 86400000).toISOString()).then(() => {}, () => {});
   } catch (err) {
     seedJob.error = String(err.message || err).slice(0, 200);
     console.error('free price load failed:', seedJob.error);
@@ -2127,8 +2187,10 @@ async function refreshAreas() {
   let n = 0;
   for (const a of areas) {
     const near = area.nearestStores(stores || [], { code: a.city_code, hood: a.hood }, { maxKm: a.max_km || 25 });
-    if (!near.length) continue;
+    // No branch near any more (a chain closed one): the old ones go too, so
+    // a far branch is never compared as if it were near.
     await supabaseAdmin.from('household_stores').delete().eq('household_id', a.household_id);
+    if (!near.length) { n++; continue; }
     await supabaseAdmin.from('household_stores').insert(near.map((x) => ({ household_id: a.household_id, chain: x.chain, store_id: x.store_id, chain_name: x.chain_name, name: x.name, address: x.address, city: x.city, km: x.km, kind: x.kind })));
     n++;
   }
@@ -2163,7 +2225,10 @@ async function loadLocal(rows = null, only = null) {
         const base = general.get(w.chain);
         const at = new Date().toISOString();
         const diff = new Map();
-        for (const x of await pricefiles.storePrices(priceFetch, chain, w.store_id)) {
+        const branch = await pricefiles.storePrices(priceFetch, chain, w.store_id);
+        // The branch's own deals (they differ between branches).
+        await savePromos(w.chain, w.store_id, branch, String(w.store_id)).catch((e) => console.error('deals ' + w.chain + '/' + w.store_id + ':', e.message));
+        for (const x of branch) {
           const g = base.get(x.barcode);
           if (g != null && Math.abs(g - x.price) >= 0.01 && (!diff.has(x.barcode) || x.price < diff.get(x.barcode))) diff.set(x.barcode, x.price);
         }
@@ -2195,9 +2260,12 @@ app.post('/api/prices/area', requireAuth, async (req, res) => {
     const maxKm = Math.min(50, Math.max(5, Math.round((Number(req.body && req.body.max_km) || 25) / 5) * 5));
     const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
     const near = area.nearestStores(stores || [], { code: at.code, hood }, { maxKm });
-    await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: at.code, city: at.name, hood, max_km: maxKm, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
-    await supabaseAdmin.from('household_stores').delete().eq('household_id', hid);
-    if (near.length) await supabaseAdmin.from('household_stores').insert(near.map((n) => ({ household_id: hid, chain: n.chain, store_id: n.store_id, chain_name: n.chain_name, name: n.name, address: n.address, city: n.city, km: n.km, kind: n.kind })));
+    // Each write checked: "saved" is said only when it was.
+    const w1 = await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: at.code, city: at.name, hood, max_km: maxKm, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+    if (w1.error) throw new Error(w1.error.message);
+    const w2 = await supabaseAdmin.from('household_stores').delete().eq('household_id', hid);
+    if (w2.error) throw new Error(w2.error.message);
+    if (near.length) { const w3 = await supabaseAdmin.from('household_stores').insert(near.map((n) => ({ household_id: hid, chain: n.chain, store_id: n.store_id, chain_name: n.chain_name, name: n.name, address: n.address, city: n.city, km: n.km, kind: n.kind }))); if (w3.error) throw new Error(w3.error.message); }
     loadLocal(null, near).catch((e) => console.error('local prices failed:', e.message));
     return res.json({ area: { city_code: at.code, city: at.name, hood, max_km: maxKm }, stores: near });
   } catch (err) {

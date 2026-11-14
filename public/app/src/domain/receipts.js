@@ -3,7 +3,7 @@
 // comparison ("you paid ₪7.90 at <store>"). Pure.
 
 import { aisleOf } from './shopping.js';
-import { score } from './prices.js';
+import { score, sizeOfProduct, bestPrice } from './prices.js';
 
 // A receipt line's name as a list item: without sizes, numbers and codes,
 // at most three words ("חלב תנובה 3% 1 ליטר" → "חלב תנובה 3%").
@@ -39,14 +39,27 @@ export function historyItems(receipt) {
 // What the household last paid for a list item, from its receipts (newest
 // first): the price of one unit, the store and the date. Null when no
 // receipt has it.
-export function lastPaid(query, receipts) {
+//   like: the product the comparison picked; a receipt line clearly another
+//   product (olive oil for "שמן" when canola was picked: four times the price
+//   a liter) is not "what you paid" for it.
+function sameKind(it, like) {
+  if (!like) return true;
+  const a = sizeOfProduct({ name: it.name });
+  const b = sizeOfProduct(like);
+  const bp = bestPrice(like);
+  if (!a || !b || !bp || a.unit !== b.unit || !(a.qty > 0) || !(b.qty > 0)) return true;
+  const q = it.qty > 0 && it.qty < 50 && Number.isInteger(it.qty) ? it.qty : 1;
+  const r = (it.price / q / a.qty) / (bp.price / b.qty);
+  return r >= 0.4 && r <= 2.5;
+}
+export function lastPaid(query, receipts, like = null) {
   const sorted = [...(receipts || [])].sort((a, b) => String(b.bought_on || b.created_at || '').localeCompare(String(a.bought_on || a.created_at || '')));
   for (const r of sorted) {
     let best = null;
     for (const it of r.items || []) {
       if (!(it.price > 0)) continue;
       const s = score(query, { name: it.name });
-      if (s > 0 && (!best || s > best.s)) best = { s, it };
+      if (s > 0 && sameKind(it, like) && (!best || s > best.s)) best = { s, it };
     }
     if (best) {
       const q = best.it.qty > 0 && best.it.qty < 50 && Number.isInteger(best.it.qty) ? best.it.qty : 1;

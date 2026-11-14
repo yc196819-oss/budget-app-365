@@ -45,7 +45,10 @@ test('kashrut comes only from confirmations: the owner first, then most families
 
 test('the automatic choice: the cheapest product the household\'s kashrut allows', () => {
   const all = [milkA, milkB, milkBig, choco];
-  assert.equal(choose('חלב 3%', all, 'any').pick.barcode, '1003', 'cheapest per liter');
+  // The usual package first (a liter: two of the three), the cheapest of those
+  // per liter; a 2-liter one only when no usual one is allowed.
+  assert.equal(choose('חלב 3%', all, 'any').pick.barcode, '1002', 'the usual liter, cheapest');
+  assert.equal(choose('חלב 3%', [milkBig, milkA], 'any').pick.barcode, '1001', 'a liter before a cheaper-per-liter 2 liters');
   assert.equal(choose('חלב 3%', all, 'regular').pick.barcode, '1002');
   assert.equal(choose('חלב 3%', all, 'mehadrin').pick.barcode, '1001', 'not the chocolate milk, though it is cheaper');
 });
@@ -82,8 +85,8 @@ test('the list at each chain: cheapest first, and what each chain is missing', (
   const choices = [choose('חלב 3%', [milkA], 'any'), choose('חלב 3%', [milkB], 'any')];
   const b = basket(choices, () => 2);
   const plain = ({ lines, ...r }) => r;
-  assert.deepEqual(plain(b[0]), { chain: 'x', name: 'רשת א', store: null, total: 24.2, missing: 0, swaps: 0 });
-  assert.deepEqual(plain(b[1]), { chain: 'y', name: 'רשת ב', store: null, total: 13.8, missing: 1, swaps: 0 });
+  assert.deepEqual(plain(b[0]), { chain: 'x', name: 'רשת א', store: null, total: 24.2, missing: 0, swaps: 0, gap: 0, saved: 0 });
+  assert.deepEqual(plain(b[1]), { chain: 'y', name: 'רשת ב', store: null, total: 13.8, missing: 1, swaps: 0, gap: 11.8, saved: 0 });
   assert.equal(count('×3'), 3);
   assert.equal(count('2 ק"ג'), 1);
 });

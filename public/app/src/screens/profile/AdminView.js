@@ -9,7 +9,7 @@ import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
 import { greeting, ago, areas, record } from '../../domain/admin.js';
 import { loadStart, loadState, kosherList, kosherConfirm } from '../../data/prices.js';
-import { CERTS, NOT_KOSHER, certFromText, size, sizeText } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, certFromText, size, sizeOfProduct, sizeText } from '../../domain/prices.js';
 
 const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', shop: 'קניות', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
 const NAMES = { app_open: 'פתיחות', open_desktop: 'פתיחות במחשב', open_mobile: 'פתיחות בטלפון (דפדפן)', open_installed: 'פתיחות באפליקציה המותקנת', tx_add: 'הוספת תנועה', import_done: 'ייבוא', advisor_ask: 'שאלות ליועץ', advisor_talk: 'שיחה קולית', decision_open: 'החלטה חדשה', decision_message: 'הודעות ביחד', trip_plan: 'תכנון טיול', news_open: 'חדשות', lesson_done: 'שיעור', shortcut: 'קיצור דרך', export: 'ייצוא', restore: 'שחזור', import_fail: 'ייבוא שנכשל', guide_step: 'צעד במסלול התחלה', guide_skip: 'דילוג במסלול', learn_auto: 'עדכון אוטומטי מהיועץ', learn_undo: 'ביטול עדכון של היועץ', onboard_0: 'הרשמה: מסך פתיחה', onboard_1: 'הרשמה: מי אתם', onboard_2: 'הרשמה: מה רלוונטי', onboard_3: 'הרשמה: כרטיסים', onboard_4: 'הרשמה: הכנסה', onboard_5: 'הרשמה: פרטיות', onboard_done: 'הרשמה הושלמה' };
@@ -142,7 +142,7 @@ function SeedCard() {
     ${st && !st.running && st.endedAt && html`<span class="muted" style="font-size:13px">הטעינה האחרונה הסתיימה: נוספו ${st.added} מוצרים${st.cost ? ' · עלות $' + Number(st.cost).toFixed(2) : ''}.</span>`}
     ${st && st.error && html`<span role="alert" style="color:var(--danger)">${st.error}</span>`}
     ${err && html`<span role="alert" style="color:var(--danger)">${err}</span>`}
-    ${st && st.chainsDone && st.chainsDone.length > 0 && html`<ul class="price-seed-chains">${st.chainsDone.map((c) => html`<li key=${c.key} class=${c.error ? 'bad' : 'ok'}><span>${c.error ? '✕' : '✓'} ${c.name}</span><small class="muted">${c.error ? 'לא נטען: ' + c.error : c.count.toLocaleString('he-IL') + ' מוצרים'}</small></li>`)}</ul>`}
+    ${st && st.chainsDone && st.chainsDone.length > 0 && html`<ul class="price-seed-chains">${st.chainsDone.map((c) => html`<li key=${c.key} class=${c.error ? 'bad' : 'ok'}><span>${c.error ? '✕' : '✓'} ${c.name}</span><small class="muted">${c.error ? 'לא נטען: ' + c.error : c.count.toLocaleString('he-IL') + ' מוצרים' + (c.deals > 0 ? ' · ' + c.deals.toLocaleString('he-IL') + ' מבצעים' : '')}</small></li>`)}</ul>`}
     ${!(st && st.running) && html`<button type="button" class="btn btn-ghost" style="width:auto" onClick=${start}>${st && st.products ? 'לעדכן מחירים מהרשתות עכשיו (חינם)' : 'לטעון מחירים מהרשתות (חינם)'}</button>`}
   </div>`;
 }
@@ -173,7 +173,7 @@ function KosherCard() {
     ${d.waiting.length === 0 ? html`<span class="muted">אין מוצרים שמחכים.</span>` : html`
       <label class="kosher-all"><input type="checkbox" checked=${all} onChange=${() => setSel(all ? new Set() : new Set(d.waiting.map((p) => p.barcode)))} /> לסמן את כל ${d.waiting.length} המוצרים ברשימה</label>
       <ul class="kosher-list">${d.waiting.map((p) => html`<li key=${p.barcode}>
-      <label><input type="checkbox" checked=${sel.has(p.barcode)} onChange=${() => toggle(p.barcode)} /><span><b>${p.name}</b><small class="muted">${[p.fam ? p.fam + (p.fam === 1 ? ' משפחה קונה' : ' משפחות קונות') : '', p.maker, sizeText(size(p.qty, p.unit)), p.barcode].filter(Boolean).join(' · ')}</small></span></label>
+      <label><input type="checkbox" checked=${sel.has(p.barcode)} onChange=${() => toggle(p.barcode)} /><span><b>${p.name}</b><small class="muted">${[p.fam ? p.fam + (p.fam === 1 ? ' משפחה קונה' : ' משפחות קונות') : '', p.maker, sizeText(sizeOfProduct(p)), p.barcode].filter(Boolean).join(' · ')}</small></span></label>
       ${(p.kosher_cert || certFromText(p.name)) && html`<span class="kosher kosher-unknown">${p.kosher_cert ? 'במאגר: ' + p.kosher_cert : 'בשם: ' + certFromText(p.name)}</span>`}</li>`)}</ul>`}
     ${sel.size > 0 && html`<div class="kosher-bar"><select class="input" aria-label="איזו כשרות" value=${cert} onChange=${(e) => setCert(e.currentTarget.value)} style="flex:1;min-width:0"><option value="">איזו כשרות כתובה על האריזה?</option>${CERT_OPTIONS.map((c) => html`<option key=${c} value=${c}>${c}</option>`)}</select>
       <button type="button" class="btn btn-primary" style="width:auto" disabled=${!cert} onClick=${() => confirm([...sel], cert)}>לסמן ${sel.size}</button></div>`}

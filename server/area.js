@@ -1,3 +1,4 @@
+const { isOnline } = require('./online');
 // A family says where it lives (a settlement, and a neighborhood if it
 // wants); we find, for every chain, the branch nearest to it. Pure.
 //
@@ -83,6 +84,9 @@ function nearestStores(stores, home, { maxKm = 25 } = {}) {
   const hoodWords = norm(home.hood).split(' ').filter((w) => w.length >= 2);
   const byChain = new Map();
   for (const s of stores) {
+    // An online warehouse is not a shop near the family (it is compared as
+    // the chain's online shop, everywhere).
+    if (isOnline(s.name)) continue;
     const p = storePlace(s);
     if (!p) continue;
     const list = byChain.get(s.chain) || [];

@@ -1206,6 +1206,8 @@ body.chat-open { overflow: hidden; }
 .price-pref { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .price-pref .seg { background: var(--surface-2); flex: 1; max-width: 360px; }
 .price-pref .seg button { height: 32px; font-size: 13.5px; }
+.price-pref .pp-area-edit { margin-inline-start: auto; }
+.pp-area-note { flex-basis: 100%; font-size: 13px; line-height: 1.5; margin-top: -6px; }
 .price-pref-pick { display: grid; gap: 8px; }
 .price-pref-btn { display: grid; gap: 2px; text-align: start; border: 1px solid var(--line); cursor: pointer; color: var(--text); font: inherit; padding: 12px 14px; }
 .price-pref-btn:hover { border-color: var(--accent); }
@@ -1332,7 +1334,7 @@ body.chat-open { overflow: hidden; }
 .chip-no { color: var(--danger); }
 .price-cert-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .price-pref-certs { font-size: 13.5px; }
-.kosher small { font-weight: 600; opacity: .85; }
+.kosher small { font-weight: 600; }
 .kosher-fits { background: var(--income-tint); color: var(--income); }
 .kosher-other { background: var(--surface-2); color: var(--muted); }
 .kosher-free { background: var(--surface-2); color: var(--muted); }
@@ -1603,7 +1605,7 @@ body.chat-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .cart-go, .cart-wheel, .cart-drop { animation: none; } .cart-drop { display: none; } }
 
 /* ── Shopping tab, premium pass: the price panel as a warm ledger ── */
-.price-panel { border: 1px solid var(--line); background: var(--surface); }
+.price-panel { border: 1px solid var(--line); background: var(--surface); scroll-margin-top: 12px; }
 .pp-hero { position: relative; overflow: hidden; display: grid; gap: 2px; border-radius: 24px; padding: 18px 18px 14px; color: #FBF4EA; background: radial-gradient(120% 130% at 100% 0, #5a3412 0, #2a1d14 55%, #17110c 100%); box-shadow: 0 12px 30px rgba(40, 24, 10, .22); }
 .pp-hero::after { content: ''; position: absolute; inset: auto -60px -120px auto; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle, #E9A35B2e, transparent 70%); pointer-events: none; }
 .pp-eye { font-size: 13px; font-weight: 700; letter-spacing: .02em; color: #F3C88F; }
@@ -1618,7 +1620,9 @@ body.chat-open { overflow: hidden; }
 .pp-bar:hover { background: #ffffff0d; }
 .pp-bar.on { background: #ffffff17; }
 .pp-bar-n { font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pp-bar-t { height: 6px; border-radius: 6px; background: #ffffff14; overflow: hidden; }
+.pp-bar-t { display: flex; height: 6px; border-radius: 6px; background: #ffffff14; overflow: hidden; }
+/* What the missing products would add: striped, not counted in the price. */
+.pp-bar-gap { display: block; height: 100%; background: repeating-linear-gradient(-45deg, #ffffff40 0 3px, transparent 3px 6px); }
 .pp-bar-t i { display: block; height: 100%; border-radius: 6px; background: #ffffff55; transform-origin: right; animation: pp-grow .7s var(--out, ease) both; }
 .pp-bar.on .pp-bar-t i, .pp-bar:first-child .pp-bar-t i { background: var(--fx-gold); }
 .pp-bar-v { font-size: 14px; font-weight: 800; }
@@ -1626,6 +1630,14 @@ body.chat-open { overflow: hidden; }
 @keyframes pp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .pp-empty { display: grid; gap: 4px; padding: 14px; border-radius: var(--radius-m); background: var(--surface-2); }
 .pp-set { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-m); background: var(--surface-2); }
+.pp-set-sum { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; color: var(--muted); }
+.pp-set-sum::-webkit-details-marker { display: none; }
+.pp-set-sum span { flex: 1; display: grid; gap: 1px; min-width: 0; }
+.pp-set-sum b { color: var(--text); font-size: 14px; }
+.pp-set-sum small { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-set-sum::after { content: '⌄'; font-size: 16px; transition: transform .2s; }
+.pp-set[open] > .pp-set-sum { margin-bottom: 6px; }
+.pp-set[open] > .pp-set-sum::after { transform: rotate(180deg); }
 .pp-set .price-pref { font-size: 14px; }
 .pp-pin { display: inline-flex; color: var(--accent); }
 .pp-strict { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); cursor: pointer; }
@@ -1652,6 +1664,24 @@ body.chat-open { overflow: hidden; }
 .pp-tag.t-swap { border-style: dashed; }
 .pp-tag.t-miss { color: var(--danger); border-color: var(--danger-tint); }
 .pp-tag.t-paid { background: var(--income-tint); border-color: transparent; color: var(--income); }
+/* A deal counted in the total; a deal shown that is not (club, coupon, more to buy). */
+.pp-tag.t-deal { background: var(--accent-tint); border-color: transparent; color: var(--accent); }
+.pp-tag.t-deal-off { border-style: dashed; font-weight: 600; }
+.pp-club-ask { margin: -6px 0 10px; padding-inline-start: 54px; }
+.pp-club-ask .btn-text { font-size: 13px; padding: 2px 0; color: var(--accent); }
+.pp-step { font-size: 12.5px; font-weight: 800; letter-spacing: .02em; color: var(--accent); }
+.pp-shabbat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-club-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pp-club-list li { display: flex; align-items: center; gap: 6px; }
+.pp-club-list li > span { flex: 1; font-weight: 700; font-size: 14px; }
+.pp-row-p s { font-size: 11.5px; }
+.pp-two { font-size: 13.5px; color: #F4D9A6; margin-top: 2px; }
+.pp-two summary { cursor: pointer; }
+.pp-two span { display: block; color: #F6E7CC; line-height: 1.55; margin-top: 2px; }
+.pp-inline { color: #F4D9A6; font-weight: 800; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+.pp-send { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13.5px; color: #F6E7CC; margin-top: 4px; }
+.pp-send .btn-text { color: #F4D9A6; font-weight: 800; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; }
+.pp-deals { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #F4D9A6; margin-top: 2px; }
 .pp-more { display: grid; gap: 8px; padding: 0 0 14px; animation: admin-rise .3s var(--out, ease) both; }
 .pp-chosen { font-size: 12.5px; font-weight: 800; color: var(--income); padding: 0 6px; }
 .price-img.sign { color: var(--accent); background: var(--accent-tint); }
@@ -1720,3 +1750,4 @@ body.chat-open { overflow: hidden; }
 .demo-acts .btn { width: auto; padding-inline: 16px; gap: 8px; }
 .demo-bar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; padding-top: calc(8px + env(safe-area-inset-top, 0px)); font-size: 14px; font-weight: 700; color: #2a1d14; background: var(--fx-gold); }
 .demo-bar button { background: #2a1d14; color: #FBF4EA; border: 0; border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.pp-missing { font-size: 13px; line-height: 1.5; color: #F6C3B5; margin-top: 2px; }
