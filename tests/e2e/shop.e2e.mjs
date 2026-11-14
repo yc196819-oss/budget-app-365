@@ -678,7 +678,8 @@ test('a long list (90 items, a family before a holiday): searched in parts of up
   for (let i = 1; i < 90; i++) cat['מוצר ' + i] = [{ barcode: String(9000 + i), name: 'מוצר ' + i + ' 1 ק"ג', names: '', qty: 1, unit: 'ק"ג', offers: [{ chain: 'x', chain_name: 'רשת א', price: 10 }, { chain: 'y', chain_name: 'רשת ב', price: 11 }], kosher: {} }];
   await page.click('.shop-prices-cta button');
   await page.locator('.pp-hero').waitFor();
-  assert.equal(calls.search.length, 3, 'three parts');
+  await page.waitForTimeout(1500);
+  assert.equal(calls.search.length, 3, 'three parts, and the list searched once (not again when the area arrives)');
   assert.ok(calls.search.every((q) => q.length <= 40));
   assert.equal(calls.search.flat().length, 90, 'each item once');
   assert.match(await page.locator('.price-count').textContent(), /יש מחיר: 90 מתוך 90/);

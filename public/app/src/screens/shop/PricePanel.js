@@ -228,7 +228,9 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   }, [catalog]);
   const key = names.join('|');
   const areaKey = area ? area.city_code + ':' + (area.hood || '') : '';
-  useEffect(() => { if (!pref) return; search().then((c) => c && lookUp(c)); }, [pref, key, areaKey]);
+  // Once both the kashrut and the area are known (each loads on its own):
+  // searching on the first and again on the second asked the database twice.
+  useEffect(() => { if (!pref || area === undefined) return; search().then((c) => c && lookUp(c)); }, [pref, key, areaKey, area === undefined]);
 
   const choosePref = async (k) => {
     setPref(k);
