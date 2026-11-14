@@ -1780,3 +1780,6 @@ body.chat-open { overflow: hidden; }
 .prop-costs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .prop-found { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
 .prop-found .chip { height: auto; min-height: 34px; padding: 6px 12px; white-space: normal; text-align: start; }
+.hero-coming { font-size: 13px; color: var(--hero-muted); line-height: 1.5; text-align: start; }
+.hero-partial { display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.55; border-inline-start: 3px solid var(--warn); }
+.hero-partial .btn { align-self: flex-start; }

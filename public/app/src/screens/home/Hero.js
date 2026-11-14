@@ -5,7 +5,10 @@ import { CountUp } from '../../components/CountUp.js';
 
 // "Left to spend this month", with a bar for the budget used and a mark for
 // how far into the month we are.
-export function Hero({ plan, onOpen }) {
+// A payment still to come, in words: its category, or what it was called.
+const comingText = (plan, catName) => plan.recurring.slice(0, 3).map((r) => (catName(r.category_id) || r.description) + ' כ-' + money(r.amount)).join(', ') + (plan.recurring.length > 3 ? ' ועוד' : '');
+
+export function Hero({ plan, onOpen, catName = () => '', onImport = null }) {
   const over = plan.hasBudget && plan.remaining < 0;
   const forecast = plan.canForecast
     ? (plan.projectedEnd < 0 ? 'בקצב הזה החודש ייגמר במינוס של כ-' + money(-plan.projectedEnd) : 'בקצב הזה תסיימו את החודש עם כ-' + money(plan.projectedEnd))
@@ -22,5 +25,10 @@ export function Hero({ plan, onOpen }) {
       <span>${plan.daysLeft === 1 ? 'היום האחרון בחודש' : 'עוד ' + plan.daysLeft + ' ימים'}</span>
     </span>
     ${forecast && html`<span class=${'hero-forecast' + (plan.projectedEnd < 0 ? ' bad' : '')}>${forecast}</span>`}
-  </button>`;
+    ${plan.smart && plan.hasBudget && plan.recurring.length > 0 && html`<span class="hero-coming">כבר הורדנו מה שעוד צפוי לרדת החודש: ${comingText(plan, catName)}</span>`}
+  </button>
+  ${plan.smart && plan.looksPartial && html`<div class="card hero-partial" role="status">
+    <span>נראה שעוד לא נכנסו כל ההוצאות של החודש${plan.lastLine ? ' (השורה האחרונה מ-' + Number(plan.lastLine.slice(8, 10)) + '.' + Number(plan.lastLine.slice(5, 7)) + ')' : ''}, אז "נשאר להוציא" עלול להיות גבוה מדי.</span>
+    ${onImport && html`<button type="button" class="btn btn-ghost" onClick=${onImport}>להעלות דף חשבון או אשראי</button>`}
+  </div>`}`;
 }

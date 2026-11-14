@@ -34,7 +34,7 @@ async function open({ email = OWNER, width = 390, setup = () => {}, missing = fa
   if (email) await page.evaluate((e) => { const k = 'sb-bwwupwbakefjhwropdin-auth-token'; const x = JSON.parse(localStorage.getItem(k)); x.user.email = e; localStorage.setItem(k, JSON.stringify(x)); }, email);
   await page.goto(server.base + '/app/' + hash);
   await page.reload();
-  await page.locator('.tabs[role=group]').first().waitFor({ timeout: 8000 }).catch(async (e) => { console.log('BODY:', (await page.locator('body').innerText()).slice(0, 600)); throw e; });
+  await page.locator('.tabs[role=group], .hero').first().waitFor({ timeout: 8000 }).catch(async (e) => { console.log('BODY:', (await page.locator('body').innerText()).slice(0, 600)); throw e; });
   return { page, db, errors, calls };
 }
 
@@ -186,4 +186,25 @@ test('an apartment run through its own bank account: the rent and costs come fro
   assert.match(card, /נשאר בכיס בחודש₪120/);
   assert.deepEqual(errors, []);
   await page.close();
+});
+
+test('the home screen: an apartment\'s own account is kept out of the family\'s month (owner)', async () => {
+  const aptLines = (d) => {
+    d.tables.bank_accounts.push({ id: 'a2', household_id: 'h1', name: 'חשבון הדירה', balance: 3000, balance_updated_at: '2026-11-10T08:00:00Z' });
+    d.tables.transactions.push({ id: 'ax1', household_id: 'h1', account_id: 'a2', type: 'expense', amount: 4321, description: 'אינסטלטור', tx_date: '2026-11-05', category_id: 'home', nature: 'variable', spread: 'month', created_at: '2026-11-05T10:00:00Z' });
+  };
+  const heroOf = async (opts) => {
+    const { page, errors } = await open({ hash: '#/home', ...opts });
+    await page.locator('.hero-num').waitFor();
+    await page.waitForTimeout(1500);
+    const t = (await page.locator('.hero-num').textContent()).trim();
+    assert.deepEqual(errors, []);
+    await page.close();
+    return t;
+  };
+  const without = await heroOf({});
+  const counted = await heroOf({ setup: aptLines });
+  const linked = await heroOf({ setup: (d) => { aptLines(d); d.tables.properties = [{ ...RENTED, account_id: 'a2' }]; } });
+  assert.notEqual(counted, without, 'an account that is not an apartment\'s counts as the family\'s');
+  assert.equal(linked, without, 'the apartment\'s plumber is not the family\'s spending');
 });

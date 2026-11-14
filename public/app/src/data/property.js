@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { sb } from '../lib/supabase.js';
 import { cleanProperty } from '../domain/property.js';
+import { setApartmentAccounts } from './household.js';
 
 // The household's apartments and their mortgages (table properties), loaded
 // only when the apartments view opens. Without the table
@@ -8,7 +9,11 @@ import { cleanProperty } from '../domain/property.js';
 
 const state = { hid: null, status: 'idle', list: [], missing: false };
 const listeners = new Set();
-const emit = () => listeners.forEach((fn) => fn());
+// Each change also tells the household which accounts are an apartment's.
+const emit = () => {
+  setApartmentAccounts(state.list.filter((p) => !p.home && p.account_id).map((p) => p.account_id));
+  listeners.forEach((fn) => fn());
+};
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function snapshot() { return { ...state }; }
 

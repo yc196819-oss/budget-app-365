@@ -44,6 +44,54 @@ export function expectedFixed(txs, today) {
   return out.sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
+// Big payments that came every month lately (in at least 2 of the last 3
+// full months, about the same sum, in the same category) and not yet this
+// month: rent, a loan, a monthly donation written by hand. Not only lines
+// marked "fixed": many families never mark them. Each: { category_id,
+// description, amount, day }.
+export function recurringComing(txs, today, { min = 300, skip = [] } = {}) {
+  const y = today.getFullYear(), m = today.getMonth();
+  const months = [1, 2, 3].map((k) => { const d = new Date(y, m - k, 1); return d.getFullYear() * 12 + d.getMonth(); });
+  const near = (a, b) => Math.abs(a - b) <= Math.max(a, b) * 0.12;
+  const byCat = new Map();
+  for (const t of txs) {
+    if (!isExpense(t) || !t.category_id || t.spread === 'year' || !(Number(t.amount) >= min)) continue;
+    const d = parseDate(t.tx_date);
+    const k = d.y * 12 + d.m;
+    if (!months.includes(k) && k !== y * 12 + m) continue;
+    if (!byCat.has(t.category_id)) byCat.set(t.category_id, []);
+    byCat.get(t.category_id).push({ t, k, a: Number(t.amount), day: d.d });
+  }
+  const out = [];
+  for (const [cat, list] of byCat) {
+    const past = list.filter((x) => x.k !== y * 12 + m).sort((p, q) => q.k - p.k);
+    const used = new Set();
+    for (const x of past) {
+      if (used.has(x)) continue;
+      const group = past.filter((o) => !used.has(o) && near(o.a, x.a));
+      const inMonths = new Set(group.map((o) => o.k));
+      group.forEach((o) => used.add(o));
+      // Once a month (many purchases of the same sum, like the supermarket, are not a monthly payment).
+      if (inMonths.size < 2 || group.length > inMonths.size) continue;
+      const amounts = group.map((o) => o.a).sort((p, q) => p - q);
+      const amount = amounts[Math.floor(amounts.length / 2)];
+      // Already here this month (about the same sum, same category), or already expected as a fixed line.
+      if (list.some((o) => o.k === y * 12 + m && near(o.a, amount))) continue;
+      if (skip.some((f) => f.category_id === cat && near(Number(f.amount) || 0, amount))) continue;
+      const days = group.map((o) => o.day).sort((p, q) => p - q);
+      out.push({ category_id: cat, description: x.t.description || '', amount, day: days[Math.floor(days.length / 2)] });
+    }
+  }
+  return out.sort((p, q) => q.amount - p.amount);
+}
+
+// Average spending of the last 3 full months, everything.
+function avgMonthExpense(txs, today) {
+  const months = monthsBack(new Date(today.getFullYear(), today.getMonth() - 1, 1), 3);
+  const vals = months.map((mo) => sum(txs.filter(isExpense), (t) => monthShare(t, mo))).filter((v) => v > 0);
+  return vals.length ? sum(vals) / vals.length : 0;
+}
+
 // Average variable spending of the last 3 full months (before this one).
 function avgVariable(txs, today) {
   const months = monthsBack(new Date(today.getFullYear(), today.getMonth() - 1, 1), 3);
@@ -52,7 +100,10 @@ function avgVariable(txs, today) {
   return used.length ? sum(used) / used.length : 0;
 }
 
-export function monthPlan({ txs, budgets, today }) {
+// smart: also count the big monthly payments that have not come yet this
+// month (recurringComing) as already spoken for, and say when the month's
+// lines look missing (the statement not uploaded yet).
+export function monthPlan({ txs, budgets, today, smart = false }) {
   const y = today.getFullYear();
   const m = today.getMonth();
   const mo = { y, m };
@@ -73,12 +124,27 @@ export function monthPlan({ txs, budgets, today }) {
   const w = day / dim;
   const pace = (variableSpent / day) * dim;
   const variableProjected = Math.max(variableSpent, avg > 0 ? w * pace + (1 - w) * avg : pace);
-  const projectedExpense = spent + fixedExpenseLeft + (variableProjected - variableSpent);
+  // Still coming this month: fixed lines, and (smart) the big monthly payments.
+  const recurring = smart ? recurringComing(txs, today, { skip: coming.filter(isExpense) }) : [];
+  const recurringLeft = sum(recurring, (t) => t.amount);
+  // (A monthly payment still to come is not variable spending: not counted twice.)
+  const projectedExpense = spent + fixedExpenseLeft + recurringLeft + Math.max(0, variableProjected - variableSpent - recurringLeft);
   const projectedIncome = incomeSoFar + fixedIncomeLeft;
 
-  const remaining = budget - spent;
+  const remaining = budget - spent - (smart ? fixedExpenseLeft + recurringLeft : 0);
   const daysLeft = dim - day + 1;
+  // The month looks missing its lines: a week and more in, and less than a
+  // third of what usually goes out by this day of the month.
+  const usual = avgMonthExpense(txs, today);
+  const looksPartial = smart && day >= 8 && usual > 0 && spent < usual * (day / dim) * 0.33;
+  const lastLine = smart ? exp.reduce((d, t) => { const x = parseDate(t.tx_date); return x.y === y && x.m === m && t.tx_date > d ? t.tx_date : d; }, '') : '';
   return {
+    smart,
+    recurring,
+    recurringLeft,
+    committedLeft: smart ? fixedExpenseLeft + recurringLeft : 0,
+    looksPartial,
+    lastLine: lastLine || null,
     month: mo,
     budget,
     hasBudget: budget > 0,
@@ -86,7 +152,7 @@ export function monthPlan({ txs, budgets, today }) {
     variableSpent,
     remaining,
     daysLeft,
-    perDayLeft: budget > 0 ? Math.max(0, remaining - fixedExpenseLeft) / daysLeft : 0,
+    perDayLeft: budget > 0 ? Math.max(0, remaining - (smart ? 0 : fixedExpenseLeft)) / daysLeft : 0,
     spentPct: budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0,
     dayPct: Math.round((day / dim) * 100),
     avgVariable: avg,
