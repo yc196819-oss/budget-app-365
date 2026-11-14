@@ -44,16 +44,16 @@ export function AssetsScreen({ data, userId, owner = false }) {
 
   return html`<div class="stack">
     <${Segmented} variant="tabs" label="תצוגה" value=${view} onChange=${setView} options=${views} />
-    <${AssetsHero} view=${view} s=${s} homes=${view === 'homes' ? propertiesTotals(props.list, today) : null} />
+    <${AssetsHero} view=${view} s=${s} homes=${view === 'homes' ? propertiesTotals(props.list, today, data.txs) : null} />
     ${view === 'daily'
       ? html`<${DailyView} data=${data} today=${today} onOpen=${open} userId=${userId} />`
       : view === 'homes'
-        ? html`<${PropertiesView} props=${props} today=${today} onOpen=${open} />`
+        ? html`<${PropertiesView} props=${props} today=${today} onOpen=${open} txs=${data.txs} accounts=${data.accounts} />`
         : html`<${LongView} data=${data} market=${market} marketError=${marketError} onOpen=${open} />`}
     ${sheet && sheet.kind === 'account' && html`<${AccountSheet} account=${find(data.accounts)} onClose=${close} />`}
     ${sheet && (sheet.kind === 'investment' || sheet.kind === 'pension') && html`<${InvestmentSheet} inv=${find(data.investments)} market=${market} pension=${sheet.kind === 'pension'} onClose=${close} />`}
     ${sheet && sheet.kind === 'card' && html`<${CardSheet} card=${find(data.cards)} accounts=${data.accounts} members=${data.members} userId=${userId} onClose=${close} />`}
     ${sheet && sheet.kind === 'loan' && html`<${LoanSheet} loan=${find(data.loans)} onClose=${close} />`}
-    ${owner && sheet && sheet.kind === 'property' && html`<${PropertySheet} property=${find(props.list)} txs=${data.txs} onClose=${close} />`}
+    ${owner && sheet && sheet.kind === 'property' && html`<${PropertySheet} property=${find(props.list)} txs=${data.txs} accounts=${data.accounts} onClose=${close} />`}
   </div>`;
 }

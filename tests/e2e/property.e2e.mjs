@@ -155,3 +155,35 @@ for (const scheme of ['light', 'dark']) {
     await page.close();
   });
 }
+
+test('an apartment run through its own bank account: the rent and costs come from there', async () => {
+  const { page, db, errors } = await open({
+    setup: (d) => {
+      d.tables.bank_accounts.push({ id: 'a2', household_id: 'h1', name: 'חשבון הדירה', bank_name: 'בנק בדוי', balance: 3000, balance_updated_at: '2026-11-10T08:00:00Z' });
+      for (const m of ['08', '09', '10']) {
+        d.tables.transactions.push({ id: 'ar' + m, household_id: 'h1', account_id: 'a2', type: 'income', amount: 5200, description: 'העברה מ כהן משה', tx_date: '2026-' + m + '-03', category_id: null, created_at: '2026-' + m + '-03T10:00:00Z' });
+        d.tables.transactions.push({ id: 'aa' + m, household_id: 'h1', account_id: 'a2', type: 'expense', amount: 380, description: 'ארנונה', tx_date: '2026-' + m + '-05', category_id: null, created_at: '2026-' + m + '-05T10:00:00Z' });
+        d.tables.transactions.push({ id: 'am' + m, household_id: 'h1', account_id: 'a2', type: 'expense', amount: 4700, description: 'הלוואה לדיור', tx_date: '2026-' + m + '-10', category_id: null, created_at: '2026-' + m + '-10T10:00:00Z' });
+      }
+    }
+  });
+  await page.click('button:has-text("+ דירה")');
+  const sheet = page.locator('.prop-form');
+  await sheet.locator('label:has-text("שם") input').fill('הדירה בבית שמש');
+  await sheet.locator('label:has-text("שווי") input').fill('1,650,000');
+  await sheet.locator('label:has-text("חשבון בנק נפרד") select').selectOption('a2');
+  assert.match(await sheet.locator('.prop-note').textContent(), /נכנסים ₪5,200, יוצאים ₪380 בחודש, ועוד ₪4,700 החזר משכנתא/);
+  await sheet.locator('label:has-text("כמה נשאר לשלם") input').fill('820,000');
+  await sheet.locator('label:has-text("ריבית") input').fill('4.6');
+  await sheet.locator('label:has-text("החזר חודשי") input').fill('4,700');
+  await sheet.locator('button[type=submit]').click();
+  await page.locator('.prop-card').waitFor();
+  assert.equal(db.tables.properties[0].account_id, 'a2');
+  const card = await page.locator('.prop-card').textContent();
+  assert.match(card, /לפי חשבון הדירה: ממוצע של 3 החודשים האחרונים/);
+  assert.match(card, /שכירות נכנסת\+₪5,200/);
+  assert.match(card, /הוצאות בחשבון \(בלי המשכנתא\)−₪380/);
+  assert.match(card, /נשאר בכיס בחודש₪120/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

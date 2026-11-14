@@ -167,3 +167,36 @@ export function cleanProperty(input) {
     mortgage
   };
 }
+
+// An apartment run through its own bank account: what really came in and
+// went out there, a month on average over the last full months (this month
+// is not over yet). The mortgage payment, when it is paid from there, is
+// apart: it is already counted from the mortgage.
+//   transactions: [{ type, amount, description, tx_date, account_id }]
+const MORTGAGE_LINE = /משכנתא|משכנתה|הלוואה לדיור|מסלול הלוואה|טפחות.*הלוואה/;
+export function accountFlows(transactions, accountId, { months = 3, today = new Date() } = {}) {
+  if (!accountId) return null;
+  const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)).toISOString().slice(0, 7);
+  const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - months, 1)).toISOString().slice(0, 7);
+  let income = 0, expense = 0, mortgage = 0;
+  const seen = new Set();
+  for (const t of transactions || []) {
+    if (t.account_id !== accountId) continue;
+    const ym = String(t.tx_date || '').slice(0, 7);
+    if (!(ym >= start && ym < end)) continue;
+    const a = Math.abs(num(t.amount) || 0);
+    seen.add(ym);
+    if (t.type === 'income') income += a;
+    else if (MORTGAGE_LINE.test(String(t.description || ''))) mortgage += a;
+    else expense += a;
+  }
+  if (!seen.size) return { months: 0, income: 0, expense: 0, mortgage: 0 };
+  return { months: seen.size, income: r2(income / months), expense: r2(expense / months), mortgage: r2(mortgage / months) };
+}
+
+// The apartment as its account shows it: the rent and the costs from there
+// (when the account has lines), the rest as typed.
+export function withAccount(p, flows) {
+  if (!p || !flows || !flows.months) return p;
+  return { ...p, rent: flows.income, costs: { other: flows.expense } };
+}

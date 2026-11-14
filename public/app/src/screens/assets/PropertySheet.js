@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { Segmented } from '../../components/Segmented.js';
 import { saveProperty, deleteProperty } from '../../data/property.js';
-import { COSTS, rentCandidates } from '../../domain/property.js';
+import { COSTS, rentCandidates, accountFlows } from '../../domain/property.js';
 import { money } from '../../domain/format.js';
 import { showToast } from '../../lib/toast.js';
 
@@ -12,7 +12,7 @@ const has = (v) => String(v || '').replace(/[,₪%\s]/g, '') !== '';
 
 // An apartment and its mortgage: an apartment for rent (or standing empty),
 // or the family's own home, whose mortgage counts too.
-export function PropertySheet({ property, txs, onClose }) {
+export function PropertySheet({ property, txs, accounts = [], onClose }) {
   const p = property || {};
   const m = p.mortgage || {};
   const [kind, setKind] = useState(p.home ? 'home' : 'invest');
@@ -28,10 +28,14 @@ export function PropertySheet({ property, txs, onClose }) {
   const [rate, setRate] = useState(str(m.rate));
   const [payment, setPayment] = useState(str(m.payment));
   const [months, setMonths] = useState(str(m.months));
+  const [account, setAccount] = useState(str(p.account_id));
   const [busy, setBusy] = useState(false);
   const home = kind === 'home';
+  // Run through its own account: the rent and the costs come from there.
+  const flows = !home && account ? accountFlows(txs || [], account) : null;
+  const fromAccount = !!(flows && flows.months);
   // The rent coming in, as the account shows it (the same payer, month after month).
-  const found = !home && rented ? rentCandidates(txs || []).slice(0, 3) : [];
+  const found = !home && rented && !fromAccount ? rentCandidates((txs || []).filter((t) => !account || t.account_id === account)).slice(0, 3) : [];
 
   const save = async (e) => {
     e.preventDefault();
@@ -39,7 +43,7 @@ export function PropertySheet({ property, txs, onClose }) {
     try {
       await saveProperty(property ? property.id : null, {
         name: name || (home ? 'הבית שלנו' : 'הדירה'), city, home, rented: !home && rented,
-        value, rent: !home && rented ? rent : null, rent_payer: !home && rented ? payer : null, costs,
+        value, rent: !home && rented ? rent : null, rent_payer: !home && rented ? payer : null, costs, account_id: !home && account ? account : null,
         mortgage: hasLoan ? { balance, rate, payment, months: has(payment) ? null : months } : null
       });
       onClose();
@@ -61,6 +65,14 @@ export function PropertySheet({ property, txs, onClose }) {
       <label class="field"><span>עיר (לא חובה)</span><input class="input" value=${city} onInput=${(e) => setCity(e.target.value)} maxlength="60" /></label>
       <label class="field"><span>שווי הדירה בערך (₪)</span><input class="input num" inputmode="decimal" value=${value} onInput=${(e) => setValue(e.target.value)} placeholder="למשל: 1,650,000" /></label>
 
+      ${!home && accounts.length > 0 && html`<label class="field"><span>חשבון בנק נפרד לדירה (לא חובה)</span>
+        <select class="input" value=${account} onChange=${(e) => setAccount(e.target.value)}>
+          <option value="">אין, הכול בחשבון של הבית</option>
+          ${accounts.map((a) => html`<option key=${a.id} value=${a.id}>${a.name}${a.bank_name ? ' · ' + a.bank_name : ''}</option>`)}
+        </select></label>
+        ${account && html`<div class="prop-note" role="status">${fromAccount
+          ? 'השכירות וההוצאות יחושבו ממה שנכנס ויצא בחשבון הזה (ממוצע של ' + flows.months + ' החודשים האחרונים): נכנסים ' + money(flows.income) + ', יוצאים ' + money(flows.expense) + ' בחודש' + (flows.mortgage ? ', ועוד ' + money(flows.mortgage) + ' החזר משכנתא שנספר בנפרד' : '') + '. מה שתקלידו למטה ישמש רק כשאין תנועות.'
+          : 'עוד אין תנועות בחשבון הזה מהחודשים האחרונים. בינתיים החישוב הוא לפי מה שתקלידו למטה, וכשתעלו דפי חשבון הוא יהיה לפי החשבון.'}</div>`}`}
       ${!home && html`<fieldset class="prop-group">
         <legend>שכירות</legend>
         <${Segmented} label="מושכרת" value=${rented ? 'yes' : 'no'} onChange=${(v) => setRented(v === 'yes')} options=${[{ key: 'yes', label: 'מושכרת' }, { key: 'no', label: 'עומדת ריקה' }]} />

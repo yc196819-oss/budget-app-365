@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useState } from 'preact/hooks';
 import { money } from '../../domain/format.js';
-import { propertyView, prepay, RENT_EXEMPT_ABOUT } from '../../domain/property.js';
+import { propertyView, prepay, accountFlows, withAccount, RENT_EXEMPT_ABOUT } from '../../domain/property.js';
 import { Loading } from '../../components/Loading.js';
 
 const signed = (v) => (v < 0 ? '−' : '') + money(Math.abs(v));
@@ -15,7 +15,7 @@ const pct = (v) => (v == null ? '—' : v.toFixed(1) + '%');
 
 // The family's apartments and mortgages: what each brings in and costs, what
 // is left in the pocket, and when the mortgage ends.
-export function PropertiesView({ props, today, onOpen }) {
+export function PropertiesView({ props, today, onOpen, txs = [], accounts = [] }) {
   if (props.status === 'loading' || props.status === 'idle') return html`<${Loading} label="טוען…" />`;
   if (props.missing) {
     return html`<div class="card muted" role="status" style="font-size:14px">החלק של הדירות עוד לא הופעל במסד הנתונים (supabase_properties.sql).</div>`;
@@ -25,20 +25,25 @@ export function PropertiesView({ props, today, onOpen }) {
     <div class="sec-row"><h2 class="section-h">דירות ומשכנתאות</h2><button type="button" class="btn-text" onClick=${() => onOpen('property')}>+ דירה</button></div>
     ${list.length === 0
       ? html`<div class="card muted" style="font-size:14px">הוסיפו דירה נוספת שיש לכם, או את הבית שלכם עם המשכנתא, כדי לראות כמה נשאר בכיס כל חודש ומתי המשכנתא נגמרת.</div>`
-      : list.map((p) => html`<${PropertyCard} key=${p.id} p=${p} today=${today} onEdit=${() => onOpen('property', p.id)} />`)}
+      : list.map((p) => html`<${PropertyCard} key=${p.id} p=${p} today=${today} txs=${txs} accounts=${accounts} onEdit=${() => onOpen('property', p.id)} />`)}
     <span class="faint" style="font-size:12px">החישוב הוא לפי החזר קבוע (שפיצר) וריבית אחת. במשכנתא עם כמה מסלולים או הצמדה למדד, המספרים בקירוב. זה לא ייעוץ מס או השקעות.</span>
   </div>`;
 }
 
 // What the hero shows on the apartments view.
-export function propertiesTotals(list, today) {
+// The apartment as it is counted: from its own account when it has one with lines.
+const counted = (p, txs, today) => (p.home || !p.account_id ? p : withAccount(p, accountFlows(txs, p.account_id, { today })));
+
+export function propertiesTotals(list, today, txs = []) {
   let equity = 0, cash = 0, owed = 0;
-  for (const p of list || []) { const v = propertyView(p, today); equity += v.equity; if (!p.home) cash += v.cashMonth; owed += v.mortgage ? v.mortgage.balance : 0; }
+  for (const p of list || []) { const v = propertyView(counted(p, txs, today), today); equity += v.equity; if (!p.home) cash += v.cashMonth; owed += v.mortgage ? v.mortgage.balance : 0; }
   return { equity, cash, owed };
 }
 
-function PropertyCard({ p, today, onEdit }) {
-  const v = propertyView(p, today);
+function PropertyCard({ p, today, txs, accounts, onEdit }) {
+  const flows = !p.home && p.account_id ? accountFlows(txs, p.account_id, { today }) : null;
+  const v = propertyView(counted(p, txs, today), today);
+  const acct = p.account_id ? accounts.find((a) => a.id === p.account_id) : null;
   const m = v.mortgage;
   const title = p.name || (p.home ? 'הבית שלנו' : 'הדירה');
   return html`<section class="card prop-card stack" aria-label=${title}>
@@ -52,9 +57,12 @@ function PropertyCard({ p, today, onEdit }) {
       <div><small>${m ? 'שלכם (בלי המשכנתא)' : 'שלכם'}</small><b class="num">${v.value ? money(v.equity) : '—'}</b></div>
     </div>
 
+    ${flows && html`<span class="muted prop-from" style="font-size:13px">${flows.months
+      ? 'לפי ' + (acct ? acct.name : 'החשבון של הדירה') + ': ממוצע של ' + flows.months + ' החודשים האחרונים'
+      : 'עוד אין תנועות ב' + (acct ? acct.name : 'חשבון של הדירה') + '. החישוב לפי מה שהוקלד.'}</span>`}
     <dl class="prop-lines">
-      ${!p.home && p.rented && html`<div><dt>שכירות נכנסת</dt><dd class="num" style="color:var(--income)">+${money(v.rent)}</dd></div>`}
-      ${v.costs > 0 && html`<div><dt>הוצאות (ארנונה, ועד וכו')</dt><dd class="num">−${money(v.costs)}</dd></div>`}
+      ${!p.home && (p.rented || (flows && flows.months)) && html`<div><dt>שכירות נכנסת</dt><dd class="num" style="color:var(--income)">+${money(v.rent)}</dd></div>`}
+      ${v.costs > 0 && html`<div><dt>${flows && flows.months ? 'הוצאות בחשבון (בלי המשכנתא)' : "הוצאות (ארנונה, ועד וכו')"}</dt><dd class="num">−${money(v.costs)}</dd></div>`}
       ${m && html`<div><dt>החזר משכנתא</dt><dd class="num">−${money(m.payment)}</dd></div>`}
       <div class="prop-total"><dt>${p.home ? 'עולה לכם בחודש' : 'נשאר בכיס בחודש'}</dt><dd class="num" style=${v.cashMonth < 0 && !p.home ? 'color:var(--danger)' : ''}>${p.home ? money(-v.cashMonth) : signed(v.cashMonth)}</dd></div>
       ${!p.home && html`<div><dt>בשנה</dt><dd class="num">${signed(v.cashYear)}</dd></div>`}

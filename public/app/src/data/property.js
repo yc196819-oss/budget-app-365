@@ -25,7 +25,7 @@ export async function load(hid) {
 // Saves what the family typed (made safe first). Returns the saved row.
 export async function saveProperty(id, input) {
   const p = cleanProperty(input);
-  const fields = { name: p.name, city: p.city, home: p.home, rented: p.rented, value: p.value, rent: p.rent, costs: p.costs, mortgage: p.mortgage, rent_payer: String(input.rent_payer || '').trim().slice(0, 80) || null };
+  const fields = { name: p.name, city: p.city, home: p.home, rented: p.rented, value: p.value, rent: p.rent, costs: p.costs, mortgage: p.mortgage, rent_payer: String(input.rent_payer || '').trim().slice(0, 80) || null, account_id: input.account_id || null };
   const q = id
     ? sb.from('properties').update(fields).eq('id', id).eq('household_id', state.hid)
     : sb.from('properties').insert({ ...fields, household_id: state.hid });

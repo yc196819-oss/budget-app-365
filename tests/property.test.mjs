@@ -130,3 +130,22 @@ test('a payment below the interest: the balance grows, and it is said', () => {
   assert.equal(v.mortgage.split.principal, 0);
   assert.equal(v.mortgage.interestLeft, Infinity);
 });
+
+test('an apartment run through its own account: the rent and costs from there, the mortgage apart', async () => {
+  const { accountFlows, withAccount } = await import('../public/app/src/domain/property.js');
+  const tx = [];
+  for (const m of ['2026-08', '2026-09', '2026-10', '2026-11']) {
+    tx.push({ account_id: 'apt', type: 'income', amount: 5200, description: 'העברה מ כהן משה', tx_date: m + '-03' });
+    tx.push({ account_id: 'apt', type: 'expense', amount: 380, description: 'עיריית בית שמש ארנונה', tx_date: m + '-05' });
+    tx.push({ account_id: 'apt', type: 'expense', amount: 4700, description: 'הלוואה לדיור', tx_date: m + '-10' });
+    tx.push({ account_id: 'home', type: 'income', amount: 14000, description: 'משכורת', tx_date: m + '-10' });
+  }
+  tx.push({ account_id: 'apt', type: 'expense', amount: 1200, description: 'אינסטלטור', tx_date: '2026-09-20' });
+  const f = accountFlows(tx, 'apt', { today: TODAY });
+  // August to October (November is not over), the plumber once in three months.
+  assert.deepEqual(f, { months: 3, income: 5200, expense: 780, mortgage: 4700 });
+  const v = propertyView(withAccount({ rented: true, value: 1650000, rent: 1, mortgage: { balance: 820000, rate: 4.6, payment: 4700 } }, f), TODAY);
+  assert.equal(v.cashMonth, 5200 - 780 - 4700);
+  assert.equal(accountFlows(tx, null), null);
+  assert.equal(accountFlows([], 'apt', { today: TODAY }).months, 0);
+});
