@@ -180,3 +180,13 @@ test('round 2: rent is found among the lines a real account has, not benefits or
   }
   assert.deepEqual(rentCandidates(tx).map((x) => x.who), ['שכר דירה לוי', 'העברה מ-כהן משה', 'הפקדת שיק']);
 });
+
+test('round 6: the apartments count in what the family has and owes', async () => {
+  const { summary } = await import('../public/app/src/domain/assets.js');
+  const base = { accounts: [{ balance: 10000 }], today: TODAY };
+  const s = summary({ ...base, properties: [{ value: 1650000, mortgage: { balance: 820000 } }, { value: 900000, mortgage: null }] });
+  assert.equal(s.assets, 10000 + 2550000);
+  assert.equal(s.debts, 820000);
+  assert.equal(s.net, 10000 + 2550000 - 820000);
+  assert.equal(summary(base).net, 10000, 'without apartments, as before');
+});

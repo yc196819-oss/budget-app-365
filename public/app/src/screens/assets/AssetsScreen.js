@@ -39,7 +39,7 @@ export function AssetsScreen({ data, userId, owner = false }) {
   const today = new Date();
   // The apartments see their own accounts' lines too (kept out of the household's month).
   const allTxs = data.apartmentTxs && data.apartmentTxs.length ? [...data.txs, ...data.apartmentTxs] : data.txs;
-  const s = summary({ ...data, market, today });
+  const s = summary({ ...data, market, today, properties: owner && props.status === 'ready' ? props.list : [] });
   const open = (kind, id = null) => setSheet({ kind, id });
   const close = () => setSheet(null);
   const find = (list) => (sheet && sheet.id ? list.find((r) => r.id === sheet.id) : null);
