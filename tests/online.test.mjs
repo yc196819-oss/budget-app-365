@@ -43,7 +43,7 @@ test('online: compared as a chain of its own, everywhere, with what to know', ()
   assert.deepEqual(withoutChains(cat, ['a'])['חלב'][0].offers.map((o) => o.chain), ['far'], 'a chain left out is left out online too');
   assert.ok(isOnlineChain('a-online'));
   assert.equal(baseChain('a-online'), 'a');
-  assert.match(chainNote('rami-levy-online').text, /דמי משלוח לא כלולים/);
+  assert.match(chainNote('rami-levy-online').text, /כולל משלוח של ₪35.90/);
   assert.equal(bestAlways([{ chain: 'a-online', missing: 0, total: 50 }, { chain: 'a', name: 'א', missing: 0, total: 52 }]).chain, 'a', 'cheapest online: the cheapest shop is named too');
   assert.equal(twoChains([{ chain: 'a-online', missing: 0, total: 50, lines: [] }]), null);
 });
@@ -51,4 +51,16 @@ test('online: compared as a chain of its own, everywhere, with what to know', ()
 test('online: a chain\'s club counts in its online shop too', () => {
   const club = { need: 1, unit_price: 4, everyone: false, club: 'club', coupon: false, min_buy: 0 };
   assert.equal(promoCost({ chain: 'a-online', price: 6, promos: [club] }, 1, new Date('2026-11-13'), new Set(['a:club'])).cost, 4);
+});
+
+test('online: the delivery is part of what the list costs there', async () => {
+  const { basket, deliveryOf } = await import('../public/app/src/domain/prices.js');
+  const milk = { barcode: '1', name: 'חלב 1 ליטר', qty: 1, unit: 'ליטר', offers: [{ chain: 'rami-levy-online', chain_name: 'רמי לוי אונליין', price: 5 }, { chain: 'rami-levy', chain_name: 'רמי לוי', price: 6 }] };
+  const rows = basket([{ id: 'a', pick: milk, pool: [milk] }], () => 10);
+  const on = rows.find((r) => r.chain === 'rami-levy-online');
+  assert.equal(on.total, 85.9, 'ten milks at ₪5 and the delivery');
+  assert.deepEqual(on.delivery, { fee: 35.9, sure: true });
+  assert.equal(rows[0].chain, 'rami-levy', 'the shop is cheaper once the delivery is counted');
+  assert.equal(deliveryOf('shuk-hair-online').sure, false, 'not confirmed: said as about');
+  assert.equal(deliveryOf('rami-levy'), null);
 });

@@ -687,21 +687,22 @@ test('a long list (90 items, a family before a holiday): searched in parts of up
   assert.deepEqual(errors, []);
 });
 
-test('online and in the shop are two prices: the chain online is compared on its own, with delivery not included', async () => {
+test('online and in the shop are two prices: the chain online is compared on its own, with its delivery counted', async () => {
   const { page, errors } = await open(390, (d) => {
-    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: '×20', aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
     d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
   }, OWNER);
-  // Made-up prices: the chain online is cheaper than its shop.
+  // Made-up prices: online is cheaper a carton, but there is the delivery.
   await page.route('**/rest/v1/rpc/price_search', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ q: 1, barcode: '1001', name: 'חלב 3% בשקית', names: '', qty: 1, unit: 'ליטר', kosher: {},
-    offers: [{ chain: 'x-online', chain_name: 'רשת א אונליין', price: 5.4 }, { chain: 'x', chain_name: 'רשת א', price: 6.2 }, { chain: 'y', chain_name: 'רשת ב', price: 5.9 }] }]) }));
+    offers: [{ chain: 'x-online', chain_name: 'רשת א אונליין', price: 3.4 }, { chain: 'x', chain_name: 'רשת א', price: 6.2 }, { chain: 'y', chain_name: 'רשת ב', price: 5.9 }] }]) }));
   await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
   await page.click('.shop-prices-cta button');
   const hero = page.locator('.pp-hero');
   await hero.waitFor();
-  assert.match(await hero.textContent(), /₪5\.40ברשת א אונליין.*דמי משלוח לא כלולים.*בחנות: הכי משתלם ברשת ב, ₪5\.90/);
-  assert.match(await page.locator('.pp-bar', { hasText: 'רשת א אונליין' }).textContent(), /אונליין · משלוח/);
-  assert.equal(await page.locator('.pp-bar', { hasText: /^רשת א₪/ }).count() + await page.locator('.pp-bar').count() >= 3, true, 'the shop and the online shop: two bars');
+  // 20 × ₪3.40 + ₪35.90 delivery = ₪103.90, against 20 × ₪5.90 = ₪118 in the shop.
+  assert.match(await hero.textContent(), /₪103\.90ברשת א אונליין.*כולל משלוח של ₪35\.90.*בחנות: הכי משתלם ברשת ב, ₪118\.00/);
+  assert.match(await page.locator('.pp-bar', { hasText: 'רשת א אונליין' }).textContent(), /אונליין · כולל משלוח.*כולל משלוח בערך ₪35\.90/);
+  assert.equal(await page.locator('.pp-bar').count(), 3, 'the shop and the online shop: two bars, and the other chain');
   await page.close();
   assert.deepEqual(errors, []);
 });

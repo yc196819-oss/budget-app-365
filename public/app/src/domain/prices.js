@@ -489,7 +489,11 @@ export function basket(choices, qtyOf = () => 1, now = new Date(), clubs = null)
         lines.push({ id: c.id, product: best.product, price: best.paid, cost: best.d.cost, promo: best.d.promo, other: best.d.other, swap: true });
       } else { missing++; const b = bestPrice(c.pick); gap += b ? b.price * q : 0; lines.push({ id: c.id, product: null, price: null, swap: false }); }
     }
+    // An online shop: its delivery is part of what the list costs there.
+    const delivery = deliveryOf(chain);
+    if (delivery && lines.some((l) => l.product)) total += delivery.fee;
     return { chain, name, store: stores.get(chain) || null, total: Math.round(total * 100) / 100, missing, swaps, lines,
+      ...(delivery ? { delivery } : {}),
       saved: Math.round(saved * 100) / 100,
       // About what the missing products add, at their cheapest elsewhere.
       gap: Math.round(gap * 100) / 100 };
@@ -541,7 +545,7 @@ export function chainListText(row, items) {
     const z = sizeText(sizeOfProduct(l.product));
     lines.push('☐ ' + it.name + (it.qty ? ' ' + it.qty : '') + ': ' + l.product.name + (z && !l.product.name.includes(z) ? ' ' + z : '') + ' · ' + money(l.cost != null ? l.cost : l.price) + (l.promo ? ' (במבצע)' : ''));
   }
-  return ['רשימה לקנייה ב' + row.name + (row.store ? ' (' + row.store + ')' : '') + ': בערך ' + money(row.total), '', ...lines,
+  return ['רשימה לקנייה ב' + row.name + (row.store ? ' (' + row.store + ')' : '') + ': בערך ' + money(row.total) + (row.delivery ? ' (כולל משלוח ' + money(row.delivery.fee) + ')' : ''), '', ...lines,
     ...(missing.length ? ['', 'אין ב' + row.name + ': ' + missing.join(', ')] : []), '', 'מ"התקציב שלנו"'].join('\n');
 }
 
@@ -556,7 +560,12 @@ export const CHAIN_NOTES = {
 // A chain's online shop ("rami-levy-online"): a price of its own, by delivery.
 export const isOnlineChain = (chain) => /-online$/.test(String(chain || ''));
 export const baseChain = (chain) => String(chain || '').replace(/-online$/, '');
-const ONLINE_NOTE = { icon: 'cart', short: 'אונליין · משלוח', text: 'זה המחיר באתר ההזמנות של הרשת. דמי משלוח לא כלולים, ובדרך כלל יש סכום מינימום להזמנה.', alt: 'בחנות' };
+// Delivery from a chain's online shop: since 2026 the big chains charge the
+// same ₪35.90 a delivery, with no free-delivery threshold (Rami Levy and
+// Shufersal confirmed; for the others it is the going price, said so).
+export const DELIVERY = { fee: 35.9, sure: ['rami-levy', 'shufersal'] };
+export const deliveryOf = (chain) => (isOnlineChain(chain) ? { fee: DELIVERY.fee, sure: DELIVERY.sure.includes(baseChain(chain)) } : null);
+const ONLINE_NOTE = { icon: 'cart', short: 'אונליין · כולל משלוח', text: 'זה המחיר באתר ההזמנות של הרשת, כולל משלוח של ₪35.90. ייתכן סכום מינימום להזמנה.', alt: 'בחנות' };
 export const chainNote = (chain) => CHAIN_NOTES[chain] || (isOnlineChain(chain) ? ONLINE_NOTE : null);
 // The cheapest chain that is open every day, when the cheapest is not.
 export function bestAlways(rows) {

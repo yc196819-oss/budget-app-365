@@ -327,7 +327,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
         <span class="pp-bar-n">${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span>
         <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i>${c.gap > 0 && html`<b class="pp-bar-gap" style=${'width:' + Math.round((c.gap / most) * 100) + '%'}></b>`}</span>
         <span class="pp-bar-v num">${fmt(c.total)}</span>
-        ${(c.missing > 0 || c.swaps > 0) && html`<small class="pp-bar-x">${[c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
+        ${(c.missing > 0 || c.swaps > 0 || c.delivery) && html`<small class="pp-bar-x">${[c.delivery ? 'כולל משלוח ' + (c.delivery.sure ? '' : 'בערך ') + fmt(c.delivery.fee) : '', c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
       </button>`)}</div>
     </div>` : area && !area.stores.length ? html`<div class="pp-empty"><b>אין סניף של אף רשת עד ${area.max_km || 25} ק"מ מ${area.city}</b><span class="muted">רשת רחוקה לא נכנסת להשוואה, כי לא באמת קונים בה. אפשר להגדיל את המרחק.</span><button type="button" class="btn btn-ghost" style="justify-self:start" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></div>`
       : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
