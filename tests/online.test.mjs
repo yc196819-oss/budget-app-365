@@ -64,3 +64,10 @@ test('online: the delivery is part of what the list costs there', async () => {
   assert.equal(deliveryOf('shuk-hair-online').sure, false, 'not confirmed: said as about');
   assert.equal(deliveryOf('rami-levy'), null);
 });
+
+test('online on the server: kept apart from the shop, and not retried on its own', () => {
+  const prices = require('../server/prices.js');
+  assert.deepEqual(prices.retryLater([{ key: 'a', error: 'fetch failed' }, { key: 'a-online', error: 'fetch failed', online: true }]), ['a']);
+  const r = prices.catalogRows([{ barcode: '7290000000011', itemName: 'חלב', price: 5, chainKey: 'rami-levy-online', chainName: 'רמי לוי אונליין' }, { barcode: '7290000000011', itemName: 'חלב', price: 6, chainKey: 'rami-levy', chainName: 'רמי לוי' }]);
+  assert.deepEqual(r.offers.map((o) => [o.chain, o.price]).sort(), [['rami-levy', 6], ['rami-levy-online', 5]]);
+});
