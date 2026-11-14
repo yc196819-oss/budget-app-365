@@ -725,3 +725,29 @@ test('no shop near the family but chains online: only those, and it says why', a
   await page.close();
   assert.deepEqual(errors, []);
 });
+
+test('a chain with a shop and an online shop is one chain in the clubs list, and its club counts in both', async () => {
+  let db;
+  const { page, errors } = await open(390, (d) => {
+    db = d;
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'במבה', qty: null, aisle: 'dry', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+  }, OWNER);
+  const club = { everyone: false, club: 'club', coupon: false, min_buy: 0, need: 1, unit_price: 2 };
+  await page.route('**/rest/v1/rpc/price_search', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ q: 1, barcode: '5002', name: 'במבה 80 גרם', names: '', qty: 80, unit: 'גרם', kosher: {},
+    offers: [{ chain: 'x', chain_name: 'רשת א', price: 4.5, promos: [club] }, { chain: 'x-online', chain_name: 'רשת א אונליין', price: 4.2, promos: [club] }, { chain: 'y', chain_name: 'רשת ב', price: 4.9 }] }]) }));
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+  await page.click('.shop-prices-cta button');
+  await page.locator('.pp-hero').waitFor();
+  await page.locator('.pp-set summary').click();
+  await page.locator('.pp-clubs-row button').click();
+  const names = await page.locator('.pp-club-list li > span').allTextContents();
+  assert.deepEqual(names.filter((n) => n.startsWith('רשת א')), ['רשת א'], 'one chain, not its shop and online shop apart');
+  await page.locator('.pp-club-list li', { hasText: 'רשת א' }).locator('.chip', { hasText: 'מועדון' }).click();
+  await page.locator('.pp-clubs .btn-primary').click();
+  await page.waitForSelector('.pp-hero:has-text("₪2.00")');
+  assert.deepEqual(db.tables.price_prefs[0].clubs, ['x:club']);
+  assert.match(await page.locator('.pp-bar', { hasText: 'רשת א אונליין' }).textContent(), /₪37\.90/, 'the club deal online too: ₪2 and the delivery');
+  await page.close();
+  assert.deepEqual(errors, []);
+});
