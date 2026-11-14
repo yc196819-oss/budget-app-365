@@ -71,7 +71,7 @@ function PropertyCard({ p, today, txs, accounts, onEdit }) {
 
     ${!p.home && p.rented && v.value > 0 && html`<div class="prop-yield muted">
       תשואה: <b class="num">${pct(v.grossYield)}</b> לפני הוצאות, <b class="num">${pct(v.netYield)}</b> אחריהן (בלי המשכנתא).
-      ${m && !m.growing && v.cashMonth < 0 && v.profitMonth > 0 ? html` מהמשכנתא, ${money(m.split.principal)} בחודש הולכים לקרן ונשארים שלכם: בלי הריבית, הדירה מכניסה ${money(v.profitMonth)} בחודש.` : ''}
+      ${m && !m.growing && !m.noRate && v.cashMonth < 0 && v.profitMonth > 0 ? html` מהמשכנתא, ${money(m.split.principal)} בחודש הולכים לקרן ונשארים שלכם: בלי הריבית, הדירה מכניסה ${money(v.profitMonth)} בחודש.` : ''}
     </div>`}
 
     ${v.rentTax && html`<div class="prop-note" role="note">
