@@ -1,6 +1,6 @@
 import { sb } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
-import { certLevel, isCert, searchTerm, chainHe } from '../domain/prices.js';
+import { certLevel, isCert, searchTerm, chainHe, looser } from '../domain/prices.js';
 
 // Prices for the shopping list: matched in our own catalog first (one call
 // for the whole list), and only what is missing is asked of the price
@@ -15,8 +15,6 @@ export async function searchPrices(names) {
   const terms = [...new Set(list.map(searchTerm))];
   // A long list in parts of 40, four at a time: one huge request could pass
   // the database's time limit, and a part that fails is asked once more.
-  const parts = [];
-  for (let i = 0; i < terms.length; i += 40) parts.push(terms.slice(i, i + 40));
   const ask = async (part) => {
     for (let tries = 0; ; tries++) {
       const { data, error } = await sb.rpc('price_search', { p_queries: part });
@@ -25,16 +23,26 @@ export async function searchPrices(names) {
     }
   };
   const found = new Map(terms.map((t) => [t, []]));
-  for (let i = 0; i < parts.length; i += 4) {
-    const got = await Promise.all(parts.slice(i, i + 4).map(ask));
-    got.forEach((rows, k) => {
-      const part = parts[i + k];
-      for (const r of rows) {
-        const term = part[r.q - 1];
-        if (term) found.get(term).push({ ...r, names: String(r.names || '').split(' | ').filter(Boolean), offers: (r.offers || []).map((o) => (o && o.chain_name ? { ...o, chain_name: chainHe(o.chain_name) } : o)) });
-      }
-    });
-  }
+  const run = async (list, into) => {
+    const ps = [];
+    for (let i = 0; i < list.length; i += 40) ps.push(list.slice(i, i + 40));
+    for (let i = 0; i < ps.length; i += 4) {
+      const got = await Promise.all(ps.slice(i, i + 4).map(ask));
+      got.forEach((rows, k) => {
+        const part = ps[i + k];
+        for (const r of rows) {
+          const term = into(part[r.q - 1]);
+          if (term) found.get(term).push({ ...r, names: String(r.names || '').split(' | ').filter(Boolean), offers: (r.offers || []).map((o) => (o && o.chain_name ? { ...o, chain_name: chainHe(o.chain_name) } : o)) });
+        }
+      });
+    }
+  };
+  await run(terms, (t) => t);
+  // What found nothing as written ("חלות לשבת", "קולה 1.5 ליטר שישייה"):
+  // once more, looser, for the item as it was written.
+  const again = new Map();
+  for (const t of terms) { if (!found.get(t).length) { const l = looser(t); if (l && !again.has(l)) again.set(l, t); } }
+  if (again.size) { try { await run([...again.keys()], (l) => again.get(l)); } catch (_e) { /* the first answers stand */ } }
   return Object.fromEntries(list.map((n) => [n, found.get(searchTerm(n)) || []]));
 }
 

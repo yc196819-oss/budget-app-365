@@ -56,7 +56,9 @@ export function parseItem(text) {
   if (m && m[2]) { qty = m[1]; t = m[2]; }
   else {
     m = /^(.*?)\s*[x×*]\s*(\d+)$/.exec(t) || /^(.*?)\s+(\d+)$/.exec(t);
-    if (m && m[1]) { qty = m[2]; t = m[1]; }
+    // A size, not how many: "טיטולים מידה 4", "מטרנה שלב 2", and eggs by the tray ("ביצים L 12").
+    const sizeOf = m && m[1] && !/[x×*]\s*\d+$/.test(t) && (/(מידה|מס['׳]?|שלב|גודל)$/.test(m[1].trim()) || (/ביצים/.test(m[1]) && [6, 10, 12, 18, 20, 24, 30].includes(Number(m[2]))));
+    if (m && m[1] && !sizeOf) { qty = m[2]; t = m[1]; }
     else {
       const w = t.split(' ');
       if (WORDS[w[0]] && w.length > 1) { qty = String(WORDS[w[0]]); t = w.slice(1).join(' '); }

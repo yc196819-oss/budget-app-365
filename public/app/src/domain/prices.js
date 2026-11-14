@@ -394,6 +394,22 @@ export function searchTerm(name) {
   return n;
 }
 
+// A looser search when the item as written finds nothing: without what a
+// product's name never says ("לשבת", "שישייה", "1.5 ליטר"), and at last
+// without its last word. null when nothing is left to loosen.
+export function looser(term) {
+  const t = String(term || '');
+  let n = t
+    .replace(/(^|\s)(לשבת|לחג|לבית|לילדים|לתינוק|לתינוקות|לארוחת\s+\S+|לסעודה|לכיבוד)(?=\s|$)/g, ' ')
+    .replace(/(^|\s)(שישייה|שישיה|מארז|מארזים|חבילה|חבילות|קרטון|זוג|שקית|שקיות|בקבוק|בקבוקים|פחית|פחיות)(?=\s|$)/g, ' ')
+    .replace(/(^|\s)\d+(?:[.,]\d+)?\s*(ליטר|ל['׳]|ל|מ"ל|מל|גרם|גר|ג['׳]|ק"ג|קג|קילו|יח['׳]?|יחידות|גלילים)?(?=\s|$)/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  n = searchTerm(n);
+  if (n && n !== t) return n;
+  const w = t.split(' ');
+  return w.length > 2 ? w.slice(0, -1).join(' ') : null;
+}
+
 // The whole list at once (20 items or 200): one choice per item.
 export function chooseAll(items, catalog, pref = 'any', { strict = false } = {}) {
   return items.map((it) => ({ id: it.id, ...choose(searchTerm(it.name), catalog[it.name] || [], pref, { keep: it.barcode, strict }), query: it.name }));
