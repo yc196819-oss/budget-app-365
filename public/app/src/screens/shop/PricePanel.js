@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
@@ -49,14 +49,16 @@ function ClubPicker({ chains, initial, onSave, onCancel }) {
   const [all, setAll] = useState(false);
   const flip = (k) => setSel((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   // The cheapest chains for this list first (and any already marked); the rest on request.
-  const list = all ? chains : chains.filter((c, i) => i < 6 || sel.has(c.chain + ':club') || sel.has(c.chain + ':card'));
+  // (A club is the chain's, online too: each chain once, as its shop.)
+  const own = chains.filter((c) => !isOnlineChain(c.chain) || !chains.some((x) => x.chain === baseChain(c.chain))).map((c) => (isOnlineChain(c.chain) ? { ...c, chain: baseChain(c.chain), name: c.name.replace(/ אונליין$/, '') } : c));
+  const list = all ? own : own.filter((c, i) => i < 6 || sel.has(c.chain + ':club') || sel.has(c.chain + ':card'));
   return html`<div class="stack price-certs pp-clubs">
     <b>באילו רשתות אתם במועדון?</b>
     <span class="muted" style="line-height:1.55">מבצעים של מועדון או של כרטיס האשראי של הרשת ייכנסו לסכום רק ברשתות שתסמנו.</span>
     <ul class="pp-club-list">${list.map((c) => html`<li key=${c.chain}><span>${c.name}</span>
       <button type="button" class="chip" aria-pressed=${sel.has(c.chain + ':club')} onClick=${() => flip(c.chain + ':club')}>מועדון</button>
       <button type="button" class="chip" aria-pressed=${sel.has(c.chain + ':card')} onClick=${() => flip(c.chain + ':card')}>כרטיס אשראי</button></li>`)}</ul>
-    ${!all && list.length < chains.length && html`<button type="button" class="btn-text" style="justify-self:start" onClick=${() => setAll(true)}>כל הרשתות (${chains.length})</button>`}
+    ${!all && list.length < own.length && html`<button type="button" class="btn-text" style="justify-self:start" onClick=${() => setAll(true)}>כל הרשתות (${own.length})</button>`}
     <div class="price-cert-actions"><button type="button" class="btn btn-primary" style="width:auto" onClick=${() => onSave(sel)}>לשמור</button>
       <button type="button" class="btn-text" onClick=${onCancel}>ביטול</button></div>
   </div>`;
@@ -311,7 +313,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
       <span class="pp-eye">הסל שלכם · ${priced} מוצרים</span>
       <span class="pp-big num">${fmt(shown.total)}</span>
       <span class="pp-at">ב${shown.name}${shown.store ? html` <small>· ${shown.store}</small>` : ''}${shown === best ? html` <em class="pp-best">הכי משתלם</em>` : ''}</span>
-      ${chainNote(shown.chain) && html`<span class="pp-weekly"><${Icon} name="calendar" size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
+      ${chainNote(shown.chain) && html`<span class="pp-weekly"><${Icon} name=${chainNote(shown.chain).icon || 'calendar'} size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
       ${shown === best && bestAlways(chains) && html`<button type="button" class="pp-always" onClick=${() => setChainSel(bestAlways(chains).chain)}>${chainNote(best.chain).alt || 'בחנות שפתוחה כל יום'}: הכי משתלם ב${bestAlways(chains).name}, <b class="num">${fmt(bestAlways(chains).total)}</b></button>`}
       ${shown.missing > 0 && html`<span class="pp-missing">בלי ${shown.missing === 1 ? 'מוצר אחד שאין' : shown.missing + ' מוצרים שאין'} ב${shown.name}: ${shown.lines.filter((l) => !l.product).map((l) => (open.find((i) => i.id === l.id) || {}).name).filter(Boolean).slice(0, 4).join(', ')}${shown.missing > 4 ? ' ועוד' : ''}</span>`}
       ${shown.saved > 0 && html`<span class="pp-deals"><${Icon} name="tag" size=${15} />כולל <b class="num">${fmt(shown.saved)}</b> הנחה במבצעים שכל אחד מקבל</span>`}
@@ -347,7 +349,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
             const line = at && at.cost != null ? at.cost : one * n;
             return one === null ? html`<b class="num faint">—</b>` : html`<b class="num">${fmt(line)}</b>${line < one * n - 0.009 ? html`<s class="muted num">${fmt(one * n)}</s>` : n > 1 ? html`<small class="muted">${n} × ${fmt(one)}</small>` : ''}${where ? html`<small class="muted">${where}</small>` : ''}`; })()}</span>
         </button>
-        ${at && !at.promo && at.other && (at.other.why === 'club' || at.other.why === 'card') && html`<div class="pp-club-ask"><button type="button" class="btn-text" onClick=${() => saveClubs(new Set([...clubs, shown.chain + ':' + at.other.why]), (at.other.why === 'card' ? 'מבצעי כרטיס האשראי של ' : 'מבצעי המועדון של ') + shown.name + ' נכללים עכשיו בסכום')}>${at.other.why === 'card' ? 'יש לי את כרטיס האשראי של ' + shown.name : 'אני במועדון של ' + shown.name}: לכלול את המבצע</button></div>`}
+        ${at && !at.promo && at.other && (at.other.why === 'club' || at.other.why === 'card') && html`<div class="pp-club-ask"><button type="button" class="btn-text" onClick=${() => saveClubs(new Set([...clubs, baseChain(shown.chain) + ':' + at.other.why]), (at.other.why === 'card' ? 'מבצעי כרטיס האשראי של ' : 'מבצעי המועדון של ') + shown.name.replace(/ אונליין$/, '') + ' נכללים עכשיו בסכום')}>${at.other.why === 'card' ? 'יש לי את כרטיס האשראי של ' + shown.name.replace(/ אונליין$/, '') : 'אני במועדון של ' + shown.name.replace(/ אונליין$/, '')}: לכלול את המבצע</button></div>`}
         ${expanded && html`<div class="pp-more">
           ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל לא ידוע שהכשרות שלהם מהרשימה שלכם. בחרו מוצר, או סמנו מה כתוב על האריזה:</span>`}
           <ul class="price-opts">${c.options.map((o) => html`<li key=${o.barcode}><${Product} p=${o}>

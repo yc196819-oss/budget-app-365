@@ -46,7 +46,9 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //   clubs: the family's clubs, a Set of 'chain:club' / 'chain:card'.
 export function promoCost(offer, qty = 1, now = new Date(), clubs = null) {
   const mine = new Set();
-  if (clubs && offer) for (const k of ['club', 'card']) if (clubs.has(offer.chain + ':' + k)) mine.add(k);
+  // (A chain's club counts in its online shop too.)
+  const chainOf = offer ? String(offer.chain || '').replace(/-online$/, '') : '';
+  if (clubs && offer) for (const k of ['club', 'card']) if (clubs.has(chainOf + ':' + k)) mine.add(k);
   const price = Number(offer && offer.price) || 0;
   const base = r2(price * qty);
   let best = null;

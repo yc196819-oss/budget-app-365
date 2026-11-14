@@ -415,7 +415,8 @@ export function hiddenChains(pref, shown = []) {
 export function withoutChains(catalog, hidden) {
   if (!hidden || !hidden.length) return catalog;
   const out = new Set(hidden);
-  return Object.fromEntries(Object.entries(catalog || {}).map(([n, list]) => [n, (list || []).map((p) => ({ ...p, offers: (p.offers || []).filter((o) => !out.has(o.chain)) }))]));
+  // (A chain left out is left out online too.)
+  return Object.fromEntries(Object.entries(catalog || {}).map(([n, list]) => [n, (list || []).map((p) => ({ ...p, offers: (p.offers || []).filter((o) => !out.has(baseChain(o.chain))) }))]));
 }
 
 // With the family's area set: only the chains with a branch near it, at
@@ -427,7 +428,8 @@ export function withoutChains(catalog, hidden) {
 export function nearby(catalog, on, stores = null) {
   if (!on) return catalog;
   const near = stores ? new Set(stores.map((s) => s.chain)) : null;
-  return Object.fromEntries(Object.entries(catalog || {}).map(([n, list]) => [n, (list || []).map((p) => ({ ...p, offers: (p.offers || []).filter((o) => (near ? near.has(o.chain) : o.local)) }))]));
+  // (A chain's online shop delivers: it is not a branch near or far.)
+  return Object.fromEntries(Object.entries(catalog || {}).map(([n, list]) => [n, (list || []).map((p) => ({ ...p, offers: (p.offers || []).filter((o) => isOnlineChain(o.chain) || (near ? near.has(o.chain) : o.local)) }))]));
 }
 
 // Another product that can stand for the picked one at a chain: the same
@@ -548,10 +550,14 @@ export function chainListText(row, items) {
 export const CHAIN_NOTES = {
   'mishnat-yosef': { short: 'מכירה פעם בשבוע', text: 'משנת יוסף מוכרת במוקדי מכירה פעם בשבוע, ולא בחנות שפתוחה כל יום. המחיר הוא של יום המכירה.', url: 'https://mishnatyosef.org/', alt: 'בחנות שפתוחה כל יום' },
   // Convenience stores at fuel stations: for a small top-up, not the big shopping.
-  'yellow': { short: 'חנות בתחנת דלק', text: 'יילו היא חנות נוחות בתחנת דלק: טובה לקנייה קטנה, פחות לקנייה הגדולה.', alt: 'בסופרמרקט' },
-  'dor-alon': { short: 'חנות בתחנת דלק', text: 'דור אלון היא חנויות נוחות בתחנות דלק: טובות לקנייה קטנה, פחות לקנייה הגדולה.', alt: 'בסופרמרקט' }
+  'yellow': { icon: 'pin', short: 'חנות בתחנת דלק', text: 'יילו היא חנות נוחות בתחנת דלק: טובה לקנייה קטנה, פחות לקנייה הגדולה.', alt: 'בסופרמרקט' },
+  'dor-alon': { icon: 'pin', short: 'חנות בתחנת דלק', text: 'דור אלון היא חנויות נוחות בתחנות דלק: טובות לקנייה קטנה, פחות לקנייה הגדולה.', alt: 'בסופרמרקט' }
 };
-export const chainNote = (chain) => CHAIN_NOTES[chain] || null;
+// A chain's online shop ("rami-levy-online"): a price of its own, by delivery.
+export const isOnlineChain = (chain) => /-online$/.test(String(chain || ''));
+export const baseChain = (chain) => String(chain || '').replace(/-online$/, '');
+const ONLINE_NOTE = { icon: 'cart', short: 'אונליין · משלוח', text: 'זה המחיר באתר ההזמנות של הרשת. דמי משלוח לא כלולים, ובדרך כלל יש סכום מינימום להזמנה.', alt: 'בחנות' };
+export const chainNote = (chain) => CHAIN_NOTES[chain] || (isOnlineChain(chain) ? ONLINE_NOTE : null);
 // The cheapest chain that is open every day, when the cheapest is not.
 export function bestAlways(rows) {
   if (!rows.length || !chainNote(rows[0].chain)) return null;

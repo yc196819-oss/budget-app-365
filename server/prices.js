@@ -275,6 +275,7 @@ async function apifyItems(fetchFn, token, runId, { limit = 5000 } = {}) {
 // dropped connection). A site that refused us (403) or had no files would
 // only fail again, so it waits for the next night.
 function retryLater(done) {
-  return (done || []).filter((c) => c && c.error && !/HTTP 40[13]|no files|^save:/i.test(String(c.error))).map((c) => c.key);
+  // (An online shop is read with its chain, not on its own.)
+  return (done || []).filter((c) => c && c.error && !c.online && !/HTTP 40[13]|no files|^save:/i.test(String(c.error))).map((c) => c.key);
 }
 module.exports.retryLater = retryLater;

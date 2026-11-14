@@ -2046,21 +2046,45 @@ const promos = require('./server/promos');
 // prices were just read), saved over the branch's deals from before.
 // sid '' is the branch of the chain's general prices. Before the deals table
 // is in the database, nothing is saved (and nothing else stops).
-async function savePromos(chainKey, storeId, priceRows, sid = '') {
+//   saveAs: the key the deals are kept under (a chain's online shop is read
+//   from the chain's site but compared as "<chain>-online").
+async function savePromos(chainKey, storeId, priceRows, sid = '', saveAs = null) {
   const chain = pricefiles.CHAINS.find((c) => c.key === chainKey);
+  const key = saveAs || chainKey;
   if (!chain || !storeId || !priceRows || !priceRows.length) return 0;
   const regular = new Map();
   for (const r of priceRows) if (!regular.has(r.barcode) || r.price < regular.get(r.barcode)) regular.set(r.barcode, r.price);
   const rows = promos.promoRows(promos.parsePromoFile(await pricefiles.storePromos(priceFetch, chain, storeId)), regular);
   const at = new Date().toISOString();
-  const { error } = await supabaseAdmin.from('price_promos').delete().eq('chain', chainKey).eq('store_id', sid);
+  const { error } = await supabaseAdmin.from('price_promos').delete().eq('chain', key).eq('store_id', sid);
   if (error) throw new Error(error.message);
-  const out = rows.map((r) => ({ ...r, chain: chainKey, store_id: sid, seen_at: at }));
+  const out = rows.map((r) => ({ ...r, chain: key, store_id: sid, seen_at: at }));
   for (let i = 0; i < out.length; i += 1000) {
     const { error: e } = await supabaseAdmin.from('price_promos').insert(out.slice(i, i + 1000));
     if (e) throw new Error(e.message);
   }
   return out.length;
+}
+const online = require('./server/online');
+// A chain's online shop: its online warehouse's full price file (the first
+// that has a real catalog), kept as "<chain>-online" with its own deals.
+async function loadOnline(key, storeIds) {
+  const chain = pricefiles.CHAINS.find((c) => c.key === key);
+  const okey = online.onlineKey(key);
+  const name = online.onlineName(chain ? chain.name : key);
+  if (!chain) return { key: okey, name, count: 0, error: 'no chain' };
+  let last = 'no file';
+  for (const sid of storeIds.slice(0, 3)) {
+    try {
+      const rows = await pricefiles.storePrices(priceFetch, chain, sid);
+      if (rows.length < 200) { last = 'small (' + rows.length + ')'; continue; }
+      await saveCatalog(online.asOnline(rows, chain));
+      const deals = await savePromos(key, sid, rows, '', okey).catch(() => null);
+      console.log('prices:', okey, rows.length, 'ok');
+      return { key: okey, name, count: rows.length, error: null, deals, online: true };
+    } catch (e) { last = String(e.message || e).slice(0, 60); }
+  }
+  return { key: okey, name, count: 0, error: last, online: true };
 }
 // The free load: each chain's own full price file (the transparency law),
 // one chain at a time (one file in memory at a time), saved by barcode.
@@ -2069,15 +2093,19 @@ async function runFreeLoad() {
   Object.assign(seedJob, { running: true, part: 0, parts: pricefiles.CHAINS.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null, free: true, chainsDone: [] });
   try {
     const keys = pricefiles.CHAINS.map((c) => c.key);
+    // Each chain's online warehouse (from the branch lists): not taken as its
+    // shop branch, and read as "<chain> אונליין", a chain of its own.
+    const { data: storeNames } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,store_id,name').order('chain').order('store_id'));
+    const onlineMap = online.onlineStores(storeNames || []);
     // Each chain is saved as soon as it is read, and let go: holding every
     // chain's file until the end ran the server out of memory at night,
     // and then nothing was saved.
     for (const key of keys) {
       seedJob.part++;
       seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
-      let [r] = await pricefiles.allChains(priceFetch, { only: [key] });
+      let [r] = await pricefiles.allChains(priceFetch, { only: [key], avoid: onlineMap });
       // A chain that failed (a site busy for a moment) is asked once more.
-      if (r.error) { await new Promise((ok) => setTimeout(ok, 5000)); [r] = await pricefiles.allChains(priceFetch, { only: [key] }); }
+      if (r.error) { await new Promise((ok) => setTimeout(ok, 5000)); [r] = await pricefiles.allChains(priceFetch, { only: [key], avoid: onlineMap }); }
       let error = r.error || null;
       if (r.rows.length) await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
       seedJob.added += error ? 0 : r.count;
@@ -2086,6 +2114,8 @@ async function runFreeLoad() {
       if (!error && r.rows.length) deals = await savePromos(r.key, r.storeId, r.rows).catch((e) => { console.error('deals ' + r.key + ':', e.message); return null; });
       seedJob.chainsDone.push({ key: r.key, name: r.name, count: r.count, error, deals });
       console.log('prices:', r.key, r.count, error || 'ok');
+      // Its online shop, when it has one: a price of its own.
+      if (onlineMap[key]) seedJob.chainsDone.push(await loadOnline(key, onlineMap[key]));
     }
     // A site that did not answer at all (a few minutes down at night) gets
     // one more try at the end, a few minutes later. A site that refuses us
@@ -2095,7 +2125,7 @@ async function runFreeLoad() {
       await new Promise((ok) => setTimeout(ok, RETRY_WAIT_MS));
       for (const key of again) {
         seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
-        const [r] = await pricefiles.allChains(priceFetch, { only: [key] });
+        const [r] = await pricefiles.allChains(priceFetch, { only: [key], avoid: onlineMap });
         // Failed again: said so, so the morning check knows it was tried.
         if (r.error || !r.rows.length) { const at = seedJob.chainsDone.findIndex((c) => c.key === key); if (at >= 0) seedJob.chainsDone[at] = { ...seedJob.chainsDone[at], retried: true, error: (r.error || 'no rows') + ' (גם בניסיון הנוסף)' }; continue; }
         let error = null;
