@@ -4,7 +4,17 @@ import { CountUp } from '../../components/CountUp.js';
 
 const signedMoney = (v) => (v < 0 ? '−' : '') + money(v);
 
-export function AssetsHero({ view, s }) {
+export function AssetsHero({ view, s, homes = null }) {
+  if (homes) {
+    return html`<section class="hero rise">
+      <span style="font-weight:700;color:var(--hero-muted)">השווי שלכם בדירות</span>
+      <span class="display num" style="font-size:44px;line-height:1"><${CountUp} value=${homes.equity} format=${signedMoney} /></span>
+      <div class="hero-boxes">
+        <div><small>נשאר במשכנתאות</small><b class="num">${money(homes.owed)}</b></div>
+        <div><small>מהדירות הנוספות בחודש</small><b class="num">${signedMoney(homes.cash)}</b></div>
+      </div>
+    </section>`;
+  }
   const long = view === 'long';
   return html`<section class="hero rise">
     <span style="font-weight:700;color:var(--hero-muted)">${long ? 'החיסכון לטווח ארוך' : 'השווי הנקי'}</span>

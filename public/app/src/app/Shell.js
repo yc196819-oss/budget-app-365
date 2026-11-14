@@ -35,6 +35,7 @@ import { ShareSheet } from '../screens/import/ShareSheet.js';
 import { LearnSheet } from '../screens/learn/LearnSheet.js';
 import { ToastHost } from '../components/ToastHost.js';
 import { useHousehold } from '../data/useHousehold.js';
+import { useProperties } from '../data/property.js';
 import { useMedia } from '../lib/useMedia.js';
 import { AdvisorPanel } from '../screens/advisor/AdvisorPanel.js';
 import { claimRef } from '../data/share.js';
@@ -95,6 +96,9 @@ export function Shell({ tab, session }) {
   }, []);
   const [theme, setTheme] = useState(() => readLocal('theme', ''));
   const data = useHousehold(session.household?.household_id, session.user.id);
+  // The owner's apartments (for now on the owner's board only): an apartment's
+  // own bank account is then kept out of the household's month.
+  useProperties(owner ? session.household?.household_id : null);
   // The desktop rail and the mobile sheet hold the same advisor; only one is mounted.
   const desktop = useMedia('(min-width: 1024px)');
   // On a narrower computer screen the menu shrinks to icons and the advisor

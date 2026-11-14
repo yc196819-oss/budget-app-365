@@ -50,7 +50,8 @@ export function openLoans(loans) {
   return loans.filter((l) => !l.settled && num(l.amount) > 0);
 }
 
-export function summary({ accounts = [], investments = [], loans = [], installments = [], cards = [], txs = [], market = null, today }) {
+// properties: the family's apartments (their value is had, their mortgage owed).
+export function summary({ accounts = [], investments = [], loans = [], installments = [], cards = [], txs = [], market = null, today, properties = [] }) {
   const cash = sum(accounts.filter((a) => a.balance !== null && a.balance !== undefined && a.balance !== ''), (a) => num(a.balance));
   const values = investments.map((i) => ({ inv: i, ...investmentValue(i, market) }));
   const longTerm = sum(values.filter((v) => isLongTerm(v.inv)), (v) => v.value);
@@ -60,13 +61,15 @@ export function summary({ accounts = [], investments = [], loans = [], installme
   const loanDebt = sum(open.filter((l) => l.direction !== 'tome'), (l) => num(l.amount));
   const instDebt = sum(installments, (i) => installmentLeft(i, today).amount);
   const cardDebt = sum(cards, (c) => cardCycle(c, txs, today).pending);
-  const assets = cash + invest + longTerm + owedToUs;
-  const debts = loanDebt + instDebt + cardDebt;
+  const realEstate = sum(properties, (p) => num(p.value));
+  const mortgages = sum(properties, (p) => (p.mortgage ? num(p.mortgage.balance) : 0));
+  const assets = cash + invest + longTerm + owedToUs + realEstate;
+  const debts = loanDebt + instDebt + cardDebt + mortgages;
   return {
-    cash, invest, longTerm, owedToUs, loanDebt, instDebt, cardDebt,
+    cash, invest, longTerm, owedToUs, loanDebt, instDebt, cardDebt, realEstate, mortgages,
     assets, debts, net: assets - debts,
     // "Daily" money: what is in the bank and what will go out of it soon.
-    daily: { have: cash + owedToUs, owe: debts },
+    daily: { have: cash + owedToUs, owe: loanDebt + instDebt + cardDebt },
     hasAnything: accounts.length + investments.length + loans.length + installments.length + cards.length > 0
   };
 }

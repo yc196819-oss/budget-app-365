@@ -18,7 +18,7 @@ const PAGE = 1000;
 const MONTHS_BACK = 23;
 const DELETE_DELAY_MS = 5000;
 
-const state = { hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, genders: {}, accounts: [], cards: [], goals: [], installments: [], loans: [], investments: [], income: [], hidden: new Set(), refreshing: false };
+const state = { aptAccounts: new Set(), hid: null, userId: null, status: 'idle', error: null, txs: [], categories: [], budgets: [], members: {}, genders: {}, accounts: [], cards: [], goals: [], installments: [], loans: [], investments: [], income: [], hidden: new Set(), refreshing: false };
 const listeners = new Set();
 const pendingDeletes = new Map();
 
@@ -39,6 +39,17 @@ export function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
+// The bank accounts an apartment is run through (its rent and its costs):
+// kept out of the household's own month and budget, and given to the
+// apartments view apart.
+export function setApartmentAccounts(ids) {
+  const next = new Set((ids || []).filter(Boolean));
+  if (next.size === state.aptAccounts.size && [...next].every((x) => state.aptAccounts.has(x))) return;
+  state.aptAccounts = next;
+  listeners.forEach((fn) => fn());
+}
+const ofApartment = (t) => !!t.account_id && state.aptAccounts.has(t.account_id);
+
 export function snapshot() {
   return {
     hid: state.hid,
@@ -48,7 +59,8 @@ export function snapshot() {
     refreshing: state.refreshing,
     // Money moved between the household's own accounts is neither spent nor
     // earned: every screen counts txs, and the transfers are kept apart.
-    txs: state.txs.filter((t) => !state.hidden.has(t.id) && !isTransfer(t)),
+    txs: state.txs.filter((t) => !state.hidden.has(t.id) && !isTransfer(t) && !ofApartment(t)),
+    apartmentTxs: state.aptAccounts.size ? state.txs.filter((t) => !state.hidden.has(t.id) && !isTransfer(t) && ofApartment(t)) : [],
     transfers: state.txs.filter((t) => !state.hidden.has(t.id) && isTransfer(t)),
     categories: state.categories,
     budgets: state.budgets,

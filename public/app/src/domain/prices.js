@@ -391,7 +391,24 @@ export function searchTerm(name) {
   // (Without emoji, bullets or numbering an older line may still carry.)
   const n = String(name || '').replace(/\p{Extended_Pictographic}|[\u2600-\u27BF\uFE0F\u200d]/gu, ' ').replace(/^\s*(?:[-–—•*·▪◦●○■□☐✓→>]+\s*|\d{1,2}\s*[.)]\s+)/, '').replace(/[,;.]+\s*$/, '').trim().replace(/\s+/g, ' ');
   for (const [re, to] of AS_SOLD) if (re.test(n)) return to;
-  return n;
+  // "חד פעמיות" as the chains write it: "חד פעמי", "חד"פ" (both start "חד").
+  return n.replace(/(^|\s)חד[\s-]*פעמי(?:ות|ים|ת)?(?=\s|$)/g, '$1חד').replace(/(^|\s)ח["״]פ(?=\s|$)/g, '$1חד');
+}
+
+// A looser search when the item as written finds nothing: without what a
+// product's name never says ("לשבת", "שישייה", "1.5 ליטר"), and at last
+// without its last word. null when nothing is left to loosen.
+export function looser(term) {
+  const t = String(term || '');
+  let n = t
+    .replace(/(^|\s)(לשבת|לחג|לבית|לילדים|לתינוק|לתינוקות|לארוחת\s+\S+|לסעודה|לכיבוד)(?=\s|$)/g, ' ')
+    .replace(/(^|\s)(שישייה|שישיה|מארז|מארזים|חבילה|חבילות|קרטון|זוג|שקית|שקיות|בקבוק|בקבוקים|פחית|פחיות)(?=\s|$)/g, ' ')
+    .replace(/(^|\s)\d+(?:[.,]\d+)?\s*(ליטר|ל['׳]|ל|מ"ל|מל|גרם|גר|ג['׳]|ק"ג|קג|קילו|יח['׳]?|יחידות|גלילים)?(?=\s|$)/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  n = searchTerm(n);
+  if (n && n !== t) return n;
+  const w = t.split(' ');
+  return w.length > 2 ? w.slice(0, -1).join(' ') : null;
 }
 
 // The whole list at once (20 items or 200): one choice per item.
@@ -591,9 +608,20 @@ export function saving(rows) {
 // How many packages a list line asks for: "×2" → 2, "3 יח'" or "2 חבילות"
 // → that many; "2 ליטר" of a liter carton → 2, "1.5 ק"ג" of a 500 gram
 // pack → 3 (with the product picked, so its size is known); else 1.
-const PIECES = /^(יח'?|יחידות|יחידה|חבילות|חבילה|בקבוקים|בקבוק|שקיות|שקית|קופסאות|קופסה|מגשים|מגש|תבניות|תבנית)$/;
+const PIECES = /^(יח'?|יחידות|יחידה|קרטונים|קרטון|חבילות|חבילה|בקבוקים|בקבוק|שקיות|שקית|קופסאות|קופסה|מגשים|מגש|תבניות|תבנית)$/;
+// A pack written as a word: a six-pack of single bottles is six of them (a
+// product that is itself a six-pack is one).
+const PACKS = { 'שישייה': 6, 'שישיה': 6, 'שישיות': 6, 'זוג': 2, 'זוגות': 2, 'רביעייה': 4, 'רביעיה': 4, 'רביעיות': 4 };
 export function count(qtyText, product = null) {
-  const t = String(qtyText || '').trim();
+  let t = String(qtyText || '').trim();
+  const pack = /^(\d+)?\s*(שישייה|שישיה|שישיות|זוגות|זוג|רביעייה|רביעיה|רביעיות)$/.exec(t);
+  if (pack) {
+    const each = PACKS[pack[2]], times = Number(pack[1] || 1);
+    const isPack = product && new RegExp('(שישי|רביעי|' + each + '\\s*(יח|\\*|×|x|ב-?)|\\b' + each + 'X)', 'i').test(product.name || '');
+    return Math.max(1, Math.min(99, times * (isPack ? 1 : each)));
+  }
+  // "חצי קילו" is half a kilo.
+  t = t.replace(/^חצי\s+/, '0.5 ').replace(/^(קילו|ק"ג)$/, '1 ק"ג');
   let m = /^×\s*(\d+)$/.exec(t);
   if (m) return Math.max(1, Math.min(99, Number(m[1])));
   m = /^(\d+(?:[.,]\d+)?)\s*(.*)$/.exec(t);
@@ -605,5 +633,8 @@ export function count(qtyText, product = null) {
   const want = size(n, unit);
   const has = product ? sizeOfProduct(product) : null;
   if (!want || !has || want.unit !== has.unit || want.unit === 'unit' || !(has.qty > 0)) return 1;
+  // Loose produce sold by the kilo (a price per kilo, no package size in the
+  // name): 1.5 kilos are 1.5 times the price, not 2.
+  if (product && /ק"ג|קג|קילו/.test(product.unit || '') && Number(product.qty) === 1 && !/\d/.test(product.name || '')) return Math.max(0.1, Math.min(99, Math.round((want.qty / has.qty) * 10) / 10));
   return Math.max(1, Math.min(99, Math.ceil(want.qty / has.qty - 0.05)));
 }

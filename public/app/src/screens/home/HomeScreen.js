@@ -34,7 +34,7 @@ import { transferDays } from '../../domain/transfers.js';
 
 // The month at a glance: what is left to spend, where the month is heading,
 // what needs attention (one action each) and what is coming up.
-export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, userId }) {
+export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, userId, owner = false }) {
   // One sheet at a time: { kind: 'hero' } | { kind: 'tx', id } | null
   const [sheet, setSheet] = useState(null);
   // Pairs the household said are two real purchases (not a double charge).
@@ -64,7 +64,9 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   }
 
   const today = new Date();
-  const plan = monthPlan({ txs: data.txs, budgets: data.budgets, today });
+  // (The owner's board first: payments still to come this month are spoken for.)
+  const plan = monthPlan({ txs: data.txs, budgets: data.budgets, today, smart: owner });
+  const catName = (id) => (data.categories.find((c) => c.id === id) || {}).name || '';
   const cash = cashNow(data.accounts, data.cards, data.txs, today);
   const soon = upcoming({ txs: data.txs, cards: data.cards, today });
   // "Complete the picture" (its card, or the ✓ at the top) already says which
@@ -116,7 +118,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       <${MonthlyAsk} userId=${userId} data=${data} />
       ${guide}
       ${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}
-      <${Hero} plan=${plan} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
+      <${Hero} plan=${plan} catName=${catName} onImport=${onImport} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
       <${InstallCard} />
       <${TripFound} data=${data} trips=${trips} />
       <${Attention} items=${items} onAct=${act} />
@@ -134,7 +136,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
     ${sheet && sheet.kind === 'sort' && html`<${SortSheet} data=${data} onClose=${() => setSheet(null)} />`}
     ${askTx && html`<${MoveSheet} key=${askTx.id} data=${data} line=${askTx} kind=${sheet.ask} onClose=${() => setSheet(null)} />`}
     ${sheet && sheet.kind === 'transfers' && html`<${TransferSheet} data=${data} dupeOk=${dupeOk} onClose=${() => setSheet(null)} onDays=${() => setDupeVer((v) => v + 1)} />`}
-    ${sheet && sheet.kind === 'hero' && html`<${HeroSheet} plan=${plan} onClose=${() => setSheet(null)} />`}
+    ${sheet && sheet.kind === 'hero' && html`<${HeroSheet} plan=${plan} catName=${catName} onClose=${() => setSheet(null)} />`}
     ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
   </div>`;
 }
