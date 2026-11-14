@@ -33,7 +33,21 @@ function clubKind(text) {
   if ((who.length ? who : alts).some(isCard)) return 'card';
   return 'staff';
 }
-const when = (s) => { const v = String(s || '').trim(); if (!/^\d{4}-\d{2}-\d{2}/.test(v)) return null; const d = new Date(v.slice(0, 19) + '+02:00'); return Number.isNaN(d.getTime()) ? null : d.toISOString(); };
+// A time in the file is Israel's clock: +02:00 in winter, +03:00 in summer.
+function israelOffset(utcGuess) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Jerusalem', timeZoneName: 'shortOffset' }).formatToParts(utcGuess);
+  const m = /GMT([+-]\d+)/.exec((parts.find((x) => x.type === 'timeZoneName') || {}).value || '');
+  return m ? Number(m[1]) : 2;
+}
+const when = (s) => {
+  const v = String(s || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}/.test(v)) return null;
+  const local = v.slice(0, 19).length >= 19 ? v.slice(0, 19) : v.slice(0, 10) + 'T00:00:00';
+  const guess = new Date(local + 'Z');
+  if (Number.isNaN(guess.getTime())) return null;
+  const off = israelOffset(guess);
+  return new Date(guess.getTime() - off * 3600000).toISOString();
+};
 
 // The file into deals, each with its products: [{ id, text, everyone,
 // coupon, minBuy, starts, ends, gift, items: [{ barcode, minQty, maxQty,

@@ -79,7 +79,7 @@ test('policy: the deal\'s limit, and the best of two deals', () => {
 });
 
 test('deals in words', () => {
-  assert.equal(promoText({ need: 2, unit_price: 7.5, ends_at: '2026-12-05T21:59:00Z' }), '2 ב-₪15 · עד 5.12');
+  assert.equal(promoText({ need: 2, unit_price: 7.5, ends_at: '2026-12-05T21:59:00Z' }, null, NOW), '2 ב-₪15 · עד 5.12');
   assert.equal(promoText({ need: 1, unit_price: 12.5 }, 15.9), '₪12.50 במקום ₪15.90');
   assert.equal(blockText('min-buy', { min_buy: 75 }), 'בקנייה מעל ₪75');
   assert.equal(offText({ why: 'more', promo: { need: 4, unit_price: 12.53 } }), 'מבצע 4 ב-₪50.12 (לא בסכום: ברשימה פחות מ-4)');
@@ -147,4 +147,14 @@ test('a deal of thousands of products is read fast (each deal\'s fields once, no
   const p = parsePromoFile(file);
   assert.equal(p.reduce((n, d) => n + d.items.length, 0), 20000);
   assert.ok(Date.now() - t < 2000, 'under two seconds (it took ' + (Date.now() - t) + 'ms)');
+});
+
+test('deal times are Israel\'s clock (winter +2, summer +3), and the end is said as today / tomorrow', () => {
+  const end = (e) => parsePromoFile('<Root><Promotions>' + promo({ id: 't', text: 'x', end: e, items: item('7290000000011', { price: 5 }) }) + '</Promotions></Root>')[0].ends;
+  assert.equal(end('2026-12-05T23:59:00.000'), '2026-12-05T21:59:00.000Z', 'winter');
+  assert.equal(end('2026-07-05T23:59:00.000'), '2026-07-05T20:59:00.000Z', 'summer');
+  const now = new Date('2026-11-13T10:00:00Z');
+  assert.equal(promoText({ need: 1, unit_price: 5, ends_at: '2026-11-13T21:59:00Z' }, null, now), '₪5 · עד היום');
+  assert.equal(promoText({ need: 1, unit_price: 5, ends_at: '2026-11-14T21:59:00Z' }, null, now), '₪5 · עד מחר');
+  assert.equal(promoText({ need: 1, unit_price: 5, ends_at: '2026-11-14T22:30:00Z' }, null, now), '₪5 · עד 15.11', 'after midnight in Israel is the next day');
 });

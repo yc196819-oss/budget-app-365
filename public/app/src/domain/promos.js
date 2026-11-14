@@ -64,11 +64,21 @@ export function promoCost(offer, qty = 1, now = new Date(), clubs = null) {
 
 // A deal in a few words: "2 ב-₪15", or "₪12.50 במקום ₪15.90", and until when.
 const fmt = (n) => '₪' + (Math.round(n * 100) / 100).toFixed(2).replace(/\.00$/, '');
-const dateText = (iso) => { if (!iso) return ''; const d = new Date(iso); return d.getDate() + '.' + (d.getMonth() + 1); };
-export function promoText(p, regular) {
+// The day in Israel (where the shop is), whatever the device's clock says.
+const ilDay = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(d);
+function untilText(iso, now = new Date()) {
+  if (!iso) return '';
+  const end = new Date(iso);
+  const day = ilDay(end);
+  if (day === ilDay(now)) return 'עד היום';
+  if (day === ilDay(new Date(now.getTime() + 86400000))) return 'עד מחר';
+  const [, m, d] = day.split('-');
+  return 'עד ' + Number(d) + '.' + Number(m);
+}
+export function promoText(p, regular, now = new Date()) {
   const need = p.need || 1;
   const deal = need > 1 ? need + ' ב-' + fmt(p.unit_price * need) : fmt(p.unit_price) + (regular ? ' במקום ' + fmt(regular) : '');
-  return deal + (p.ends_at ? ' · עד ' + dateText(p.ends_at) : '');
+  return deal + (p.ends_at ? ' · ' + untilText(p.ends_at, now) : '');
 }
 // What a deal that is not counted takes, in words.
 export function blockText(why, p) {
