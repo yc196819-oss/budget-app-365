@@ -3,16 +3,17 @@
 // refuse visitors from outside Israel, so first: which ones answer our
 // server at all. Pure apart from the fetch it is given.
 
+// The sites the nightly load reads from (the same as server/pricefiles.js),
+// and the chains set aside (their sites refuse our server abroad): shown as
+// such, not as a fault. Yeinot Bitan and Mega are Carrefour now.
 const CHAINS = [
-  { key: 'shufersal', name: 'שופרסל', url: 'https://prices.shufersal.co.il/' },
-  { key: 'cerberus', name: 'רמי לוי, יוחננוף, אושר עד, טיב טעם ועוד (אתר משותף)', url: 'https://url.publishedprices.co.il/login' },
-  { key: 'carrefour', name: 'קרפור', url: 'https://prices.carrefour.co.il/' },
-  { key: 'laib', name: 'ויקטורי, מחסני השוק ועוד', url: 'https://laibcatalog.co.il/' },
-  { key: 'hazi', name: 'חצי חינם', url: 'https://shop.hazi-hinam.co.il/Prices' },
-  { key: 'bitan', name: 'יינות ביתן', url: 'https://prices.ybitan.co.il/' },
-  { key: 'mega', name: 'מגה', url: 'https://publishprice.mega.co.il/' },
-  { key: 'king', name: 'קינג סטור', url: 'https://www.kingstore.co.il/Food_Law/Main.aspx' },
-  { key: 'superpharm', name: 'סופר-פארם', url: 'https://prices.super-pharm.co.il/' }
+  { key: 'shufersal', name: 'שופרסל (חנות ואונליין)', url: 'https://prices.shufersal.co.il/' },
+  { key: 'cerberus', name: 'רמי לוי, יוחננוף, אושר עד, טיב טעם, סאלח דבאח ועוד 7 (אתר משותף)', url: 'https://url.publishedprices.co.il/login' },
+  { key: 'bina', name: 'שפע ברכת השם, משנת יוסף, קינג סטור, זול ובגדול, שוק העיר ועוד 5 (אתר משותף שני)', url: 'https://kingstore.binaprojects.com/Main.aspx' },
+  { key: 'carrefour', name: 'קרפור (כולל יינות ביתן ומגה)', url: 'https://prices.carrefour.co.il/', paused: true },
+  { key: 'laib', name: 'ויקטורי, מחסני השוק', url: 'https://laibcatalog.co.il/', paused: true },
+  { key: 'hazi', name: 'חצי חינם', url: 'https://shop.hazi-hinam.co.il/Prices', paused: true },
+  { key: 'superpharm', name: 'סופר-פארם', url: 'https://prices.super-pharm.co.il/', paused: true }
 ];
 
 // One site: does it answer, how fast, and with what. A 403 or a timeout
@@ -32,7 +33,8 @@ async function probeOne(chain, fetchFn, timeoutMs = 12000) {
 }
 
 async function probeAll(fetchFn, chains = CHAINS, timeoutMs) {
-  return Promise.all(chains.map((c) => probeOne(c, fetchFn, timeoutMs)));
+  // A chain set aside is not asked: said as set aside, not as failing.
+  return Promise.all(chains.map((c) => (c.paused ? { key: c.key, name: c.name, paused: true, ok: false } : probeOne(c, fetchFn, timeoutMs))));
 }
 
 module.exports = { CHAINS, probeOne, probeAll };

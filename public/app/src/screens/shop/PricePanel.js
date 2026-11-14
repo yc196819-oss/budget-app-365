@@ -321,7 +321,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
       ${shown === best && (() => { const t = twoChains(chains); if (!t) return ''; const names = (ids) => ids.map((id) => (open.find((i) => i.id === id) || {}).name).filter(Boolean);
         return html`<details class="pp-two"><summary>בשתי רשתות: <b class="num">${fmt(t.total)}</b>, עוד <b class="num">${fmt(t.saved)}</b> פחות</summary>
           <span>ב${t.b.name}: ${names(t.atB).join(', ')}</span><span>ב${t.a.name}: כל השאר</span></details>`; })()}
-      ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת הרשת היקרה ביותר בהשוואה</span>`}
+      ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת המחיר האמצעי ברשתות</span>`}
       ${(() => { const text = chainListText(shown, open); const copy = async () => { try { await navigator.clipboard.writeText(text); showToast('הרשימה של ' + shown.name + ' הועתקה'); track('price_list_copy'); } catch (_e) { showToast('לא הצלחנו להעתיק.'); } };
         return html`<div class="pp-send"><span>לשלוח למי שהולך לקנות:</span><a class="btn-text" href=${'https://wa.me/?text=' + encodeURIComponent(text)} target="_blank" rel="noopener" onClick=${() => track('price_list_wa')}>וואטסאפ</a><button type="button" class="btn-text" onClick=${copy}>להעתיק</button></div>`; })()}
       <div class="pp-bars" role="group" aria-label="הסל בכל רשת: לבחור רשת">${top.map((c) => html`<button type="button" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>

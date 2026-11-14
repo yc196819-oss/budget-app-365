@@ -80,14 +80,14 @@ function PriceReachCard() {
   const [busy, setBusy] = useState(false);
   const [r, setR] = useState(null);
   const run = async () => { setBusy(true); try { setR(await priceReach()); } catch (e) { setR({ error: e.message || 'הבדיקה נכשלה' }); } setBusy(false); };
-  const why = (x) => (x.ok ? 'עונה' : x.status === 403 ? 'חוסם (כנראה כי השרת בחו"ל)' : x.error === 'timeout' ? 'לא ענה בזמן' : x.status ? 'שגיאה ' + x.status : 'לא נגיש');
+  const why = (x) => (x.paused ? 'בצד: לא נטען כרגע (האתר חוסם שרתים מחו"ל)' : x.ok ? 'עונה' : x.status === 403 ? 'חוסם (כנראה כי השרת בחו"ל)' : x.error === 'timeout' ? 'לא ענה בזמן' : x.status ? 'שגיאה ' + x.status : 'לא נגיש');
   return html`<div class="card stack admin-prices"><b>מחירי סופר: אילו רשתות נגישות מהשרת</b>
     <span class="muted" style="font-size:13px;line-height:1.55">בודק עכשיו, מהשרת שלנו, אם האתרים שבהם הרשתות מפרסמות מחירים עונים. לא נשמר כלום.</span>
     <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px" disabled=${busy} onClick=${run}>${busy ? 'בודק…' : 'לבדוק עכשיו'}</button>
     ${r && r.error && html`<span role="status" style="font-size:13px">${r.error}</span>`}
     ${r && r.sites && html`<div role="status" class="stack" style="gap:4px;font-size:13px">
-      <span>${r.sites.filter((x) => x.ok).length} מתוך ${r.sites.length} עונים</span>
-      ${r.sites.map((x) => html`<span key=${x.key}><b style=${'color:' + (x.ok ? 'var(--accent)' : 'var(--danger)')}>${x.ok ? '✓' : '✕'}</b> ${x.name}: ${why(x)}</span>`)}
+      <span>${r.sites.filter((x) => x.ok).length} מתוך ${r.sites.filter((x) => !x.paused).length} אתרים שאנחנו טוענים מהם עונים</span>
+      ${r.sites.map((x) => html`<span key=${x.key}><b style=${'color:' + (x.paused ? 'var(--muted)' : x.ok ? 'var(--accent)' : 'var(--danger)')}>${x.paused ? '–' : x.ok ? '✓' : '✕'}</b> ${x.name}: ${why(x)}</span>`)}
     </div>`}
   </div>`;
 }

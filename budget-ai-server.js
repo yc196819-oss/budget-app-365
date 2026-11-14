@@ -2073,18 +2073,24 @@ async function loadOnline(key, storeIds) {
   const okey = online.onlineKey(key);
   const name = online.onlineName(chain ? chain.name : key);
   if (!chain) return { key: okey, name, count: 0, error: 'no chain' };
+  // The fullest of its online warehouses (a chain with several regional ones:
+  // Shuk Ha'ir's first had 2,900 products, another 4,400).
   let last = 'no file';
-  for (const sid of storeIds.slice(0, 3)) {
+  let best = null;
+  for (const sid of storeIds.slice(0, 8)) {
     try {
       const rows = await pricefiles.storePrices(priceFetch, chain, sid);
       if (rows.length < 200) { last = 'small (' + rows.length + ')'; continue; }
-      await saveCatalog(online.asOnline(rows, chain));
-      const deals = await savePromos(key, sid, rows, '', okey).catch(() => null);
-      console.log('prices:', okey, rows.length, 'ok');
-      return { key: okey, name, count: rows.length, error: null, deals, online: true };
+      if (!best || rows.length > best.rows.length) best = { sid, rows };
     } catch (e) { last = String(e.message || e).slice(0, 60); }
   }
-  return { key: okey, name, count: 0, error: last, online: true };
+  if (!best) return { key: okey, name, count: 0, error: last, online: true };
+  try {
+    await saveCatalog(online.asOnline(best.rows, chain));
+  } catch (e) { return { key: okey, name, count: 0, error: 'save: ' + String(e.message || e).slice(0, 60), online: true }; }
+  const deals = await savePromos(key, best.sid, best.rows, '', okey).catch(() => null);
+  console.log('prices:', okey, best.rows.length, 'ok');
+  return { key: okey, name, count: best.rows.length, error: null, deals, online: true };
 }
 // The free load: each chain's own full price file (the transparency law),
 // one chain at a time (one file in memory at a time), saved by barcode.

@@ -76,3 +76,12 @@ test('online: a delivery price not confirmed for a chain is said as about', () =
   assert.match(chainNote('rami-levy-online').text, /כולל משלוח של ₪35\.90\./);
   assert.match(chainNote('shuk-hair-online').text, /בערך ₪35\.90 \(לא אימתנו/);
 });
+
+test('the saving said is against the middle of the chains, not the dearest', async () => {
+  const { saving } = await import('../public/app/src/domain/prices.js');
+  const r = (total) => ({ missing: 0, total });
+  assert.equal(saving([r(100), r(110), r(120), r(200)]), 15, 'the middle of 100, 110, 120, 200 is 115');
+  assert.equal(saving([r(100), r(110), r(300)]), 10);
+  assert.equal(saving([r(100), r(108)]), 8, 'two chains: the difference');
+  assert.equal(saving([r(100)]), 0);
+});
