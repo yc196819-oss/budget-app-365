@@ -62,7 +62,8 @@ test('today\'s lesson: read, a 2-question quiz, saved per user, streak on the ho
 test('progress from another device is loaded, and the library shows every topic', async () => {
   const done = Object.fromEntries(LESSONS.slice(0, 3).map((l) => [l.id, '2026-01-01']));
   const { page } = await open((db) => db.tables.user_settings.push({ user_id: 'u1', household_id: 'h1', learning: { done, answers: {} }, reminders: { keep: true } }));
-  assert.match(await page.locator('.learn-card').textContent(), new RegExp(LESSONS[3].title));
+  // The progress arrives a moment after the card shows (it is loaded from the account).
+  await page.locator('.learn-card', { hasText: LESSONS[3].title }).waitFor();
   await page.click('.learn-card');
   await page.click('.sheet button:has-text("כל השיעורים")');
   assert.equal(await page.locator('.topic').count(), TOPICS.length);
