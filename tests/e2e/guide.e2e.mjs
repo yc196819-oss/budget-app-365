@@ -81,7 +81,7 @@ test('sorting everything without a category: a choice is saved at once, the advi
   assert.equal(db.tables.transactions.find((t) => t.id === 'l3').category_id, 'home', 'saved at once');
   await sheet.locator('.sort-row.saved').first().waitFor();
   // The advisor's suggestion waits for one tap.
-  await sheet.locator('text=לשמור את הצעות היועץ (1)').click();
+  await sheet.locator('text=לשמור את כל ההצעות (1)').click();
   await page.waitForSelector('text=סווגה תנועה אחת');
   assert.deepEqual(['l1', 'l2', 'l3'].map((id) => db.tables.transactions.find((t) => t.id === id).category_id), ['home', 'home', 'home']);
   await sheet.locator('text=סיימתי').click();
@@ -89,6 +89,35 @@ test('sorting everything without a category: a choice is saved at once, the advi
   await page.reload();
   await page.waitForSelector('.hero');
   assert.equal(await page.locator('.import-notice').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('sorting: investments and merchants chosen before come ready as suggestions, and one tap saves them all', async () => {
+  const db = withLoose(makeFakeDb());
+  const d = iso(new Date());
+  db.tables.categories.push({ id: 'inv', name: 'השקעות', icon: null, kind: 'expense', parent_id: null, household_id: db.hid });
+  // Made-up monthly investments, and a merchant the family sorted before.
+  db.tables.transactions.push(
+    { id: 'i1', household_id: 'h1', type: 'expense', amount: 500, description: 'פסגות ניירות ערך', tx_date: d, category_id: null, source: 'pdf', created_at: '2026-11-01T18:14:44Z' },
+    { id: 'i2', household_id: 'h1', type: 'expense', amount: 700, description: 'הוראת קבע קרן נאמנות', tx_date: d, category_id: null, source: 'pdf', created_at: '2026-11-01T18:14:44Z' },
+    { id: 'old', household_id: 'h1', type: 'expense', amount: 100, description: 'תרומה לעמותה', tx_date: '2026-01-05', category_id: 'home', source: 'pdf', created_at: '2026-01-05T18:14:44Z' }
+  );
+  const { page, errors } = await open(db);
+  await page.locator('.import-notice').locator('text=לסווג עכשיו').click();
+  const sheet = page.locator('.sort-sheet');
+  await sheet.waitFor();
+  await sheet.locator('.sort-ready').waitFor();
+  assert.equal(await sheet.locator('select[aria-label="קטגוריה לפסגות ניירות ערך"]').inputValue(), 'inv');
+  assert.equal(await sheet.locator('select[aria-label^="קטגוריה להוראת קבע קרן נאמנות"]').inputValue(), 'inv');
+  assert.equal(await sheet.locator('select[aria-label="קטגוריה לתרומה לעמותה"]').inputValue(), 'home');
+  // Nothing saved before the tap.
+  assert.equal(db.tables.transactions.find((t) => t.id === 'i1').category_id, null);
+  const save = sheet.locator('button:has-text("לשמור את כל ההצעות")');
+  assert.match(await save.textContent(), /\((3|4)\)/);
+  await save.click();
+  await page.waitForSelector('.toast:has-text("סווגו")');
+  assert.deepEqual(['i1', 'i2', 'l2', 'l3'].map((id) => db.tables.transactions.find((t) => t.id === id).category_id), ['inv', 'inv', 'home', 'home']);
   assert.deepEqual(errors, []);
   await page.close();
 });
