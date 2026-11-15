@@ -82,7 +82,7 @@ test('sorting everything without a category: a choice is saved at once, the advi
   await sheet.locator('.sort-row.saved').first().waitFor();
   // The advisor's suggestion waits for one tap.
   await sheet.locator('text=לשמור את הצעות היועץ (1)').click();
-  await page.waitForSelector('text=סווגו 1 תנועות');
+  await page.waitForSelector('text=סווגה תנועה אחת');
   assert.deepEqual(['l1', 'l2', 'l3'].map((id) => db.tables.transactions.find((t) => t.id === id).category_id), ['home', 'home', 'home']);
   await sheet.locator('text=סיימתי').click();
   // Seen once: the notice does not come back.
