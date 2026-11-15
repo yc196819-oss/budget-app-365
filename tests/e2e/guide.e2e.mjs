@@ -101,7 +101,7 @@ test('sorting everything without a category: a choice is saved at once, the advi
   await notice.locator('text=לסווג עכשיו').click();
   const sheet = page.locator('.sort-sheet');
   await sheet.waitFor();
-  assert.equal(await sheet.locator('.sort-row').count(), 2, 'one line per merchant');
+  assert.equal(await sheet.locator('.sort-card').count(), 2, 'one line per merchant');
   await sheet.locator('text=שהיועץ יציע לכולם').click();
   await page.waitForSelector('text=היועץ הציע ל-1 בתי עסק');
   assert.equal(sent.length, 1);
@@ -110,7 +110,7 @@ test('sorting everything without a category: a choice is saved at once, the advi
   await sheet.locator('select[aria-label="קטגוריה לתרומה לעמותה"]').selectOption('home');
   for (let i = 0; i < 30 && db.tables.transactions.find((t) => t.id === 'l3').category_id !== 'home'; i++) await page.waitForTimeout(100);
   assert.equal(db.tables.transactions.find((t) => t.id === 'l3').category_id, 'home', 'saved at once');
-  await sheet.locator('.sort-row.saved').first().waitFor();
+  await sheet.locator('.sort-card.saved').first().waitFor();
   // The advisor's suggestion waits for one tap.
   await sheet.locator('text=לשמור את כל ההצעות (1)').click();
   await page.waitForSelector('text=סווגה תנועה אחת');
@@ -139,9 +139,11 @@ test('sorting: investments and merchants chosen before come ready as suggestions
   const sheet = page.locator('.sort-sheet');
   await sheet.waitFor();
   await sheet.locator('.sort-ready').waitFor();
-  assert.equal(await sheet.locator('select[aria-label="קטגוריה לפסגות ניירות ערך"]').inputValue(), 'inv');
-  assert.equal(await sheet.locator('select[aria-label^="קטגוריה להוראת קבע קרן נאמנות"]').inputValue(), 'inv');
-  assert.equal(await sheet.locator('select[aria-label="קטגוריה לתרומה לעמותה"]').inputValue(), 'home');
+  const picked = (name) => sheet.locator('.sort-card', { hasText: name }).locator('.sort-chip[aria-pressed="true"]').textContent();
+  assert.equal(await picked('פסגות ניירות ערך'), 'השקעות');
+  assert.equal(await picked('הוראת קבע קרן נאמנות'), 'השקעות');
+  assert.equal(await picked('תרומה לעמותה'), 'בית ודיור');
+  assert.match(await sheet.locator('.sort-card', { hasText: 'פסגות' }).textContent(), /הצעה: השקעות/);
   // Nothing saved before the tap.
   assert.equal(db.tables.transactions.find((t) => t.id === 'i1').category_id, null);
   const save = sheet.locator('button:has-text("לשמור את כל ההצעות")');
@@ -163,11 +165,11 @@ test('sorting, as a friend did it: choices saved one by one, a break to add a ca
   const sheet = page.locator('.sort-sheet');
   await sheet.waitFor();
   // Two merchants and three Bit payments, each on its own line.
-  assert.equal(await sheet.locator('.sort-row').count(), 5);
-  assert.equal(await sheet.locator('.sort-row', { hasText: 'BIT' }).count(), 3);
+  assert.equal(await sheet.locator('.sort-card').count(), 5);
+  assert.equal(await sheet.locator('.sort-card', { hasText: 'BIT' }).count(), 3);
   // One Bit payment sorted: only that one.
-  await sheet.locator('.sort-row', { hasText: '₪60' }).locator('select').selectOption('food');
-  await sheet.locator('.sort-row', { hasText: 'משכנתא' }).locator('select').selectOption('home');
+  await sheet.locator('.sort-card', { hasText: '₪60' }).locator('select').selectOption('food');
+  await sheet.locator('.sort-card', { hasText: 'משכנתא' }).locator('select').selectOption('home');
   for (let i = 0; i < 30 && db.tables.transactions.find((t) => t.id === 'l1').category_id !== 'home'; i++) await page.waitForTimeout(100);
   assert.equal(db.tables.transactions.find((t) => t.id === 'bit2').category_id, 'food');
   assert.equal(db.tables.transactions.find((t) => t.id === 'bit0').category_id, null, 'the other Bit payments untouched');

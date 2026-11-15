@@ -3,7 +3,7 @@ import { Loading } from '../../components/Loading.js';
 import { useState } from 'preact/hooks';
 import { Segmented } from '../../components/Segmented.js';
 import { routeView } from '../../domain/routes.js';
-import { summary, symbolsOf, investDeposits } from '../../domain/assets.js';
+import { summary, symbolsOf, investDeposits, withDeposits } from '../../domain/assets.js';
 import { useMarket } from '../../data/market.js';
 import { AssetsHero } from './AssetsHero.js';
 import { DailyView } from './DailyView.js';
@@ -39,9 +39,12 @@ export function AssetsScreen({ data, userId, owner = false }) {
   const today = new Date();
   // The apartments see their own accounts' lines too (kept out of the household's month).
   const allTxs = data.apartmentTxs && data.apartmentTxs.length ? [...data.txs, ...data.apartmentTxs] : data.txs;
-  const s = summary({ ...data, market, today, properties: owner && props.status === 'ready' ? props.list : [] });
   // What went into investments, from the sorted lines: no typing needed.
   const deposits = investDeposits(data.txs, data.categories, today);
+  // The investments with what the lines say: deposits kept up to date, and
+  // places money went to listed on their own.
+  const investments = withDeposits(data.investments, deposits.places);
+  const s = summary({ ...data, investments, market, today, properties: owner && props.status === 'ready' ? props.list : [] });
   const open = (kind, id = null) => setSheet({ kind, id });
   const close = () => setSheet(null);
   const find = (list) => (sheet && sheet.id ? list.find((r) => r.id === sheet.id) : null);
@@ -53,7 +56,7 @@ export function AssetsScreen({ data, userId, owner = false }) {
       ? html`<${DailyView} data=${data} today=${today} onOpen=${open} userId=${userId} />`
       : view === 'homes'
         ? html`<${PropertiesView} props=${props} today=${today} onOpen=${open} txs=${allTxs} accounts=${data.accounts} />`
-        : html`<${LongView} data=${data} deposits=${deposits} market=${market} marketError=${marketError} onOpen=${open} />`}
+        : html`<${LongView} data=${data} investments=${investments} deposits=${deposits} market=${market} marketError=${marketError} onOpen=${open} />`}
     ${sheet && sheet.kind === 'account' && html`<${AccountSheet} account=${find(data.accounts)} onClose=${close} />`}
     ${sheet && (sheet.kind === 'investment' || sheet.kind === 'pension') && html`<${InvestmentSheet} inv=${find(data.investments)} market=${market} pension=${sheet.kind === 'pension'} onClose=${close} />`}
     ${sheet && sheet.kind === 'card' && html`<${CardSheet} card=${find(data.cards)} accounts=${data.accounts} members=${data.members} userId=${userId} onClose=${close} />`}

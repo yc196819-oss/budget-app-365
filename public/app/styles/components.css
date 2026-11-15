@@ -1860,3 +1860,22 @@ body.chat-open { overflow: hidden; }
 .home-foot .btn-text { font-size: 13px; }
 .home-switch { align-self: center; font-size: 12px; }
 .att-more { align-self: flex-start; }
+
+/* Sorting what has no category: a card a row, the likely categories as one tap. */
+.sort-cards { display: flex; flex-direction: column; gap: 10px; }
+.sort-card { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); transition: border-color .2s, background .2s; }
+.sort-card.saved { border-color: color-mix(in srgb, var(--income) 55%, var(--line)); }
+.sort-card.suggested { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.sort-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.sort-name { font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sort-amt { font-weight: 700; white-space: nowrap; }
+.sort-amt.income { color: var(--income); }
+.sort-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); min-height: 0; }
+.sort-meta:empty { display: none; }
+.sort-state { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+.sort-state.ok { color: var(--income); }
+.sort-state.sug { color: var(--accent); }
+.sort-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sort-chip { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+.sort-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.sort-other { border: 1px dashed var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 6px 10px; font: inherit; font-size: 14px; max-width: 100%; }

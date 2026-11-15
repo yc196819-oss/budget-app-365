@@ -79,3 +79,28 @@ test('the forecast: regular deposits on a line of their own each month, out of t
   const fc3 = forecast({ txs: base, today });
   assert.equal(fc3.months[1].lines.filter((l) => l.kind === 'saving').length, 0);
 });
+
+import { withDeposits, summary } from '../public/app/src/domain/assets.js';
+
+test('investments from the lines: a place with no investment is listed on its own, worth what went in', () => {
+  const d = investDeposits(txs, cats, today);
+  const list = withDeposits([], d.places);
+  const fund = list.find((i) => i.name === 'קרן בדויה');
+  assert.equal(fund.derived, true);
+  assert.equal(fund.cost, 8000);
+  assert.equal(fund.current_value, 8000);
+  assert.equal(summary({ investments: list, today }).invest, 8500, 'counted in what the family has');
+});
+
+test('a written investment: what went in follows the deposits, and its value grows by deposits after it was written', () => {
+  const d = investDeposits(txs, cats, today);
+  const inv = [{ id: 'i1', name: 'קרן בדויה', cost: 3000, current_value: 3300, value_updated_at: '2026-08-15T10:00:00Z' }];
+  const list = withDeposits(inv, d.places);
+  const fund = list.find((i) => i.id === 'i1');
+  assert.equal(fund.cost, 8000, 'all the deposits');
+  assert.equal(fund.current_value, 3300 + 3000, 'September, October, November came after the value was written');
+  assert.equal(list.filter((i) => i.name === 'קרן בדויה').length, 1, 'not listed twice');
+  // A live price is left as it is.
+  const live = withDeposits([{ id: 'i2', name: 'קרן בדויה', symbol: 'SPY', units: 1, current_value: 100, value_updated_at: '2026-08-15' }], d.places).find((i) => i.id === 'i2');
+  assert.equal(live.current_value, 100);
+});
