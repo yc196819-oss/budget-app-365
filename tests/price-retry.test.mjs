@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { retryLater } = require('../server/prices.js');
 
-test('after the night\'s load, only chains whose site did not answer are tried again', () => {
+test('after the night\'s load, chains whose site did not answer or had no files yet are tried again', () => {
   const done = [
     { key: 'a', error: null },
     { key: 'b', error: 'fetch failed (UND_ERR_CONNECT_TIMEOUT)' },
@@ -14,7 +14,7 @@ test('after the night\'s load, only chains whose site did not answer are tried a
     { key: 'f', error: 'save: duplicate key' },
     { key: 'g', error: 'socket hang up' }
   ];
-  assert.deepEqual(retryLater(done), ['b', 'c', 'g']);
+  assert.deepEqual(retryLater(done), ['b', 'c', 'e', 'g']);
   assert.deepEqual(retryLater([]), []);
   assert.deepEqual(retryLater(null), []);
 });

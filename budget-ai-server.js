@@ -2095,6 +2095,7 @@ async function loadOnline(key, storeIds) {
 // The free load: each chain's own full price file (the transparency law),
 // one chain at a time (one file in memory at a time), saved by barcode.
 const RETRY_WAIT_MS = Number(process.env.PRICE_RETRY_WAIT_MS || 180000);
+const LATE_RETRY_MS = Number(process.env.PRICE_LATE_RETRY_MS || 90 * 60000);
 async function runFreeLoad() {
   Object.assign(seedJob, { running: true, part: 0, parts: pricefiles.CHAINS.length, added: 0, cost: 0, error: null, startedAt: new Date().toISOString(), endedAt: null, free: true, chainsDone: [] });
   try {
@@ -2123,17 +2124,21 @@ async function runFreeLoad() {
       // Its online shop, when it has one: a price of its own.
       if (onlineMap[key]) seedJob.chainsDone.push(await loadOnline(key, onlineMap[key]));
     }
-    // A site that did not answer at all (a few minutes down at night) gets
-    // one more try at the end, a few minutes later. A site that refuses us
-    // (403) or has no files would only fail again.
-    const again = prices.retryLater(seedJob.chainsDone);
-    if (again.length) {
-      await new Promise((ok) => setTimeout(ok, RETRY_WAIT_MS));
+    // A site that did not answer at all (a few minutes down at night), or had
+    // no files yet, gets more tries at the end. A site that refuses us (403)
+    // would only fail again.
+    // Twice: a few minutes later, and once more an hour and a half later
+    // (after Shabbat, Osher Ad had no files yet at 3:30 in the morning).
+    for (const wait of [RETRY_WAIT_MS, LATE_RETRY_MS]) {
+      const again = prices.retryLater(seedJob.chainsDone.filter((c) => !c.retriedLate));
+      if (!again.length) break;
+      await new Promise((ok) => setTimeout(ok, wait));
+      const late = wait === LATE_RETRY_MS;
       for (const key of again) {
         seedJob.current = (pricefiles.CHAINS.find((c) => c.key === key) || {}).name || key;
         const [r] = await pricefiles.allChains(priceFetch, { only: [key], avoid: onlineMap });
         // Failed again: said so, so the morning check knows it was tried.
-        if (r.error || !r.rows.length) { const at = seedJob.chainsDone.findIndex((c) => c.key === key); if (at >= 0) seedJob.chainsDone[at] = { ...seedJob.chainsDone[at], retried: true, error: (r.error || 'no rows') + ' (גם בניסיון הנוסף)' }; continue; }
+        if (r.error || !r.rows.length) { const at = seedJob.chainsDone.findIndex((c) => c.key === key); if (at >= 0) seedJob.chainsDone[at] = { ...seedJob.chainsDone[at], retried: true, retriedLate: late, error: String(r.error || 'no rows').replace(/ \(גם בניסיון.*$/, '') + (late ? ' (גם בניסיון השני והשלישי)' : ' (גם בניסיון הנוסף)') }; continue; }
         let error = null;
         await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
         const deals = error ? null : await savePromos(r.key, r.storeId, r.rows).catch(() => null);
