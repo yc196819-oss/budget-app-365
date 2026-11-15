@@ -32,6 +32,14 @@ export function SortSheet({ data, onClose }) {
   const roots = (type) => data.categories.filter((c) => !c.parent_id && (type === 'income' ? c.kind === 'income' : c.kind !== 'income'));
   const kids = (id) => data.categories.filter((c) => c.parent_id === id);
   const valueOf = (p) => (p ? p.subcategory_id || p.category_id : '');
+  const nameOf = (id) => (data.categories.find((c) => c.id === id) || {}).name || '';
+  // The categories this family uses most, as one-tap buttons on each row.
+  const [usage] = useState(() => {
+    const n = {};
+    for (const t of data.txs || []) if (t.category_id) n[t.category_id] = (n[t.category_id] || 0) + 1;
+    return n;
+  });
+  const favs = (type) => roots(type).slice().sort((a, b) => (usage[b.id] || 0) - (usage[a.id] || 0)).slice(0, 4).map((c) => c.id);
   const asPick = (id) => {
     const c = data.categories.find((x) => x.id === id);
     return !c ? null : c.parent_id ? { category_id: c.parent_id, subcategory_id: c.id } : { category_id: c.id, subcategory_id: null };
@@ -83,18 +91,24 @@ export function SortSheet({ data, onClose }) {
       ${savedCount > 0 && html`<span class="sort-saved" role="status"><${Icon} name="check" size=${16} />נשמרו ${savedCount} ${savedCount === 1 ? 'שורה' : 'שורות'}</span>`}
       ${ready > 0 && html`<span class="sort-ready" role="status">${ready === 1 ? 'לשורה אחת יש הצעה' : 'ל-' + ready + ' שורות יש הצעה'} לפי בית העסק (למשל השקעות). בדקו, ולחיצה אחת למטה שומרת הכול.</span>`}
       ${aiOn && html`<button type="button" class="btn btn-ghost" disabled=${asking || saving} onClick=${suggest}>${asking ? 'היועץ חושב…' : 'שהיועץ יציע לכולם'}</button>`}
-      <div class="list">${groups.map((g) => { const p = picks[g.key]; return html`<div class=${'sort-row' + (p && p.saved ? ' saved' : '')} key=${g.key} style="display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)">
-        <span style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.description}${g.generic && g.date ? html` <span class="muted" style="font-weight:400">· ${dayLabel(g.date, new Date())}</span>` : ''}</b>
-          <span class="num muted" style="font-size:13px;white-space:nowrap">${g.ids.length > 1 ? g.ids.length + ' × · ' : ''}${g.type === 'income' ? '+' : ''}${money(g.total)}</span></span>
-        <span style="display:flex;align-items:center;gap:8px">
-          <select class="input" style="flex:1" aria-label=${'קטגוריה ל' + g.description + (g.generic && g.date ? ' ' + g.date : '')} value=${valueOf(p)} onChange=${(e) => choose(g, e.target.value)}>
-            <option value="">בחרו קטגוריה</option>
-            ${roots(g.type).map((r) => [html`<option value=${r.id}>${r.name}</option>`, ...kids(r.id).map((c) => html`<option value=${c.id}>— ${c.name}</option>`)])}
-          </select>
-          ${p && p.saved && html`<span class="sort-ok" aria-label="נשמר"><${Icon} name="check" size=${18} /></span>`}
-          ${p && !p.saved && p.suggested && html`<span class="faint" style="font-size:12px;white-space:nowrap">הצעה</span>`}
-        </span>
-      </div>`; })}</div>
+      <div class="sort-cards">${groups.map((g) => {
+        const p = picks[g.key];
+        const cur = p ? p.subcategory_id || p.category_id : '';
+        const root = p ? p.category_id : '';
+        const chips = [...new Set([...(p && p.suggested && !p.saved ? [p.category_id] : []), ...favs(g.type)])].slice(0, 4);
+        const label = cur ? nameOf(cur) : '';
+        return html`<div class=${'sort-card' + (p && p.saved ? ' saved' : p && p.suggested ? ' suggested' : '')} key=${g.key}>
+          <div class="sort-top"><b class="sort-name">${g.description}</b><span class=${'num sort-amt' + (g.type === 'income' ? ' income' : '')}>${g.type === 'income' ? '+' : ''}${money(g.total)}</span></div>
+          <div class="sort-meta">${[g.generic && g.date ? dayLabel(g.date, new Date()) : null, g.ids.length > 1 ? g.ids.length + ' תנועות' : null].filter(Boolean).join(' · ')}
+            ${p && p.saved ? html`<span class="sort-state ok"><${Icon} name="check" size=${14} />נשמר: ${label}</span>` : p && p.suggested ? html`<span class="sort-state sug">הצעה: ${label}</span>` : ''}</div>
+          <div class="sort-chips" role="group" aria-label=${'קטגוריה מהירה ל' + g.description}>
+            ${chips.map((id) => html`<button type="button" class="sort-chip" aria-pressed=${String(root === id)} onClick=${() => choose(g, id)}>${nameOf(id)}</button>`)}
+            <select class="sort-other" aria-label=${'קטגוריה ל' + g.description + (g.generic && g.date ? ' ' + g.date : '')} value=${chips.includes(cur) ? '' : cur} onChange=${(e) => choose(g, e.target.value)}>
+              <option value="">${chips.length ? 'קטגוריה אחרת…' : 'בחרו קטגוריה'}</option>
+              ${roots(g.type).map((r) => [html`<option value=${r.id}>${r.name}</option>`, ...kids(r.id).map((c) => html`<option value=${c.id}>— ${c.name}</option>`)])}
+            </select>
+          </div>
+        </div>`; })}</div>
       <div style="display:flex;flex-direction:column;gap:6px"><span class="faint" style="font-size:13px">חסרה קטגוריה ברשימה? מוסיפים, והיא מופיעה בבחירה. מה שכבר בחרתם נשאר.</span><${NewCategory} categories=${data.categories} kind="expense" /></div>
       ${waitingSuggested.length > 0 && html`<button type="button" class="btn" disabled=${saving} onClick=${saveSuggested}>${saving ? 'שומר…' : 'לשמור את כל ההצעות (' + waitingSuggested.length + ')'}</button>`}
       <button type="button" class=${'btn' + (waitingSuggested.length ? ' btn-ghost' : '')} onClick=${onClose}>סיימתי</button>

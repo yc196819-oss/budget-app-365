@@ -126,23 +126,24 @@ test('long term: what went into investments comes from the sorted lines, with no
   await page.click('text=לטווח ארוך');
   const card = page.locator('.invest-deposits');
   await card.waitFor();
-  assert.match(await page.locator('.hero').textContent(), /הופקד להשקעות \(לפי התנועות\)/);
-  assert.match(await card.textContent(), /בממוצע בחודש₪1,000/);
+    assert.match(await card.textContent(), /בממוצע בחודש₪1,000/);
   assert.match(await card.textContent(), /החודש עד עכשיו₪1,000/);
   assert.match(await card.textContent(), /ב-12 החודשים האחרונים₪3,000/);
   assert.match(await card.textContent(), /קרן בדויה₪4,000/);
   assert.equal(await card.locator('.dep-bar').count(), 6);
-  // One tap: it becomes an investment (what went in as its cost and value), and its sheet opens to type today's value.
-  await card.locator('button[aria-label="להוסיף כהשקעה: קרן בדויה"]').click();
-  await page.waitForSelector('.toast:has-text("נוסף להשקעות")');
+  // Already in the investments, with nothing typed; one tap writes today's value.
+  assert.match(await page.locator('.hero').textContent(), /₪4,000/);
+  const row = page.locator('.row', { hasText: 'לפי ההפקדות' });
+  assert.match(await row.textContent(), /קרן בדויה/);
+  await row.click();
+  await page.waitForSelector('.sheet');
   const inv = db.tables.investments.find((i) => i.name === 'קרן בדויה');
   assert.ok(inv);
   assert.deepEqual([inv.cost, inv.current_value, inv.currency], [4000, 4000, 'ILS']);
-  await page.waitForSelector('.sheet');
   await page.click('.sheet button[aria-label="סגירה"]');
   await page.waitForFunction(() => !document.querySelector('.sheet'));
-  assert.match(await card.textContent(), /ברשימה/);
-  assert.equal(await card.locator('.dep-add').count(), 0);
+  assert.equal(await page.locator('.row', { hasText: 'לפי ההפקדות' }).count(), 0);
+  assert.match(await page.locator('.row', { hasText: 'קרן בדויה' }).textContent(), /ההפקדות מתעדכנות לבד/);
   assert.deepEqual(errors, []);
   await page.close();
 });

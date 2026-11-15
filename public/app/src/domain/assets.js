@@ -173,7 +173,15 @@ export function investDeposits(txs = [], categories = [], today = new Date()) {
   const lastYear = round2(sum(inYear, (t) => num(t.amount)));
   const byMonth = Array.from({ length: 6 }, (_, k) => { const ym = ymBack(today, 5 - k); return { ym, amount: round2(sum(deposits.filter((t) => ymOf(t.tx_date) === ym), (t) => num(t.amount))) }; });
   const where = new Map();
-  for (const t of deposits) { const k = String(t.description || '').trim() || 'השקעה'; where.set(k, round2((where.get(k) || 0) + num(t.amount))); }
+  const places = new Map();
+  for (const t of deposits) {
+    const k = String(t.description || '').trim() || 'השקעה';
+    where.set(k, round2((where.get(k) || 0) + num(t.amount)));
+    const p = places.get(k) || { name: k, amount: 0, lines: [] };
+    p.amount = round2(p.amount + num(t.amount));
+    p.lines.push({ date: t.tx_date, amount: num(t.amount) });
+    places.set(k, p);
+  }
   return {
     any: deposits.length > 0,
     count: deposits.length,
@@ -184,6 +192,34 @@ export function investDeposits(txs = [], categories = [], today = new Date()) {
     thisMonth: round2(sum(deposits.filter((t) => ymOf(t.tx_date) === nowYm), (t) => num(t.amount))),
     first: first || null,
     byMonth,
-    where: Array.from(where, ([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount).slice(0, 4)
+    where: Array.from(where, ([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount).slice(0, 4),
+    // Every place money went to, with its deposits (for the investments list).
+    places: [...places.values()].sort((a, b) => b.amount - a.amount)
   };
+}
+
+// An investment and a place deposits went to are the same when one name holds the other.
+export const samePlace = (a, b) => { const x = String(a || '').trim(), y = String(b || '').trim(); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); };
+
+// The investments as the lines tell them, with nothing to type:
+// - one typed in that deposits went to: what was put in is the deposits
+//   (kept up to date), and its value grows by every deposit made after the
+//   value was last written (a value from a live price is left as it is);
+// - a place deposits went to with no investment yet: it is in the list on its
+//   own, worth what was put in, until a value is written for it.
+export function withDeposits(investments = [], places = []) {
+  const used = new Set();
+  const out = investments.map((i) => {
+    const p = places.find((x) => !used.has(x.name) && samePlace(i.name, x.name));
+    if (!p) return i;
+    used.add(p.name);
+    const since = i.value_updated_at ? String(i.value_updated_at).slice(0, 10) : null;
+    const after = since ? p.lines.filter((l) => l.date > since).reduce((s, l) => s + l.amount, 0) : 0;
+    return { ...i, cost: p.amount, current_value: i.symbol ? i.current_value : round2(num(i.current_value) + after), fromDeposits: true };
+  });
+  for (const p of places) {
+    if (used.has(p.name)) continue;
+    out.push({ id: 'dep:' + p.name, name: p.name, asset_type: 'לפי ההפקדות', cost: p.amount, current_value: p.amount, derived: true, first: p.lines.reduce((m, l) => (!m || l.date < m ? l.date : m), '') });
+  }
+  return out;
 }
