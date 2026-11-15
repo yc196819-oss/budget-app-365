@@ -66,11 +66,15 @@ test('the owner attaches a picture: the privacy note once, a preview, sent with 
   await page.close();
 });
 
-test('everyone else: no attach button yet, and a picture pasted is not attached', async () => {
-  const { page, errors } = await open({ email: null });
+test('everyone can attach a picture now; a picture alone asks what is in it', async () => {
+  const { page, asked, errors } = await open({ email: null });
   await page.click('.ask-fab');
-  await page.waitForSelector('[aria-label="שאלה ליועץ"]');
-  assert.equal(await page.locator('.adv-attach').count(), 0);
+  await page.setInputFiles('.adv-compose input[type="file"]', { name: 'r.png', mimeType: 'image/png', buffer: PNG });
+  await page.waitForSelector('.adv-pic img');
+  await page.click('.adv-compose button[type="submit"]');
+  await page.waitForSelector('.adv-msg.ai:has-text("248")');
+  assert.match(asked[0].image, /^data:image\/jpeg;base64,/);
+  assert.equal(asked[0].message, 'מה רואים בתמונה?');
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -105,11 +109,10 @@ test('a picture shared (owner) can still be a statement: on to "which account or
   await page.close();
 });
 
-test('everyone else: a shared picture goes straight to "which account or card", as before', async () => {
+test('everyone: a shared picture asks what it is for too', async () => {
   const { page } = await open({ email: null });
   await sharePicture(page);
-  await page.waitForSelector('.share-q');
-  assert.equal(await page.locator('.share-choose').count(), 0);
+  await page.waitForSelector('.share-choose');
   await page.close();
 });
 

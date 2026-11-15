@@ -241,6 +241,16 @@ const aiLimiter = rateLimit({
   keyGenerator: (req) => req.authUserId || req.ip,
   message: { error: 'יותר מדי בקשות AI, נסה שוב בעוד דקה' }
 });
+// Pictures to the advisor: up to 20 an hour per person (only requests that carry one count).
+const advisorImageLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.authUserId || req.ip,
+  skip: (req) => !(req.body && req.body.image),
+  message: { error: 'צירפתם הרבה תמונות בשעה האחרונה. נסו שוב מאוחר יותר.' }
+});
 
 // ═══ stage 3: monthly AI quota per household (friends use the owner's AI keys) ═══
 // households.ai_monthly_limit: null = unlimited (our own household), number = cap.
@@ -1129,17 +1139,14 @@ ${historyText ? '\nהשיחה עד עכשיו:\n' + historyText + '\n' : ''}
 ההודעה הנוכחית (${authorName || 'משתמש'}): ${message}`;
 }
 
-app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimiter, aiQuota, async (req, res) => {
   const { summary, history, message, authorName, authorGender, candidates, categories, device } = req.body || {};
   if (!message) return res.status(400).json({ error: 'message is required' });
   if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'No AI key configured' });
-  // A picture with the question: for now the owner's. Read for this answer
-  // only; never stored or logged.
+  // A picture with the question (up to 20 an hour, advisorImageLimiter).
+  // Read for this answer only; never stored or logged.
   let image = null;
   if (req.body && req.body.image) {
-    // Asked of the auth server: a session remembered from a few minutes ago
-    // carries no email (see requireAuth), so the email cannot be read from it.
-    if (!(await isAdmin(req.authUserId).catch(() => false))) return res.status(403).json({ error: 'צירוף תמונה עוד לא זמין.' });
     if (!ANTHROPIC_KEY) return res.status(503).json({ error: 'היועץ לא יכול לקרוא תמונות כרגע.' });
     image = advisorImage.parseImage(req.body.image);
     if (image.error) return res.status(400).json({ error: image.error });

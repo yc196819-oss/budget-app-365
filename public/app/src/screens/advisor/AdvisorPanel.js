@@ -17,11 +17,10 @@ import { snapshot as decisionsSnapshot } from '../../data/decisions.js';
 import { forAdvisor } from '../../domain/decisions.js';
 import { matchHowto, profileHint } from '../../content/howto.js';
 import { go } from '../../lib/go.js';
-import { useOwner } from '../../lib/owner.js';
 import { shrinkImage } from '../../data/feedback.js';
 import { takeAdvisorImage } from '../../lib/advisorInbox.js';
 
-// A picture goes with the question (for now the owner's). It is read for the
+// A picture goes with the question. It is read for the
 // answer and not kept: the conversation keeps only this line and the answer.
 export const PIC_MARK = 'צירפתי תמונה';
 const picNoteKey = 'advisor:pic-note';
@@ -70,7 +69,6 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   const talkOn = useRef(false);
   const talkStop = useRef(null);
   // The picture waiting to go with the next question: { data, name } | null.
-  const owner = useOwner(session.user && session.user.email);
   const [image, setImage] = useState(null);
   const [picNote, setPicNote] = useState(false);
   const attach = async (file) => {
@@ -85,12 +83,11 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   };
   // A picture shared from the phone to the advisor: a new conversation with it.
   useEffect(() => {
-    if (!owner) return undefined;
     const take = () => { const f = takeAdvisorImage(); if (f) { if (!convRef.current) setConv({ id: null, user_id: me, is_private: false, messages: [] }); attach(f); } };
     take();
     window.addEventListener('advisor-image', take);
     return () => window.removeEventListener('advisor-image', take);
-  }, [owner]);
+  }, []);
 
   const names = data.members || {};
   const memberName = (id) => (id === me ? (names[id] || 'אני') : (names[id] || partnerWord(genderOf(data.genders, id))));
@@ -352,7 +349,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
       ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>
         <div class="learn-actions"><button type="button" class="btn" onClick=${startLearn}>לבדוק מה למדתי</button><button type="button" class="btn-text" onClick=${dismissOffer}>לא עכשיו</button></div></div>`}
-      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${owner ? { image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } } : null} onSend=${(v) => send(v ?? draft)} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
+      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${{ image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } }} onSend=${(v) => send(v ?? draft)} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
     </div>`;
   }
 
@@ -363,7 +360,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     ${aiOn && html`<div class="stack" style="gap:8px">
       <b style="font-size:14px;color:var(--muted)">אפשר לשאול למשל</b>
       <div class="chips">${starters(screen).map((s) => html`<button type="button" class="chip" disabled=${busy} onClick=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(s); }}>${s}</button>`)}</div>
-      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${owner ? { image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } } : null} onSend=${(v) => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(v ?? draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
+      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${{ image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } }} onSend=${(v) => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(v ?? draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
     </div>`}
     ${error && html`<div class="adv-err" role="alert">${error}</div>`}
     <div class="stack" style="gap:6px">

@@ -42,13 +42,16 @@ test('the advisor is told the picture is not kept and to copy amounts exactly', 
   assert.match(IMAGE_NOTE, /בדיוק/);
 });
 
-// A session remembered by the server carries no email, so the owner check
-// for pictures asks the auth server (isAdmin) and does not read req.authEmail:
-// that broke the first real try ("צירוף תמונה עוד לא זמין" for the owner).
-test('the picture owner check does not rely on the session email', () => {
+// Pictures are for everyone, up to 20 an hour per person; only requests that
+// carry a picture count. (No check reads req.authEmail: a session the server
+// remembers carries none, which broke the owner's first try.)
+test('the picture limit counts only requests with a picture', () => {
   const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'budget-ai-server.js'), 'utf8');
+  assert.match(src, /app\.post\('\/api\/ai\/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimiter,/);
+  const at = src.indexOf('const advisorImageLimiter');
+  const lim = src.slice(at, src.indexOf('});', at));
+  assert.match(lim, /max: 20/);
+  assert.match(lim, /skip: \(req\) => !\(req\.body && req\.body\.image\)/);
   const start = src.indexOf("app.post('/api/ai/advice-chat-stream'");
-  const part = src.slice(start, src.indexOf('advisorImage.parseImage', start));
-  assert.match(part, /isAdmin\(req\.authUserId\)/);
-  assert.doesNotMatch(part, /req\.authEmail/);
+  assert.doesNotMatch(src.slice(start, src.indexOf('advisorImage.parseImage', start)), /req\.authEmail/);
 });
