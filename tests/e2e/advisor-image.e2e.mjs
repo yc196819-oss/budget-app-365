@@ -112,3 +112,16 @@ test('everyone else: a shared picture goes straight to "which account or card", 
   assert.equal(await page.locator('.share-choose').count(), 0);
   await page.close();
 });
+
+test('a refused or failed send keeps the picture in the box, to try again', async () => {
+  const { page } = await open();
+  await page.unroute('**/api/ai/advice-chat-stream');
+  await page.route('**/api/ai/advice-chat-stream', (r) => r.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ error: 'צירוף תמונה עוד לא זמין.' }) }));
+  await page.click('.ask-fab');
+  await page.setInputFiles('.adv-compose input[type="file"]', { name: 'r.png', mimeType: 'image/png', buffer: PNG });
+  await page.waitForSelector('.adv-pic img');
+  await page.click('.adv-compose button[type="submit"]');
+  await page.waitForSelector('.adv-err');
+  assert.equal(await page.locator('.adv-pic img').count(), 1);
+  await page.close();
+});

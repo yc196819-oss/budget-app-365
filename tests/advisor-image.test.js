@@ -41,3 +41,14 @@ test('the advisor is told the picture is not kept and to copy amounts exactly', 
   assert.match(IMAGE_NOTE, /לא נשמרת/);
   assert.match(IMAGE_NOTE, /בדיוק/);
 });
+
+// A session remembered by the server carries no email, so the owner check
+// for pictures asks the auth server (isAdmin) and does not read req.authEmail:
+// that broke the first real try ("צירוף תמונה עוד לא זמין" for the owner).
+test('the picture owner check does not rely on the session email', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'budget-ai-server.js'), 'utf8');
+  const start = src.indexOf("app.post('/api/ai/advice-chat-stream'");
+  const part = src.slice(start, src.indexOf('advisorImage.parseImage', start));
+  assert.match(part, /isAdmin\(req\.authUserId\)/);
+  assert.doesNotMatch(part, /req\.authEmail/);
+});
