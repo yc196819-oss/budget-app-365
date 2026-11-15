@@ -20,6 +20,13 @@ async function open(db) {
   return { page, errors };
 }
 
+// The full list of steps waits in "עוד דברים לסדר" on the home.
+async function openTodo(page) {
+  await page.locator('button:has-text("עוד דברים לסדר")').first().click();
+  await page.waitForSelector('.sheet .setup-guide');
+  return page.locator('.sheet .setup-guide');
+}
+
 function withLoose(db) {
   db.tables.households = [{ id: 'h1', income_expectations: [] }];
   const d = iso(new Date());
@@ -34,7 +41,7 @@ function withLoose(db) {
 test('the guide resumes at the first step not done, and saving the income ticks it', async () => {
   const db = withLoose(makeFakeDb());
   const { page, errors } = await open(db);
-  const guide = page.locator('.setup-guide');
+  const guide = await openTodo(page);
   assert.match(await guide.textContent(), /ממשיכים מאיפה שעצרתם/);
   assert.match(await guide.locator('.guide-step.open').textContent(), /מסווגים את מה שנשאר/);
   assert.match(await guide.locator('.guide-step.open').textContent(), /3 תנועות מחכות לקטגוריה/);
@@ -47,8 +54,10 @@ test('the guide resumes at the first step not done, and saving the income ticks 
   assert.deepEqual(db.tables.households[0].income_expectations, [{ label: 'הכנסה חודשית נטו', amount: 18000 }]);
   // Skips are remembered after reopening the app.
   await page.reload();
+  await page.waitForSelector('.hero');
+  await openTodo(page);
   // The app opens with the data kept on the device, then refreshes: wait for the fresh one.
-  await page.waitForFunction(() => { const el = document.querySelector('.setup-guide .guide-step.open'); return el && !/מסווגים|כמה נכנס/.test(el.textContent); }, null, { timeout: 10000 });
+  await page.waitForFunction(() => { const el = document.querySelector('.sheet .setup-guide .guide-step.open'); return el && !/מסווגים|כמה נכנס/.test(el.textContent); }, null, { timeout: 10000 });
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -64,9 +73,10 @@ test('banks and cards can be chosen from the start, not only after the six steps
   assert.match(await pic.textContent(), /איפה הכסף שלכם/);
   const order = await page.evaluate(() => { const a = document.querySelector('.pic-card'); const b = document.querySelector('.setup-guide'); return !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)); });
   assert.ok(order, 'the banks and cards card comes before the steps');
-  // The cards step opens the same picker.
-  await page.locator('.setup-guide .guide-head', { hasText: 'כל כרטיסי האשראי' }).click();
-  await page.click('.setup-guide button:has-text("לבחור את הכרטיסים")');
+  // The cards step (in the full list) opens the same picker.
+  const guide = await openTodo(page);
+  await guide.locator('.guide-head', { hasText: 'כל כרטיסי האשראי' }).click();
+  await guide.locator('button:has-text("לבחור את הכרטיסים")').click();
   await page.waitForSelector('.pic-picker');
   assert.deepEqual(errors, []);
   await page.close();
@@ -79,7 +89,7 @@ test('banks and cards can be chosen from the start, not only after the six steps
   await mockSupabase(page2, db2);
   await signIn(page2, server.base);
   await page2.goto(server.base + '/app/#/home');
-  await page2.click('.setup-guide button:has-text("לבחור בנק וכרטיסים ולהעלות")');
+  await page2.locator('button:has-text("לבחור בנק וכרטיסים ולהעלות")').first().click();
   await page2.waitForSelector('.pic-picker');
   await page2.close();
 });

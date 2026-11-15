@@ -1,6 +1,6 @@
 import { html } from '../../lib/html.js';
 import { Splash } from '../../components/Splash.js';
-import { PictureCard } from '../picture/Picture.js';
+import { PictureCard, nothingChosen } from '../picture/Picture.js';
 import { useEffect, useState } from 'preact/hooks';
 import { track } from '../../lib/telemetry.js';
 import { monthPlan, cashNow, upcoming, attention, topCategories } from '../../domain/home.js';
@@ -161,6 +161,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       <${RepairCard} data=${data} />
       <${ImportNotice} data=${data} onImport=${onImport} />
       <${Hero} plan=${plan} catName=${catName} onImport=${onImport} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
+      ${nextKey && onPicture && nothingChosen(data) && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}
       ${nextKey
         ? html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} onPicture=${onPicture} compact=${true} onMore=${() => setTodo(true)} />`
         : html`<div class="calm-next">${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}<button type="button" class="btn-text" style="align-self:flex-end" onClick=${() => setTodo(true)}>עוד דברים לסדר ›</button></div>`}
