@@ -2403,6 +2403,86 @@ app.post('/api/prices/images', requireAuth, async (req, res) => {
     return res.json({ images: {} });
   }
 });
+
+// ── the shopping tab by a link, for one person without an account ──
+// The owner makes a link (only its fingerprint is kept) and can cancel it.
+// Whoever holds it gets the shopping page alone: their list stays in their
+// own browser, and the server answers only price searches and photos.
+// Without the shop_guest_links table, no link works.
+const guestShop = require('./server/guestShop');
+const guestLimiter = rateLimit({ windowMs: 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.ip });
+async function guestLink(token) {
+  if (!supabaseAdmin || !guestShop.isToken(token)) return null;
+  const { data, error } = await supabaseAdmin.from('shop_guest_links').select('id,label,revoked_at,uses').eq('token_hash', guestShop.hashToken(token)).maybeSingle();
+  if (error || !data || data.revoked_at) return null;
+  return data;
+}
+app.get('/api/guest/shop/:token', guestLimiter, async (req, res) => {
+  const link = await guestLink(req.params.token).catch(() => null);
+  if (!link) return res.status(404).json({ error: 'הקישור לא פעיל. בקשו קישור חדש ממי ששלח אותו.' });
+  // When it was last opened (for the owner), at most once a minute is enough.
+  supabaseAdmin.from('shop_guest_links').update({ last_used_at: new Date().toISOString(), uses: (link.uses || 0) + 1 }).eq('id', link.id).then(() => {}, () => {});
+  return res.json({ ok: true, label: link.label });
+});
+app.post('/api/guest/shop/:token/search', guestLimiter, async (req, res) => {
+  try {
+    if (!(await guestLink(req.params.token))) return res.status(404).json({ error: 'הקישור לא פעיל.' });
+    const queries = guestShop.cleanQueries(req.body && req.body.queries);
+    if (!queries.length) return res.json({ rows: [] });
+    // The chains' general prices (a guest has no area).
+    const { data, error } = await supabaseAdmin.rpc('price_search', { p_queries: queries });
+    if (error) throw error;
+    return res.json({ rows: data || [] });
+  } catch (err) {
+    console.error('guest search failed:', err.message);
+    return res.status(502).json({ error: 'לא הצלחנו לטעון מחירים. נסו שוב.' });
+  }
+});
+app.post('/api/guest/shop/:token/images', guestLimiter, async (req, res) => {
+  try {
+    if (!(await guestLink(req.params.token))) return res.status(404).json({ error: 'הקישור לא פעיל.' });
+    const codes = [...new Set((Array.isArray(req.body && req.body.barcodes) ? req.body.barcodes : []).map(String).filter((c) => /^[0-9]{8,14}$/.test(c)))].slice(0, 60);
+    if (!codes.length) return res.json({ images: {} });
+    // Only photos already found (a guest does not send us looking for more).
+    const { data } = await supabaseAdmin.from('price_products').select('barcode,image_url').in('barcode', codes).not('image_url', 'is', null);
+    return res.json({ images: Object.fromEntries((data || []).map((p) => [p.barcode, p.image_url])) });
+  } catch (_err) {
+    return res.json({ images: {} });
+  }
+});
+// The owner's links: make one (the secret is shown once), list, cancel.
+app.get('/api/admin/guest-links', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const { data, error } = await supabaseAdmin.from('shop_guest_links').select('*').order('created_at', { ascending: false }).limit(50);
+    if (error) return res.json({ links: [], missing: true });
+    return res.json({ links: (data || []).map(guestShop.forOwner) });
+  } catch (err) {
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+app.post('/api/admin/guest-links', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const token = guestShop.newToken();
+    const { data, error } = await supabaseAdmin.from('shop_guest_links').insert({ token_hash: guestShop.hashToken(token), label: guestShop.cleanLabel(req.body && req.body.label) }).select('*').single();
+    if (error) return res.status(503).json({ error: 'צריך קודם להריץ את supabase_shop_guests.sql.' });
+    return res.json({ link: guestShop.forOwner(data), token });
+  } catch (err) {
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+app.delete('/api/admin/guest-links/:id', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!/^[0-9a-f-]{36}$/.test(String(req.params.id))) return res.status(400).json({ error: 'bad id' });
+    const { error } = await supabaseAdmin.from('shop_guest_links').update({ revoked_at: new Date().toISOString() }).eq('id', req.params.id);
+    if (error) throw error;
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'failed' });
+  }
+});
 // Every morning (pg_cron job "account-cleanup"): empty accounts nobody uses
 // (no transactions, nobody else in the household, no sign-in for 3 months)
 // are told two weeks before (by email, unless they asked for none), then

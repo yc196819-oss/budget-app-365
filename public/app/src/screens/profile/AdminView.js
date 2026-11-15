@@ -1,5 +1,6 @@
 import { html } from '../../lib/html.js';
 import { useShopAsUser, setShopAsUser } from '../../lib/viewAs.js';
+import { listGuestLinks, makeGuestLink, cancelGuestLink, guestUrl } from '../../data/guestLinks.js';
 import { Icon } from '../../components/Icon.js';
 import { api } from '../../lib/api.js';
 import { useEffect, useState } from 'preact/hooks';
@@ -365,6 +366,51 @@ function ShopAsUserCard({ onLeave }) {
   </div>`;
 }
 
+// Share the shopping tab with one person, by a link: no account, nothing
+// else of the app. The link is shown once, when made; it can be cancelled.
+function GuestLinksCard() {
+  const [links, setLinks] = useState(null);
+  const [missing, setMissing] = useState(false);
+  const [label, setLabel] = useState('');
+  const [made, setMade] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const reload = () => listGuestLinks().then((r) => { setLinks(r.links || []); setMissing(!!r.missing); }).catch(() => setLinks([]));
+  useEffect(() => { reload(); }, []);
+  const make = async (e) => {
+    e.preventDefault();
+    setBusy(true); setErr('');
+    try { const r = await makeGuestLink(label.trim()); setMade({ label: r.link.label, url: guestUrl(r.token) }); setLabel(''); reload(); } catch (x) { setErr(x.message || 'לא נוצר. נסו שוב.'); }
+    setBusy(false);
+  };
+  const copy = async (url) => {
+    try {
+      if (navigator.share) { await navigator.share({ title: 'רשימת קניות', url }); return; }
+      await navigator.clipboard.writeText(url);
+      setErr('הקישור הועתק');
+    } catch (_e) { /* closed the share sheet */ }
+  };
+  const cancel = async (id) => { try { await cancelGuestLink(id); reload(); } catch (_e) { setErr('לא בוטל. נסו שוב.'); } };
+  const when = (iso) => (iso ? new Date(iso).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : '');
+  return html`<div class="card stack admin-guest">
+    <b>לשתף את טאב הקניות עם אדם אחד</b>
+    <span class="muted" style="font-size:14px">קישור אישי: רשימה משלו, היועץ שמציע רשימה והשוואת מחירים. בלי חשבון, ובלי גישה לשום חלק אחר באפליקציה. אפשר לבטל בכל רגע.</span>
+    ${missing ? html`<span class="muted" role="status">צריך קודם להריץ את supabase_shop_guests.sql במסד הנתונים.</span>` : html`
+    <form class="admin-guest-new" onSubmit=${make}>
+      <input class="input" value=${label} onInput=${(e) => setLabel(e.target.value)} maxLength="60" aria-label="למי הקישור" placeholder="למי הקישור? (למשל: רינה)" />
+      <button type="submit" class="btn" disabled=${busy}>${busy ? 'יוצר…' : 'ליצור קישור'}</button>
+    </form>`}
+    ${made && html`<div class="admin-guest-made" role="status"><span>הקישור ל${made.label} (מוצג רק עכשיו):</span>
+      <input class="input" readOnly value=${made.url} aria-label="הקישור" onFocus=${(e) => e.currentTarget.select()} />
+      <button type="button" class="btn" onClick=${() => copy(made.url)}>לשתף או להעתיק</button></div>`}
+    ${err && html`<span class="muted" role="status">${err}</span>`}
+    ${links && links.length > 0 && html`<ul class="admin-guest-list">${links.map((l) => html`<li key=${l.id} class=${l.revoked ? 'off' : ''}>
+      <span><b>${l.label}</b><small class="muted">${l.revoked ? 'בוטל' : l.last_used_at ? 'נכנסו ' + l.uses + ' פעמים, אחרונה ' + when(l.last_used_at) : 'עוד לא נכנסו'} · נוצר ${when(l.created_at)}</small></span>
+      ${!l.revoked && html`<button type="button" class="btn-text" style="color:var(--danger)" onClick=${() => cancel(l.id)} aria-label=${'לבטל את הקישור של ' + l.label}>לבטל</button>`}
+    </li>`)}</ul>`}
+  </div>`;
+}
+
 export function AdminView({ onBack, onClose = null }) {
   const [s, setS] = useState(undefined);
   const [live, setLive] = useState(null);
@@ -426,7 +472,7 @@ export function AdminView({ onBack, onClose = null }) {
     { key: 'mail', icon: 'mail', title: 'מיילים', sub: 'מיילי עזרה וסיכום חודשי', body: () => html`
     ${back && back.campaigns && html`<${MailBoard} back=${back} setBack=${setBack} />`}
     ${back && html`<${MonthlyMailCard} />`}` },
-    { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים מהרשתות, ואישור כשרות', body: () => html`<${ShopAsUserCard} onLeave=${onClose} />${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceReachCard} />`}` },
+    { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים מהרשתות, ואישור כשרות', body: () => html`<${ShopAsUserCard} onLeave=${onClose} /><${GuestLinksCard} />${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceReachCard} />`}` },
     { key: 'demo', icon: 'together', title: 'חשבון הדמו', sub: 'לפתוח בלי סיסמה, ולרענן את הנתונים', body: () => html`<${DemoCard} />` },
     { key: 'system', icon: 'wrench', title: 'מצב המערכת', sub: s ? 'תקלות השבוע: ' + s.errors.week : 'תקלות ומה שבור', body: () => html`${s && html`
       <div class="card stack"><b>תקלות השבוע: <span class="num">${s.errors.week}</span></b>

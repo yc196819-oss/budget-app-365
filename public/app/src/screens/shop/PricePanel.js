@@ -136,7 +136,8 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel, step }) {
   </div>`;
 }
 
-export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
+// guest: by a shopping link, without an account (the chains' general prices, no area).
+export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest = false }) {
   const open = items.filter((i) => !i.cleared_at && !i.done);
   // While the prices are open, the advisor's floating button would sit on
   // the prices column: it steps aside.
@@ -179,7 +180,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
   // The family's area: undefined while loading, null when not chosen.
   const [area, setAreaState] = useState(undefined);
   const [editArea, setEditArea] = useState(false);
-  const [skipArea, setSkipArea] = useState(false);
+  const [skipArea, setSkipArea] = useState(guest);
   useEffect(() => { getArea(hid).then((a) => setAreaState(a)).catch(() => setAreaState(null)); }, [hid]);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
@@ -270,7 +271,8 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked }) {
     <span class="pp-shabbat-chips">${Object.keys(SHABBAT_CHAINS).map((k) => html`<button type="button" class="chip" key=${k} aria-pressed=${shownChains.includes(k)} title=${SHABBAT_CHAINS[k]} onClick=${() => flipChain(k)}>${CHAIN_LABEL[k]}${shownChains.includes(k) ? ' · מוצגת' : ''}</button>`)}</span>
     <small class="muted pp-area-note">לחיצה מחזירה אותה להשוואה.</small></div>`;
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
-  const areaRow = editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
+  const areaRow = guest ? html`<div class="price-pref price-area"><span class="muted">מחירים כלליים של הרשתות (לא לפי אזור).</span></div>`
+    : editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
     : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לשנות</button><small class="muted pp-area-note">${!area.stores.length ? 'אין סניף של אף רשת עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</small></div>`
       : html`<div class="price-pref price-area"><span class="muted">מחירים כלליים, לא לפי האזור שלכם.</span><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לבחור אזור</button></div>`;
 
