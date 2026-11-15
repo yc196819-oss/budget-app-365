@@ -307,3 +307,21 @@ test('chains on their own sites: each list is read, the fullest branch taken, an
   // A site with nothing to list says so (and the load goes on to the next chain).
   await assert.rejects(own(async () => ok('<html></html>'), by('super-pharm')), /no files/);
 });
+
+test('the second shared site: up to five branches until one is big, and a branch that fails is passed over', async () => {
+  const { bina } = createRequire(import.meta.url)('../server/pricefiles.js');
+  const zlib = await import('node:zlib');
+  const file = (n) => '<Root><Items>' + Array.from({ length: n }, (_, i) => `<Item><ItemCode>${7290000300000 + i}</ItemCode><ItemName>מוצר בדוי</ItemName><ItemPrice>4</ItemPrice></Item>`).join('') + '</Items></Root>';
+  const base = 'https://example.binaprojects.com';
+  const sizes = { '005': 700, '004': 0, '003': 2300, '002': 900 };
+  const site = async (url) => {
+    const body = (s) => ({ ok: true, status: 200, arrayBuffer: async () => Buffer.from(s) });
+    if (url.startsWith(base + '/MainIO_Hok.aspx?')) return body(JSON.stringify(['005', '004', '003', '002'].map((b, i) => ({ FileNm: 'PriceFull7290000000000-000-' + b + '-20261115-0' + (5 - i) + '0000.GZ' }))));
+    if (url.startsWith(base + '/Download.aspx?FileNm=')) return body(JSON.stringify([{ SPath: base + '/Download/' + decodeURIComponent(url.split('=')[1]) }]));
+    const b = (/-000-(\d{3})-/.exec(url) || [])[1];
+    if (b === '004') return { ok: false, status: 500, arrayBuffer: async () => Buffer.from('') };
+    return body(zlib.gzipSync(file(sizes[b] || 0)));
+  };
+  const rows = await bina(site, { key: 't', name: 'בדויה', host: 'example', id: '7290000000000' });
+  assert.equal(rows.length, 2300, 'past a small branch and a broken one, to the big one');
+});

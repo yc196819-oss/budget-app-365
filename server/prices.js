@@ -278,6 +278,8 @@ async function apifyItems(fetchFn, token, runId, { limit = 5000 } = {}) {
 // only fail again, so it waits for the next night.
 function retryLater(done) {
   // (An online shop is read with its chain, not on its own.)
-  return (done || []).filter((c) => c && c.error && !c.online && !/HTTP 40[13]|no files|^save:/i.test(String(c.error))).map((c) => c.key);
+  // ("no files" too: after Shabbat a chain's site may have none yet at night,
+  // and have them an hour later. A site that refuses us would only refuse again.)
+  return (done || []).filter((c) => c && c.error && !c.online && !/HTTP 40[13]|^save:/i.test(String(c.error))).map((c) => c.key);
 }
 module.exports.retryLater = retryLater;

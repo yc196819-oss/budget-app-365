@@ -187,17 +187,23 @@ async function bina(fetchFn, chain, avoid = null) {
   const files = (Array.isArray(list) ? list : []).map((f) => String((f && f.FileNm) || '')).filter((n) => /^PriceFull[\w.-]+$/i.test(n) && !(avoid && avoid.has(storeOfFile(n))));
   if (!files.length) throw new Error('no files');
   const newest = files.sort((a, b) => binaStamp(b).localeCompare(binaStamp(a)));
-  // The list does not say how big a branch is: a small one (a few dozen
-  // products) is passed over for the next, up to three branches.
+  // The list does not say how big a branch is: a small one is passed over
+  // for the next.
   let best = [];
-  for (const name of newest.slice(0, 3)) {
+  // (Up to five branches, until one has 2,000 products: on Saturday night the
+  // newest may be a small one — Super Sapir loaded 722 instead of 2,215.)
+  let lastErr = null;
+  for (const name of newest.slice(0, 5)) {
     const link = JSON.parse((await getBuf(fetchFn, base + '/Download.aspx?FileNm=' + encodeURIComponent(name))).toString('utf8') || '[]');
     const url = String((Array.isArray(link) && link[0] && link[0].SPath) || '');
     if (url.toLowerCase().indexOf(base.toLowerCase() + '/') !== 0) throw new Error('no file link');
-    const rows = withStore(parsePriceFile(gunzip(await getBuf(fetchFn, url)), chain), name);
+    // A branch whose file fails is passed over, once another one was read.
+    let rows;
+    try { rows = withStore(parsePriceFile(gunzip(await getBuf(fetchFn, url)), chain), name); } catch (e) { if (!best.length) lastErr = e; continue; }
     if (rows.length > best.length) best = rows;
-    if (best.length >= 500) break;
+    if (best.length >= 2000) break;
   }
+  if (!best.length && lastErr) throw lastErr;
   return best;
 }
 
