@@ -28,7 +28,7 @@ async function open({ email = OWNER, setup = () => {} } = {}) {
 test('the calm home (owner): the number first, one next step, the rest on request, and back to the old home', async () => {
   const { page, errors } = await open({ setup: (db) => db.tables.transactions.push({ id: 'x1', household_id: db.hid, type: 'expense', amount: 120, description: 'חנות בדויה', tx_date: '2026-11-12', category_id: null }) });
   await page.waitForSelector('.home.calm');
-  const order = await page.evaluate(() => [...document.querySelectorAll('.home.calm > *')].map((e) => e.className.split(' ')[0] || e.tagName));
+  const order = await page.evaluate(() => [...document.querySelectorAll('.home.calm .home-main > *')].map((e) => e.className.split(' ')[0] || e.tagName));
   assert.ok(order.indexOf('hero') < order.indexOf('card'), 'the number before the cards: ' + order.join(','));
   const next = page.locator('.next-step');
   assert.match(await next.textContent(), /הצעד הבא/);

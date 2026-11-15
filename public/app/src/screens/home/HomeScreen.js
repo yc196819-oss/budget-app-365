@@ -54,7 +54,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   // The new, calmer home: for now the owner's (to try before everyone).
   const [layout, setLayoutRaw] = useState(() => readLocal('home:layout', 'new'));
   const setLayout = (v) => { writeLocal('home:layout', v); setLayoutRaw(v); };
-  const calm = layout !== 'old';
+  const calm = owner && layout !== 'old';
   const [todo, setTodo] = useState(false);
   const [upOpen, setUpOpen] = useState(false);
   const trips = useTrips(data.hid);
@@ -111,7 +111,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   const askTx = sheet && sheet.kind === 'ask' ? data.txs.find((t) => t.id === sheet.id) : null;
 
   const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} onPicture=${onPicture} />`;
-  const switchLink = html`<button type="button" class="btn-text faint home-switch" onClick=${() => setLayout(calm ? 'old' : 'new')}>${calm ? 'למסך הבית הקודם' : 'לנסות את מסך הבית החדש'}</button>`;
+  const switchLink = owner && html`<button type="button" class="btn-text faint home-switch" onClick=${() => setLayout(calm ? 'old' : 'new')}>${calm ? 'למסך הבית הקודם' : 'לנסות את מסך הבית החדש'}</button>`;
   const footer = html`<p class="home-foot muted">משהו לא עובד? יש רעיון? <button type="button" class="btn-text" onClick=${() => go('profile/feedback')}>כתבו לנו</button>${onLearn ? html` · <button type="button" class="btn-text" onClick=${onLearn}>פינת הלמידה</button>` : ''}</p>`;
 
   // ── the calm home ──
