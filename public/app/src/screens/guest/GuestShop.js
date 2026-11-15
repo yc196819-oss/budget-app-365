@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { parseItems, grouped } from '../../domain/shopping.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
-import { setGuest, guestCheck } from '../../data/prices.js';
+import { setGuest, guestCheck, guestCall } from '../../data/prices.js';
 import { AdvisorList } from '../shop/AdvisorList.js';
 import { PricePanel } from '../shop/PricePanel.js';
 
@@ -20,9 +20,13 @@ export function guestToken(hash) {
 // The shopping tab by a link, for one person without an account: a list of
 // their own (kept in this browser only), the advisor's list for the week,
 // and the price comparison. Nothing else of the app is reachable from here.
+// A home link (the owner's partner): the household's own list, the same
+// one the owner sees, refreshed every few seconds. A test link: a list of
+// its own, in this browser.
 export function GuestShop({ token }) {
   const [state, setState] = useState('checking');
   const [label, setLabel] = useState('');
+  const [home, setHome] = useState(false);
   const [items, setItemsState] = useState(load);
   const [text, setText] = useState('');
   const [advisor, setAdvisor] = useState(false);
@@ -31,21 +35,46 @@ export function GuestShop({ token }) {
   const input = useRef(null);
   useEffect(() => {
     setGuest(token);
-    guestCheck().then((r) => { setLabel(r.label || ''); setState('ok'); }).catch(() => setState('off'));
+    guestCheck().then((r) => { setLabel(r.label || ''); setHome(!!r.home); if (r.home) setItemsState([]); setState('ok'); }).catch(() => setState('off'));
     return () => setGuest(null);
   }, [token]);
-  const save = (next) => { setItemsState(next); writeLocal('guest:list', JSON.stringify(next)); };
+  // The home's list: read now and every 8 seconds while the page is open.
+  const [err, setErr] = useState('');
+  const pull = () => guestCall('/items').then((r) => { setItemsState(r.items || []); setErr(''); }).catch(() => setErr('לא הצלחנו לרענן את הרשימה.'));
+  useEffect(() => {
+    if (state !== 'ok' || !home) return undefined;
+    pull();
+    const t = setInterval(() => { if (document.visibilityState === 'visible') pull(); }, 8000);
+    return () => clearInterval(t);
+  }, [state, home]);
+  const save = (next) => { setItemsState(next); if (!home) writeLocal('guest:list', JSON.stringify(next)); };
+  const failed = () => { setErr('לא נשמר. נסו שוב.'); if (home) pull(); };
   const add = (list) => {
     const have = new Set(items.filter((i) => !i.cleared_at).map((i) => key(i.name)));
     const now = new Date().toISOString();
-    const fresh = list.filter((x) => x.name && !have.has(key(x.name))).map((x, n) => ({ id: 'g' + Date.now().toString(36) + n, name: x.name, qty: x.qty || null, aisle: x.aisle || 'other', done: false, created_at: now, cleared_at: null }));
+    const wanted = list.filter((x) => x.name && !have.has(key(x.name)));
+    if (home) {
+      if (wanted.length) guestCall('/items', { items: wanted.map((x) => ({ name: x.name, qty: x.qty || null, aisle: x.aisle || 'other' })) }).then((r) => setItemsState((all) => [...all, ...(r.items || [])])).catch(failed);
+      return wanted.length;
+    }
+    const fresh = wanted.map((x, n) => ({ id: 'g' + Date.now().toString(36) + n, name: x.name, qty: x.qty || null, aisle: x.aisle || 'other', done: false, created_at: now, cleared_at: null }));
     save([...items, ...fresh]);
     return fresh.length;
   };
   const submit = (e) => { e.preventDefault(); if (!text.trim()) return; add(parseItems(text)); setText(''); if (input.current) input.current.focus(); };
-  const toggle = (it) => save(items.map((x) => (x.id === it.id ? { ...x, done: !x.done } : x)));
-  const remove = (it) => save(items.filter((x) => x.id !== it.id));
-  const finish = () => { const at = new Date().toISOString(); save(items.map((x) => (x.done && !x.cleared_at ? { ...x, cleared_at: at } : x))); };
+  const toggle = (it) => {
+    save(items.map((x) => (x.id === it.id ? { ...x, done: !x.done } : x)));
+    if (home) guestCall('/items/' + it.id, { done: !it.done }, 'PATCH').catch(failed);
+  };
+  const remove = (it) => {
+    save(items.filter((x) => x.id !== it.id));
+    if (home) guestCall('/items/' + it.id, null, 'DELETE').catch(failed);
+  };
+  const finish = () => {
+    const at = new Date().toISOString();
+    save(items.map((x) => (x.done && !x.cleared_at ? { ...x, cleared_at: at } : x)));
+    if (home) guestCall('/finish', {}).catch(failed);
+  };
   const setPeople = (n) => { setPeopleState(n); writeLocal('guest:people', String(n)); };
 
   if (state === 'checking') return html`<main class="guest-shop"><span class="muted">טוען…</span></main>`;
@@ -57,7 +86,8 @@ export function GuestShop({ token }) {
   const groups = grouped(items);
   const bought = open.filter((i) => i.done).length;
   return html`<main class="guest-shop stack">
-    <header class="guest-head"><h1>רשימת קניות</h1><span class="muted">${label ? 'קישור אישי: ' + label + ' · ' : ''}הרשימה נשמרת רק בדפדפן הזה</span></header>
+    <header class="guest-head"><h1>רשימת קניות</h1><span class="muted">${label ? 'קישור אישי: ' + label + ' · ' : ''}${home ? 'רשימה משותפת של הבית: מה שמוסיפים כאן מופיע גם אצל השני' : 'הרשימה נשמרת רק בדפדפן הזה'}</span></header>
+    ${err && html`<span class="muted" role="status">${err}</span>`}
     <form class="shop-add" onSubmit=${submit}>
       <input ref=${input} class="input" value=${text} onInput=${(e) => setText(e.target.value)} maxLength="300" aria-label="מה להוסיף לרשימה" placeholder="מה להוסיף? אפשר כמה ביחד: חלב, 2 ביצים, לחם" />
       <button type="submit" class="btn" disabled=${!text.trim()}>להוסיף</button>

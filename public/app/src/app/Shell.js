@@ -3,7 +3,7 @@ import { partnerWord, genderOf } from '../domain/people.js';
 import { track, setScreen, deviceKind } from '../lib/telemetry.js';
 import { Loading } from '../components/Loading.js';
 import { useEffect, useState } from 'preact/hooks';
-import { tabLabel } from '../domain/routes.js';
+import { tabLabel, TABS } from '../domain/routes.js';
 import { dateLabel, initials } from '../domain/format.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
 import { Icon } from '../components/Icon.js';
@@ -212,13 +212,16 @@ export function Shell({ tab, session }) {
       <${ToastHost} />
     </main>`;
   }
-  const Screen = SCREENS[tab];
-  const title = tabLabel(tab);
+  // The shopping tab: for now the owner's only (others try it by a link).
+  const tabs = owner ? TABS : TABS.filter((t) => t.key !== 'shop');
+  const shown = !owner && tab === 'shop' ? 'home' : tab;
+  const Screen = SCREENS[shown];
+  const title = tabLabel(shown);
   const close = () => setOverlay(null);
 
   return html`
     <div class=${'shell' + (desktop && navMini ? ' nav-mini' : '') + (desktop && !railOn ? ' no-rail' : '') + (floating && floatOpen ? ' float-open' : '')}>
-      <${Sidebar} mini=${navMini} onMini=${() => setMini(!navMini)} tab=${tab} badges=${{ ...badges, profile: answers }} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => openImport(null) : null} onLearn=${() => setOverlay('learn')} onProfile=${() => { setProfileView('main'); setOverlay('profile'); }} />
+      <${Sidebar} tabs=${tabs} mini=${navMini} onMini=${() => setMini(!navMini)} tab=${tab} badges=${{ ...badges, profile: answers }} profile=${profile} onAdd=${() => setOverlay('add')} onImport=${session.household ? () => openImport(null) : null} onLearn=${() => setOverlay('learn')} onProfile=${() => { setProfileView('main'); setOverlay('profile'); }} />
       <main class="shell-main">
         ${IS_DEMO && html`<div class="demo-bar" role="note">חשבון הדמו · מה שמשנים כאן נשמר בחשבון הדמו<button type="button" onClick=${() => window.close()}>לסגור את הלשונית</button></div>`}
         <header class="topbar">
@@ -228,13 +231,13 @@ export function Shell({ tab, session }) {
             <button type="button" class="icon-btn only-mobile" aria-label=${answers > 0 ? 'פרופיל והגדרות, יש תשובה לפנייה שלך' : 'פרופיל והגדרות'} style="position:relative" onClick=${() => { setProfileView('main'); setOverlay('profile'); }}>${profile.initials}${answers > 0 && html`<span class="fb-dot" aria-hidden="true">${answers}</span>`}</button>
           </div>
         </header>
-        ${session.household ? html`<${Screen} key=${tab + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} owner=${owner && !(tab === 'shop' && shopUser)} asUser=${owner && tab === 'shop' && shopUser} onOwnerView=${() => setShopAsUser(false)} onImport=${openImport} onPicture=${() => setOverlay('picture')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
+        ${session.household ? html`<${Screen} key=${shown + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} owner=${owner && !(tab === 'shop' && shopUser)} asUser=${owner && tab === 'shop' && shopUser} onOwnerView=${() => setShopAsUser(false)} onImport=${openImport} onPicture=${() => setOverlay('picture')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
       ${railOn && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} onFloat=${() => setMode('float')} onHide=${() => setMode('button')} />`}
       ${floating && floatOpen && html`<${AdvisorRail} floating=${true} data=${data} session=${session} screen=${tab} onPin=${() => setMode('side')} onMinimize=${() => setFloatOpen(false)} />`}
       <button type="button" class="ask-fab" onClick=${openAdvisor}><span class="orb"><${Icon} name="spark" size=${18} stroke=${2.2} /></span>שאל את היועץ</button>
-      <${BottomNav} tab=${tab} badges=${badges} onAdd=${() => setOverlay('add')} />
+      <${BottomNav} tabs=${tabs} tab=${tab} badges=${badges} onAdd=${() => setOverlay('add')} />
 
       ${overlay === 'profile' && html`<${ProfileSheet} answers=${answers} start=${profileView} profile=${profile} hid=${session.household ? session.household.household_id : null} userId=${session.user.id} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
       ${(overlay === 'add' || overlay === 'voice') && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => openImport(null)} startVoice=${overlay === 'voice'} />`}

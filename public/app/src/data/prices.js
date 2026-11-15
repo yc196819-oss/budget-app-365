@@ -9,8 +9,8 @@ import { readLocal, writeLocal } from '../lib/storage.js';
 let GUEST = null;
 export function setGuest(token) { GUEST = token || null; }
 export const isGuest = () => !!GUEST;
-async function guestCall(path, body) {
-  const res = await fetch(CONFIG.apiBase + '/api/guest/shop/' + encodeURIComponent(GUEST) + path, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+export async function guestCall(path, body, method = null) {
+  const res = await fetch(CONFIG.apiBase + '/api/guest/shop/' + encodeURIComponent(GUEST) + path, { method: method || (body ? 'POST' : 'GET'), headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || 'request failed (' + res.status + ')');
   return json;

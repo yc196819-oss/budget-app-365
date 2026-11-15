@@ -105,6 +105,9 @@ test('the owner makes a link, sees it once, and can cancel it', async () => {
   await page.click('text=לוח בעלים');
   await page.click('.admin-hub-btn:has-text("מחירי סופר")');
   const card = page.locator('.admin-guest');
+  // A test link (a list of its own); "הבית שלנו" would share the owner's list.
+  assert.equal(await card.locator('input[type=radio]').count(), 2);
+  await card.locator('label:has-text("לבדיקה") input').check();
   await card.locator('input[aria-label="למי הקישור"]').fill('רינה');
   await card.locator('button:has-text("ליצור קישור")').click();
   assert.equal(await card.locator('.admin-guest-made input').inputValue(), server.base + '/app/#/guest/' + TOKEN);
@@ -129,4 +132,44 @@ test('the server: an unknown or malformed link gets nothing, and only the signed
   assert.ok(refused(await get('/api/admin/guest-links')));
   assert.ok(refused(await get('/api/admin/guest-links', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })));
   assert.ok(refused(await get('/api/admin/guest-links/11111111-1111-1111-1111-111111111111', { method: 'DELETE' })));
+});
+
+test('a home link (a partner): the household\'s own list, saved on the server, the same one the owner sees', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  const errors = collectErrors(page);
+  await mockSupabase(page, makeFakeDb());
+  // The household's list on the server (made-up items).
+  let list = [{ id: '11111111-1111-1111-1111-111111111111', name: 'חלב', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-15T08:00:00Z', cleared_at: null, barcode: null }];
+  const sent = [];
+  await page.route('**/api/guest/shop/' + TOKEN, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"label":"הבית","home":true}' }));
+  await page.route('**/api/guest/shop/' + TOKEN + '/items**', (r) => {
+    const m = r.request().method();
+    sent.push(m);
+    if (m === 'GET') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: list }) });
+    if (m === 'POST') { const add = JSON.parse(r.request().postData()).items.map((x, i) => ({ ...x, id: '2222222' + i + '-2222-2222-2222-222222222222', done: false, created_at: '2026-11-15T08:01:00Z', cleared_at: null, barcode: null })); list = [...list, ...add]; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: add }) }); }
+    if (m === 'PATCH') { const id = r.request().url().split('/').pop(); list = list.map((x) => (x.id === id ? { ...x, ...JSON.parse(r.request().postData()) } : x)); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); }
+    if (m === 'DELETE') { const id = r.request().url().split('/').pop(); list = list.filter((x) => x.id !== id); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); }
+    return r.continue();
+  });
+  // Something left in this browser from a test link is not mixed in.
+  await page.goto(server.base + '/app/');
+  await page.evaluate(() => localStorage.setItem('guest:list', JSON.stringify([{ id: 'gx', name: 'מוצר מקישור אחר', aisle: 'other', done: false, created_at: 'x', cleared_at: null }])));
+  await page.goto(server.base + '/app/#/guest/' + TOKEN);
+  await page.reload();
+  await page.locator('.shop-item', { hasText: 'חלב' }).waitFor();
+  assert.match(await page.locator('.guest-head').textContent(), /רשימה משותפת של הבית/);
+  assert.equal(await page.locator('.shop-item', { hasText: 'מוצר מקישור אחר' }).count(), 0);
+  await page.locator('.shop-add .input').fill('לחם');
+  await page.keyboard.press('Enter');
+  await page.locator('.shop-item', { hasText: 'לחם' }).waitFor();
+  assert.ok(list.some((x) => x.name === 'לחם'), 'saved on the server');
+  await page.locator('.shop-item', { hasText: 'חלב' }).locator('input[type=checkbox]').check();
+  for (let i = 0; i < 20 && !list.find((x) => x.name === 'חלב').done; i++) await page.waitForTimeout(100);
+  assert.equal(list.find((x) => x.name === 'חלב').done, true);
+  await page.click('button[aria-label="להוריד את לחם מהרשימה"]');
+  for (let i = 0; i < 20 && list.some((x) => x.name === 'לחם'); i++) await page.waitForTimeout(100);
+  assert.equal(list.some((x) => x.name === 'לחם'), false);
+  assert.ok(sent.includes('POST') && sent.includes('PATCH') && sent.includes('DELETE'));
+  assert.deepEqual(errors, []);
+  await page.close();
 });

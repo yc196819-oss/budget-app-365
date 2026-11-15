@@ -5,7 +5,7 @@ import { Icon } from './Icon.js';
 // Mobile navigation: the "+" button always in the exact middle, two tabs on
 // one side and the rest on the other. A tab can carry a count (answers
 // waiting for you).
-export function BottomNav({ tab, onAdd, badges = {} }) {
+export function BottomNav({ tab, onAdd, badges = {}, tabs = TABS }) {
   const half = 2;
   const item = (t) => html`
     <a class="nav-item" href=${hrefFor(t.key)} aria-current=${tab === t.key ? 'page' : 'false'}>
@@ -13,8 +13,8 @@ export function BottomNav({ tab, onAdd, badges = {} }) {
     </a>`;
   return html`
     <nav class="bottom-nav" aria-label="ניווט ראשי">
-      <div class="nav-side">${TABS.slice(0, half).map(item)}</div>
+      <div class="nav-side">${tabs.slice(0, half).map(item)}</div>
       <button type="button" class="nav-add" aria-label="הוספת הוצאה" onClick=${onAdd}><${Icon} name="plus" size=${26} stroke=${2.6} /></button>
-      <div class="nav-side">${TABS.slice(half).map(item)}</div>
+      <div class="nav-side">${tabs.slice(half).map(item)}</div>
     </nav>`;
 }

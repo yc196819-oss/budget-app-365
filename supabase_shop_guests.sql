@@ -2,7 +2,7 @@
 -- comparison and the advisor's list) with one person, by a link, without an
 -- account. Only a fingerprint (SHA-256) of each link's secret is kept. Read
 -- and written by the server only (no policies: nobody signed in reaches it).
--- Safe to run again.
+-- Applied 2026-11-15. Safe to run again.
 
 create table if not exists public.shop_guest_links (
   id uuid primary key default gen_random_uuid(),
@@ -11,7 +11,11 @@ create table if not exists public.shop_guest_links (
   created_at timestamptz not null default now(),
   revoked_at timestamptz,
   last_used_at timestamptz,
-  uses integer not null default 0
+  uses integer not null default 0,
+  -- A link of the owner's home (his partner): the same shopping list as his
+  -- household's. Null: a test link, with a list of its own in the browser.
+  household_id uuid references public.households(id) on delete cascade
 );
+alter table public.shop_guest_links add column if not exists household_id uuid references public.households(id) on delete cascade;
 alter table public.shop_guest_links enable row level security;
 revoke all on public.shop_guest_links from anon, authenticated;

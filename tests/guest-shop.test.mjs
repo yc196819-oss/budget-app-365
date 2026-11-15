@@ -19,5 +19,13 @@ test('what a guest sends is cut to size, and the owner never sees the secret', (
   assert.equal(g.cleanLabel('  <b>רינה</b> '), 'bרינה/b');
   assert.equal(g.cleanLabel(''), 'קישור לקניות');
   const row = { id: 'i', label: 'רינה', token_hash: 'f'.repeat(64), created_at: 'c', revoked_at: null, last_used_at: null, uses: 3 };
-  assert.deepEqual(g.forOwner(row), { id: 'i', label: 'רינה', created_at: 'c', revoked: false, last_used_at: null, uses: 3 });
+  assert.deepEqual(g.forOwner(row), { id: 'i', label: 'רינה', home: false, created_at: 'c', revoked: false, last_used_at: null, uses: 3 });
+  assert.equal(g.forOwner({ ...row, household_id: 'h' }).home, true);
+});
+
+test('what a partner adds to the home list is cut to size', () => {
+  assert.deepEqual(g.cleanItems([{ name: ' חלב ', qty: '2', aisle: 'dairy' }, { name: '' }, { name: 'x', aisle: 'DROP TABLE' }, null]), [{ name: 'חלב', qty: '2', aisle: 'dairy' }, { name: 'x', qty: null, aisle: 'other' }]);
+  assert.equal(g.cleanItems(Array.from({ length: 100 }, () => ({ name: 'a' }))).length, 60);
+  assert.equal(g.isId('11111111-1111-1111-1111-111111111111'), true);
+  assert.equal(g.isId("1' or 1=1"), false);
 });

@@ -1799,3 +1799,7 @@ body.chat-open { overflow: hidden; }
 .admin-guest-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
 .admin-guest-list li > span { display: flex; flex-direction: column; gap: 2px; }
 .admin-guest-list li.off b { text-decoration: line-through; color: var(--muted); }
+.admin-guest-kind { display: flex; flex-direction: column; gap: 8px; }
+.admin-guest-kind label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.admin-guest-kind input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+.admin-guest-kind label > span { display: flex; flex-direction: column; gap: 2px; }
