@@ -53,4 +53,7 @@ test('round 36: what a family means by "לחם" and "עגבניות"', async () 
   assert.equal(special('עגבניות שרי עגול', 'עגבניות שרי'), false, 'unless asked for');
   assert.equal(special('לחם פומפרניקל 750 גרם', 'לחם'), true);
   assert.equal(special('לחם שיפון עגול', 'לחם שיפון'), false);
+  assert.equal(special('קמח תופח נפלאות 1קג', 'קמח'), true, 'self-raising flour is a special kind');
+  assert.equal(special('גבינה צהובה מגורדת 28%', 'גבינה צהובה'), true, 'grated cheese is a special kind');
+  assert.equal(special('גבינה צהובה מגורדת 28%', 'גבינה צהובה מגורדת'), false);
 });
