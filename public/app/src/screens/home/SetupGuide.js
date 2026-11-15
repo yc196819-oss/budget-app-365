@@ -18,7 +18,19 @@ const readSet = (k) => { try { return new Set(JSON.parse(readLocal(k, '[]'))); }
 // "Let's set up your picture": the next step, open, with why it matters and
 // one button that takes the person straight there. Done steps tick by
 // themselves (from the data), so leaving and coming back resumes here.
-export function SetupGuide({ data, userId, onImport, onAdd, onAsk, onPicture = null }) {
+// Is there a step left to show? (The home asks, to show the next step or
+// something else in its place.)
+export function guideOpen(data) {
+  let asked = false;
+  try { asked = localStorage.getItem(askedKey) === '1'; } catch (_e) { /* private mode */ }
+  const p = guideProgress(guideSteps(data, { asked, skipped: readSet(skipKey(data.hid)) }));
+  const later = Number(readLocal(laterKey(data.hid), '0')) > Date.now();
+  return !p.complete && !(later && data.txs.length) ? p.next.key : null;
+}
+
+// compact: only the next step, as the home's "next step" card; onMore opens
+// everything else there is to set up.
+export function SetupGuide({ data, userId, onImport, onAdd, onAsk, onPicture = null, compact = false, onMore = null }) {
   const [skipped, setSkipped] = useState(() => readSet(skipKey(data.hid)));
   const [later, setLater] = useState(() => Number(readLocal(laterKey(data.hid), '0')) > Date.now());
   const [open, setOpen] = useState(null);
@@ -61,6 +73,27 @@ export function SetupGuide({ data, userId, onImport, onAdd, onAsk, onPicture = n
     else if (s.key === 'ask') onAsk();
   };
   const loose = looseTxs(data.txs).length;
+  const label = (s) => (s.key === 'import' && onPicture && nothingChosen(data) ? 'לבחור בנק וכרטיסים ולהעלות' : s.key === 'card' && onPicture ? 'לבחור את הכרטיסים' : s.cta);
+  const sheets = html`${sheet === 'sort' && html`<${SortSheet} data=${data} onClose=${() => setSheet(null)} />`}
+    ${sheet === 'card' && html`<${CardSheet} card=${null} accounts=${data.accounts} members=${data.members} userId=${userId} onClose=${() => setSheet(null)} />`}`;
+
+  if (compact && current) {
+    const s = current;
+    return html`<section class="card stack setup-guide next-step" aria-label="הצעד הבא">
+      <div class="next-h"><small>הצעד הבא</small>${!first && html`<span class="num">${p.finished + 1} מתוך ${p.total}</span>`}</div>
+      <b style="font-size:17px">${s.key === 'sort' && loose ? (loose === 1 ? 'תנועה אחת מחכה לקטגוריה' : loose + ' תנועות מחכות לקטגוריה') : s.title}</b>
+      <span class="muted" style="font-size:14px;line-height:1.55">${s.why}</span>
+      ${s.key === 'income' ? html`<form onSubmit=${saveIncome} style="display:flex;gap:8px">
+          <input class="input num" inputmode="numeric" placeholder="למשל 18,000" aria-label="הכנסה חודשית נטו" value=${income} onInput=${(e) => setIncomeText(e.target.value)} style="flex:1;width:auto;min-width:0" />
+          <button type="submit" class="btn" style="width:auto" disabled=${busy || !(toNumber(income) > 0)}>${s.cta}</button></form>`
+        : html`<button type="button" class="btn" onClick=${() => go(s)}>${label(s)}</button>`}
+      <div class="next-foot">
+        ${s.key !== 'import' ? html`<button type="button" class="btn-text faint" style="font-size:13px" onClick=${() => skip(s.key)}>${s.optional ? 'לא עכשיו' : 'לא רלוונטי לי'}</button>` : html`<span></span>`}
+        ${onMore && html`<button type="button" class="btn-text" onClick=${onMore}>עוד דברים לסדר ›</button>`}
+      </div>
+      ${sheets}
+    </section>`;
+  }
 
   return html`<section class="card stack setup-guide" aria-label="מסלול התחלה">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
@@ -84,7 +117,7 @@ export function SetupGuide({ data, userId, onImport, onAdd, onAsk, onPicture = n
             ${s.key === 'income' ? html`<form onSubmit=${saveIncome} style="display:flex;gap:8px">
                 <input class="input num" inputmode="numeric" placeholder="למשל 18,000" aria-label="הכנסה חודשית נטו" value=${income} onInput=${(e) => setIncomeText(e.target.value)} style="flex:1;width:auto;min-width:0" />
                 <button type="submit" class="btn" style="width:auto" disabled=${busy || !(toNumber(income) > 0)}>${s.cta}</button></form>`
-              : html`<button type="button" class="btn" onClick=${() => go(s)}>${s.key === 'import' && onPicture && nothingChosen(data) ? 'לבחור בנק וכרטיסים ולהעלות' : s.key === 'card' && onPicture ? 'לבחור את הכרטיסים' : s.cta}</button>`}
+              : html`<button type="button" class="btn" onClick=${() => go(s)}>${label(s)}</button>`}
             ${s.key === 'import' && html`<span style="font-size:14px;line-height:1.55;color:var(--income);font-weight:700">יש לכם כמה כרטיסים או כמה חשבונות בנק? מכניסים את כולם, והכל מסודר במקום אחד.</span>`}
             ${s.key === 'import' && html`<button type="button" class="btn-text" style="align-self:flex-start" onClick=${onAdd}>או להוסיף הוצאה ידנית / בקול</button>`}
             ${s.key !== 'import' && html`<button type="button" class="btn-text faint" style="align-self:flex-start;font-size:13px" onClick=${() => skip(s.key)}>${s.optional ? 'לא עכשיו' : 'לא רלוונטי לי'}</button>`}
@@ -93,7 +126,6 @@ export function SetupGuide({ data, userId, onImport, onAdd, onAsk, onPicture = n
       })}
     </ol>
     ${data.txs.length > 0 && html`<button type="button" class="btn-text faint" style="align-self:flex-start;font-size:13px" onClick=${hide}>להסתיר לכמה ימים</button>`}
-    ${sheet === 'sort' && html`<${SortSheet} data=${data} onClose=${() => setSheet(null)} />`}
-    ${sheet === 'card' && html`<${CardSheet} card=${null} accounts=${data.accounts} members=${data.members} userId=${userId} onClose=${() => setSheet(null)} />`}
+    ${sheets}
   </section>`;
 }

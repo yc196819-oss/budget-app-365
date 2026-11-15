@@ -18,7 +18,11 @@ import { InstallCard } from '../../components/InstallCard.js';
 import { TalkToUs } from '../../components/TalkToUs.js';
 import { TripFound } from '../trips/TripFound.js';
 import { useTrips } from '../../data/useTrips.js';
-import { SetupGuide } from './SetupGuide.js';
+import { SetupGuide, guideOpen } from './SetupGuide.js';
+import { Sheet } from '../../components/Sheet.js';
+import { Icon } from '../../components/Icon.js';
+import { go } from '../../lib/go.js';
+import { money } from '../../domain/format.js';
 import { ImportNotice } from './ImportNotice.js';
 import { RepairCard } from './RepairCard.js';
 import { AnswerNotice } from './AnswerNotice.js';
@@ -47,6 +51,12 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   const dupeOk = new Set([...(data.dupeOk || []), ...local]);
   // The holiday plan and the quarterly check-in have their own sheets.
   const planSheet = usePlanSheet();
+  // The new, calmer home: for now the owner's (to try before everyone).
+  const [layout, setLayoutRaw] = useState(() => readLocal('home:layout', 'new'));
+  const setLayout = (v) => { writeLocal('home:layout', v); setLayoutRaw(v); };
+  const calm = owner && layout !== 'old';
+  const [todo, setTodo] = useState(false);
+  const [upOpen, setUpOpen] = useState(false);
   const trips = useTrips(data.hid);
   // The owner's numbers: the first time this person sees a month built from
   // their own data (once per person on this device; nothing else is sent).
@@ -75,16 +85,6 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   const items = attention({ txs: data.txs, categories: data.categories, budgets: data.budgets, cards: onPicture ? [] : data.cards, today, plan, dupeOk, transferDays: days });
   const top = topCategories(data.txs, data.categories, data.budgets, today);
 
-  const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} onPicture=${onPicture} />`;
-  if (!data.txs.length) {
-    return html`<div class="stack">
-      <${AnswerNotice} userId=${userId} />
-      ${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}
-      ${guide}
-      <${InstallCard} />
-    </div>`;
-  }
-
   const act = async (a) => {
     if (a.to === 'dupe-ok') {
       writeLocal(dupeKey, JSON.stringify([...new Set([...local, a.key])]));
@@ -110,6 +110,87 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   const sheetTx = sheet && sheet.kind === 'tx' ? data.txs.find((t) => t.id === sheet.id) : null;
   const askTx = sheet && sheet.kind === 'ask' ? data.txs.find((t) => t.id === sheet.id) : null;
 
+  const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} onPicture=${onPicture} />`;
+  const switchLink = owner && html`<button type="button" class="btn-text faint home-switch" onClick=${() => setLayout(calm ? 'old' : 'new')}>${calm ? 'למסך הבית הקודם' : 'לנסות את מסך הבית החדש'}</button>`;
+  const footer = html`<p class="home-foot muted">משהו לא עובד? יש רעיון? <button type="button" class="btn-text" onClick=${() => go('profile/feedback')}>כתבו לנו</button>${onLearn ? html` · <button type="button" class="btn-text" onClick=${onLearn}>פינת הלמידה</button>` : ''}</p>`;
+
+  // ── the calm home ──
+  if (calm && !data.txs.length) {
+    // The first day: the statements come first, the number appears after.
+    return html`<div class="stack home calm">
+      <${AnswerNotice} userId=${userId} />
+      <section class="card stack first-day" aria-label="הצעד הראשון">
+        <small class="first-day-k">יום ראשון · הצעד הראשון</small>
+        <b style="font-size:20px">בואו נכניס את המספרים האמיתיים</b>
+        <span class="muted" style="font-size:14px;line-height:1.55">בוחרים בנק וכרטיסים, ומעלים פירוטים של 6 החודשים האחרונים (אקסל, PDF או צילום מסך). דקה או שתיים.</span>
+        <button type="button" class="btn" onClick=${onPicture || onImport}>לבחור בנק וכרטיסים ולהעלות</button>
+        <button type="button" class="btn btn-ghost" onClick=${onImport}>יש לי כבר קובץ: להעלות עכשיו</button>
+        <button type="button" class="btn-text" style="align-self:flex-start" onClick=${onAdd}>או להוסיף הוצאה ידנית / בקול</button>
+        <span class="faint" style="font-size:12px;line-height:1.5">אחר כך: לסווג, כמה נכנס בחודש, תקציב. נעבור על זה ביחד, צעד אחרי צעד.</span>
+      </section>
+      <section class="hero hero-empty" aria-label="כמה נשאר החודש">
+        <span style="font-weight:700;color:var(--hero-muted)">כמה נשאר החודש</span>
+        <span class="display num" style="font-size:40px;line-height:1" aria-hidden="true">—</span>
+        <span style="font-size:13px;color:var(--hero-muted)">יופיע כאן אחרי ההעלאה הראשונה</span>
+      </section>
+      ${footer}
+      ${switchLink}
+    </div>`;
+  }
+  if (calm) {
+    const nextKey = guideOpen(data);
+    // What the next step already asks is not asked again below it.
+    const calmItems = nextKey === 'sort' ? items.filter((a) => a.kind !== 'loose') : items;
+    const moreSheet = todo && html`<${Sheet} title="דברים לסדר" onClose=${() => setTodo(false)}>
+      <div class="stack">
+        ${onPicture && html`<${PictureCard} data=${data} onOpen=${() => { setTodo(false); onPicture(); }} />`}
+        ${guide}
+        <${MonthlyAsk} userId=${userId} data=${data} />
+        <${FixedCheckCard} data=${data} />
+        <${InstallCard} />
+      </div>
+    <//>`;
+    const upSum = soon.reduce((s, u) => s + (u.amount && u.amount < 0 ? -u.amount : 0), 0);
+    return html`<div class="stack home calm">
+      <${AnswerNotice} userId=${userId} />
+      <${RepairCard} data=${data} />
+      <${ImportNotice} data=${data} onImport=${onImport} />
+      <${Hero} plan=${plan} catName=${catName} onImport=${onImport} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
+      ${nextKey
+        ? html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} onPicture=${onPicture} compact=${true} onMore=${() => setTodo(true)} />`
+        : html`<div class="calm-next">${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}<button type="button" class="btn-text" style="align-self:flex-end" onClick=${() => setTodo(true)}>עוד דברים לסדר ›</button></div>`}
+      <${Attention} items=${calmItems} onAct=${act} limit=${2} />
+      <${PlanCards} data=${data} onSheet=${(s) => { setSheet(null); planSheet.open(s); }} />
+      <${TripFound} data=${data} trips=${trips} />
+      <${WhereMoney} top=${top} />
+      <div class="calm-tiles">
+        ${cash.known && html`<button type="button" class="card calm-tile" onClick=${() => go('assets')}><small>כסף פנוי בחשבון</small><b class="num" style=${cash.free < 0 ? 'color:var(--danger)' : ''}>${(cash.free < 0 ? '−' : '') + money(Math.abs(cash.free))}</b></button>`}
+        <button type="button" class="card calm-tile" aria-expanded=${String(upOpen)} onClick=${() => setUpOpen((v) => !v)}><small>בשבועיים הקרובים</small><b>${soon.length ? (upSum ? '−' + money(upSum) : soon.length + ' צפויים') : 'אין חיובים צפויים'}</b>${soon.length > 0 && html`<span class="faint" style="font-size:12px">${soon.length === 1 ? 'חיוב אחד' : soon.length + ' חיובים'} · ${upOpen ? 'להסתיר' : 'לראות'}</span>`}</button>
+      </div>
+      ${upOpen && soon.length > 0 && html`<${Upcoming} items=${soon} />`}
+      ${footer}
+      ${switchLink}
+      ${moreSheet}
+      <${PlanSheets} data=${data} sheet=${planSheet.value} onClose=${planSheet.close} />
+      ${sheet && sheet.kind === 'sort' && html`<${SortSheet} data=${data} onClose=${() => setSheet(null)} />`}
+      ${askTx && html`<${MoveSheet} key=${askTx.id} data=${data} line=${askTx} kind=${sheet.ask} onClose=${() => setSheet(null)} />`}
+      ${sheet && sheet.kind === 'transfers' && html`<${TransferSheet} data=${data} dupeOk=${dupeOk} onClose=${() => setSheet(null)} onDays=${() => setDupeVer((v) => v + 1)} />`}
+      ${sheet && sheet.kind === 'hero' && html`<${HeroSheet} plan=${plan} catName=${catName} onClose=${() => setSheet(null)} />`}
+      ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}
+    </div>`;
+  }
+
+  if (!data.txs.length) {
+    return html`<div class="stack">
+      <${AnswerNotice} userId=${userId} />
+      ${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}
+      ${guide}
+      <${InstallCard} />
+      ${switchLink}
+    </div>`;
+  }
+
+
   return html`<div class="stack home">
     <div class="home-main stack">
       <${AnswerNotice} userId=${userId} />
@@ -125,6 +206,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       <${FixedCheckCard} data=${data} />
       <${PlanCards} data=${data} onSheet=${(s) => { setSheet(null); planSheet.open(s); }} />
       <${WhereMoney} top=${top} />
+      ${switchLink}
     </div>
     <div class="home-side stack">
       <${CashCard} cash=${cash} accounts=${data.accounts} />

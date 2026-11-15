@@ -1841,3 +1841,22 @@ body.chat-open { overflow: hidden; }
 /* Files uploaded before a card or account was chosen for them. */
 .pic-loose { gap: 8px; margin-bottom: 12px; }
 .pic-loose-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The calm home (owner first): the number first, one next step, the rest on request. */
+.next-step { border-inline-start: 4px solid var(--accent); gap: 10px; }
+.next-h { display: flex; justify-content: space-between; align-items: baseline; }
+.next-h small { color: var(--accent); font-weight: 700; font-size: 13px; }
+.next-h span { font-size: 12px; color: var(--muted); }
+.next-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.calm-next { display: flex; flex-direction: column; gap: 6px; }
+.calm-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.calm-tile { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: start; border: 0; cursor: pointer; font: inherit; color: inherit; }
+.calm-tile small { color: var(--muted); font-size: 12px; }
+.calm-tile b { font-size: 17px; }
+.first-day { border-inline-start: 4px solid var(--accent); gap: 10px; }
+.first-day-k { color: var(--accent); font-weight: 700; font-size: 13px; }
+.hero-empty { opacity: .6; gap: 8px; }
+.home-foot { text-align: center; font-size: 13px; margin: 4px 0 0; }
+.home-foot .btn-text { font-size: 13px; }
+.home-switch { align-self: center; font-size: 12px; }
+.att-more { align-self: flex-start; }
