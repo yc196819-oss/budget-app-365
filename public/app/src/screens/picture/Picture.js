@@ -2,8 +2,8 @@ import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
-import { PROVIDERS, providerOf, tracker, upcoming, monthName, monthShort, howTo, howSteps, sourcesOf, nameOf } from '../../domain/sources.js';
-import { listSourceFiles, saveRow, archiveCard, deleteRow } from '../../data/household.js';
+import { PROVIDERS, providerOf, tracker, upcoming, monthName, monthShort, howTo, howSteps, sourcesOf, nameOf, looseFiles } from '../../domain/sources.js';
+import { listSourceFiles, saveRow, archiveCard, deleteRow, assignFiles } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
 import { PictureGuide } from './PictureGuide.js';
@@ -196,8 +196,33 @@ function Picker({ data, step, onStep, onDone }) {
   </div>`;
 }
 
+// Files uploaded before an account or card was chosen for them: one tap ties
+// them to it, so they are counted and not asked for again.
+function LooseFiles({ loose, sources, onDone }) {
+  const [busy, setBusy] = useState(false);
+  if (!loose.length || !sources.length) return null;
+  const n = loose.reduce((s, f) => s + f.n, 0);
+  const tie = async (x) => {
+    setBusy(true);
+    try {
+      await assignFiles(loose.map((f) => f.id), x);
+      track('picture_loose_assigned');
+      showToast((loose.length === 1 ? 'הקובץ שויך' : loose.length + ' קבצים שויכו') + ' ל' + nameOf(x) + '.');
+      onDone();
+    } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
+    setBusy(false);
+  };
+  return html`<section class="card stack pic-loose" aria-label="קבצים שעוד לא שויכו">
+    <b>${loose.length === 1 ? 'קובץ אחד שכבר העליתם' : loose.length + ' קבצים שכבר העליתם'} (${n} תנועות) עוד לא שויכו לכרטיס או לחשבון</b>
+    <span class="muted" style="font-size:14px;line-height:1.55">של מי הם? בוחרים, והם נספרים כאן, בלי להעלות שוב.</span>
+    <div class="pic-loose-pick" role="group" aria-label="לשייך ל">${sources.map((x) => html`<button type="button" key=${x.id} class="import-src" disabled=${busy} onClick=${() => tie(x)} aria-label=${'לשייך ל' + nameOf(x)}>
+      <${Logo} provider=${x.provider} name=${x.name} size="s" /><small>${x.kind === 'card' ? (x.last4 || nameOf(x)) : nameOf(x)}</small></button>`)}</div>
+  </section>`;
+}
+
 export function PictureSheet({ data, onClose, onUpload }) {
-  const files = useSourceFiles(data.hid, data.txs.length);
+  const [ver, setVer] = useState(0);
+  const files = useSourceFiles(data.hid, data.txs.length + ':' + ver);
   const t = files ? tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: [...data.txs, ...(data.transfers || [])] }) : null;
   // false, or the step of the picker: 'bank' then 'card'.
   const [edit, setEdit] = useState(() => (data.accounts.length + data.cards.length && !nothingChosen(data) ? false : 'bank'));
@@ -211,7 +236,8 @@ export function PictureSheet({ data, onClose, onUpload }) {
   if (!t) return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}><span class="muted">טוען…</span><//>`;
   if (edit) return html`<${Sheet} title="הבנקים והכרטיסים שלכם" onClose=${onClose}><${Picker} data=${data} step=${edit} onStep=${setEdit} onDone=${() => setEdit(false)} /><//>`;
   // Something to upload: one step at a time, unless all of it was asked for.
-  if (t.tasks.length && !all) return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}><${PictureGuide} tasks=${t.tasks} accounts=${data.accounts} onUpload=${onUpload} onAll=${() => setAll(true)} /><//>`;
+  const loose = html`<${LooseFiles} loose=${looseFiles({ imports: files, txs: data.txs })} sources=${sourcesOf({ accounts: data.accounts, cards: data.cards })} onDone=${() => setVer((v) => v + 1)} />`;
+  if (t.tasks.length && !all) return html`<${Sheet} title="השלמת התמונה" onClose=${onClose}>${loose}<${PictureGuide} tasks=${t.tasks} accounts=${data.accounts} onUpload=${onUpload} onAll=${() => setAll(true)} /><//>`;
   const full = t.tasks.length === 0;
   // Saved before the companies were chosen, and not recognised by name.
   const unknown = sourcesOf({ accounts: data.accounts, cards: data.cards }).filter((x) => !x.provider);
@@ -311,6 +337,7 @@ export function PictureSheet({ data, onClose, onUpload }) {
   return html`<${Sheet} title="השלמת התמונה" onClose=${onClose} full=${true}>
     <div class=${'pic' + (view === 'history' ? ' pic-only-history' : '')}>
       <div class="pic-now">
+      ${loose}
       <div class=${'pic-summary' + (full ? ' is-full' : '')}>
         <span class="pic-ring2" role="img" aria-label=${t.ring.done + ' מתוך ' + t.ring.total + ' הועלו'}>
           <svg viewBox="0 0 42 42" width="92" height="92" aria-hidden="true"><circle cx="21" cy="21" r="18" fill="none" class="bg" /><circle cx="21" cy="21" r="18" fill="none" class="fg" pathLength="100" stroke-dasharray=${(t.ring.pct || 0.01) + ' 100'} style=${t.ring.pct ? '' : 'stroke-opacity:0'} /></svg>

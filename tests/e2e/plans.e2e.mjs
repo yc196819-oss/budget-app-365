@@ -63,6 +63,34 @@ test('a holiday plan is saved as a dated goal and replaces the estimate in the f
   await page.close();
 });
 
+test('a holiday that does not interest you: ✕ hides it (until the next holiday), and it can be undone', async () => {
+  const { page, errors } = await open(DEC1, '#/home');
+  const card = page.locator('.plan-wrap', { hasText: 'חנוכה' });
+  await card.waitFor();
+  await card.locator('button[aria-label="להסתיר את חנוכה"]').click();
+  assert.equal(await page.locator('.plan-wrap', { hasText: 'חנוכה' }).count(), 0, 'hidden, without opening the plan');
+  assert.equal(await page.locator('.sheet').count(), 0);
+  await page.waitForSelector('.toast:has-text("יופיע שוב רק בחג הבא")');
+  // Still hidden after a reload, and on the goals tab too.
+  await page.reload();
+  await page.waitForSelector('.hero');
+  assert.equal(await page.locator('.plan-wrap', { hasText: 'חנוכה' }).count(), 0);
+  await page.goto(server.base + '/app/#/plans/months');
+  await page.waitForSelector('.tabs');
+  assert.equal(await page.locator('.plan-wrap', { hasText: 'חנוכה' }).count(), 0);
+  // Undo brings it back.
+  await page.goto(server.base + '/app/#/home');
+  await page.waitForSelector('.hero');
+  await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('holiday:hide:')).forEach((k) => localStorage.removeItem(k)));
+  await page.reload();
+  await page.locator('.plan-wrap', { hasText: 'חנוכה' }).waitFor();
+  await page.locator('.plan-wrap button[aria-label="להסתיר את חנוכה"]').click();
+  await page.click('.toast button');
+  await page.locator('.plan-wrap', { hasText: 'חנוכה' }).waitFor();
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('holidays come from the Hebrew calendar: Pesach 2030 shows, though no date was ever written for it', async () => {
   const { page, errors } = await open(new Date(2030, 3, 1, 10));
   const card = page.locator('.plan-card', { hasText: 'פסח' });

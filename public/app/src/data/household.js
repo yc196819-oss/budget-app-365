@@ -557,6 +557,18 @@ export async function undoRepair({ before = [], drop = [] }) {
   await load(state.hid, state.userId, { force: true });
 }
 
+// Files uploaded before the account or card was chosen: tied to it now, the
+// files and their lines (a card's lines become paid by that card).
+export async function assignFiles(ids, source) {
+  if (!ids.length || !source) return;
+  const { error } = await sb.from('imports').update({ source_kind: source.kind, source_id: source.id }).in('id', ids).eq('household_id', state.hid);
+  if (error) throw error;
+  const patch = source.kind === 'card' ? { card_id: source.id, payment_method: 'credit' } : { account_id: source.id };
+  const { error: e } = await sb.from('transactions').update(patch).in('import_id', ids).eq('household_id', state.hid);
+  if (e) throw e;
+  await load(state.hid, state.userId, { force: true });
+}
+
 // Changes the category of several transactions at once and returns what is
 // needed to undo it.
 export async function setCategory(ids, category_id, subcategory_id = null) {

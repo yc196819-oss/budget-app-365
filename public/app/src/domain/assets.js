@@ -136,10 +136,28 @@ export function symbolsOf(investments) {
 // that category is a withdrawal. No return is counted: what was put in.
 const ymOf = (iso) => String(iso || '').slice(0, 7);
 const ymBack = (today, k) => { const d = new Date(today.getFullYear(), today.getMonth() - k, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
-export function investDeposits(txs = [], categories = [], today = new Date()) {
+// Is a line money into (or back from) investments?
+export function investLine(categories = []) {
   const inv = new Set(categories.filter((c) => (c.kind || 'expense') !== 'income' && /השקע/.test(c.name || '')).map((c) => c.id));
   for (const c of categories) if (c.parent_id && inv.has(c.parent_id)) inv.add(c.id);
-  const isInv = (t) => (t.category_id ? inv.has(t.category_id) || inv.has(t.subcategory_id) : t.type !== 'income' && INVEST.test(String(t.description || '')));
+  return (t) => (t.category_id ? inv.has(t.category_id) || inv.has(t.subcategory_id) : t.type !== 'income' && INVEST.test(String(t.description || '')));
+}
+
+// Regular deposits or one-offs? Regular: in at least 3 of the last 4 full
+// months; the usual sum is the middle of those months. One-offs (a single
+// big deposit) are not expected again.
+export function investPattern(txs = [], categories = [], today = new Date()) {
+  const isInv = investLine(categories);
+  const months = [1, 2, 3, 4].map((k) => ymBack(today, k));
+  const totals = months.map((ym) => round2(sum(txs.filter((t) => t.type !== 'income' && t.tx_date && ymOf(t.tx_date) === ym && isInv(t)), (t) => num(t.amount))));
+  const used = totals.filter((v) => v > 0).sort((a, b) => a - b);
+  const recurring = used.length >= 3;
+  const monthly = recurring ? (used.length % 2 ? used[(used.length - 1) / 2] : Math.round((used[used.length / 2 - 1] + used[used.length / 2]) / 2)) : 0;
+  return { recurring, monthly, months: used.length, isInv };
+}
+
+export function investDeposits(txs = [], categories = [], today = new Date()) {
+  const isInv = investLine(categories);
   const lines = txs.filter((t) => t.tx_date && isInv(t));
   const nowYm = ymBack(today, 0);
   const year = new Set(Array.from({ length: 12 }, (_, k) => ymBack(today, k + 1)));

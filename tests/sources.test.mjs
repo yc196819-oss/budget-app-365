@@ -264,3 +264,16 @@ test('a bank account marked "only its cards": not asked for, not counted, still 
   const back = tracker({ accounts: two.map((a) => ({ ...a, cards_only: false })), cards: myCards, imports }, today);
   assert.ok(back.tasks.some((x) => x.source.id === 'b2'));
 });
+
+import { looseFiles } from '../public/app/src/domain/sources.js';
+
+test('files uploaded before a card was chosen: found, so they can be tied to it (not asked for again)', () => {
+  const imports = [{ id: 'f1', source_id: null }, { id: 'f2', source_id: null }, { id: 'f3', source_id: 'c1' }, { id: 'f4', source_id: null }];
+  const txs = [
+    { id: 1, import_id: 'f1', tx_date: '2026-03-02' }, { id: 2, import_id: 'f1', tx_date: '2026-03-20' },
+    { id: 3, import_id: 'f2', tx_date: '2026-04-01', card_id: 'c1' },
+    { id: 4, import_id: 'f3', tx_date: '2026-05-01' }
+  ];
+  assert.deepEqual(looseFiles({ imports, txs }), [{ id: 'f1', from: '2026-03-02', to: '2026-03-20', n: 2, tied: false }]);
+  assert.deepEqual(looseFiles({ imports: [], txs }), []);
+});
