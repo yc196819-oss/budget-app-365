@@ -1832,3 +1832,8 @@ body.chat-open { overflow: hidden; }
 .dep-where li span { flex: 1; }
 .dep-add { font-size: 13px; white-space: nowrap; }
 .dep-where span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A plan card that can be closed (a holiday that does not interest you). */
+.plan-wrap { position: relative; }
+.plan-wrap .plan-card { width: 100%; padding-inline-end: 48px; }
+.plan-close { position: absolute; top: 10px; inset-inline-end: 10px; width: 32px; height: 32px; }
