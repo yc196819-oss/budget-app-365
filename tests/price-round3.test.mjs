@@ -92,7 +92,7 @@ test('round 8: a list pasted from a message: bullets, numbering and emoji are no
   assert.deepEqual(parseItem('✅ קמח,'), { name: 'קמח', qty: null });
   assert.deepEqual(parseItem('3% חלב'), { name: '3% חלב', qty: null }, 'a percent is part of the name');
   assert.deepEqual(parseItem('2 חלב'), { name: 'חלב', qty: '×2' }, 'a quantity still is');
-  assert.equal(searchTerm('🥛 חלב'), 'חלב', 'a line saved before: searched without its emoji');
+  assert.equal(searchTerm('🥛 חלב'), 'חלב 3%', 'a line saved before: searched without its emoji (and as the regular milk)');
   assert.equal(searchTerm('- ביצה'), 'ביצים');
   const { parseItems } = await import('../public/app/src/domain/shopping.js');
   assert.deepEqual(parseItems('רשימה לשבת:\n1. חלב 3%\n2. ביצים x2\n• לחם 🍞').map((i) => [i.name, i.qty]), [['חלב 3%', null], ['ביצים', '×2'], ['לחם', null]], 'a whole message: the heading left out');

@@ -16,3 +16,19 @@ export function useShopAsUser() {
   useEffect(() => { const fn = () => setOn(shopAsUser()); listeners.add(fn); return () => listeners.delete(fn); }, []);
   return on;
 }
+
+// Whether this person gets the shopping tab's full version: the owner, or
+// someone in a household with him (asked of the server once, kept here so
+// the tab does not blink on the next start). The server checks again on
+// every shopping action.
+export function useShopAccess(userId, owner) {
+  const k = 'shop:access:' + (userId || '');
+  const [on, setOn] = useState(() => readLocal(k, '') === '1');
+  useEffect(() => {
+    if (!userId || owner) return undefined;
+    let live = true;
+    import('./api.js').then(({ api }) => api('/api/shop/access')).then((r) => { if (!live) return; const yes = !!(r && r.shop); setOn(yes); writeLocal(k, yes ? '1' : ''); }).catch(() => {});
+    return () => { live = false; };
+  }, [userId, owner]);
+  return owner || on;
+}

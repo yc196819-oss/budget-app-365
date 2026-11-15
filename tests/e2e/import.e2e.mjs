@@ -118,6 +118,47 @@ test('an Excel statement: read on the device, categorized, duplicates held back,
   await page.close();
 });
 
+test('leaving the check mid-way loses nothing: the upload offers to go on from where it stopped, with the choices made', async () => {
+  const { page, db, errors } = await open();
+  const before = db.tables.transactions.length;
+  await page.click('text=העלאת פירוט כרטיס');
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: statementXlsx() });
+  await page.waitForSelector('.import-summary');
+  await page.locator('.import-line', { hasText: 'מוסך הצפון' }).locator('.import-open').click();
+  await page.locator('.import-pick .chip', { hasText: 'רכב' }).click();
+  // Out of the sheet, before saving.
+  await page.click('.sheet button[aria-label="סגירה"]');
+  await page.waitForFunction(() => !document.querySelector('.sheet'));
+  assert.equal(db.tables.transactions.length, before, 'nothing saved yet');
+  // Back, even after a reload.
+  await page.reload();
+  await page.waitForSelector('.month-nav');
+  await page.click('text=העלאת פירוט כרטיס');
+  const card = page.locator('.import-draft');
+  await card.waitFor();
+  assert.match(await card.textContent(), /max\.xlsx · 6 תנועות/);
+  await card.locator('text=להמשיך מאיפה שעצרתי').click();
+  await page.waitForSelector('.import-summary');
+  assert.equal(await page.locator('.import-line').count(), 1, 'the garage stays sorted');
+  await page.click('text=לשמור 5 תנועות');
+  await page.waitForSelector('.toast:has-text("נשמרו 5 תנועות")');
+  assert.equal(db.tables.transactions.slice(before).find((t) => t.description === 'מוסך הצפון').category_id, 'car');
+  // Saved: no draft any more.
+  await page.click('text=העלאת פירוט כרטיס');
+  await page.waitForSelector('.sheet input[type="file"]', { state: 'attached' });
+  assert.equal(await page.locator('.import-draft').count(), 0);
+  // "Start over" drops a draft.
+  await page.setInputFiles('.sheet input[type="file"]', { name: 'max.xlsx', mimeType: '', buffer: statementXlsx() });
+  await page.waitForSelector('.import-summary');
+  await page.click('.sheet button[aria-label="סגירה"]');
+  await page.click('text=העלאת פירוט כרטיס');
+  await page.locator('.import-draft >> text=להתחיל מחדש').click();
+  assert.equal(await page.locator('.import-draft').count(), 0);
+  assert.equal(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('import:draft')).length), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('without AI the lines still import; unknown merchants just wait for a category', async () => {
   const { page, db } = await open(390, { fail: true });
   const before = db.tables.transactions.length;

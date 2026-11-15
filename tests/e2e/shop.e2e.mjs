@@ -12,7 +12,11 @@ after(async () => { await browser?.close(); server?.stop(); });
 
 const TODAY = new Date(2026, 10, 8, 10);
 
-async function open(width = 1280, setup = () => {}, email = null) {
+// (The shopping tab is the owner's for now: the tests open it as the owner;
+// openRegular opens the regular view he can switch to, as families will see it.)
+let regularView = false;
+const openRegular = async (...a) => { regularView = true; try { return await open(...a); } finally { regularView = false; } };
+async function open(width = 1280, setup = () => {}, email = OWNER) {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   await page.clock.setFixedTime(TODAY);
   const db = makeFakeDb(TODAY);
@@ -28,6 +32,8 @@ async function open(width = 1280, setup = () => {}, email = null) {
   await mockSupabase(page, db);
   await signIn(page, server.base);
   if (email) await page.evaluate((e) => { const k = 'sb-bwwupwbakefjhwropdin-auth-token'; const x = JSON.parse(localStorage.getItem(k)); x.user.email = e; localStorage.setItem(k, JSON.stringify(x)); }, email);
+  // The regular view: what a family will see, tried by the owner (the switch on his board).
+  if (regularView) await page.evaluate(() => localStorage.setItem('owner:shop-as-user', '1'));
   await page.goto(server.base + '/app/#/shop');
   await page.reload();
   await page.waitForSelector('.shop-add');
@@ -106,7 +112,7 @@ test('finishing a shopping remembers it: the previous list and what you usually 
 });
 
 test('the food budget beside the list, the area is saved, and sharing by email first, WhatsApp last', async () => {
-  const { page, db, errors } = await open(1280, (d) => {
+  const { page, db, errors } = await openRegular(1280, (d) => {
     d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב', qty: '×2', aisle: 'dairy', done: false, created_at: '2026-11-07T10:00:00Z' }];
   });
   assert.match(await page.locator('.shop-budget').textContent(), /נשאר לסופר החודש/);
@@ -130,7 +136,7 @@ test('the food budget beside the list, the area is saved, and sharing by email f
 });
 
 test('the first time, what the tab is for: saving at the supermarket; "הבנתי" hides it for good, "מה זה?" brings it back', async () => {
-  const { page, errors } = await open(1280);
+  const { page, errors } = await openRegular(1280);
   const intro = page.locator('.shop-intro');
   assert.match(await intro.textContent(), /עוזרים לכם לחסוך בסופר/);
   assert.equal(await intro.locator('.shop-benefits li').count(), 3);
@@ -368,7 +374,7 @@ test('prices: changing the product for an item is remembered on the list', async
 });
 
 test('prices for everyone else: a "coming soon" preview with sample products, and "tell me when it opens"', async () => {
-  const { page, errors } = await open(390, (d) => {
+  const { page, errors } = await openRegular(390, (d) => {
     d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
   });
   const sent = [];
@@ -418,7 +424,7 @@ test('the advisor\'s week (the owner first): what the home buys again and the ba
 });
 
 test('people who are not the owner do not see the advisor\'s week yet', async () => {
-  const { page } = await open(390);
+  const { page } = await openRegular(390);
   await page.waitForSelector('.shop-add');
   assert.equal(await page.locator('.adv-cta').count(), 0);
   await page.close();
@@ -483,7 +489,7 @@ test('a photo that is not a receipt says so, and nothing is saved', async () => 
 });
 
 test('receipts are for the owner for now: others do not see the card', async () => {
-  const { page, errors } = await open(390);
+  const { page, errors } = await openRegular(390);
   await page.waitForSelector('.price-teaser');
   assert.equal(await page.locator('.rcpt-card').count(), 0);
   await page.close();
@@ -779,15 +785,46 @@ test('the owner can try the shopping tab as a regular family sees it, and come b
   await page.close();
 });
 
-test('a regular family never sees the owner\'s "regular view" note, even with the switch left on the device', async () => {
-  const { page, errors } = await open(390, (d) => {
-    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
-  });
-  await page.evaluate(() => localStorage.setItem('owner:shop-as-user', '1'));
+test('a regular family has no shopping tab for now: not in the menu, and its address opens the home screen', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  await page.clock.setFixedTime(TODAY);
+  const errors = collectErrors(page);
+  await mockSupabase(page, makeFakeDb(TODAY));
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/shop');
+  await page.reload();
+  await page.locator('.bottom-nav').waitFor();
+  assert.equal(await page.locator('.bottom-nav .nav-item[href="#/shop"]').count(), 0);
+  assert.equal(await page.locator('.shop-add').count(), 0);
+  assert.equal((await page.locator('.topbar h1').textContent()).trim(), 'בית');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('the owner\'s partner (in his household) gets the whole shopping tab in her own account', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  await page.clock.setFixedTime(TODAY);
+  const errors = collectErrors(page);
+  const db = makeFakeDb(TODAY);
+  db.tables.shopping_items = [{ id: 's1', household_id: db.hid, name: 'חלב', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+  db.tables.households = [{ id: db.hid, shop_area: null }];
+  db.tables.household_area = [{ household_id: db.hid, city_code: '2610', city: 'בית שמש', hood: null }];
+  db.tables.household_stores = [];
+  await mockSupabase(page, db);
+  // The server says she shares a household with the owner.
+  await page.route('**/api/shop/access', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"shop":true}' }));
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/shop');
   await page.reload();
   await page.locator('.shop-add').waitFor();
-  assert.equal(await page.locator('.shop-asuser').count(), 0);
-  assert.equal(await page.locator('.price-teaser').count(), 1);
+  assert.equal(await page.locator('.bottom-nav .nav-item[href="#/shop"]').count(), 1);
+  // The full version: the comparison and the advisor, not the "soon" preview.
+  await page.locator('.shop-prices-cta').waitFor();
+  assert.equal(await page.locator('.adv-cta').count(), 1);
+  assert.equal(await page.locator('.price-teaser').count(), 0);
+  // And nothing of the owner's board.
+  await page.click('button[aria-label^="פרופיל והגדרות"]');
+  assert.equal(await page.locator('text=לוח בעלים').count(), 0);
   assert.deepEqual(errors, []);
   await page.close();
 });

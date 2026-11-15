@@ -1747,7 +1747,7 @@ const listAllUsers = () => ops.pageAll(async (_from, _to, page) => {
 }).then((users) => ({ data: { users }, error: null }), (error) => ({ data: null, error }));
 async function ownerIds(allUsers) {
   if (allUsers) {
-    ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => isOwnerEmail(u.email) || isDemoEmail(u.email)).map((u) => u.id) };
+    ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => isOwnerEmail(u.email) || isDemoEmail(u.email)).map((u) => u.id), real: allUsers.filter((u) => isOwnerEmail(u.email)).map((u) => u.id) };
   } else if (Date.now() - ownerIdsCache.at > 10 * 60 * 1000 && supabaseAdmin) {
     const { data } = await listAllUsers();
     return ownerIds((data && data.users) || []);
@@ -1848,6 +1848,25 @@ app.post('/api/admin/ask', requireAuth, async (req, res) => {
     console.error('admin ask failed:', err.message);
     return res.status(502).json({ error: 'לא התקבלה תשובה. נסו שוב.' });
   }
+});
+
+// The shopping tab's full version (the price comparison, the advisor's list,
+// receipts): for now the owner, and whoever shares a household with him (his
+// partner). Not the demo account's household.
+async function shopAllowed(userId) {
+  if (!supabaseAdmin || !userId) return false;
+  if (await isAdmin(userId)) return true;
+  await ownerIds();
+  const owners = ownerIdsCache.real || [];
+  if (!owners.length) return false;
+  const { data: mine } = await supabaseAdmin.from('memberships').select('household_id').eq('user_id', userId);
+  const hids = (mine || []).map((m) => m.household_id);
+  if (!hids.length) return false;
+  const { data: shared } = await supabaseAdmin.from('memberships').select('user_id').in('household_id', hids).in('user_id', owners).limit(1);
+  return !!(shared && shared.length);
+}
+app.get('/api/shop/access', requireAuth, async (req, res) => {
+  try { return res.json({ shop: await shopAllowed(req.authUserId) }); } catch (_e) { return res.json({ shop: false }); }
 });
 
 // The owner's accounts only (ADMIN_EMAILS), with the email confirmed; asked
@@ -1987,7 +2006,7 @@ app.post('/api/prices/fetch', requireAuth, async (req, res) => {
     const hid = String((req.body && req.body.hid) || '');
     if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
     // While the catalog grows ("בקרוב" for everyone else), only the owner searches.
-    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
+    if (!PRICES_OPEN && !(await shopAllowed(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
     // Families never wait for the price service: what our catalog does not
     // have yet is written down, and the owner's next load brings it in.
     if (!(await isAdmin(req.authUserId))) {
@@ -2264,7 +2283,7 @@ app.post('/api/prices/area', requireAuth, async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
     const hid = String((req.body && req.body.hid) || '');
     if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
-    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
+    if (!PRICES_OPEN && !(await shopAllowed(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
     const at = area.place(String((req.body && req.body.city_code) || ''));
     if (!at) return res.status(400).json({ error: 'לא מצאנו את היישוב. נסו לבחור מהרשימה.' });
     const hood = String((req.body && req.body.hood) || '').replace(/\s+/g, ' ').trim().slice(0, 60) || null;
@@ -2355,7 +2374,7 @@ app.post('/api/receipts/scan', requireAuth, aiLimiter, aiQuota, async (req, res)
   try {
     const { hid, fileData, mimeType } = req.body || {};
     if (!(await isHouseholdMember(req.authUserId, String(hid || '')))) return res.status(403).json({ error: 'not allowed' });
-    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'בקרוב!' });
+    if (!PRICES_OPEN && !(await shopAllowed(req.authUserId))) return res.status(403).json({ error: 'בקרוב!' });
     if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'קריאת קבלות לא זמינה כרגע.' });
     if (!fileData || !/^image\/(png|jpe?g|webp)$/i.test(String(mimeType || ''))) return res.status(400).json({ error: 'צריך תמונה (JPG או PNG).' });
     const ai = await generateWithFallback({ prompt: receipts.PROMPT, text: '', fileData, mimeType, effort: 'low', maxTokens: 8000, json: true, model: ANTHROPIC_FILES_MODEL });
@@ -2401,6 +2420,163 @@ app.post('/api/prices/images', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('price images failed:', err.message);
     return res.json({ images: {} });
+  }
+});
+
+// ── the shopping tab by a link, for one person without an account ──
+// The owner makes a link (only its fingerprint is kept) and can cancel it.
+// Whoever holds it gets the shopping page alone: their list stays in their
+// own browser, and the server answers only price searches and photos.
+// Without the shop_guest_links table, no link works.
+const guestShop = require('./server/guestShop');
+const guestLimiter = rateLimit({ windowMs: 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.ip });
+async function guestLink(token) {
+  if (!supabaseAdmin || !guestShop.isToken(token)) return null;
+  const { data, error } = await supabaseAdmin.from('shop_guest_links').select('id,label,revoked_at,uses,household_id').eq('token_hash', guestShop.hashToken(token)).maybeSingle();
+  if (error || !data || data.revoked_at) return null;
+  return data;
+}
+app.get('/api/guest/shop/:token', guestLimiter, async (req, res) => {
+  const link = await guestLink(req.params.token).catch(() => null);
+  if (!link) return res.status(404).json({ error: 'הקישור לא פעיל. בקשו קישור חדש ממי ששלח אותו.' });
+  // When it was last opened (for the owner), at most once a minute is enough.
+  supabaseAdmin.from('shop_guest_links').update({ last_used_at: new Date().toISOString(), uses: (link.uses || 0) + 1 }).eq('id', link.id).then(() => {}, () => {});
+  return res.json({ ok: true, label: link.label, home: !!link.household_id });
+});
+// A home link (the owner's partner): the household's own shopping list, the
+// same one the owner sees. Only its open items and the last finished ones.
+const GUEST_ITEM_COLS = 'id,name,qty,aisle,done,created_at,cleared_at,barcode';
+async function homeLink(req, res) {
+  const link = await guestLink(req.params.token).catch(() => null);
+  if (!link || !link.household_id) { res.status(404).json({ error: 'הקישור לא פעיל.' }); return null; }
+  return link;
+}
+app.get('/api/guest/shop/:token/items', guestLimiter, async (req, res) => {
+  try {
+    const link = await homeLink(req, res); if (!link) return;
+    const since = new Date(Date.now() - 120 * 86400000).toISOString();
+    const { data, error } = await supabaseAdmin.from('shopping_items').select(GUEST_ITEM_COLS).eq('household_id', link.household_id).or('cleared_at.is.null,cleared_at.gte.' + since).order('created_at', { ascending: true }).limit(2000);
+    if (error) throw error;
+    return res.json({ items: data || [] });
+  } catch (err) {
+    return res.status(502).json({ error: 'לא הצלחנו לטעון את הרשימה. נסו שוב.' });
+  }
+});
+app.post('/api/guest/shop/:token/items', guestLimiter, async (req, res) => {
+  try {
+    const link = await homeLink(req, res); if (!link) return;
+    const rows = guestShop.cleanItems(req.body && req.body.items).map((x) => ({ ...x, household_id: link.household_id, added_by: null }));
+    if (!rows.length) return res.json({ items: [] });
+    const { data, error } = await supabaseAdmin.from('shopping_items').insert(rows).select(GUEST_ITEM_COLS);
+    if (error) throw error;
+    return res.json({ items: data || [] });
+  } catch (err) {
+    return res.status(502).json({ error: 'לא נשמר. נסו שוב.' });
+  }
+});
+app.patch('/api/guest/shop/:token/items/:id', guestLimiter, async (req, res) => {
+  try {
+    const link = await homeLink(req, res); if (!link) return;
+    if (!guestShop.isId(req.params.id)) return res.status(400).json({ error: 'bad id' });
+    const b = req.body || {};
+    const patch = {};
+    if (typeof b.done === 'boolean') { patch.done = b.done; patch.done_at = b.done ? new Date().toISOString() : null; }
+    if (b.barcode === null || /^[0-9]{8,14}$/.test(String(b.barcode || ''))) patch.barcode = b.barcode || null;
+    if (!Object.keys(patch).length) return res.json({ ok: true });
+    const { error } = await supabaseAdmin.from('shopping_items').update(patch).eq('id', req.params.id).eq('household_id', link.household_id);
+    if (error) throw error;
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(502).json({ error: 'לא נשמר. נסו שוב.' });
+  }
+});
+app.delete('/api/guest/shop/:token/items/:id', guestLimiter, async (req, res) => {
+  try {
+    const link = await homeLink(req, res); if (!link) return;
+    if (!guestShop.isId(req.params.id)) return res.status(400).json({ error: 'bad id' });
+    const { error } = await supabaseAdmin.from('shopping_items').delete().eq('id', req.params.id).eq('household_id', link.household_id);
+    if (error) throw error;
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(502).json({ error: 'לא נמחק. נסו שוב.' });
+  }
+});
+app.post('/api/guest/shop/:token/finish', guestLimiter, async (req, res) => {
+  try {
+    const link = await homeLink(req, res); if (!link) return;
+    const { error } = await supabaseAdmin.from('shopping_items').update({ cleared_at: new Date().toISOString() }).eq('household_id', link.household_id).eq('done', true).is('cleared_at', null);
+    if (error) throw error;
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(502).json({ error: 'לא נשמר. נסו שוב.' });
+  }
+});
+app.post('/api/guest/shop/:token/search', guestLimiter, async (req, res) => {
+  try {
+    if (!(await guestLink(req.params.token))) return res.status(404).json({ error: 'הקישור לא פעיל.' });
+    const queries = guestShop.cleanQueries(req.body && req.body.queries);
+    if (!queries.length) return res.json({ rows: [] });
+    // The chains' general prices (a guest has no area).
+    const { data, error } = await supabaseAdmin.rpc('price_search', { p_queries: queries });
+    if (error) throw error;
+    return res.json({ rows: data || [] });
+  } catch (err) {
+    console.error('guest search failed:', err.message);
+    return res.status(502).json({ error: 'לא הצלחנו לטעון מחירים. נסו שוב.' });
+  }
+});
+app.post('/api/guest/shop/:token/images', guestLimiter, async (req, res) => {
+  try {
+    if (!(await guestLink(req.params.token))) return res.status(404).json({ error: 'הקישור לא פעיל.' });
+    const codes = [...new Set((Array.isArray(req.body && req.body.barcodes) ? req.body.barcodes : []).map(String).filter((c) => /^[0-9]{8,14}$/.test(c)))].slice(0, 60);
+    if (!codes.length) return res.json({ images: {} });
+    // Only photos already found (a guest does not send us looking for more).
+    const { data } = await supabaseAdmin.from('price_products').select('barcode,image_url').in('barcode', codes).not('image_url', 'is', null);
+    return res.json({ images: Object.fromEntries((data || []).map((p) => [p.barcode, p.image_url])) });
+  } catch (_err) {
+    return res.json({ images: {} });
+  }
+});
+// The owner's links: make one (the secret is shown once), list, cancel.
+app.get('/api/admin/guest-links', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const { data, error } = await supabaseAdmin.from('shop_guest_links').select('*').order('created_at', { ascending: false }).limit(50);
+    if (error) return res.json({ links: [], missing: true });
+    return res.json({ links: (data || []).map(guestShop.forOwner) });
+  } catch (err) {
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+app.post('/api/admin/guest-links', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    const token = guestShop.newToken();
+    // A home link: the list of the household open in the owner's app (he must be in it).
+    let household_id = null;
+    if (req.body && req.body.home) {
+      const hid = String(req.body.hid || '');
+      if (!guestShop.isId(hid)) return res.status(400).json({ error: 'לא נמצא משק בית.' });
+      const { data: m } = await supabaseAdmin.from('memberships').select('household_id').eq('user_id', req.authUserId).eq('household_id', hid).maybeSingle();
+      if (!m) return res.status(403).json({ error: 'not allowed' });
+      household_id = hid;
+    }
+    const { data, error } = await supabaseAdmin.from('shop_guest_links').insert({ token_hash: guestShop.hashToken(token), label: guestShop.cleanLabel(req.body && req.body.label), household_id }).select('*').single();
+    if (error) return res.status(503).json({ error: 'צריך קודם להריץ את supabase_shop_guests.sql.' });
+    return res.json({ link: guestShop.forOwner(data), token });
+  } catch (err) {
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+app.delete('/api/admin/guest-links/:id', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!/^[0-9a-f-]{36}$/.test(String(req.params.id))) return res.status(400).json({ error: 'bad id' });
+    const { error } = await supabaseAdmin.from('shop_guest_links').update({ revoked_at: new Date().toISOString() }).eq('id', req.params.id);
+    if (error) throw error;
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'failed' });
   }
 });
 // Every morning (pg_cron job "account-cleanup"): empty accounts nobody uses

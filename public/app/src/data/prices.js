@@ -1,6 +1,23 @@
 import { sb } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
 import { certLevel, isCert, searchTerm, chainHe, looser } from '../domain/prices.js';
+import { CONFIG } from '../config.js';
+import { readLocal, writeLocal } from '../lib/storage.js';
+
+// A guest by a shopping link (no account): searches go through the server
+// with the link's secret, and the choices stay in this browser.
+let GUEST = null;
+export function setGuest(token) { GUEST = token || null; }
+export const isGuest = () => !!GUEST;
+export async function guestCall(path, body, method = null) {
+  const res = await fetch(CONFIG.apiBase + '/api/guest/shop/' + encodeURIComponent(GUEST) + path, { method: method || (body ? 'POST' : 'GET'), headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'request failed (' + res.status + ')');
+  return json;
+}
+export const guestCheck = () => guestCall('');
+const gGet = (k, fb) => { try { return JSON.parse(readLocal('guest:' + k, '')) ?? fb; } catch (_e) { return fb; } };
+const gSet = (k, v) => writeLocal('guest:' + k, JSON.stringify(v));
 
 // Prices for the shopping list: matched in our own catalog first (one call
 // for the whole list), and only what is missing is asked of the price
@@ -20,7 +37,7 @@ export async function searchPrices(names) {
   // the database's time limit, and a part that fails is asked once more.
   const ask = async (part) => {
     for (let tries = 0; ; tries++) {
-      const { data, error } = await sb.rpc('price_search', { p_queries: part });
+      const { data, error } = GUEST ? await guestCall('/search', { queries: part }).then((j) => ({ data: j.rows, error: null }), (e) => ({ data: null, error: e })) : await sb.rpc('price_search', { p_queries: part });
       if (!error) return data || [];
       if (tries >= 1) throw error;
     }
@@ -50,12 +67,14 @@ export async function searchPrices(names) {
 }
 
 // Ask the service for items with nothing in our catalog; then check on it.
-export const fetchPrices = (hid, queries) => api('/api/prices/fetch', { method: 'POST', body: { hid, queries } });
+// (A guest does not send the price service looking: the catalog only.)
+export const fetchPrices = (hid, queries) => (GUEST ? Promise.resolve({}) : api('/api/prices/fetch', { method: 'POST', body: { hid, queries } }));
 export const fetchStatus = (runId) => api('/api/prices/fetch/' + encodeURIComponent(runId));
 
 // The household's kashrut: the certifiers it relies on (a list), "any" for
 // no preference, or null when not chosen yet (a level from before asks again).
 export async function getKosherPref(hid) {
+  if (GUEST) { const k = gGet('kosher', null); return Array.isArray(k) ? k.filter(isCert) : k === 'any' ? 'any' : null; }
   const { data } = await sb.from('price_prefs').select('kosher,certs').eq('household_id', hid).maybeSingle();
   if (!data) return null;
   const certs = (data.certs || []).filter(isCert);
@@ -63,6 +82,7 @@ export async function getKosherPref(hid) {
   return data.kosher === 'any' ? 'any' : null;
 }
 export async function setKosherPref(hid, pref) {
+  if (GUEST) { gSet('kosher', Array.isArray(pref) && pref.length ? pref.filter(isCert) : 'any'); return; }
   const certs = Array.isArray(pref) ? pref.filter(isCert) : [];
   const kosher = !certs.length ? 'any' : certs.every((c) => certLevel(c) === 'regular') ? 'regular' : 'mehadrin';
   const { error } = await sb.from('price_prefs').upsert({ household_id: hid, kosher, certs, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
@@ -72,34 +92,40 @@ export async function setKosherPref(hid, pref) {
 // ('rami-levy:club', 'shufersal:card'): their deals count for them. Before the
 // database has the column, none.
 export async function getClubs(hid) {
+  if (GUEST) return (gGet('clubs', []) || []).filter((c) => /^[a-z0-9-]{1,40}:(club|card)$/.test(c));
   const { data, error } = await sb.from('price_prefs').select('clubs').eq('household_id', hid).maybeSingle();
   if (error || !data) return [];
   return (data.clubs || []).filter((c) => /^[a-z0-9-]{1,40}:(club|card)$/.test(c));
 }
 // Chains open on Shabbat the family brought back into its comparison.
 export async function getChainsShown(hid) {
+  if (GUEST) return (gGet('chains', []) || []).filter((c) => /^[a-z0-9-]{1,40}$/.test(c));
   const { data, error } = await sb.from('price_prefs').select('chains_shown').eq('household_id', hid).maybeSingle();
   if (error || !data) return [];
   return (data.chains_shown || []).filter((c) => /^[a-z0-9-]{1,40}$/.test(c));
 }
 export async function setChainsShown(hid, chains) {
   const list = [...new Set((chains || []).filter((c) => /^[a-z0-9-]{1,40}$/.test(c)))].slice(0, 40);
+  if (GUEST) { gSet('chains', list); return; }
   const { error } = await sb.from('price_prefs').upsert({ household_id: hid, chains_shown: list, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
   if (error) throw error;
 }
 export async function setClubs(hid, clubs) {
   const list = [...new Set((clubs || []).filter((c) => /^[a-z0-9-]{1,40}:(club|card)$/.test(c)))].slice(0, 80);
+  if (GUEST) { gSet('clubs', list); return; }
   const { error } = await sb.from('price_prefs').upsert({ household_id: hid, clubs: list, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
   if (error) throw error;
 }
 // This household's word on a product: the certifier its package shows (one
 // per household).
 export async function voteKosher(hid, barcode, cert) {
+  if (GUEST) return;
   const { error } = await sb.from('kosher_votes').upsert({ household_id: hid, barcode, cert, level: certLevel(cert) }, { onConflict: 'barcode,household_id' });
   if (error) throw error;
 }
 // Where the family lives, and the branch found near it at each chain.
 export async function getArea(hid) {
+  if (GUEST) return null;
   const [{ data: a }, { data: s }] = await Promise.all([
     sb.from('household_area').select('city_code,city,hood,max_km').eq('household_id', hid).maybeSingle(),
     sb.from('household_stores').select('chain,chain_name,store_id,name,address,city,km,kind').eq('household_id', hid)
@@ -110,12 +136,13 @@ export const setArea = (hid, city_code, hood, max_km = 25) => api('/api/prices/a
 export const findPlaces = (q) => api('/api/prices/places?q=' + encodeURIComponent(q));
 // The product picked for a line on the list.
 export async function pickProduct(itemId, barcode) {
+  if (GUEST) return;
   const { error } = await sb.from('shopping_items').update({ barcode }).eq('id', itemId);
   if (error) throw error;
 }
 
 // The owner: a first catalog, and products waiting for a kashrut word.
-export const productImages = (barcodes) => api('/api/prices/images', { method: 'POST', body: { barcodes } });
+export const productImages = (barcodes) => (GUEST ? guestCall('/images', { barcodes }) : api('/api/prices/images', { method: 'POST', body: { barcodes } }));
 export const loadStart = () => api('/api/admin/prices/load', { method: 'POST', body: {} });
 export const loadState = () => api('/api/admin/prices/load');
 export const seedStart = (part) => api('/api/admin/prices/seed', { method: 'POST', body: { part } });

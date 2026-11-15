@@ -12,6 +12,7 @@ import { Steps, Checked } from './Steps.js';
 import { Review } from './Review.js';
 import { sourcesOf, checkFile, otherSource, missingCards, learnProvider, providerOf, nameOf } from '../../domain/sources.js';
 import { Logo } from '../picture/Picture.js';
+import { readDraft, writeDraft, dropDraft, draftFits } from '../../data/importDraft.js';
 
 // Upload a card statement: pick a file, watch it being read, review what
 // was found (categories, duplicates), save. Saving can be undone.
@@ -55,11 +56,31 @@ export function ImportSheet({ data, onClose, source: preset = null, file: given 
   // The source chips in the review, opened by "לשנות".
   const [change, setChange] = useState(false);
   const [dropCharges, setDropCharges] = useState(true);
+  // A check left mid-way before: offered when the upload opens.
+  const [draft, setDraft] = useState(() => (given ? null : (() => { const d = readDraft(data.hid); return draftFits(d, preset) ? d : null; })()));
+  useEffect(() => {
+    if (phase !== 'review' || !items.length || saved.current) return;
+    writeDraft(data.hid, { fileName, items, fromCard, issuer, sourceId, cardId });
+  }, [phase, items, sourceId, cardId]);
+  const resume = () => {
+    const d = draft;
+    setDraft(null);
+    setFileName(d.fileName || '');
+    setItems(d.items);
+    setFromCard(!!d.fromCard);
+    setIssuer(d.issuer || null);
+    if (!preset && d.sourceId && sources.some((x) => x.id === d.sourceId)) setSourceId(d.sourceId);
+    if (!preset && d.cardId && data.cards.some((c) => c.id === d.cardId)) setCardIdRaw(d.cardId);
+    track('import_resume');
+    setPhase('review');
+  };
+  const discard = () => { dropDraft(data.hid); setDraft(null); };
 
   // A file that arrived from outside (shared from the phone): read it at once.
   useEffect(() => { if (given) setTimeout(() => start(given), 0); }, []);
   const start = async (file) => {
     const id = ++run.current;
+    if (draft) discard();
     setFileName(file.name);
     track('import_file_' + fileType(file.name));
     setPhase('work');
@@ -132,7 +153,7 @@ export function ImportSheet({ data, onClose, source: preset = null, file: given 
     setMoving(false);
   };
 
-  const reset = () => { run.current++; setItems([]); setError(''); setChange(false); setPhase('pick'); };
+  const reset = () => { run.current++; dropDraft(data.hid); setItems([]); setError(''); setChange(false); setPhase('pick'); };
 
   const save = async () => {
     const isCard = fromCard || !!cardId;
@@ -146,13 +167,14 @@ export function ImportSheet({ data, onClose, source: preset = null, file: given 
     setSaving(true);
     try {
       const added = await addImported(rows, { fileName, kind: String(fileName).split('.').pop().toLowerCase().slice(0, 5), source });
-      if (!added.length) { busySave.current = false; saved.current = true; onClose(); showToast('כל התנועות בפירוט הזה כבר שמורות. לא נשמרו פעמיים.'); return; }
+      if (!added.length) { busySave.current = false; saved.current = true; dropDraft(data.hid); onClose(); showToast('כל התנועות בפירוט הזה כבר שמורות. לא נשמרו פעמיים.'); return; }
       // Installment payments create (or correct) their deal, so the payments
       // still to come are in the forecast. Never holds up the import.
       const deals = installmentDeals(rows, data.installments);
       for (const d of deals.create) await saveRow('installments', d).catch(() => {});
       for (const u of deals.update) await saveRow('installments', u).catch(() => {});
       saved.current = true;
+      dropDraft(data.hid);
       // An account or card saved before its company was chosen learns it
       // from the file it was just confirmed with.
       const learned = learnProvider({ source, issuer });
@@ -182,6 +204,12 @@ export function ImportSheet({ data, onClose, source: preset = null, file: given 
   };
 
   return html`<${Sheet} title=${source ? 'העלאת פירוט: ' + nameOf(source) : preset ? 'העלאת פירוט: ' + preset.name : 'העלאת פירוט'} onClose=${() => { run.current++; onClose(); }}>
+    ${phase === 'pick' && draft && html`<div class="card stack import-draft" role="region" aria-label="פירוט שהתחלתם לבדוק">
+      <b>יש פירוט שהתחלתם לבדוק</b>
+      <span class="muted" style="font-size:14px;line-height:1.55">${draft.fileName ? draft.fileName + ' · ' : ''}${draft.items.length} תנועות. מה שכבר שיניתם נשמר.</span>
+      <button type="button" class="btn" onClick=${resume}>להמשיך מאיפה שעצרתי</button>
+      <button type="button" class="btn btn-ghost" onClick=${discard}>להתחיל מחדש</button>
+    </div>`}
     ${phase === 'pick' && html`<${PickFile} onFile=${start} />`}
     ${phase === 'work' && html`<${Steps} step=${step} fileName=${fileName} />`}
     ${phase === 'checked' && (other

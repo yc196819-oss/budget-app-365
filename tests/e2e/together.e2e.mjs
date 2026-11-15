@@ -171,20 +171,20 @@ test('the profile has a notifications switch for this device', async () => {
   await page.close();
 });
 
-test('mobile bar: the "+" stays in the exact middle, all five tabs on one row', async () => {
+test('mobile bar: the "+" stays in the exact middle, the tabs on one row (shopping is the owner\'s for now)', async () => {
   const { page } = await open({ hash: '#/home' });
   await page.waitForSelector('.hero');
   const add = await page.locator('.nav-add').boundingBox();
   const vw = page.viewportSize().width;
   assert.ok(Math.abs(add.x + add.width / 2 - vw / 2) <= 2, 'plus centered: ' + (add.x + add.width / 2));
   const items = await page.locator('.bottom-nav .nav-item').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { y: Math.round(r.top), w: r.width, href: e.getAttribute('href') }; }));
-  assert.equal(items.length, 5);
+  assert.equal(items.length, 4);
   assert.equal(new Set(items.map((i) => i.y)).size, 1, 'one row');
   assert.ok(items.every((i) => i.w >= 44), 'each tab is tappable');
-  // RTL: home and money on the right of the plus; shopping, goals and assets on the left.
+  // RTL: home and money on the right of the plus; goals and assets on the left.
   const xs = await page.locator('.bottom-nav .nav-item').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().x));
-  assert.ok(xs[0] > add.x && xs[1] > add.x && xs[2] < add.x && xs[3] < add.x && xs[4] < add.x);
-  assert.deepEqual(items.map((i) => i.href), ['#/home', '#/money', '#/shop', '#/plans', '#/assets']);
+  assert.ok(xs[0] > add.x && xs[1] > add.x && xs[2] < add.x && xs[3] < add.x);
+  assert.deepEqual(items.map((i) => i.href), ['#/home', '#/money', '#/plans', '#/assets']);
   await page.close();
 });
 

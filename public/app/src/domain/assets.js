@@ -2,7 +2,9 @@
 // no network. Rows come from the same tables the current app uses:
 //   bank_accounts { id, name, bank_name, balance, balance_updated_at }
 //   investments   { id, name, asset_type, symbol, units, currency, cost, current_value, value_updated_at }
-//   loans         { id, direction: 'iowe' | 'tome', counterparty, amount, loan_date, note, settled }
+//   loans         { id, direction: 'iowe' | 'tome', counterparty, amount, loan_date, note, settled,
+//                   monthly_amount, first_payment } (paid back month by month: amount is the
+//                   debt when the payments start)
 //   installments  { id, description, total_amount, payments_count, first_payment }
 
 import { parseDate } from './money.js';
@@ -46,8 +48,55 @@ export function installmentLeft(inst, today) {
   return { left: count - made, amount: (count - made) * monthly, monthly };
 }
 
-export function openLoans(loans) {
-  return loans.filter((l) => !l.settled && num(l.amount) > 0);
+export function openLoans(loans, today = new Date()) {
+  return loans.filter((l) => !l.settled && loanPlan(l, today).left > 0);
+}
+
+// ── debts paid back month by month ──────────────────────────────────────
+const round2 = (v) => Math.round(v * 100) / 100;
+const dayOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+// Payment k (from 0): the first payment's day, k months on (the 31st is the
+// month's last day in a shorter month).
+function payDate(f, k) {
+  const y = f.y + Math.floor((f.m + k) / 12);
+  const m = (f.m + k) % 12;
+  return new Date(y, m, Math.min(f.d, new Date(y, m + 1, 0).getDate()));
+}
+const payAmount = (amount, monthly, k) => round2(Math.max(0, Math.min(monthly, amount - k * monthly)));
+
+// Where a debt stands: how much is left today, how many payments were made
+// and are left, the next one (date and sum) and the month of the last. With
+// no monthly payment, just what was typed as left.
+export function loanPlan(l, today = new Date()) {
+  const amount = num(l.amount);
+  const monthly = num(l.monthly_amount);
+  if (!(monthly > 0) || !l.first_payment) return { plan: false, amount, left: amount };
+  const f = parseDate(l.first_payment);
+  const count = Math.max(1, Math.ceil(amount / monthly - 1e-9));
+  const now = dayOnly(today);
+  let paid = 0;
+  while (paid < count && payDate(f, paid) <= now) paid++;
+  const left = round2(Math.max(0, amount - paid * monthly));
+  return {
+    plan: true, amount, monthly, count, paid, left,
+    next: paid < count ? payDate(f, paid) : null,
+    nextAmount: paid < count ? payAmount(amount, monthly, paid) : 0,
+    last: payDate(f, count - 1),
+    done: left <= 0
+  };
+}
+
+// The payment of a debt due in a month ({ y, m }), if any: its sum, its
+// number and date.
+export function loanDueIn(l, mo) {
+  const amount = num(l.amount);
+  const monthly = num(l.monthly_amount);
+  if (l.settled || !(monthly > 0) || !l.first_payment) return null;
+  const f = parseDate(l.first_payment);
+  const k = (mo.y - f.y) * 12 + (mo.m - f.m);
+  const count = Math.max(1, Math.ceil(amount / monthly - 1e-9));
+  if (k < 0 || k >= count) return null;
+  return { amount: payAmount(amount, monthly, k), n: k + 1, count, date: payDate(f, k) };
 }
 
 // properties: the family's apartments (their value is had, their mortgage owed).
@@ -56,9 +105,9 @@ export function summary({ accounts = [], investments = [], loans = [], installme
   const values = investments.map((i) => ({ inv: i, ...investmentValue(i, market) }));
   const longTerm = sum(values.filter((v) => isLongTerm(v.inv)), (v) => v.value);
   const invest = sum(values.filter((v) => !isLongTerm(v.inv)), (v) => v.value);
-  const open = openLoans(loans);
-  const owedToUs = sum(open.filter((l) => l.direction === 'tome'), (l) => num(l.amount));
-  const loanDebt = sum(open.filter((l) => l.direction !== 'tome'), (l) => num(l.amount));
+  const open = openLoans(loans, today);
+  const owedToUs = sum(open.filter((l) => l.direction === 'tome'), (l) => loanPlan(l, today).left);
+  const loanDebt = sum(open.filter((l) => l.direction !== 'tome'), (l) => loanPlan(l, today).left);
   const instDebt = sum(installments, (i) => installmentLeft(i, today).amount);
   const cardDebt = sum(cards, (c) => cardCycle(c, txs, today).pending);
   const realEstate = sum(properties, (p) => num(p.value));

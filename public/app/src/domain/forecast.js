@@ -10,6 +10,7 @@ import { MONTH_NAMES, monthShare, parseDate } from './money.js';
 import { monthPlan, cashNow } from './home.js';
 import { holidaysBetween, holidayGoalName, lastHolidayExtra } from './calendar.js';
 import { installmentOf, similarText } from './statement.js';
+import { loanDueIn } from './assets.js';
 
 const sum = (list, f = (x) => x) => list.reduce((s, x) => s + f(x), 0);
 const isExpense = (t) => t.type !== 'income';
@@ -60,6 +61,21 @@ function installmentsIn(installments, mo, paidNow = []) {
   return out;
 }
 
+// A debt owed to the family, paid back month by month: each month's payment
+// is expected income ("תשלום 3 מתוך 10"). This month, only a payment whose
+// day has not come yet (one that came is in the month's income already).
+function loansIn(loans, mo, today, first) {
+  const out = [];
+  const now = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  for (const l of loans) {
+    if (l.direction !== 'tome') continue;
+    const due = loanDueIn(l, mo);
+    if (!due || !(due.amount > 0) || (first && due.date < now)) continue;
+    out.push({ label: 'החזר חוב: ' + (l.counterparty || '') + ' (תשלום ' + due.n + ' מתוך ' + due.count + ')', amount: due.amount, kind: 'debt' });
+  }
+  return out;
+}
+
 function plannedIn(goals, mo) {
   return goals.filter((g) => g.target_date && (() => { const d = parseDate(g.target_date); return d.y === mo.y && d.m === mo.m; })())
     .map((g) => ({ label: 'מתוכנן: ' + g.name, amount: -Math.max(0, (Number(g.target_amount) || 0) - (Number(g.saved_amount) || 0)), kind: 'planned' }))
@@ -93,14 +109,14 @@ function scenarioLines(scenarios, i) {
 // not taken yet), when balances are known.
 export function householdForecast(data, today = new Date(), scenarios = []) {
   const cash = cashNow(data.accounts || [], data.cards || [], data.txs || [], today);
-  return forecast({ txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], budgets: data.budgets || [], income: data.income || [], today, startBalance: cash.known ? cash.free : null, scenarios });
+  return forecast({ txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], loans: data.loans || [], budgets: data.budgets || [], income: data.income || [], today, startBalance: cash.known ? cash.free : null, scenarios });
 }
 
 // income: the household's expected monthly income lines (what they told the
 // app or the advisor, one line per person). When set, it is the income of
 // every coming month; this month, what has not come in yet is still expected
 // (a salary not paid yet is not "no income").
-export function forecast({ txs, goals = [], installments = [], budgets = [], income = [], today, startBalance = null, scenarios = [], months = 6 }) {
+export function forecast({ txs, goals = [], installments = [], loans = [], budgets = [], income = [], today, startBalance = null, scenarios = [], months = 6 }) {
   const base = baseline(txs, today);
   const plan = monthPlan({ txs, budgets, today });
   const expected = sum(Array.isArray(income) ? income : [], (l) => Number(l && l.amount) || 0);
@@ -126,7 +142,7 @@ export function forecast({ txs, goals = [], installments = [], budgets = [], inc
       ];
     }
     const paidNow = i === 0 ? txs.filter((t) => isExpense(t) && (() => { const d = parseDate(t.tx_date); return d.y === mo.y && d.m === mo.m; })()) : [];
-    lines.push(...installmentsIn(installments, mo, paidNow), ...plannedIn(goals, mo), ...holidaysIn(goals, txs, mo), ...scenarioLines(scenarios, i));
+    lines.push(...installmentsIn(installments, mo, paidNow), ...loansIn(loans, mo, today, i === 0), ...plannedIn(goals, mo), ...holidaysIn(goals, txs, mo), ...scenarioLines(scenarios, i));
     lines = lines.filter((l) => Math.round(l.amount) !== 0);
     const net = sum(lines, (l) => l.amount);
     balance += net;

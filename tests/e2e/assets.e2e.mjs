@@ -75,6 +75,40 @@ test('a loan can be added, then marked paid off', async () => {
   await page.close();
 });
 
+test('a debt owed to us paid back each month: the app works out the payments, what is left, and the next one', async () => {
+  const { page, db } = await open('#/assets');
+  await page.click('text=+ הלוואה');
+  await page.click('.sheet button:has-text("חייבים לנו")');
+  await page.fill('.sheet input[required] >> nth=0', 'דני');
+  await page.click('.sheet button:has-text("כל חודש")');
+  await page.fill('.sheet input[inputmode="decimal"] >> nth=0', '5,000');
+  await page.click('.sheet button:has-text("מספר תשלומים")');
+  await page.fill('.sheet input[inputmode="numeric"]', '10');
+  // Started two months ago, on the 1st: three payments came already.
+  const t = new Date();
+  const first = new Date(t.getFullYear(), t.getMonth() - 2, 1);
+  const iso = first.getFullYear() + '-' + String(first.getMonth() + 1).padStart(2, '0') + '-01';
+  await page.fill('.sheet input[type="date"]', iso);
+  const preview = page.locator('.loan-preview');
+  assert.match(await preview.textContent(), /10 תשלומים של ₪500/);
+  assert.match(await preview.textContent(), /כבר שולמו 3, נשאר עכשיו ₪3,500/);
+  assert.match(await preview.textContent(), /נספר בתחזית כהכנסה צפויה/);
+  await page.screenshot({ path: process.env.SHOT_DIR ? process.env.SHOT_DIR + '/loan-sheet.png' : '/dev/null' }).catch(() => {});
+  await page.click('.sheet button[type="submit"]');
+  await page.waitForSelector('.toast');
+  const added = db.tables.loans.find((l) => l.counterparty === 'דני');
+  assert.deepEqual([added.direction, added.amount, added.monthly_amount, added.first_payment], ['tome', 5000, 500, iso]);
+  const row = page.locator('.row', { hasText: 'דני' });
+  assert.match(await row.textContent(), /\+₪3,500/);
+  assert.match(await row.textContent(), /חייבים לנו · ₪500 בחודש/);
+  assert.match(await row.locator(".row-sub2").textContent(), /^אמור להיכנס ₪500 ב-1\.\d+ · נשארו 7 תשלומים$/);
+  await page.screenshot({ path: process.env.SHOT_DIR ? process.env.SHOT_DIR + '/loan-row.png' : '/dev/null' }).catch(() => {});
+  // Opened again: the plan is there to change.
+  await row.click();
+  assert.equal(await page.locator('.sheet input[inputmode="decimal"] >> nth=1').inputValue(), '500');
+  await page.close();
+});
+
 test('the bank balance is edited from the account', async () => {
   const { page, db } = await open('#/assets');
   await page.locator('.row', { hasText: 'עו״ש' }).click();

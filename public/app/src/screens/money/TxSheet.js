@@ -15,7 +15,8 @@ import { showToast } from '../../lib/toast.js';
 
 // Details of one transaction: change its category (optionally for all
 // transactions of the same merchant) or delete it. Both can be undone.
-export function TxSheet({ tx, txs, categories, members, onClose, onMerchant }) {
+// waiting: other lines without a category, for "the next one" (one after another).
+export function TxSheet({ tx, txs, categories, members, onClose, onMerchant, waiting = [], onNext = null }) {
   const [applyAll, setApplyAll] = useState(true);
   const [busy, setBusy] = useState(false);
   // After a change: offer to keep it as a rule for this merchant.
@@ -116,6 +117,7 @@ export function TxSheet({ tx, txs, categories, members, onClose, onMerchant }) {
       ${ask && ask.state === 'saved' && html`<div class="card rule-saved" role="status"><${Icon} name="check" size=${18} />נשמר: ${tx.description} ← ${ask.name}. מעכשיו זה יסווג לבד.</div>`}
       ${others.length > 0 && html`<label class="check"><input type="checkbox" checked=${applyAll} onChange=${(e) => setApplyAll(e.target.checked)} />
         <span>לשנות גם ב-${others.length} התנועות האחרות של ${tx.description}</span></label>`}
+      ${onNext && waiting.length > 0 && html`<button type="button" class=${'btn' + (tx.category_id ? '' : ' btn-ghost') + ' tx-next'} onClick=${() => onNext(waiting[0].id)}>לתנועה הבאה בלי קטגוריה (נשארו ${waiting.length}) ›</button>`}
     </div>
     ${refund && html`<div class="card rule-saved" role="status"><${Icon} name="check" size=${18} />החזר על הוצאה: מקטין את ההוצאות בקטגוריה הזו.
       <button type="button" class="btn-text" onClick=${() => updateTx(tx.id, fromRefund(tx)).then(() => { onClose(); showToast('בוטל: נספר שוב כהכנסה.'); }).catch(() => showToast('לא הצלחנו לבטל. נסו שוב.'))}>לבטל</button></div>`}

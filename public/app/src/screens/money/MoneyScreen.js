@@ -16,7 +16,7 @@ import { routeView } from '../../domain/routes.js';
 
 const VIEWS = [{ key: 'list', label: 'תנועות' }, { key: 'cats', label: 'קטגוריות' }, { key: 'report', label: 'דוח' }];
 
-export function MoneyScreen({ data, onAdd, onImport }) {
+export function MoneyScreen({ data, onAdd, onImport, onAddIncome = null }) {
   const months = useMemo(() => monthsBack(new Date(), 12), []);
   const [period, setPeriod] = useState('month');
   const [index, setIndex] = useState(months.length - 1);
@@ -38,16 +38,20 @@ export function MoneyScreen({ data, onAdd, onImport }) {
   const pickIndex = (i, fromStrip) => { setIndex(i); if (fromStrip) setPeriod('month'); };
   const openTx = (tx) => setSheet({ kind: 'tx', id: tx.id });
   const sheetTx = sheet && sheet.kind === 'tx' ? data.txs.find((t) => t.id === sheet.id) : null;
+  // Lines still without a category, newest first: sorted one after another from the sheet.
+  const waiting = data.txs.filter((t) => !t.category_id).sort((a, b) => String(b.tx_date).localeCompare(String(a.tx_date)));
   const common = { txs: data.txs, categories: data.categories, budgets: data.budgets, periodMonths, period };
 
   return html`<div class="stack">
     <${PeriodBar} months=${months} period=${period} index=${index} onPeriod=${setPeriod} onIndex=${pickIndex} txs=${data.txs} />
     <${Segmented} variant="tabs" label="תצוגה" value=${view} onChange=${setView} options=${VIEWS} />
     ${view === 'list' && (data.transfers || []).length > 0 && html`<button type="button" class="btn-text tr-money-link" onClick=${() => setSheet({ kind: 'transfers' })}><${Icon} name="swap" size=${15} />${(data.transfers || []).length === 1 ? 'תנועה אחת היא העברה בין החשבונות שלכם' : (data.transfers || []).length + ' תנועות הן העברות בין החשבונות שלכם'}, ולא נספרות ›</button>`}
-    ${view === 'list' && html`<${ListView} txs=${data.txs} months=${months} period=${period} index=${index} categoriesById=${categoriesById} onOpen=${openTx} onAdd=${onAdd} onImport=${onImport} query=${query} onQuery=${setQuery} />`}
+    ${view === 'list' && html`<${ListView} txs=${data.txs} months=${months} period=${period} index=${index} categoriesById=${categoriesById} onOpen=${openTx} onAdd=${onAdd} onImport=${onImport} query=${query} onQuery=${setQuery}
+      noIncome=${!data.txs.some((t) => t.type === 'income')} onAddIncome=${onAddIncome} onImportBank=${() => onImport((data.accounts || []).find((a) => !a.cards_only) || null)} />`}
     ${view === 'cats' && html`<${CategoriesView} ...${common} onOpenCategory=${(id) => setSheet({ kind: 'cat', id })} onManage=${() => setSheet({ kind: 'manage' })} />`}
     ${view === 'report' && html`<${ReportView} ...${common} />`}
     ${sheetTx && html`<${TxSheet} key=${sheetTx.id} tx=${sheetTx} txs=${data.txs} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)}
+      waiting=${waiting.filter((t) => t.id !== sheetTx.id)} onNext=${(id) => setSheet({ kind: 'tx', id })}
       onMerchant=${(q) => { setSheet(null); setView('list'); setPeriod('year'); setQuery(q); }} />`}
     ${sheet && sheet.kind === 'transfers' && html`<${TransferSheet} data=${data} dupeOk=${new Set(data.dupeOk || [])} onClose=${() => setSheet(null)} />`}
     ${sheet && sheet.kind === 'manage' && html`<${ManageCategories} categories=${data.categories} members=${data.members} onClose=${() => setSheet(null)} />`}

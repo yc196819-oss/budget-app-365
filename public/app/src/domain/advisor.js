@@ -5,6 +5,7 @@
 import { MONTH_NAMES, monthShare, monthsBack, merchantKey } from './money.js';
 import { monthPlan } from './home.js';
 import { householdForecast, verdict } from './forecast.js';
+import { openLoans, loanPlan } from './assets.js';
 
 const round = Math.round;
 const sum = (list, f) => list.reduce((s, x) => s + f(x), 0);
@@ -89,7 +90,7 @@ export function buildSummary({ txs, categories, budgets, goals = [], installment
     last12Months: year,
     accounts: accounts.map((a) => ({ name: a.name, balance: a.balance ?? null })),
     cards: cards.map((c) => ({ name: c.name, billingDay: c.billing_day || null, limit: c.credit_limit ?? null })),
-    loans: loans.filter((l) => !l.settled).map((l) => ({ with: l.counterparty, amount: Number(l.amount) || 0, direction: l.direction === 'tome' ? 'owed_to_us' : 'we_owe' })),
+    loans: openLoans(loans, today).map((l) => { const p = loanPlan(l, today); return { with: l.counterparty, amount: p.left, direction: l.direction === 'tome' ? 'owed_to_us' : 'we_owe', ...(p.plan ? { monthly: p.monthly, payments_left: p.count - p.paid } : {}) }; }),
     installments: installments.map((i) => ({ what: i.description, total: Number(i.total_amount) || 0, payments: Number(i.payments_count) || 0, first: i.first_payment || null })),
     investmentsTotal: round(investments.reduce((s, x) => s + (Number(x.current_value ?? x.value ?? x.amount) || 0), 0))
   };

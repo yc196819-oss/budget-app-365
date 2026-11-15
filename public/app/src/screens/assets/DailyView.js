@@ -1,13 +1,26 @@
 import { html } from '../../lib/html.js';
 import { money } from '../../domain/format.js';
-import { openLoans, installmentLeft } from '../../domain/assets.js';
+import { openLoans, installmentLeft, loanPlan } from '../../domain/assets.js';
 import { usage, cardLabel, cardSub } from '../../domain/cards.js';
 import { AssetRow } from './AssetRow.js';
+
+// A debt paid month by month: who owes whom and the sum each month, then the
+// next payment (what should come in, and when) and how many are left.
+function loanSub(l, p) {
+  const who = l.direction === 'tome' ? 'חייבים לנו' : 'אנחנו חייבים';
+  if (!p.plan) return who + (l.note ? ' · ' + l.note : '');
+  return who + ' · ' + money(p.monthly) + ' בחודש';
+}
+function loanNext(l, p) {
+  if (!p.plan || !p.next) return null;
+  const left = p.count - p.paid;
+  return (l.direction === 'tome' ? 'אמור להיכנס ' : 'יורד ') + money(p.nextAmount) + ' ב-' + p.next.getDate() + '.' + (p.next.getMonth() + 1) + ' · ' + (left === 1 ? 'תשלום אחרון' : 'נשארו ' + left + ' תשלומים');
+}
 
 const updated = (iso) => { if (!iso) return 'יתרה לא עודכנה'; const d = new Date(iso); return 'עודכן ב-' + d.getDate() + '.' + (d.getMonth() + 1); };
 
 export function DailyView({ data, today, onOpen, userId }) {
-  const loans = openLoans(data.loans);
+  const loans = openLoans(data.loans, today);
   const insts = data.installments.map((i) => ({ i, ...installmentLeft(i, today) })).filter((x) => x.left > 0);
   return html`<div class="stack">
     <section class="stack" style="gap:8px">
@@ -28,8 +41,8 @@ export function DailyView({ data, today, onOpen, userId }) {
       ${loans.length === 0
         ? html`<div class="card muted" style="font-size:14px">אין הלוואות פתוחות.</div>`
         : html`<div class="list">${loans.map((l) => html`<${AssetRow} key=${l.id} icon=${l.direction === 'tome' ? '🤝' : '📄'} title=${l.counterparty || 'הלוואה'}
-            sub=${(l.direction === 'tome' ? 'חייבים לנו' : 'אנחנו חייבים') + (l.note ? ' · ' + l.note : '')}
-            amount=${(l.direction === 'tome' ? '+' : '−') + money(l.amount)} tone=${l.direction === 'tome' ? 'var(--income)' : ''} onClick=${() => onOpen('loan', l.id)} />`)}</div>`}
+            sub=${loanSub(l, loanPlan(l, today))} sub2=${loanNext(l, loanPlan(l, today))}
+            amount=${(l.direction === 'tome' ? '+' : '−') + money(loanPlan(l, today).left)} tone=${l.direction === 'tome' ? 'var(--income)' : ''} onClick=${() => onOpen('loan', l.id)} />`)}</div>`}
     </section>
     ${insts.length > 0 && html`<section class="stack" style="gap:8px">
       <h2 class="section-h">תשלומים</h2>

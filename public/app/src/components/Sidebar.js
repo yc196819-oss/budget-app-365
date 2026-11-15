@@ -4,7 +4,7 @@ import { Icon } from './Icon.js';
 import { go } from '../lib/go.js';
 
 // Desktop navigation: same tabs as the mobile bottom bar.
-export function Sidebar({ tab, onAdd, onImport, onLearn, onProfile, profile, badges = {}, mini = false, onMini }) {
+export function Sidebar({ tabs = TABS, tab, onAdd, onImport, onLearn, onProfile, profile, badges = {}, mini = false, onMini }) {
   const tip = (t) => (mini ? t : undefined);
   return html`
     <aside class="sidebar">
@@ -12,7 +12,7 @@ export function Sidebar({ tab, onAdd, onImport, onLearn, onProfile, profile, bad
         ${onMini && html`<button type="button" class="icon-btn side-mini" aria-pressed=${String(mini)} aria-label=${mini ? 'להרחיב את התפריט' : 'להקטין את התפריט'} title=${mini ? 'להרחיב את התפריט' : 'להקטין את התפריט'} onClick=${onMini}><${Icon} name="panel" size=${18} /></button>`}
       </div>
       <nav aria-label="ניווט ראשי" class="stack" style="gap:4px">
-        ${TABS.map((t) => html`
+        ${tabs.map((t) => html`
           <a class="side-item" href=${hrefFor(t.key)} aria-current=${tab === t.key ? 'page' : 'false'} title=${tip(t.label)} aria-label=${mini ? t.label : undefined}>
             <${Icon} name=${t.icon} /><span class="side-label">${t.label}</span>${t.tag && html`<span class="nav-tag side-label">${t.tag}</span>`}${badges[t.key] > 0 && html`<span class="nav-badge side">${badges[t.key]}</span>`}
           </a>`)}

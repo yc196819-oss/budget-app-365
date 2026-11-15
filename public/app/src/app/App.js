@@ -12,6 +12,7 @@ import { TermsGate } from '../screens/legal/TermsGate.js';
 import { needsConsent } from '../domain/legal.js';
 import { readLocal, writeLocal } from '../lib/storage.js';
 import { PENDING_INVITE, DECLINED_INVITE } from '../data/onboarding.js';
+import { GuestShop, guestToken } from '../screens/guest/GuestShop.js';
 
 // An invite link (/app/?invite=CODE) is remembered until the person is
 // signed in, through sign-up and email confirmation, then taken off the URL.
@@ -26,6 +27,10 @@ import { PENDING_INVITE, DECLINED_INVITE } from '../data/onboarding.js';
 export function App() {
   const tab = useRoute();
   const session = useSession();
+  // A shopping link (#/guest/<secret>): the shopping page alone, without an
+  // account and without anything else of the app.
+  const guest = guestToken(location.hash);
+  if (guest) return html`<${GuestShop} token=${guest} />`;
   if (session.loading) return html`<div class="app-boot"><${Splash} /></div>`;
   if (session.stalled) {
     return html`<main class="login"><div class="card empty" role="alert"><b style="color:var(--text)">החיבור איטי מדי כרגע</b>

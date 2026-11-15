@@ -9,7 +9,8 @@ import { showToast } from '../../lib/toast.js';
 // The advisor's list for the week (the owner tries it first): what this home
 // buys again and again, then the basics sized for the people at home. Each
 // line can be unchecked or its amount changed before it goes on the list.
-export function AdvisorList({ items, people, onAdd, onClose }) {
+// onPeople: where a new number of people is kept (the household; a guest keeps it in the browser).
+export function AdvisorList({ items, people, onAdd, onClose, onPeople = setPeople }) {
   const [n, setN] = useState(people || 2);
   const [rows, setRows] = useState(() => suggestList({ items, people: people || 2 }).map((r) => ({ ...r, on: true })));
   const resize = (v) => {
@@ -18,7 +19,7 @@ export function AdvisorList({ items, people, onAdd, onClose }) {
     // New amounts for the basics; what was unchecked stays unchecked.
     const off = new Set(rows.filter((r) => !r.on).map((r) => r.name));
     setRows(suggestList({ items, people: next }).map((r) => ({ ...r, on: !off.has(r.name) })));
-    setPeople(next).catch(() => {});
+    Promise.resolve(onPeople(next)).catch(() => {});
   };
   const chosen = rows.filter((r) => r.on);
   const set = (i, patch) => setRows((all) => all.map((r, j) => (j === i ? { ...r, ...patch } : r)));

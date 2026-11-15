@@ -1,3 +1,4 @@
+import { INVEST } from './moves.js';
 // Pure logic for importing a card or bank statement. No DOM, no network.
 // An imported item looks like:
 //   { key, date: 'YYYY-MM-DD', description, amount: >0, type: 'expense'|'income',
@@ -263,6 +264,15 @@ export function applyAiCategories(items, sent, answers, categories) {
     const p = picks.find(({ t }) => t.type === it.type && sameMerchant(t.description, it.description));
     return p ? { ...it, ...p.cat, auto: 'ai' } : it;
   });
+}
+
+// Lines whose words say what they are, for the household's own category of
+// that name (an investment platform, securities, a fund: "השקעות"). Only
+// lines still waiting; what the household chose always wins.
+export function categorizeByWords(items, categories) {
+  const invest = (categories || []).find((c) => !c.parent_id && (c.kind || 'expense') === 'expense' && /השקע/.test(c.name || ''));
+  if (!invest) return items;
+  return items.map((t) => (!t.category_id && t.type !== 'income' && INVEST.test(String(t.description || '')) ? { ...t, category_id: invest.id, subcategory_id: null, auto: 'words' } : t));
 }
 
 // What this household chose for the same merchant before wins over anything else.

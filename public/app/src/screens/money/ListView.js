@@ -9,7 +9,8 @@ import { money, signed } from '../../domain/format.js';
 
 const FILTERS = [{ key: 'all', label: 'הכול' }, { key: 'expense', label: 'הוצאות' }, { key: 'income', label: 'הכנסות' }, { key: 'fixed', label: 'קבועות' }];
 
-export function ListView({ txs, months, period, index, categoriesById, onOpen, onAdd, onImport, query: outerQuery, onQuery }) {
+// noIncome: no income at all yet (only card statements): said why, and how to add it.
+export function ListView({ txs, months, period, index, categoriesById, onOpen, onAdd, onImport, query: outerQuery, onQuery, noIncome = false, onAddIncome = null, onImportBank = null }) {
   const [ownQuery, setOwnQuery] = useState('');
   const query = onQuery ? outerQuery || '' : ownQuery;
   const setQuery = onQuery || setOwnQuery;
@@ -47,6 +48,7 @@ export function ListView({ txs, months, period, index, categoriesById, onOpen, o
       <div class="kpi"><small>יצא</small><b class="num">−${money(exp)}</b></div>
       <div class="kpi"><small>נכנס</small><b class="num" style="color:var(--income)">+${money(inc)}</b></div>
     </div>
+    ${noIncome && html`<${IncomeHint} onAddIncome=${onAddIncome} onImportBank=${onImportBank || onImport} />`}
     <label class="search"><span class="visually-hidden">חיפוש</span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.3-4.3" /></svg>
       <input type="search" value=${query} onInput=${(e) => setQuery(e.target.value)} placeholder=${period === 'year' ? 'חיפוש בכל השנה' : 'חיפוש בית עסק או קטגוריה'} />
@@ -56,7 +58,7 @@ export function ListView({ txs, months, period, index, categoriesById, onOpen, o
     </div>
     ${query.trim() && visible.length > 0 && html`<${SearchSummary} query=${query.trim()} visible=${visible} months=${months} year=${period === 'year'} />`}
     ${filtering && !query.trim() && html`<span style="font-size:13px;font-weight:800;color:var(--accent);padding:0 4px">נמצאו ${visible.length} תנועות · ${money(visible.filter((t) => t.type !== 'income').reduce((s, t) => s + Number(t.amount), 0))} בהוצאות</span>`}
-    ${!visible.length && html`<div class="empty">לא נמצאו תנועות. נסו חיפוש אחר.</div>`}
+    ${!visible.length && !(filter === 'income' && noIncome) && html`<div class="empty">לא נמצאו תנועות. נסו חיפוש אחר.</div>`}
     ${groups.map((g) => html`<div key=${g.key}>
       <div class="group-head"><span>${g.label}</span><span class="num">${signed(g.net)}</span></div>
       <div class="list">${g.items.map((tx) => html`<${TxRow} key=${tx.id} tx=${tx} categoriesById=${categoriesById} showDate=${period === 'year'} onOpen=${onOpen} />`)}</div>
@@ -66,6 +68,19 @@ export function ListView({ txs, months, period, index, categoriesById, onOpen, o
   </div>`;
 }
 export { Segmented };
+
+// No income yet: card statements show only spending; the salary comes into
+// the bank account. Two ways to see it: the bank statement, or adding it.
+function IncomeHint({ onAddIncome, onImportBank }) {
+  return html`<div class="card stack income-hint" role="note">
+    <b>למה לא רואים הכנסות?</b>
+    <span class="muted" style="font-size:14px;line-height:1.55">ההכנסות (למשל משכורת) נכנסות לחשבון הבנק, ולכן הן לא מופיעות בפירוט של כרטיס האשראי. כדי לראות אותן:</span>
+    <div class="income-hint-btns">
+      ${onImportBank && html`<button type="button" class="btn" onClick=${onImportBank}><${Icon} name="upload" size=${16} />להעלות דף חשבון בנק</button>`}
+      ${onAddIncome && html`<button type="button" class="btn btn-ghost" onClick=${onAddIncome}><${Icon} name="plus" size=${16} />להוסיף הכנסה (למשל משכורת)</button>`}
+    </div>
+  </div>`;
+}
 
 // What a search adds up to: the total, a month on average, how many times,
 // and (over 12 months) the bars by month and the dearest month.
