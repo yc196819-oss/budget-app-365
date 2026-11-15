@@ -1837,3 +1837,7 @@ body.chat-open { overflow: hidden; }
 .plan-wrap { position: relative; }
 .plan-wrap .plan-card { width: 100%; padding-inline-end: 48px; }
 .plan-close { position: absolute; top: 10px; inset-inline-end: 10px; width: 32px; height: 32px; }
+
+/* Files uploaded before a card or account was chosen for them. */
+.pic-loose { gap: 8px; margin-bottom: 12px; }
+.pic-loose-pick { display: flex; flex-wrap: wrap; gap: 8px; }

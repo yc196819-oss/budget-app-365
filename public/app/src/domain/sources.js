@@ -376,3 +376,19 @@ export function shareGuess(fileName, sources) {
   const same = p ? sources.filter((x) => x.provider === p) : [];
   return same.length === 1 ? same[0].id : null;
 }
+
+// Files uploaded before any account or card was chosen for them: no source
+// on the file, and none of its lines tied to a card or an account. "Complete
+// the picture" cannot count them, so it would ask for them again.
+export function looseFiles({ imports = [], txs = [] } = {}) {
+  const loose = new Map(imports.filter((f) => !f.source_id).map((f) => [f.id, { id: f.id, from: null, to: null, n: 0, tied: false }]));
+  for (const t of txs) {
+    const g = t.import_id && loose.get(t.import_id);
+    if (!g) continue;
+    if (t.card_id || t.account_id) g.tied = true;
+    if (!g.from || t.tx_date < g.from) g.from = t.tx_date;
+    if (!g.to || t.tx_date > g.to) g.to = t.tx_date;
+    g.n++;
+  }
+  return [...loose.values()].filter((g) => g.n > 0 && !g.tied);
+}

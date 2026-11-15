@@ -240,6 +240,30 @@ test('only the account made at sign-up (no bank, no card): the banks are still o
   await page.close();
 });
 
+test('files uploaded before a card was chosen: one tap ties them to it, and they count (not asked for again)', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.bank_accounts = [{ id: 'a0', household_id: d.hid, name: 'חשבון ראשי', balance: 0 }];
+    d.tables.credit_cards = [{ id: 'c9', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10, bank_account_id: 'a0' }];
+    d.tables.imports = [{ id: 'f1', household_id: d.hid, kind: 'xlsx', rows: 2, source_id: null, source_kind: null, date_from: null, date_to: null, created_at: '2026-11-15T08:43:00Z' }];
+    for (const t of d.tables.transactions) { t.card_id = null; }
+    d.tables.transactions.push(
+      { id: 'u1', household_id: d.hid, type: 'expense', amount: 50, description: 'חנות בדויה', tx_date: '2026-10-03', import_id: 'f1', card_id: null, payment_method: 'credit' },
+      { id: 'u2', household_id: d.hid, type: 'expense', amount: 70, description: 'מסעדה בדויה', tx_date: '2026-10-05', import_id: 'f1', card_id: null, payment_method: 'credit' }
+    );
+  });
+  await page.click('.pic-card');
+  const loose = page.locator('.pic-loose');
+  await loose.waitFor();
+  assert.match(await loose.textContent(), /קובץ אחד שכבר העליתם \(2 תנועות\)/);
+  await loose.locator('button[aria-label^="לשייך למקס"]').click();
+  await page.waitForSelector('.toast:has-text("הקובץ שויך")');
+  assert.deepEqual([db.tables.imports[0].source_kind, db.tables.imports[0].source_id], ['card', 'c9']);
+  assert.deepEqual(db.tables.transactions.filter((t) => t.import_id === 'f1').map((t) => t.card_id), ['c9', 'c9']);
+  await page.waitForFunction(() => !document.querySelector('.pic-loose'));
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('a company with two cards: a file with only one of them says so, and can be saved anyway', async () => {
   const { page, db, errors } = await open(390, (d) => {
     d.tables.bank_accounts = [];
