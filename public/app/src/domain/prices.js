@@ -246,7 +246,7 @@ export function allowed(product, pref) {
 // person means by "עגבניות", "בצל", "תה" or "עוף" unless they typed it.
 // Words that make a product a special kind of the thing typed: a person who
 // writes "קפה" or "קמח" means the ordinary one, not capsules or pizza flour.
-const SPECIAL = /קפסול|מחית|ללא גל|פיצה|כוסמין|אורגני|ללא גלוטן|גלוטן|(^|\s)GO(\s|$)|חלבון|פרוטאין|לקישוט|דיאט|לייט|זירו|ספריי|מיני(\s|$)|לתינוק|תינוקות|ללא לקטוז|קטו(\s|$)|טבעוני|(^|\s)מלאה?(\s|$)|סושי|סטיקי/i;
+const SPECIAL = /קפסול|מחית|ללא גל|פיצה|כוסמין|אורגני|ללא גלוטן|גלוטן|(^|\s)GO(\s|$)|חלבון|פרוטאין|לקישוט|דיאט|לייט|זירו|ספריי|מיני(\s|$)|לתינוק|תינוקות|ללא לקטוז|קטו(\s|$)|טבעוני|(^|\s)מלאה?(\s|$)|סושי|סטיקי|שרי(\s|$)|פומפרניקל|שיפון|מחמצת|כוסמת|ספלט|רב[\s-]?דגן|דגנים/i;
 // A flavour or an addition ("חמוץ חריף", "עם לימון", "נוגט"): still the
 // product, but the plain one comes first when the list says just "במבה".
 const FLAVOUR = /נענע|קמומיל|לואיזה|פירות יער|פיצפוצי|פצפוצ|קורנפלקס|אוראו|עוגיות|אגוזי|שקדים|חריף|חמוץ|במילוי|נוגט|ברביקיו|צ['׳]?דר|(^|\s)עם(\s|$)|יום הולדת|מתובל|לימון|פלפל|שום|בצל|שמיר|זעתר|קינואה|ג['׳]?ינג['׳]?ר|מאנצ/;
@@ -380,17 +380,22 @@ const AS_SOLD = [
   [/^ביצה$/, 'ביצים'], [/^עגבני(?:י)?ה$/, 'עגבניות'], [/^לחמני(?:י)?ה$/, 'לחמניות'], [/^פיתה$/, 'פיתות'],
   [/^נקניקי(?:י)?ה$/, 'נקניקיות'], [/^תפוח$/, 'תפוחים'], [/^תפוח אדמה$/, 'תפוחי אדמה'], [/^בננות$/, 'בננה'],
   [/^מלפפונים$/, 'מלפפון'], [/^גזרים$/, 'גזר'], [/^בצלים$/, 'בצל'], [/^חלות$/, 'חלה'], [/^לימונים$/, 'לימון'],
-  [/^קוטג['׳]?$/, "קוטג'"], [/^שמנת מתוקה$/, 'שמנת להקצפה']
+  [/^קוטג['׳]?$/, "קוטג'"], [/^שמנת מתוקה$/, 'שמנת להקצפה'],
 ];
+// What a family means by the bare word: the price-controlled standard one.
+// ("לחם" is the standard bread every chain has, "חלב" the regular 3% milk.)
+const BY_DEFAULT = [[/^לחם$/, 'לחם אחיד'], [/^חלב$/, 'חלב 3%']];
 // A chain's name as people know it: some old rows say "Osher Ad (אושר עד)".
 export function chainHe(name) {
   const m = /^[A-Za-z][^(]*\(([^)]+)\)\s*$/.exec(String(name || '').trim());
   return m ? m[1].trim() : name;
 }
-export function searchTerm(name) {
+// plainOnly: without the bare-word defaults (a looser search never narrows).
+export function searchTerm(name, { plainOnly = false } = {}) {
   // (Without emoji, bullets or numbering an older line may still carry.)
   const n = String(name || '').replace(/\p{Extended_Pictographic}|[\u2600-\u27BF\uFE0F\u200d]/gu, ' ').replace(/^\s*(?:[-–—•*·▪◦●○■□☐✓→>]+\s*|\d{1,2}\s*[.)]\s+)/, '').replace(/[,;.]+\s*$/, '').trim().replace(/\s+/g, ' ');
   for (const [re, to] of AS_SOLD) if (re.test(n)) return to;
+  if (!plainOnly) for (const [re, to] of BY_DEFAULT) if (re.test(n)) return to;
   // "חד פעמיות" as the chains write it: "חד פעמי", "חד"פ" (both start "חד").
   return n.replace(/(^|\s)חד[\s-]*פעמי(?:ות|ים|ת)?(?=\s|$)/g, '$1חד').replace(/(^|\s)ח["״]פ(?=\s|$)/g, '$1חד');
 }
@@ -405,7 +410,7 @@ export function looser(term) {
     .replace(/(^|\s)(שישייה|שישיה|מארז|מארזים|חבילה|חבילות|קרטון|זוג|שקית|שקיות|בקבוק|בקבוקים|פחית|פחיות)(?=\s|$)/g, ' ')
     .replace(/(^|\s)\d+(?:[.,]\d+)?\s*(ליטר|ל['׳]|ל|מ"ל|מל|גרם|גר|ג['׳]|ק"ג|קג|קילו|יח['׳]?|יחידות|גלילים)?(?=\s|$)/g, ' ')
     .replace(/\s+/g, ' ').trim();
-  n = searchTerm(n);
+  n = searchTerm(n, { plainOnly: true });
   if (n && n !== t) return n;
   const w = t.split(' ');
   return w.length > 2 ? w.slice(0, -1).join(' ') : null;

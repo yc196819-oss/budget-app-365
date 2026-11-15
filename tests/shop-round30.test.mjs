@@ -26,7 +26,7 @@ test('round 31: disposables as the chains write them', async () => {
   assert.equal(searchTerm('כוסות חד פעמיות'), 'כוסות חד');
   assert.equal(searchTerm('צלחות חד-פעמיות'), 'צלחות חד');
   assert.equal(searchTerm('מגשים ח"פ'), 'מגשים חד');
-  assert.equal(searchTerm('חלב'), 'חלב');
+  assert.equal(searchTerm('קמח'), 'קמח', 'nothing to change');
 });
 
 test('round 32: how many, as families write it', async () => {
@@ -41,4 +41,16 @@ test('round 32: how many, as families write it', async () => {
   assert.equal(count('2 שישיות', cola), 12);
   assert.equal(count('2 קרטונים', milk), 2);
   assert.equal(count('זוג', milk), 2);
+});
+
+test('round 36: what a family means by "לחם" and "עגבניות"', async () => {
+  const { searchTerm, special } = await import('../public/app/src/domain/prices.js');
+  assert.equal(searchTerm('לחם'), 'לחם אחיד', 'the standard bread');
+  assert.equal(searchTerm('לחם מלא'), 'לחם מלא', 'what they typed, when they say which');
+  assert.equal(searchTerm('חלב'), 'חלב 3%', 'the regular milk');
+  assert.equal(searchTerm('חלב 1%'), 'חלב 1%');
+  assert.equal(special('עגבניות שרי עגול', 'עגבניות'), true, 'cherry tomatoes are a special kind');
+  assert.equal(special('עגבניות שרי עגול', 'עגבניות שרי'), false, 'unless asked for');
+  assert.equal(special('לחם פומפרניקל 750 גרם', 'לחם'), true);
+  assert.equal(special('לחם שיפון עגול', 'לחם שיפון'), false);
 });
