@@ -109,6 +109,33 @@ test('a debt owed to us paid back each month: the app works out the payments, wh
   await page.close();
 });
 
+test('long term: what went into investments comes from the sorted lines, with no typing', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  const db = withAssets(makeFakeDb());
+  db.tables.investments = [];
+  db.tables.categories.push({ id: 'inv', name: 'השקעות', icon: null, kind: 'expense', parent_id: null, household_id: db.hid });
+  const t = new Date();
+  const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // Made-up: 1,000 a month for 4 months, on the 1st.
+  for (let k = 0; k < 4; k++) db.tables.transactions.push({ id: 'd' + k, household_id: db.hid, type: 'expense', amount: 1000, description: 'קרן בדויה', tx_date: iso(new Date(t.getFullYear(), t.getMonth() - k, 1)), category_id: 'inv' });
+  const errors = collectErrors(page);
+  await mockSupabase(page, db);
+  await page.route('**/api/market/quotes**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"usdIls":3.7,"quotes":{}}' }));
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/assets');
+  await page.click('text=לטווח ארוך');
+  const card = page.locator('.invest-deposits');
+  await card.waitFor();
+  assert.match(await page.locator('.hero').textContent(), /הופקד להשקעות \(לפי התנועות\)/);
+  assert.match(await card.textContent(), /בממוצע בחודש₪1,000/);
+  assert.match(await card.textContent(), /החודש עד עכשיו₪1,000/);
+  assert.match(await card.textContent(), /ב-12 החודשים האחרונים₪3,000/);
+  assert.match(await card.textContent(), /קרן בדויה₪4,000/);
+  assert.equal(await card.locator('.dep-bar').count(), 6);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('the bank balance is edited from the account', async () => {
   const { page, db } = await open('#/assets');
   await page.locator('.row', { hasText: 'עו״ש' }).click();
