@@ -205,11 +205,28 @@ export function filesOf(source, { imports = [], txs = [], banks = 1 } = {}) {
 
 // One source in one month: 'ok' (uploaded), 'partial' (only part of the
 // month), 'missing', or 'waiting' (not due yet).
+// A card file covers a month's statement when it holds that month's whole
+// cycle (from the day after the previous charge to this charge): every month
+// between its first and last line counts, so a file of a year counts for the
+// year. Its first month counts only when the file starts at that cycle's
+// start (a month's file that starts on the 11th is not the month before's).
+function coversCycle(f, key, billingDay = 10) {
+  if (!f.date_from || !f.date_to) return false;
+  const first = billingMonth(f.date_from, billingDay);
+  const last = billingMonth(f.date_to, billingDay);
+  if (key > last || key < first) return false;
+  if (key > first) return true;
+  const [y, m] = key.split('-').map(Number);
+  const prevLast = daysIn(m === 1 ? y - 1 : y, m === 1 ? 11 : m - 2);
+  const start = m === 1 ? new Date(y - 1, 11, Math.min(billingDay, prevLast) + 1) : new Date(y, m - 2, Math.min(billingDay, prevLast) + 1);
+  return (parse(f.date_from) - start) / 86400000 <= 5 || first === last;
+}
+
 export function statusOf(source, files, key, today = new Date()) {
   const [y, m] = key.split('-').map(Number);
   const nowKey = ymOf(today);
   if (source.kind === 'card') {
-    const has = files.some((f) => billingMonth(f.date_to, source.billingDay) === key);
+    const has = files.some((f) => coversCycle(f, key, source.billingDay));
     if (has) return 'ok';
     if (key === nowKey && !pastCharge(source, today)) return 'waiting';
     return key > nowKey ? 'waiting' : 'missing';
@@ -320,7 +337,12 @@ export function checkFile({ source, items = [], fromCard = false, sources = [], 
   const dates = kept.map((t) => t.date).filter(Boolean).sort();
   if (dates.length) {
     const key = source.kind === 'card' ? billingMonth(dates[dates.length - 1], source.billingDay) : dates[dates.length - 1].slice(0, 7);
-    out.push({ ok: true, text: (source.kind === 'card' ? 'החיוב של ' : 'החודש: ') + monthName(key) + ' ' + key.slice(0, 4), key });
+    const first = source.kind === 'card' ? billingMonth(dates[0], source.billingDay) : dates[0].slice(0, 7);
+    // A file of several months (a whole year, say): each line goes to its own month.
+    const n = (Number(key.slice(0, 4)) - Number(first.slice(0, 4))) * 12 + Number(key.slice(5)) - Number(first.slice(5)) + 1;
+    out.push({ ok: true, text: n > 1
+      ? n + ' חודשים: ' + monthName(first) + ' ' + first.slice(0, 4) + ' עד ' + monthName(key) + ' ' + key.slice(0, 4) + '. כל תנועה נכנסת לחודש שלה.'
+      : (source.kind === 'card' ? 'החיוב של ' : 'החודש: ') + monthName(key) + ' ' + key.slice(0, 4), key });
   }
   const sum = kept.filter((t) => t.type !== 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
   out.push({ ok: kept.length > 0, text: kept.length + ' תנועות, סה״כ ₪' + Math.round(sum).toLocaleString('en-US') });

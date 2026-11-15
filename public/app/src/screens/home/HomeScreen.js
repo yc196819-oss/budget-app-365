@@ -118,6 +118,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   if (calm && !data.txs.length) {
     // The first day: the statements come first, the number appears after.
     return html`<div class="stack home calm">
+      <div class="home-main stack">
       <${AnswerNotice} userId=${userId} />
       <section class="card stack first-day" aria-label="הצעד הראשון">
         <small class="first-day-k">יום ראשון · הצעד הראשון</small>
@@ -128,6 +129,8 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
         <button type="button" class="btn-text" style="align-self:flex-start" onClick=${onAdd}>או להוסיף הוצאה ידנית / בקול</button>
         <span class="faint" style="font-size:12px;line-height:1.5">אחר כך: לסווג, כמה נכנס בחודש, תקציב. נעבור על זה ביחד, צעד אחרי צעד.</span>
       </section>
+      </div>
+      <div class="home-side stack">
       <section class="hero hero-empty" aria-label="כמה נשאר החודש">
         <span style="font-weight:700;color:var(--hero-muted)">כמה נשאר החודש</span>
         <span class="display num" style="font-size:40px;line-height:1" aria-hidden="true">—</span>
@@ -135,6 +138,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       </section>
       ${footer}
       ${switchLink}
+      </div>
     </div>`;
   }
   if (calm) {
@@ -152,6 +156,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
     <//>`;
     const upSum = soon.reduce((s, u) => s + (u.amount && u.amount < 0 ? -u.amount : 0), 0);
     return html`<div class="stack home calm">
+      <div class="home-main stack">
       <${AnswerNotice} userId=${userId} />
       <${RepairCard} data=${data} />
       <${ImportNotice} data=${data} onImport=${onImport} />
@@ -160,9 +165,11 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
         ? html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} onPicture=${onPicture} compact=${true} onMore=${() => setTodo(true)} />`
         : html`<div class="calm-next">${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}<button type="button" class="btn-text" style="align-self:flex-end" onClick=${() => setTodo(true)}>עוד דברים לסדר ›</button></div>`}
       <${Attention} items=${calmItems} onAct=${act} limit=${2} />
+      <${WhereMoney} top=${top} />
+      </div>
+      <div class="home-side stack">
       <${PlanCards} data=${data} onSheet=${(s) => { setSheet(null); planSheet.open(s); }} />
       <${TripFound} data=${data} trips=${trips} />
-      <${WhereMoney} top=${top} />
       <div class="calm-tiles">
         ${cash.known && html`<button type="button" class="card calm-tile" onClick=${() => go('assets')}><small>כסף פנוי בחשבון</small><b class="num" style=${cash.free < 0 ? 'color:var(--danger)' : ''}>${(cash.free < 0 ? '−' : '') + money(Math.abs(cash.free))}</b></button>`}
         <button type="button" class="card calm-tile" aria-expanded=${String(upOpen)} onClick=${() => setUpOpen((v) => !v)}><small>בשבועיים הקרובים</small><b>${soon.length ? (upSum ? '−' + money(upSum) : soon.length + ' צפויים') : 'אין חיובים צפויים'}</b>${soon.length > 0 && html`<span class="faint" style="font-size:12px">${soon.length === 1 ? 'חיוב אחד' : soon.length + ' חיובים'} · ${upOpen ? 'להסתיר' : 'לראות'}</span>`}</button>
@@ -170,6 +177,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       ${upOpen && soon.length > 0 && html`<${Upcoming} items=${soon} />`}
       ${footer}
       ${switchLink}
+      </div>
       ${moreSheet}
       <${PlanSheets} data=${data} sheet=${planSheet.value} onClose=${planSheet.close} />
       ${sheet && sheet.kind === 'sort' && html`<${SortSheet} data=${data} onClose=${() => setSheet(null)} />`}

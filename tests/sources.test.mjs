@@ -277,3 +277,27 @@ test('files uploaded before a card was chosen: found, so they can be tied to it 
   assert.deepEqual(looseFiles({ imports, txs }), [{ id: 'f1', from: '2026-03-02', to: '2026-03-20', n: 2, tied: false }]);
   assert.deepEqual(looseFiles({ imports: [], txs }), []);
 });
+
+test('a card file of a whole year counts for every month in it; a month file only for its month', () => {
+  const card = { kind: 'card', id: 'c1', billingDay: 10 };
+  const today = new Date(2026, 10, 15);
+  const year = [{ id: 'y', date_from: '2025-11-15', date_to: '2026-11-11' }];
+  // Its first cycle (charged 10.12.25) starts 11.11: the file starts 4 days later, so it counts.
+  for (const k of ['2025-12', '2026-01', '2026-06', '2026-10', '2026-11']) assert.equal(statusOf(card, year, k, today), 'ok', k);
+  // A file that starts in the middle of a cycle does not count for that cycle.
+  const late = [{ id: 'l', date_from: '2026-01-25', date_to: '2026-05-08' }];
+  assert.equal(statusOf(card, late, '2026-02', today), 'missing', 'the cycle of 10.2 began 11.1');
+  assert.equal(statusOf(card, late, '2026-03', today), 'ok');
+  assert.equal(statusOf(card, late, '2026-05', today), 'ok');
+  // One month's statement, as before.
+  const month = [{ id: 'm', date_from: '2026-09-11', date_to: '2026-10-09' }];
+  assert.equal(statusOf(card, month, '2026-10', today), 'ok');
+  assert.equal(statusOf(card, month, '2026-09', today), 'missing');
+});
+
+test('a bank file of a whole year counts for every month it covers', () => {
+  const bank = { kind: 'bank', id: 'b1' };
+  const today = new Date(2026, 10, 15);
+  const year = [{ id: 'y', date_from: '2025-11-01', date_to: '2026-10-31' }];
+  for (const k of ['2025-11', '2026-03', '2026-10']) assert.equal(statusOf(bank, year, k, today), 'ok', k);
+});
