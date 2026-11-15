@@ -115,14 +115,14 @@ test('a suspected double charge: "both are real" keeps both lines and the questi
   await page.close();
 });
 
-test('a household with no transactions gets the setup guide, opened at the statement', async () => {
+test('a household with no transactions: the first day card, statements first, the number after', async () => {
   const db = makeFakeDb();
   db.tables.transactions = [];
   const { page, errors } = await open(390, db);
-  const guide = page.locator('.setup-guide');
-  assert.match(await guide.textContent(), /בואו נסדר לכם את התמונה/);
-  assert.match(await guide.locator('.guide-step.open').textContent(), /מעלים פירוטי אשראי של 6 חודשים/);
-  await guide.locator('text=להעלות פירוט').click();
+  const first = page.locator('.first-day');
+  assert.match(await first.textContent(), /בואו נכניס את המספרים האמיתיים/);
+  assert.match(await page.locator('.hero-empty').textContent(), /יופיע כאן אחרי ההעלאה הראשונה/);
+  await first.locator('text=יש לי כבר קובץ: להעלות עכשיו').click();
   assert.equal(await page.locator('.sheet h2').textContent(), 'העלאת פירוט');
   assert.deepEqual(errors, []);
   await page.close();

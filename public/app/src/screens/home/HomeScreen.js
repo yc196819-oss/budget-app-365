@@ -51,10 +51,10 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   const dupeOk = new Set([...(data.dupeOk || []), ...local]);
   // The holiday plan and the quarterly check-in have their own sheets.
   const planSheet = usePlanSheet();
-  // The new, calmer home: for now the owner's (to try before everyone).
+  // The calmer home, for everyone (the previous one is a tap away).
   const [layout, setLayoutRaw] = useState(() => readLocal('home:layout', 'new'));
   const setLayout = (v) => { writeLocal('home:layout', v); setLayoutRaw(v); };
-  const calm = owner && layout !== 'old';
+  const calm = layout !== 'old';
   const [todo, setTodo] = useState(false);
   const [upOpen, setUpOpen] = useState(false);
   const trips = useTrips(data.hid);
@@ -111,7 +111,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   const askTx = sheet && sheet.kind === 'ask' ? data.txs.find((t) => t.id === sheet.id) : null;
 
   const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} onPicture=${onPicture} />`;
-  const switchLink = owner && html`<button type="button" class="btn-text faint home-switch" onClick=${() => setLayout(calm ? 'old' : 'new')}>${calm ? 'למסך הבית הקודם' : 'לנסות את מסך הבית החדש'}</button>`;
+  const switchLink = html`<button type="button" class="btn-text faint home-switch" onClick=${() => setLayout(calm ? 'old' : 'new')}>${calm ? 'למסך הבית הקודם' : 'לנסות את מסך הבית החדש'}</button>`;
   const footer = html`<p class="home-foot muted">משהו לא עובד? יש רעיון? <button type="button" class="btn-text" onClick=${() => go('profile/feedback')}>כתבו לנו</button>${onLearn ? html` · <button type="button" class="btn-text" onClick=${onLearn}>פינת הלמידה</button>` : ''}</p>`;
 
   // ── the calm home ──
@@ -147,11 +147,10 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
     const calmItems = nextKey === 'sort' ? items.filter((a) => a.kind !== 'loose') : items;
     const moreSheet = todo && html`<${Sheet} title="דברים לסדר" onClose=${() => setTodo(false)}>
       <div class="stack">
-        ${onPicture && html`<${PictureCard} data=${data} onOpen=${() => { setTodo(false); onPicture(); }} />`}
         ${guide}
         <${MonthlyAsk} userId=${userId} data=${data} />
         <${FixedCheckCard} data=${data} />
-        <${InstallCard} />
+        ${onLearn && html`<${LearnCard} userId=${userId} onOpen=${() => { setTodo(false); onLearn(); }} />`}
       </div>
     <//>`;
     const upSum = soon.reduce((s, u) => s + (u.amount && u.amount < 0 ? -u.amount : 0), 0);
@@ -161,17 +160,19 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       <${RepairCard} data=${data} />
       <${ImportNotice} data=${data} onImport=${onImport} />
       <${Hero} plan=${plan} catName=${catName} onImport=${onImport} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
+      ${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}
       ${nextKey
         ? html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} onPicture=${onPicture} compact=${true} onMore=${() => setTodo(true)} />`
-        : html`<div class="calm-next">${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}<button type="button" class="btn-text" style="align-self:flex-end" onClick=${() => setTodo(true)}>עוד דברים לסדר ›</button></div>`}
+        : html`<div class="calm-next"><button type="button" class="btn-text" style="align-self:flex-end" onClick=${() => setTodo(true)}>עוד דברים לסדר ›</button></div>`}
       <${Attention} items=${calmItems} onAct=${act} limit=${2} />
       <${WhereMoney} top=${top} />
       </div>
       <div class="home-side stack">
       <${PlanCards} data=${data} onSheet=${(s) => { setSheet(null); planSheet.open(s); }} />
       <${TripFound} data=${data} trips=${trips} />
+      <${CashCard} cash=${cash} accounts=${data.accounts} />
+      <${InstallCard} />
       <div class="calm-tiles">
-        ${cash.known && html`<button type="button" class="card calm-tile" onClick=${() => go('assets')}><small>כסף פנוי בחשבון</small><b class="num" style=${cash.free < 0 ? 'color:var(--danger)' : ''}>${(cash.free < 0 ? '−' : '') + money(Math.abs(cash.free))}</b></button>`}
         <button type="button" class="card calm-tile" aria-expanded=${String(upOpen)} onClick=${() => setUpOpen((v) => !v)}><small>בשבועיים הקרובים</small><b>${soon.length ? (upSum ? '−' + money(upSum) : soon.length + ' צפויים') : 'אין חיובים צפויים'}</b>${soon.length > 0 && html`<span class="faint" style="font-size:12px">${soon.length === 1 ? 'חיוב אחד' : soon.length + ' חיובים'} · ${upOpen ? 'להסתיר' : 'לראות'}</span>`}</button>
       </div>
       ${upOpen && soon.length > 0 && html`<${Upcoming} items=${soon} />`}

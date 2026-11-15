@@ -22,8 +22,7 @@ test('morning news in the learning corner: the items, their sources, what it mea
   await page.route('**/api/news/today', (r) => { calls++; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ digest: DIGEST() }) }); });
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/home');
-  await page.waitForSelector('.learn-card');
-  await page.click('.learn-card');
+  await page.click('.home-foot button:has-text("פינת הלמידה")');
   await page.click('.sheet .tabs button:has-text("חדשות הבוקר")');
   await page.waitForSelector('.news-item');
   assert.equal(await page.locator('.news-item').count(), 3);
@@ -54,7 +53,7 @@ test('when the news is not available, a clear message and a retry', async () => 
   await page.route('**/api/news/today', (r) => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'החדשות של הבוקר לא זמינות כרגע. נסו שוב מאוחר יותר.' }) }));
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/home');
-  await page.click('.learn-card');
+  await page.click('.home-foot button:has-text("פינת הלמידה")');
   await page.click('.sheet .tabs button:has-text("חדשות הבוקר")');
   await page.waitForSelector('.sheet [role="alert"]');
   assert.match(await page.locator('.sheet [role="alert"]').textContent(), /לא זמינות כרגע/);

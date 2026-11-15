@@ -10,6 +10,7 @@ const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
 const { claudeRequest, isRetryable } = require('./server/claude');
+const advisorImage = require('./server/advisorImage');
 const learn = require('./server/learn');
 const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
@@ -1132,17 +1133,26 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
   const { summary, history, message, authorName, authorGender, candidates, categories, device } = req.body || {};
   if (!message) return res.status(400).json({ error: 'message is required' });
   if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'No AI key configured' });
+  // A picture with the question: for now the owner's. Read for this answer
+  // only; never stored or logged.
+  let image = null;
+  if (req.body && req.body.image) {
+    if (!isOwnerEmail(req.authEmail)) return res.status(403).json({ error: 'צירוף תמונה עוד לא זמין.' });
+    if (!ANTHROPIC_KEY) return res.status(503).json({ error: 'היועץ לא יכול לקרוא תמונות כרגע.' });
+    image = advisorImage.parseImage(req.body.image);
+    if (image.error) return res.status(400).json({ error: image.error });
+  }
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders && res.flushHeaders();
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender) + devicePart(device));
+  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender) + devicePart(device) + (image ? advisorImage.IMAGE_NOTE : ''));
   // The household's numbers and lines (about 6-8k tokens at most).
   const text = JSON.stringify(summary || {}).slice(0, 24000);
   try {
     if (ANTHROPIC_KEY) {
-      const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 3000, stream: true, content: `${prompt}\n\n${text}`, effort: 'medium' });
+      const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 3000, stream: true, content: advisorImage.chatContent(`${prompt}\n\n${text}`, image), effort: 'medium' });
       const r = await fetch(cr.url, cr.init);
       if (!r.ok) console.error('Claude stream failed:', r.status, (await r.text().catch(() => '')).slice(0, 300));
       if (r.ok && r.body) {
@@ -1170,7 +1180,8 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
       }
     }
     // fallback: no streaming — whole answer as one chunk. Claude was just
-    // tried, so go straight to the other providers.
+    // tried, so go straight to the other providers (which get no picture).
+    if (image) { send({ error: 'היועץ לא הצליח לקרוא את התמונה כרגע. נסו שוב בעוד דקה.' }); return res.end(); }
     const ai = await generateWithFallback({ prompt, text }, { skipClaude: !!ANTHROPIC_KEY });
     send({ delta: String(ai.output || '').trim() });
     send({ done: true, provider: ai.provider });

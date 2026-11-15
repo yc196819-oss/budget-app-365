@@ -18,8 +18,14 @@ async function open(setup) {
   await mockSupabase(page, db);
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/home');
-  await page.waitForSelector('.learn-card');
+  await openTodo(page);
   return { page, db, errors };
+}
+// On the home the lesson card waits in "עוד דברים לסדר".
+async function openTodo(page) {
+  await page.waitForSelector('.hero');
+  await page.locator('button:has-text("עוד דברים לסדר")').first().click();
+  await page.waitForSelector('.learn-card');
 }
 
 test('today\'s lesson: read, a 2-question quiz, saved per user, streak on the home card', async () => {
@@ -46,6 +52,7 @@ test('today\'s lesson: read, a 2-question quiz, saved per user, streak on the ho
   assert.ok(row && row.learning && row.learning.done[first.id], 'progress saved');
   assert.equal(row.household_id, 'h1');
   await page.keyboard.press('Escape');
+  await openTodo(page);
   assert.match(await page.locator('.learn-card').textContent(), /השיעור של היום הושלם/);
   assert.match(await page.locator('.learn-card .flame').textContent(), /1/);
   assert.deepEqual(errors, []);
@@ -55,7 +62,8 @@ test('today\'s lesson: read, a 2-question quiz, saved per user, streak on the ho
 test('progress from another device is loaded, and the library shows every topic', async () => {
   const done = Object.fromEntries(LESSONS.slice(0, 3).map((l) => [l.id, '2026-01-01']));
   const { page } = await open((db) => db.tables.user_settings.push({ user_id: 'u1', household_id: 'h1', learning: { done, answers: {} }, reminders: { keep: true } }));
-  assert.match(await page.locator('.learn-card').textContent(), new RegExp(LESSONS[3].title));
+  // The progress arrives a moment after the card shows (it is loaded from the account).
+  await page.locator('.learn-card', { hasText: LESSONS[3].title }).waitFor();
   await page.click('.learn-card');
   await page.click('.sheet button:has-text("כל השיעורים")');
   assert.equal(await page.locator('.topic').count(), TOPICS.length);

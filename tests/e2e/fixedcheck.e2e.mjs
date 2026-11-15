@@ -12,6 +12,12 @@ after(async () => { await browser?.close(); server?.stop(); });
 const today = new Date();
 const iso = (back, d) => { const x = new Date(today.getFullYear(), today.getMonth() - back, Math.min(d, back === 0 ? today.getDate() : 28)); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
 
+// On the calm home the check waits in "עוד דברים לסדר".
+async function openTodo(page) {
+  await page.waitForSelector('.home');
+  await page.locator('button:has-text("עוד דברים לסדר")').first().click();
+  await page.waitForSelector('.sheet:has-text("דברים לסדר")');
+}
 async function openFixed(width = 390) {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   const db = makeFakeDb();
@@ -28,6 +34,7 @@ async function openFixed(width = 390) {
   await mockSupabase(page, db);
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/home');
+  await openTodo(page);
   await page.waitForSelector('.fxc');
   return { page, db, errors };
 }
@@ -49,12 +56,12 @@ test('the fixed costs check: a card with what is worth a look, the check itself,
   // "Using both": that question is answered, and not raised again.
   await page.click('.fx-ins:has-text("סטרימינג") button:has-text("משתמשים בכולם")');
   assert.equal(await page.locator('.fx-ins:has-text("סטרימינג")').count(), 0);
-  await page.click('.sheet button[aria-label="סגירה"]');
+  await page.locator('.sheet button[aria-label="סגירה"]').last().click();
   assert.match(await page.locator('.fxc').textContent(), /3 דברים ששווה לבדוק/);
   await page.click('.fxc button:has-text("לא עכשיו")');
   assert.equal(await page.locator('.fxc').count(), 0);
   await page.reload();
-  await page.waitForSelector('.att, .hero, .home');
+  await openTodo(page);
   await page.waitForTimeout(400);
   assert.equal(await page.locator('.fxc').count(), 0, 'set aside for this month');
   assert.deepEqual(errors, []);

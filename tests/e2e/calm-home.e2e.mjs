@@ -66,10 +66,14 @@ test('the calm home on the first day: choosing banks and cards and uploading is 
   await page.close();
 });
 
-test('everyone else keeps the home they know (for now)', async () => {
-  const { page } = await open({ email: null });
-  await page.waitForSelector('.home-main');
-  assert.equal(await page.locator('.home.calm').count(), 0);
-  assert.equal(await page.locator('text=לנסות את מסך הבית החדש').count(), 0);
+test('everyone gets the calm home, with the balance update and install on screen, and a way back', async () => {
+  const { page, errors } = await open({ email: null });
+  await page.waitForSelector('.home.calm .home-main');
+  assert.equal(await page.locator('.home.calm .cash').count(), 1, 'the balance card is on the screen');
+  await page.locator('text=למסך הבית הקודם').click();
+  await page.waitForSelector('.home:not(.calm)');
+  await page.locator('text=לנסות את מסך הבית החדש').click();
+  await page.waitForSelector('.home.calm');
+  assert.deepEqual(errors(), []);
   await page.close();
 });

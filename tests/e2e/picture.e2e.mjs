@@ -221,8 +221,9 @@ test('a new household with nothing uploaded yet sees the card too', async () => 
   await mockSupabase(page, db);
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/home');
-  await page.waitForSelector('.pic-card');
-  assert.match(await page.locator('.pic-card').textContent(), /איפה הכסף שלכם/);
+  // The first day: the card to choose banks and cards and upload.
+  await page.locator('.first-day button:has-text("לבחור בנק וכרטיסים ולהעלות")').click();
+  await page.waitForSelector('.pic-picker');
   await page.close();
 });
 

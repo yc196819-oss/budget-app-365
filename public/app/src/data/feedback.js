@@ -80,7 +80,7 @@ export const FEEDBACK_STATUS = { new: 'חדש', working: 'בטיפול', done: '
 // Made smaller on the device first (at most 1600px, JPEG), so it sends fast
 // and stays under the server's limit.
 const MAX_SIDE = 1600;
-export async function shrinkImage(file) {
+export async function shrinkImage(file, maxBytes = 1.4 * 1024 * 1024) {
   if (!/^image\//.test(file.type || '')) throw new Error('אפשר לצרף רק תמונה.');
   const url = URL.createObjectURL(file);
   try {
@@ -89,10 +89,14 @@ export async function shrinkImage(file) {
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(img.naturalWidth * scale);
     canvas.height = Math.round(img.naturalHeight * scale);
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext('2d');
+    // A see-through screenshot (PNG) would turn black as a JPEG: white behind it.
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     for (const q of [0.82, 0.7, 0.55]) {
       const data = canvas.toDataURL('image/jpeg', q);
-      if (data.length * 0.75 < 1.4 * 1024 * 1024) return data;
+      if (data.length * 0.75 < maxBytes) return data;
     }
     throw new Error('התמונה גדולה מדי.');
   } finally { URL.revokeObjectURL(url); }

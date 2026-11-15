@@ -3,12 +3,31 @@ import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
 import { sourcesOf, nameOf, providerOf, shareGuess } from '../../domain/sources.js';
 import { Logo } from '../picture/Picture.js';
+import { useState } from 'preact/hooks';
 
 // A file shared to the app from the phone: which account or card it is for,
 // bank by bank (each bank account, then the cards charged to it), with a
 // guess from the file's name (the company, the card's last 4 digits). Then
 // the usual upload, which finds the month in the file.
-export function ShareSheet({ data, file, onPick, onClose }) {
+export function ShareSheet({ data, file, onPick, onClose, onAdvisor }) {
+  // A picture can be a statement, or something to ask the advisor about
+  // (a receipt, a bill): asked first. Files from the bank go straight on.
+  const [asStatement, setAsStatement] = useState(!onAdvisor || !/^image\//.test(file.type || ''));
+  if (!asStatement) {
+    return html`<${Sheet} title="מה לעשות עם התמונה?" onClose=${onClose}>
+      <div class="stack share-sheet share-choose">
+        <div class="share-file"><span class="share-ext">${(String(file.name).split('.').pop() || '').slice(0, 4).toUpperCase()}</span><span><b><bdi>${file.name}</bdi></b><small>שותף מהטלפון</small></span></div>
+        <button type="button" class="share-opt" onClick=${() => setAsStatement(true)}>
+          <span class="pg-tile"><${Icon} name="money" size=${20} /></span>
+          <span class="share-opt-t"><b>פירוט חשבון להעלאה</b><small>צילום מסך של פירוט מהבנק או מהאשראי</small></span>
+        </button>
+        <button type="button" class="share-opt" onClick=${onAdvisor}>
+          <span class="pg-tile"><${Icon} name="spark" size=${20} /></span>
+          <span class="share-opt-t"><b>לשאול את היועץ</b><small>קבלה, חשבון או הצעת מחיר. התמונה לא נשמרת.</small></span>
+        </button>
+      </div>
+    <//>`;
+  }
   const sources = sourcesOf({ accounts: data.accounts, cards: data.cards });
   const guess = shareGuess(file.name, sources);
   const groups = data.accounts.map((a) => ({ bank: sources.find((x) => x.id === a.id), cards: sources.filter((x) => x.kind === 'card' && x.bankId === a.id) }));

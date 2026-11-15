@@ -1879,3 +1879,15 @@ body.chat-open { overflow: hidden; }
 .sort-chip { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
 .sort-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .sort-other { border: 1px dashed var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 6px 10px; font: inherit; font-size: 14px; max-width: 100%; }
+
+/* a picture with the question to the advisor (not kept) */
+.adv-attach { flex: none; }
+.adv-pic { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px; background: var(--surface-2, var(--card)); border: 1px solid var(--line); }
+.adv-pic img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex: none; }
+.adv-pic-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.adv-pic-t small { color: var(--muted); font-size: 12.5px; }
+.adv-pic-note { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 14px; font-size: 13.5px; line-height: 1.5; background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--text); }
+.adv-pic-note > svg { flex: none; margin-top: 2px; color: var(--accent); }
+.adv-pic-note span { flex: 1; }
+.adv-thumb { display: block; max-width: 180px; max-height: 180px; border-radius: 10px; margin-bottom: 6px; object-fit: cover; }
+.adv-pic-line { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; opacity: .8; margin-inline-end: 6px; }
