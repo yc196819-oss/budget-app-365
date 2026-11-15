@@ -106,7 +106,8 @@ test('a transfer that took 4 days is found once the household widens the days', 
   db.tables.transactions.find((x) => x.id === 'tin').tx_date = day(0);
   db.tables.transactions.find((x) => x.id === 'tout').tx_date = day(4);
   await page.reload();
-  await page.waitForSelector('.att');
+  await page.waitForSelector('.hero');
+  await page.waitForTimeout(500);
   assert.equal(await page.locator('.att', { hasText: 'העברה בין החשבונות שלכם' }).count(), 0, 'not within 2 days');
   // Widened (as the choice in the sheet keeps it): found and asked about.
   await page.evaluate(() => localStorage.setItem('transfer:days:h1', '4'));

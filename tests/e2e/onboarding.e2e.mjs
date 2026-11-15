@@ -46,11 +46,11 @@ test('a new household in one screen: a name and alone/together, then straight to
   await go.click();
 
   // Home opens at the first step: the statements of 6 months, from every card.
-  await page.waitForSelector('.setup-guide >> text=בואו נסדר לכם את התמונה');
-  const open = await page.locator('.setup-guide .guide-step.open').textContent();
-  assert.match(open, /מעלים פירוטי אשראי של 6 חודשים/);
-  assert.match(open, /מכל כרטיסי האשראי/);
-  assert.match(open, /כמה כרטיסים או כמה חשבונות בנק/);
+  await page.waitForSelector('.first-day');
+  const open = await page.locator('.first-day').textContent();
+  assert.match(open, /בואו נכניס את המספרים האמיתיים/);
+  assert.match(open, /פירוטים של 6 החודשים האחרונים/);
+  assert.match(open, /לבחור בנק וכרטיסים ולהעלות/);
 
   const t = db.tables;
   assert.equal(t.households.length, 1);

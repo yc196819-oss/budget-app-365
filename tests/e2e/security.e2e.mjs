@@ -158,6 +158,13 @@ test('an account with a password, when the email code is on for all: it shows as
   await page.close();
 });
 
+// On the home the question waits in "עוד דברים לסדר".
+async function openTodo(page) {
+  await page.waitForSelector('.hero');
+  await page.locator('button:has-text("עוד דברים לסדר")').first().click();
+  await page.waitForSelector('.sheet:has-text("דברים לסדר")');
+}
+
 test('the monthly summary email: asked once on the home screen, nothing sent without a yes, and changeable in the profile', async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = collectErrors(page);
@@ -165,6 +172,7 @@ test('the monthly summary email: asked once on the home screen, nothing sent wit
   await mockSupabase(page, db);
   await page.route('**/rest/v1/rpc/my_mfa_state', (r) => r.fulfill(json({ required: false, ok: true })));
   await signIn(page, server.base);
+  await openTodo(page);
   const ask = page.locator('.monthly-ask');
   await ask.waitFor();
   assert.match(await ask.textContent(), /לקבל סיכום חודשי למייל\?/);
@@ -173,9 +181,11 @@ test('the monthly summary email: asked once on the home screen, nothing sent wit
   assert.deepEqual(db.tables.mail_prefs.map((r) => [r.user_id, r.monthly]), [['u1', true]]);
   // Answered: not asked again.
   await page.reload();
-  await page.waitForSelector('button[aria-label="פרופיל והגדרות"]');
+  await openTodo(page);
   await page.waitForTimeout(500);
   assert.equal(await page.locator('.monthly-ask').count(), 0);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.sheet'));
   await page.click('button[aria-label="פרופיל והגדרות"]');
   const toggle = page.locator('input[aria-label="סיכום חודשי במייל"]');
   await toggle.waitFor();
@@ -193,9 +203,12 @@ test('the monthly question: "no thanks" sends nothing and the profile switch sta
   await mockSupabase(page, db);
   await page.route('**/rest/v1/rpc/my_mfa_state', (r) => r.fulfill(json({ required: false, ok: true })));
   await signIn(page, server.base);
+  await openTodo(page);
   await page.locator('.monthly-ask button:has-text("לא תודה")').click();
   await page.locator('.monthly-ask').waitFor({ state: 'detached' });
   assert.deepEqual(db.tables.mail_prefs.map((r) => r.monthly), [false]);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.sheet'));
   await page.click('button[aria-label="פרופיל והגדרות"]');
   const toggle = page.locator('input[aria-label="סיכום חודשי במייל"]');
   await toggle.waitFor();
