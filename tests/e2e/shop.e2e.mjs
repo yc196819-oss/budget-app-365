@@ -751,3 +751,43 @@ test('a chain with a shop and an online shop is one chain in the clubs list, and
   await page.close();
   assert.deepEqual(errors, []);
 });
+
+test('the owner can try the shopping tab as a regular family sees it, and come back', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+  }, OWNER);
+  // As the owner: the price comparison is there.
+  await page.locator('.shop-prices-cta').waitFor();
+  assert.equal(await page.locator('.price-teaser').count(), 0);
+  await page.click('button[aria-label^="פרופיל והגדרות"]');
+  await page.click('text=לוח בעלים');
+  await page.click('.admin-hub-btn:has-text("מחירי סופר")');
+  const card = page.locator('.admin-asuser');
+  await card.locator('input[type=checkbox]').check();
+  assert.match(await card.textContent(), /פעיל/);
+  await card.locator('a:has-text("לפתוח את טאב הקניות")').click();
+  // As a family sees it: no comparison, no advisor, the "soon" teaser, and a note to come back.
+  await page.locator('.shop-asuser').waitFor();
+  assert.equal(await page.locator('.shop-prices-cta').count(), 0);
+  assert.equal(await page.locator('.adv-cta').count(), 0);
+  assert.equal(await page.locator('.price-teaser').count(), 1);
+  await page.click('.shop-asuser button:has-text("לחזור לתצוגת הבעלים")');
+  await page.locator('.shop-prices-cta').waitFor();
+  assert.equal(await page.locator('.shop-asuser').count(), 0);
+  // (The owner board's own numbers are not served here: the test server has no database.)
+  assert.deepEqual(errors.filter((e) => !/status of 503/.test(e)), []);
+  await page.close();
+});
+
+test('a regular family never sees the owner\'s "regular view" note, even with the switch left on the device', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+  });
+  await page.evaluate(() => localStorage.setItem('owner:shop-as-user', '1'));
+  await page.reload();
+  await page.locator('.shop-add').waitFor();
+  assert.equal(await page.locator('.shop-asuser').count(), 0);
+  assert.equal(await page.locator('.price-teaser').count(), 1);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

@@ -54,7 +54,7 @@ export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTh
     return html`<${Sheet} title="האבטחה שלך" onClose=${onClose}><${SecurityView} onBack=${() => setView('main')} onOpenData=${hid ? () => setView('data') : null} /><//>`;
   }
   if (view === 'admin') {
-    return html`<${Sheet} title="לוח בעלים" onClose=${onClose}><${AdminView} onBack=${() => setView('main')} /><//>`;
+    return html`<${Sheet} title="לוח בעלים" onClose=${onClose}><${AdminView} onBack=${() => setView('main')} onClose=${onClose} /><//>`;
   }
   return html`
     <${Sheet} title="פרופיל והגדרות" onClose=${onClose}>

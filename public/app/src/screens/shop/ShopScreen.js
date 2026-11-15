@@ -53,7 +53,7 @@ function Intro({ onClose }) {
 // "Shopping": one list for the whole household, live, sorted by department,
 // remembered from one shopping to the next. Built for a computer first (type
 // several items and press Enter; email, copy or print it; WhatsApp last), and works on a phone.
-export function ShopScreen({ data, owner = false }) {
+export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = null }) {
   const shop = useShopping(data.hid);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -125,6 +125,8 @@ export function ShopScreen({ data, owner = false }) {
   const copy = async () => { try { await navigator.clipboard.writeText(listText(items)); showToast('הרשימה הועתקה. אפשר להדביק בכל מקום.'); } catch (_e) { showToast('לא הצלחנו להעתיק.'); } };
 
   return html`<div class="shop">
+    ${asUser && html`<div class="card shop-asuser" role="status"><span><b>תצוגת משתמש רגיל</b><small class="muted">כך משפחה רגילה רואה את הקניות, בלי הניסויים של לוח הבעלים.</small></span>
+      ${onOwnerView && html`<button type="button" class="btn btn-ghost" onClick=${onOwnerView}>לחזור לתצוגת הבעלים</button>`}</div>`}
     <section class="shop-main stack">
       <div class="shop-head">
         <span class="muted" style="font-size:14px">עוזרים לכם לחסוך בסופר: רשימה אחת לכל הבית, וכמה נשאר לסופר החודש. ${!intro && html`<button type="button" class="btn-text shop-what" onClick=${() => setIntro(true)}>מה זה?</button>`}</span>

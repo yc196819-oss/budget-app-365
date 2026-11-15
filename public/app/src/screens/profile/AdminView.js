@@ -1,4 +1,5 @@
 import { html } from '../../lib/html.js';
+import { useShopAsUser, setShopAsUser } from '../../lib/viewAs.js';
 import { Icon } from '../../components/Icon.js';
 import { api } from '../../lib/api.js';
 import { useEffect, useState } from 'preact/hooks';
@@ -353,7 +354,18 @@ function DemoCard() {
   </div>`;
 }
 
-export function AdminView({ onBack }) {
+// The owner tries the shopping tab as a regular family sees it.
+function ShopAsUserCard({ onLeave }) {
+  const on = useShopAsUser();
+  return html`<div class="card stack admin-asuser">
+    <b>לנסות את טאב הקניות כמו משתמש רגיל</b>
+    <span class="muted" style="font-size:14px">טאב הקניות יוצג בלי השוואת המחירים, היועץ והקבלות (שעדיין רק כאן). רק במכשיר הזה, ולא משנה כלום לאף אחד אחר.</span>
+    <label class="admin-switch"><input type="checkbox" checked=${on} onChange=${(e) => setShopAsUser(e.currentTarget.checked)} /> <span>${on ? 'פעיל: הקניות מוצגות כמו למשתמש רגיל' : 'כבוי: הקניות מוצגות כמו לבעלים'}</span></label>
+    ${on && html`<a class="btn" href="#/shop" onClick=${() => onLeave && onLeave()}>לפתוח את טאב הקניות</a>`}
+  </div>`;
+}
+
+export function AdminView({ onBack, onClose = null }) {
   const [s, setS] = useState(undefined);
   const [live, setLive] = useState(null);
   useEffect(() => { adminStats().then((x) => { setS(x); if (x && x.live) setLive(x.live); }); }, []);
@@ -414,7 +426,7 @@ export function AdminView({ onBack }) {
     { key: 'mail', icon: 'mail', title: 'מיילים', sub: 'מיילי עזרה וסיכום חודשי', body: () => html`
     ${back && back.campaigns && html`<${MailBoard} back=${back} setBack=${setBack} />`}
     ${back && html`<${MonthlyMailCard} />`}` },
-    { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים מהרשתות, ואישור כשרות', body: () => html`${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceReachCard} />`}` },
+    { key: 'prices', icon: 'cart', title: 'מחירי סופר', sub: 'קטלוג המוצרים מהרשתות, ואישור כשרות', body: () => html`<${ShopAsUserCard} onLeave=${onClose} />${back && html`<${SeedCard} />`}${back && html`<${KosherCard} />`}${back && html`<${PriceReachCard} />`}` },
     { key: 'demo', icon: 'together', title: 'חשבון הדמו', sub: 'לפתוח בלי סיסמה, ולרענן את הנתונים', body: () => html`<${DemoCard} />` },
     { key: 'system', icon: 'wrench', title: 'מצב המערכת', sub: s ? 'תקלות השבוע: ' + s.errors.week : 'תקלות ומה שבור', body: () => html`${s && html`
       <div class="card stack"><b>תקלות השבוע: <span class="num">${s.errors.week}</span></b>
