@@ -226,6 +226,20 @@ test('a new household with nothing uploaded yet sees the card too', async () => 
   await page.close();
 });
 
+test('only the account made at sign-up (no bank, no card): the banks are still offered, and the bank chosen becomes that account', async () => {
+  const { page, db, errors } = await open(390, (d) => { d.tables.bank_accounts = [{ id: 'a0', household_id: d.hid, name: 'חשבון ראשי', balance: 0 }]; d.tables.credit_cards = []; d.tables.imports = []; });
+  assert.match(await page.locator('.pic-card').textContent(), /איפה הכסף שלכם/);
+  await page.click('.pic-card');
+  await page.waitForSelector('.pic-picker');
+  assert.match(await page.locator('.pic-title').textContent(), /באיזה בנק/);
+  await page.click('.pic-pick:has(img[alt="לאומי"])');
+  await page.waitForFunction(() => document.querySelectorAll('.pic-pick.on').length === 1);
+  for (let i = 0; i < 30 && db.tables.bank_accounts[0].provider !== 'leumi'; i++) await page.waitForTimeout(100);
+  assert.deepEqual(db.tables.bank_accounts.map((a) => [a.id, a.provider, a.name]), [['a0', 'leumi', 'לאומי']], 'no second account');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('a company with two cards: a file with only one of them says so, and can be saved anyway', async () => {
   const { page, db, errors } = await open(390, (d) => {
     d.tables.bank_accounts = [];

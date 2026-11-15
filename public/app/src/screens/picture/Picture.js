@@ -54,12 +54,17 @@ function statusFor(t, r) { const m = r.months.find((x) => x.key === r.due); retu
 
 const STATUS = { ok: 'הועלה', partial: 'חלקי', missing: 'חסר', waiting: 'עוד לא', off: 'רק אשראי' };
 
+// Nothing chosen yet: no card, and only the account made at sign-up (no
+// bank picked for it). The "where is your money?" start, not the ring (a
+// friend never reached the banks and cards: that account hid the start).
+export const nothingChosen = (data) => !(data.cards || []).length && (data.accounts || []).every((a) => !a.provider);
+
 // On the home screen: the ring and what is missing, one tap to the sheet.
 export function PictureCard({ data, onOpen }) {
   const files = useSourceFiles(data.hid, data.txs.length);
   if (files === null) return null;
   const t = tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: [...data.txs, ...(data.transfers || [])] });
-  if (!t.sources.length) {
+  if (!t.sources.length || nothingChosen(data)) {
     return html`<button type="button" class="card pic-card pic-start" onClick=${onOpen}>
       <span class="pic-logos" aria-hidden="true">${['leumi', 'hapoalim', 'max', 'cal'].map((k) => html`<${Logo} key=${k} provider=${k} size="s" />`)}</span>
       <span><b>איפה הכסף שלכם?</b><small class="muted">בחרו את הבנקים והכרטיסים שלכם, ונזכיר לכם בכל חודש להעלות את מה שחסר.</small></span><span aria-hidden="true">‹</span></button>`;
@@ -118,9 +123,12 @@ function Picker({ data, step, onStep, onDone }) {
   const add = async (k, p) => {
     setBusy(k + p.key);
     try {
+      // The account made at sign-up (no bank yet) becomes this bank's, rather
+      // than a second account beside it.
+      const blank = k === 'bank' && data.accounts.find((a) => !a.provider && a.name === 'חשבון ראשי');
       await (k === 'card'
         ? saveRow('credit_cards', { name: nameOf({ kind: 'card', provider: p.key, name: p.name }), provider: p.key, billing_day: (of('card', p.key)[0] || {}).billingDay || 10 })
-        : saveRow('bank_accounts', { name: p.name, bank_name: p.name, provider: p.key }));
+        : saveRow('bank_accounts', { ...(blank ? { id: blank.id } : {}), name: p.name, bank_name: p.name, provider: p.key }));
       track('picture_add');
     } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
     setBusy('');
@@ -192,7 +200,7 @@ export function PictureSheet({ data, onClose, onUpload }) {
   const files = useSourceFiles(data.hid, data.txs.length);
   const t = files ? tracker({ accounts: data.accounts, cards: data.cards, imports: files, txs: [...data.txs, ...(data.transfers || [])] }) : null;
   // false, or the step of the picker: 'bank' then 'card'.
-  const [edit, setEdit] = useState(() => (data.accounts.length + data.cards.length ? false : 'bank'));
+  const [edit, setEdit] = useState(() => (data.accounts.length + data.cards.length && !nothingChosen(data) ? false : 'bank'));
   // On a phone: the tiles, or the last 6 months instead of them. A tile
   // tapped opens how to get its statement.
   const [view, setView] = useState('now');
