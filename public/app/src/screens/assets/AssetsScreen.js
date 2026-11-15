@@ -55,7 +55,7 @@ export function AssetsScreen({ data, userId, owner = false }) {
     ${sheet && sheet.kind === 'account' && html`<${AccountSheet} account=${find(data.accounts)} onClose=${close} />`}
     ${sheet && (sheet.kind === 'investment' || sheet.kind === 'pension') && html`<${InvestmentSheet} inv=${find(data.investments)} market=${market} pension=${sheet.kind === 'pension'} onClose=${close} />`}
     ${sheet && sheet.kind === 'card' && html`<${CardSheet} card=${find(data.cards)} accounts=${data.accounts} members=${data.members} userId=${userId} onClose=${close} />`}
-    ${sheet && sheet.kind === 'loan' && html`<${LoanSheet} loan=${find(data.loans)} onClose=${close} />`}
+    ${sheet && sheet.kind === 'loan' && html`<${LoanSheet} loan=${find(data.loans)} today=${today} onClose=${close} />`}
     ${owner && sheet && sheet.kind === 'property' && html`<${PropertySheet} property=${find(props.list)} txs=${allTxs} accounts=${data.accounts} onClose=${close} />`}
   </div>`;
 }
