@@ -17,6 +17,14 @@ import { snapshot as decisionsSnapshot } from '../../data/decisions.js';
 import { forAdvisor } from '../../domain/decisions.js';
 import { matchHowto, profileHint } from '../../content/howto.js';
 import { go } from '../../lib/go.js';
+import { useOwner } from '../../lib/owner.js';
+import { shrinkImage } from '../../data/feedback.js';
+import { takeAdvisorImage } from '../../lib/advisorInbox.js';
+
+// A picture goes with the question (for now the owner's). It is read for the
+// answer and not kept: the conversation keeps only this line and the answer.
+export const PIC_MARK = 'צירפתי תמונה';
+const picNoteKey = 'advisor:pic-note';
 
 // How many messages of a conversation were already looked at for learning,
 // so the "save what I learned?" offer does not repeat for the same messages.
@@ -61,6 +69,28 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   const [heard, setHeard] = useState('');
   const talkOn = useRef(false);
   const talkStop = useRef(null);
+  // The picture waiting to go with the next question: { data, name } | null.
+  const owner = useOwner(session.user && session.user.email);
+  const [image, setImage] = useState(null);
+  const [picNote, setPicNote] = useState(false);
+  const attach = async (file) => {
+    if (!file) return;
+    setError('');
+    try {
+      const data = await shrinkImage(file, 1024 * 1024);
+      setImage({ data, name: file.name || 'תמונה' });
+      if (!readLocal(picNoteKey, '')) setPicNote(true);
+      track('advisor_pic');
+    } catch (err) { setError(err.message || 'לא הצלחנו לצרף את התמונה.'); }
+  };
+  // A picture shared from the phone to the advisor: a new conversation with it.
+  useEffect(() => {
+    if (!owner) return undefined;
+    const take = () => { const f = takeAdvisorImage(); if (f) { if (!convRef.current) setConv({ id: null, user_id: me, is_private: false, messages: [] }); attach(f); } };
+    take();
+    window.addEventListener('advisor-image', take);
+    return () => window.removeEventListener('advisor-image', take);
+  }, [owner]);
 
   const names = data.members || {};
   const memberName = (id) => (id === me ? (names[id] || 'אני') : (names[id] || partnerWord(genderOf(data.genders, id))));
@@ -79,9 +109,10 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   // instead" sends the same question to the AI (force). Kept on screen
   // only: not saved, and not sent to the AI as part of the conversation.
   const send = async (text, opts = {}) => {
-    const msg = String(text || '').trim();
+    const pic = image;
+    const msg = String(text || '').trim() || (pic ? 'מה רואים בתמונה?' : '');
     if (!msg || busy) return null;
-    const hit = !opts.force && matchHowto(msg);
+    const hit = !pic && !opts.force && matchHowto(msg);
     if (hit) {
       setError(''); setSuggestions([]); setDraft(''); setOffer(false); setUpdated([]);
       const base = convRef.current || { id: null, user_id: me, is_private: false, messages: [] };
@@ -91,6 +122,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       return hit.a;
     }
     if (!aiOn) return null;
+    if (pic) { setImage(null); setPicNote(false); }
     setBusy(true); setError(''); setSuggestions([]); setDraft(''); setOffer(false); setUpdated([]); setToDelete(null);
     let c = convRef.current;
     let answered = null;
@@ -99,19 +131,20 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
         const row = await createConversation({ hid, userId: me, title: newTitle(msg, screen) });
         c = { ...row, is_private: !!row.is_private, messages: (c && c.messages) || [] };
       }
-      const userMsg = { role: 'user', text: msg, author_id: me };
+      const saved = pic ? PIC_MARK + ' · ' + msg : msg;
+      const userMsg = { role: 'user', text: saved, author_id: me, thumb: pic ? pic.data : null };
       const aiMsg = { role: 'ai', text: '', author_id: me, pending: true };
       const history = historyFor(c.messages.filter((m) => !m.local), memberName);
       c = { ...c, messages: [...c.messages, userMsg, aiMsg] };
       setConv(c);
-      await addMessage({ conversationId: c.id, hid, userId: me, role: 'user', text: msg });
+      await addMessage({ conversationId: c.id, hid, userId: me, role: 'user', text: saved });
       if (!memories.current) memories.current = await loadMemories(hid).catch(() => []);
       const dec = decisionsSnapshot();
       const sharedDecisions = dec.status === 'ready' ? forAdvisor(dec.decisions, dec.votes, Object.keys(names)) : [];
       const summary = buildSummary({ ...data, sharedDecisions, userId: me, userName: realName(names[me]), memories: memories.current, screen });
       let raw = '';
       abort.current = new AbortController();
-      await streamReply({ summary, history, message: msg, authorName: realName(names[me]), authorGender: genderOf(data.genders, me) }, (delta) => {
+      await streamReply({ summary, history, message: msg, authorName: realName(names[me]), authorGender: genderOf(data.genders, me), ...(pic ? { image: pic.data } : {}) }, (delta) => {
         raw += delta;
         setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m === aiMsg || (m.pending && m.role === 'ai') ? { ...m, text: parseReply(raw).text } : m)) });
       }, abort.current.signal);
@@ -278,7 +311,9 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
           ${m.role === 'user' && m.author_id !== me && html`<small>${memberName(m.author_id)}</small>`}
           ${m.pending && !m.text
             ? html`<span class="adv-thinking" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>היועץ חושב…</span>`
-            : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
+            : m.role === 'user' && String(m.text || '').startsWith(PIC_MARK)
+              ? html`${m.thumb && html`<img class="adv-thumb" src=${m.thumb} alt="התמונה שצורפה" />`}<span class="adv-pic-line"><${Icon} name="image" size=${15} />${PIC_MARK}${m.thumb ? '' : ' (לא נשמרת)'}</span><span>${String(m.text).slice(PIC_MARK.length + 3)}</span>`
+              : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
           ${m.howto && html`<div class="adv-howto">
             <small class="faint">תשובה מהירה מהמדריך של האפליקציה</small>
             <div class="adv-howto-actions">
@@ -315,7 +350,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
       ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>
         <div class="learn-actions"><button type="button" class="btn" onClick=${startLearn}>לבדוק מה למדתי</button><button type="button" class="btn-text" onClick=${dismissOffer}>לא עכשיו</button></div></div>`}
-      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${(v) => send(v ?? draft)} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
+      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${owner ? { image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } } : null} onSend=${(v) => send(v ?? draft)} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
     </div>`;
   }
 
@@ -326,7 +361,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     ${aiOn && html`<div class="stack" style="gap:8px">
       <b style="font-size:14px;color:var(--muted)">אפשר לשאול למשל</b>
       <div class="chips">${starters(screen).map((s) => html`<button type="button" class="chip" disabled=${busy} onClick=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(s); }}>${s}</button>`)}</div>
-      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} onSend=${(v) => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(v ?? draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
+      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${owner ? { image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } } : null} onSend=${(v) => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(v ?? draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
     </div>`}
     ${error && html`<div class="adv-err" role="alert">${error}</div>`}
     <div class="stack" style="gap:6px">
@@ -348,19 +383,41 @@ function grow(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight + 2, 168) + 'px';
 }
-function Composer({ draft, setDraft, busy, onSend, onMic, listening, onTalk }) {
+function Composer({ draft, setDraft, busy, onSend, onMic, listening, onTalk, pic }) {
   const box = useRef(null);
+  const fileRef = useRef(null);
+  const canSend = !!(draft.trim() || (pic && pic.image));
+  // A screenshot pasted into the box (Ctrl+V) is attached like a picked one.
+  const paste = (e) => {
+    if (!pic) return;
+    const f = [...((e.clipboardData && e.clipboardData.files) || [])].find((x) => /^image\//.test(x.type));
+    if (f) { e.preventDefault(); pic.attach(f); }
+  };
   // Back to one line once the question was sent (or the mic filled it in).
   useEffect(() => { grow(box.current); }, [draft]);
   // What is in the box right now (not the last render's draft: a fast
   // Enter right after typing would otherwise send nothing).
-  return html`<form class="adv-compose" onSubmit=${(e) => { e.preventDefault(); const v = box.current ? box.current.value : draft; if (!busy && v.trim()) onSend(v); }}>
+  const ok = (v) => !busy && (v.trim() || (pic && pic.image));
+  return html`${pic && pic.note && pic.image && html`<div class="adv-pic-note" role="note">
+      <${Icon} name="lock" size=${18} />
+      <span><b>התמונות לא נשמרות.</b> כדי לשמור על הפרטיות שלכם, התמונה משמשת רק כדי לענות לכם ולא נשמרת אצלנו. בשיחה יישאר רק "${PIC_MARK}" והתשובה.</span>
+      <button type="button" class="btn-text" onClick=${pic.okNote}>הבנתי</button>
+    </div>`}
+    ${pic && pic.image && html`<div class="adv-pic">
+      <img src=${pic.image.data} alt="התמונה שתישלח" />
+      <span class="adv-pic-t"><b>תמונה מצורפת</b><small>התמונה לא נשמרת</small></span>
+      <button type="button" class="icon-btn" aria-label="להסיר את התמונה" onClick=${pic.clear} disabled=${busy}><${Icon} name="x" size=${18} /></button>
+    </div>`}
+    <form class="adv-compose" onSubmit=${(e) => { e.preventDefault(); const v = box.current ? box.current.value : draft; if (ok(v)) onSend(v); }}>
     <textarea class="input adv-input" rows="1" value=${draft} ref=${box}
       onInput=${(e) => { setDraft(e.target.value); grow(e.target); }}
-      onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); const v = e.target.value; if (!busy && v.trim()) onSend(v); } }}
-      placeholder=${listening ? 'מקשיב…' : 'שאלו את היועץ'} aria-label="שאלה ליועץ" disabled=${busy}></textarea>
+      onPaste=${paste}
+      onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); const v = e.target.value; if (ok(v)) onSend(v); } }}
+      placeholder=${listening ? 'מקשיב…' : pic && pic.image ? 'מה לשאול על התמונה? (אפשר גם בלי)' : 'שאלו את היועץ'} aria-label="שאלה ליועץ" disabled=${busy}></textarea>
+    ${pic && html`<button type="button" class="icon-btn adv-attach" aria-label="לצרף תמונה" onClick=${() => fileRef.current && fileRef.current.click()} disabled=${busy}><${Icon} name="image" size=${20} /></button>
+      <input type="file" accept="image/*" ref=${fileRef} hidden onChange=${(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; pic.attach(f); }} />`}
     ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}><${Icon} name="mic" size=${20} /></button>`}
-    <button type="submit" class="btn" disabled=${busy || !draft.trim()}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>
+    <button type="submit" class="btn" disabled=${busy || !canSend}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>
   </form>
   ${onTalk && html`<button type="button" class="btn-text adv-talk" onClick=${onTalk}><${Icon} name="wave" size=${18} />שיחה קולית: לדבר עם היועץ בלי להקליד</button>`}
   <p class="adv-legal">מידע כללי, לא ייעוץ השקעות, מס או משפט. בינה מלאכותית יכולה לטעות. <a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a></p>`;
