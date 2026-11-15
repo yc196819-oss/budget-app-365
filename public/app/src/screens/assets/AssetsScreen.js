@@ -3,7 +3,7 @@ import { Loading } from '../../components/Loading.js';
 import { useState } from 'preact/hooks';
 import { Segmented } from '../../components/Segmented.js';
 import { routeView } from '../../domain/routes.js';
-import { summary, symbolsOf } from '../../domain/assets.js';
+import { summary, symbolsOf, investDeposits } from '../../domain/assets.js';
 import { useMarket } from '../../data/market.js';
 import { AssetsHero } from './AssetsHero.js';
 import { DailyView } from './DailyView.js';
@@ -40,18 +40,20 @@ export function AssetsScreen({ data, userId, owner = false }) {
   // The apartments see their own accounts' lines too (kept out of the household's month).
   const allTxs = data.apartmentTxs && data.apartmentTxs.length ? [...data.txs, ...data.apartmentTxs] : data.txs;
   const s = summary({ ...data, market, today, properties: owner && props.status === 'ready' ? props.list : [] });
+  // What went into investments, from the sorted lines: no typing needed.
+  const deposits = investDeposits(data.txs, data.categories, today);
   const open = (kind, id = null) => setSheet({ kind, id });
   const close = () => setSheet(null);
   const find = (list) => (sheet && sheet.id ? list.find((r) => r.id === sheet.id) : null);
 
   return html`<div class="stack">
     <${Segmented} variant="tabs" label="תצוגה" value=${view} onChange=${setView} options=${views} />
-    <${AssetsHero} view=${view} s=${s} homes=${view === 'homes' ? propertiesTotals(props.list, today, allTxs) : null} />
+    <${AssetsHero} view=${view} s=${s} deposits=${deposits} homes=${view === 'homes' ? propertiesTotals(props.list, today, allTxs) : null} />
     ${view === 'daily'
       ? html`<${DailyView} data=${data} today=${today} onOpen=${open} userId=${userId} />`
       : view === 'homes'
         ? html`<${PropertiesView} props=${props} today=${today} onOpen=${open} txs=${allTxs} accounts=${data.accounts} />`
-        : html`<${LongView} data=${data} market=${market} marketError=${marketError} onOpen=${open} />`}
+        : html`<${LongView} data=${data} deposits=${deposits} market=${market} marketError=${marketError} onOpen=${open} />`}
     ${sheet && sheet.kind === 'account' && html`<${AccountSheet} account=${find(data.accounts)} onClose=${close} />`}
     ${sheet && (sheet.kind === 'investment' || sheet.kind === 'pension') && html`<${InvestmentSheet} inv=${find(data.investments)} market=${market} pension=${sheet.kind === 'pension'} onClose=${close} />`}
     ${sheet && sheet.kind === 'card' && html`<${CardSheet} card=${find(data.cards)} accounts=${data.accounts} members=${data.members} userId=${userId} onClose=${close} />`}

@@ -53,6 +53,37 @@ test('the guide resumes at the first step not done, and saving the income ticks 
   await page.close();
 });
 
+test('banks and cards can be chosen from the start, not only after the six steps: the card is above the steps, and the first step opens it', async () => {
+  const db = withLoose(makeFakeDb());
+  // Only the account made at sign-up, no card.
+  db.tables.bank_accounts = [{ id: 'a0', household_id: 'h1', name: 'חשבון ראשי', balance: 0 }];
+  db.tables.credit_cards = [];
+  const { page, errors } = await open(db);
+  const pic = page.locator('.pic-card');
+  await pic.waitFor();
+  assert.match(await pic.textContent(), /איפה הכסף שלכם/);
+  const order = await page.evaluate(() => { const a = document.querySelector('.pic-card'); const b = document.querySelector('.setup-guide'); return !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)); });
+  assert.ok(order, 'the banks and cards card comes before the steps');
+  // The cards step opens the same picker.
+  await page.locator('.setup-guide .guide-head', { hasText: 'כל כרטיסי האשראי' }).click();
+  await page.click('.setup-guide button:has-text("לבחור את הכרטיסים")');
+  await page.waitForSelector('.pic-picker');
+  assert.deepEqual(errors, []);
+  await page.close();
+  // Before any statement: the first step chooses the banks and cards, then uploads.
+  const db2 = withLoose(makeFakeDb());
+  db2.tables.transactions = [];
+  db2.tables.bank_accounts = [{ id: 'a0', household_id: 'h1', name: 'חשבון ראשי', balance: 0 }];
+  db2.tables.credit_cards = [];
+  const page2 = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await mockSupabase(page2, db2);
+  await signIn(page2, server.base);
+  await page2.goto(server.base + '/app/#/home');
+  await page2.click('.setup-guide button:has-text("לבחור בנק וכרטיסים ולהעלות")');
+  await page2.waitForSelector('.pic-picker');
+  await page2.close();
+});
+
 test('sorting everything without a category: a choice is saved at once, the advisor\'s suggestions with one tap, and leaving the sheet loses nothing', async () => {
   const db = withLoose(makeFakeDb());
   const { page, errors } = await open(db);

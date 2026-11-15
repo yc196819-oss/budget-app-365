@@ -8,6 +8,7 @@ import { track } from '../../lib/telemetry.js';
 import { showToast } from '../../lib/toast.js';
 import { CardSheet } from '../assets/CardSheet.js';
 import { SortSheet } from '../money/SortSheet.js';
+import { nothingChosen } from '../picture/Picture.js';
 
 const toNumber = (v) => { const n = Number(String(v).replace(/[,₪\s]/g, '')); return Number.isFinite(n) ? n : null; };
 const skipKey = (hid) => 'guide:skip:' + hid;
@@ -17,7 +18,7 @@ const readSet = (k) => { try { return new Set(JSON.parse(readLocal(k, '[]'))); }
 // "Let's set up your picture": the next step, open, with why it matters and
 // one button that takes the person straight there. Done steps tick by
 // themselves (from the data), so leaving and coming back resumes here.
-export function SetupGuide({ data, userId, onImport, onAdd, onAsk }) {
+export function SetupGuide({ data, userId, onImport, onAdd, onAsk, onPicture = null }) {
   const [skipped, setSkipped] = useState(() => readSet(skipKey(data.hid)));
   const [later, setLater] = useState(() => Number(readLocal(laterKey(data.hid), '0')) > Date.now());
   const [open, setOpen] = useState(null);
@@ -51,10 +52,12 @@ export function SetupGuide({ data, userId, onImport, onAdd, onAsk }) {
   };
   const go = (s) => {
     track('guide_step');
-    if (s.key === 'import') onImport();
+    // Banks and cards not chosen yet: that first, then the upload (the
+    // statements land on the right account and card).
+    if (s.key === 'import') (onPicture && nothingChosen(data) ? onPicture : onImport)();
     else if (s.key === 'sort') setSheet('sort');
     else if (s.key === 'budget') location.hash = '#/plans/budget';
-    else if (s.key === 'card') setSheet('card');
+    else if (s.key === 'card') (onPicture ? onPicture() : setSheet('card'));
     else if (s.key === 'ask') onAsk();
   };
   const loose = looseTxs(data.txs).length;
@@ -81,7 +84,7 @@ export function SetupGuide({ data, userId, onImport, onAdd, onAsk }) {
             ${s.key === 'income' ? html`<form onSubmit=${saveIncome} style="display:flex;gap:8px">
                 <input class="input num" inputmode="numeric" placeholder="למשל 18,000" aria-label="הכנסה חודשית נטו" value=${income} onInput=${(e) => setIncomeText(e.target.value)} style="flex:1;width:auto;min-width:0" />
                 <button type="submit" class="btn" style="width:auto" disabled=${busy || !(toNumber(income) > 0)}>${s.cta}</button></form>`
-              : html`<button type="button" class="btn" onClick=${() => go(s)}>${s.cta}</button>`}
+              : html`<button type="button" class="btn" onClick=${() => go(s)}>${s.key === 'import' && onPicture && nothingChosen(data) ? 'לבחור בנק וכרטיסים ולהעלות' : s.key === 'card' && onPicture ? 'לבחור את הכרטיסים' : s.cta}</button>`}
             ${s.key === 'import' && html`<span style="font-size:14px;line-height:1.55;color:var(--income);font-weight:700">יש לכם כמה כרטיסים או כמה חשבונות בנק? מכניסים את כולם, והכל מסודר במקום אחד.</span>`}
             ${s.key === 'import' && html`<button type="button" class="btn-text" style="align-self:flex-start" onClick=${onAdd}>או להוסיף הוצאה ידנית / בקול</button>`}
             ${s.key !== 'import' && html`<button type="button" class="btn-text faint" style="align-self:flex-start;font-size:13px" onClick=${() => skip(s.key)}>${s.optional ? 'לא עכשיו' : 'לא רלוונטי לי'}</button>`}

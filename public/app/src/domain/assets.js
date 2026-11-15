@@ -9,6 +9,7 @@
 
 import { parseDate } from './money.js';
 import { cardCycle } from './home.js';
+import { INVEST } from './moves.js';
 
 const num = (v) => Number(v) || 0;
 const sum = (list, f) => list.reduce((s, x) => s + f(x), 0);
@@ -126,4 +127,45 @@ export function summary({ accounts = [], investments = [], loans = [], installme
 // Symbols worth asking the server a quote for.
 export function symbolsOf(investments) {
   return [...new Set(investments.map((i) => String(i.symbol || '').trim().toUpperCase()).filter((s) => /^[A-Z0-9.\-=^]{1,15}$/.test(s)))];
+}
+
+// ── what went into investments, from the lines ──────────────────────────
+// The lines sorted to the household's "השקעות" category (or one under it),
+// and lines with no category whose words say investment (a fund, securities,
+// a trading platform). Money out of the account is a deposit; money back in
+// that category is a withdrawal. No return is counted: what was put in.
+const ymOf = (iso) => String(iso || '').slice(0, 7);
+const ymBack = (today, k) => { const d = new Date(today.getFullYear(), today.getMonth() - k, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+export function investDeposits(txs = [], categories = [], today = new Date()) {
+  const inv = new Set(categories.filter((c) => (c.kind || 'expense') !== 'income' && /השקע/.test(c.name || '')).map((c) => c.id));
+  for (const c of categories) if (c.parent_id && inv.has(c.parent_id)) inv.add(c.id);
+  const isInv = (t) => (t.category_id ? inv.has(t.category_id) || inv.has(t.subcategory_id) : t.type !== 'income' && INVEST.test(String(t.description || '')));
+  const lines = txs.filter((t) => t.tx_date && isInv(t));
+  const nowYm = ymBack(today, 0);
+  const year = new Set(Array.from({ length: 12 }, (_, k) => ymBack(today, k + 1)));
+  const deposits = lines.filter((t) => t.type !== 'income');
+  const back = lines.filter((t) => t.type === 'income');
+  const total = round2(sum(deposits, (t) => num(t.amount)));
+  const withdrawn = round2(sum(back, (t) => num(t.amount)));
+  const inYear = deposits.filter((t) => year.has(ymOf(t.tx_date)));
+  const first = deposits.reduce((m, t) => (!m || t.tx_date < m ? t.tx_date : m), '');
+  // The average is over the full months since the first deposit (up to 12),
+  // so a fund opened 3 months ago is not divided by 12.
+  const months = first ? Math.min(12, Math.max(1, Array.from(year).filter((ym) => ym >= ymOf(first)).length)) : 0;
+  const lastYear = round2(sum(inYear, (t) => num(t.amount)));
+  const byMonth = Array.from({ length: 6 }, (_, k) => { const ym = ymBack(today, 5 - k); return { ym, amount: round2(sum(deposits.filter((t) => ymOf(t.tx_date) === ym), (t) => num(t.amount))) }; });
+  const where = new Map();
+  for (const t of deposits) { const k = String(t.description || '').trim() || 'השקעה'; where.set(k, round2((where.get(k) || 0) + num(t.amount))); }
+  return {
+    any: deposits.length > 0,
+    count: deposits.length,
+    total, withdrawn, net: round2(total - withdrawn),
+    lastYear,
+    monthlyAvg: months ? Math.round(lastYear / months) : 0,
+    months,
+    thisMonth: round2(sum(deposits.filter((t) => ymOf(t.tx_date) === nowYm), (t) => num(t.amount))),
+    first: first || null,
+    byMonth,
+    where: Array.from(where, ([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount).slice(0, 4)
+  };
 }
