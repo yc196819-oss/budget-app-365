@@ -10,7 +10,7 @@ import { MONTH_NAMES, monthShare, parseDate } from './money.js';
 import { monthPlan, cashNow } from './home.js';
 import { holidaysBetween, holidayGoalName, lastHolidayExtra } from './calendar.js';
 import { installmentOf, similarText } from './statement.js';
-import { loanDueIn } from './assets.js';
+import { loanDueIn, investPattern } from './assets.js';
 
 const sum = (list, f = (x) => x) => list.reduce((s, x) => s + f(x), 0);
 const isExpense = (t) => t.type !== 'income';
@@ -25,7 +25,10 @@ function average(txs, months, pick) {
 }
 
 // The household's regular month, from history.
-export function baseline(txs, today) {
+// skip: lines kept out of the regular month (deposits to investments, which
+// the forecast counts on their own line when they are regular).
+export function baseline(allTxs, today, skip = null) {
+  const txs = skip ? allTxs.filter((t) => !skip(t)) : allTxs;
   const months = fullMonthsBefore(today, 3);
   const last = months[0];
   const fixedLines = txs.filter((t) => isExpense(t) && t.nature === 'fixed' && t.spread !== 'year' && (() => { const d = parseDate(t.tx_date); return d.y === last.y && d.m === last.m; })());
@@ -109,15 +112,19 @@ function scenarioLines(scenarios, i) {
 // not taken yet), when balances are known.
 export function householdForecast(data, today = new Date(), scenarios = []) {
   const cash = cashNow(data.accounts || [], data.cards || [], data.txs || [], today);
-  return forecast({ txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], loans: data.loans || [], budgets: data.budgets || [], income: data.income || [], today, startBalance: cash.known ? cash.free : null, scenarios });
+  return forecast({ txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], loans: data.loans || [], categories: data.categories || [], budgets: data.budgets || [], income: data.income || [], today, startBalance: cash.known ? cash.free : null, scenarios });
 }
 
 // income: the household's expected monthly income lines (what they told the
 // app or the advisor, one line per person). When set, it is the income of
 // every coming month; this month, what has not come in yet is still expected
 // (a salary not paid yet is not "no income").
-export function forecast({ txs, goals = [], installments = [], loans = [], budgets = [], income = [], today, startBalance = null, scenarios = [], months = 6 }) {
-  const base = baseline(txs, today);
+export function forecast({ txs, goals = [], installments = [], loans = [], categories = [], budgets = [], income = [], today, startBalance = null, scenarios = [], months = 6 }) {
+  // Deposits to investments: out of the average. Regular ones come back
+  // every month on a line of their own; a one-off is not expected again.
+  const invest = investPattern(txs, categories, today);
+  const anyInvest = categories.length > 0 && txs.some((t) => isExpense(t) && invest.isInv(t));
+  const base = baseline(txs, today, anyInvest ? (t) => isExpense(t) && invest.isInv(t) : null);
   const plan = monthPlan({ txs, budgets, today });
   const expected = sum(Array.isArray(income) ? income : [], (l) => Number(l && l.amount) || 0);
   const monthlyIncome = expected > 0 ? expected : base.income;
@@ -138,7 +145,8 @@ export function forecast({ txs, goals = [], installments = [], loans = [], budge
         { label: expected > 0 ? 'הכנסה צפויה (כפי שעדכנתם)' : 'הכנסות (ממוצע 3 חודשים)', amount: monthlyIncome, kind: 'income' },
         { label: 'הוצאות קבועות', amount: -base.fixed, kind: 'fixed' },
         { label: 'הוצאות משתנות (ממוצע 3 חודשים)', amount: -base.variable, kind: 'variable' },
-        ...yearly(txs, mo)
+        ...yearly(txs, mo),
+        ...(invest.recurring ? [{ label: 'הפקדה קבועה להשקעות (לפי ' + invest.months + ' החודשים האחרונים)', amount: -invest.monthly, kind: 'saving' }] : [])
       ];
     }
     const paidNow = i === 0 ? txs.filter((t) => isExpense(t) && (() => { const d = parseDate(t.tx_date); return d.y === mo.y && d.m === mo.m; })()) : [];
@@ -148,7 +156,7 @@ export function forecast({ txs, goals = [], installments = [], loans = [], budge
     balance += net;
     out.push({ index: i, month: mo, name: MONTH_NAMES[mo.m] + ' ' + mo.y, short: MONTH_NAMES[mo.m], lines, net, end: balance });
   }
-  return { months: out, base, expectedIncome: expected, regularNet: monthlyIncome - base.fixed - base.variable, hasBalance: startBalance !== null && startBalance !== undefined };
+  return { months: out, base, expectedIncome: expected, regularNet: monthlyIncome - base.fixed - base.variable - (invest.recurring ? invest.monthly : 0), investMonthly: invest.recurring ? invest.monthly : 0, hasBalance: startBalance !== null && startBalance !== undefined };
 }
 
 // One sentence on where the half year is heading.

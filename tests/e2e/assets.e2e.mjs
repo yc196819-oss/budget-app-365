@@ -132,6 +132,17 @@ test('long term: what went into investments comes from the sorted lines, with no
   assert.match(await card.textContent(), /ב-12 החודשים האחרונים₪3,000/);
   assert.match(await card.textContent(), /קרן בדויה₪4,000/);
   assert.equal(await card.locator('.dep-bar').count(), 6);
+  // One tap: it becomes an investment (what went in as its cost and value), and its sheet opens to type today's value.
+  await card.locator('button[aria-label="להוסיף כהשקעה: קרן בדויה"]').click();
+  await page.waitForSelector('.toast:has-text("נוסף להשקעות")');
+  const inv = db.tables.investments.find((i) => i.name === 'קרן בדויה');
+  assert.ok(inv);
+  assert.deepEqual([inv.cost, inv.current_value, inv.currency], [4000, 4000, 'ILS']);
+  await page.waitForSelector('.sheet');
+  await page.click('.sheet button[aria-label="סגירה"]');
+  await page.waitForFunction(() => !document.querySelector('.sheet'));
+  assert.match(await card.textContent(), /ברשימה/);
+  assert.equal(await card.locator('.dep-add').count(), 0);
   assert.deepEqual(errors, []);
   await page.close();
 });
