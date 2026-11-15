@@ -16,7 +16,7 @@ export const REFUND = 'refund';
 export const isRefund = (t) => !!t && t.nature === REFUND;
 
 const BIT = /(^|[^א-ת])ביט([^א-ת]|$)|\bbit\b|bit\s*-|paybox|פייבוקס/i;
-const INVEST = /ניירות ערך|נ["״׳']ע(?![א-ת])|השקע|קרן נאמנות|קרן כספית|תיק מניות|מניות|גמל להשקעה|פיקדון|פקדון|ברוקר|interactive brokers|אקסלנס|מיטב|פסגות|אלטשולר|בלינק/i;
+export const INVEST = /ניירות ערך|נ["״׳']ע(?![א-ת])|השקע|קרן נאמנות|קרן כספית|תיק מניות|מניות|גמל להשקעה|פיקדון|פקדון|ברוקר|interactive brokers|אקסלנס|מיטב|פסגות|אלטשולר|בלינק/i;
 
 const daysAgo = (iso, today) => (today - new Date(String(iso).slice(0, 10) + 'T12:00:00')) / 86400000;
 const recent = (t, today, days) => { const d = daysAgo(t.tx_date, today); return d >= 0 && d <= days; };

@@ -1803,3 +1803,10 @@ body.chat-open { overflow: hidden; }
 .admin-guest-kind label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .admin-guest-kind input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent); flex: none; }
 .admin-guest-kind label > span { display: flex; flex-direction: column; gap: 2px; }
+.income-hint { border-inline-start: 3px solid var(--income); gap: 8px; }
+.income-hint-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.sort-saved { display: inline-flex; align-items: center; gap: 6px; color: var(--income); font-weight: 700; font-size: 14px; }
+.sort-ok { color: var(--income); display: inline-flex; flex: none; }
+.sort-row.saved select { border-color: var(--income); }
+.hero-budget { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; border-inline-start: 3px solid var(--accent); }
+.hero-budget > span { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; }

@@ -2,6 +2,7 @@ import { html } from '../../lib/html.js';
 import { money } from '../../domain/format.js';
 import { Icon } from '../../components/Icon.js';
 import { CountUp } from '../../components/CountUp.js';
+import { go } from '../../lib/go.js';
 
 // "Left to spend this month", with a bar for the budget used and a mark for
 // how far into the month we are.
@@ -29,6 +30,10 @@ export function Hero({ plan, onOpen, catName = () => '', onImport = null }) {
     ${forecast && html`<span class=${'hero-forecast' + (plan.projectedEnd < 0 ? ' bad' : '')}>${forecast}</span>`}
     ${plan.smart && plan.hasBudget && plan.recurring.length > 0 && html`<span class="hero-coming">כבר הורדנו מה שעוד צפוי לרדת החודש: ${comingText(plan, catName)}</span>`}
   </button>
+  ${!plan.hasBudget && (plan.spent > 0 || plan.avgVariable > 0) && html`<div class="card hero-budget" role="note">
+    <span><b>עוד אין תקציב חודשי</b><small class="muted">נציע תקציב לכל קטגוריה לפי מה שאתם מוציאים באמת. משנים כל שורה, ושומרים בלחיצה.</small></span>
+    <button type="button" class="btn" onClick=${() => go('plans/budget')}>לקבוע תקציב</button>
+  </div>`}
   ${plan.smart && plan.looksPartial && html`<div class="card hero-partial" role="status">
     <span>נראה שעוד לא נכנסו כל ההוצאות של החודש${plan.lastLine ? ' (השורה האחרונה מ-' + Number(plan.lastLine.slice(8, 10)) + '.' + Number(plan.lastLine.slice(5, 7)) + ')' : ''}, אז "נשאר להוציא" עלול להיות גבוה מדי.</span>
     ${onImport && html`<button type="button" class="btn btn-ghost" onClick=${onImport}>להעלות דף חשבון או אשראי</button>`}

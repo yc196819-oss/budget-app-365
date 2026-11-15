@@ -73,9 +73,23 @@ export function merchantKey(description) {
     .join(' ');
 }
 
+// A line that names only how it was paid, not what for: a Bit or PayBox
+// payment, a bank transfer. Each such line is something else, so it is
+// never "the same merchant" as another (one category for one Bit payment is
+// not the category of every Bit payment).
+const GENERIC = /^(bit|ביט|paybox|pay box|פייבוקס|פיי בוקס|העברה|העברה ב ?bit|העברה בביט|העברה ב ?paybox|העברה לאחר|העברה מ|העברת כספים|העברה בנקאית|הוראת קבע|משיכת מזומן|משיכה מכספומט|כספומט|מזומן|הפקדה|זיכוי|חיוב)$/i;
+export function isGeneric(description) {
+  const d = String(description || '');
+  const k = merchantKey(d.replace(/בנה["״]?פ/g, ' '));
+  if (!k || GENERIC.test(k)) return true;
+  // "העברה ב BIT", "BIT העברה": a payment channel and nothing else.
+  return /bit|ביט|paybox|פייבוקס/i.test(d) && k.split(' ').every((w) => /^(bit|ביט|paybox|פייבוקס|העברה|ב|בביט|לביט)$/i.test(w));
+}
+
 // Same merchant when one key is a word-prefix of the other:
 // "ארומה" matches "ארומה תל", but "קפה לנדוור" does not match "קפה גרג".
 export function sameMerchant(a, b) {
+  if (isGeneric(a) || isGeneric(b)) return false;
   const ka = merchantKey(a);
   const kb = merchantKey(b);
   if (!ka || !kb) return false;

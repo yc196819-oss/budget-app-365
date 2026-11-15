@@ -19,11 +19,12 @@ import { readLocal, writeLocal } from '../../lib/storage.js';
 // and shown as cards to check, edit or remove before anything is saved.
 // Saying "קיבלתי…" makes it income. The category is taken from the last time
 // the merchant appeared. One-tap buttons for what the household buys most.
-export function AddSheet({ data, onClose, onImport, startVoice = false }) {
+// startIncome: opened to add income ("the salary that comes into the bank").
+export function AddSheet({ data, onClose, onImport, startVoice = false, startIncome = false }) {
   const [text, setText] = useState('');
-  const [type, setType] = useState('expense');
+  const [type, setType] = useState(startIncome ? 'income' : 'expense');
   // Once the person taps expense/income themselves, their choice wins.
-  const [chosen, setChosen] = useState(false);
+  const [chosen, setChosen] = useState(startIncome);
   // The currency typed amounts are in (dollars, euros… are converted by the date's rate).
   const [currency, setCurrency] = useState('ILS');
   const [busy, setBusy] = useState(false);

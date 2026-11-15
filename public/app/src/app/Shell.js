@@ -233,7 +233,7 @@ export function Shell({ tab, session }) {
             <button type="button" class="icon-btn only-mobile" aria-label=${answers > 0 ? 'פרופיל והגדרות, יש תשובה לפנייה שלך' : 'פרופיל והגדרות'} style="position:relative" onClick=${() => { setProfileView('main'); setOverlay('profile'); }}>${profile.initials}${answers > 0 && html`<span class="fb-dot" aria-hidden="true">${answers}</span>`}</button>
           </div>
         </header>
-        ${session.household ? html`<${Screen} key=${shown + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} owner=${tab === 'shop' ? canShop && !(owner && shopUser) : owner} asUser=${owner && tab === 'shop' && shopUser} onOwnerView=${() => setShopAsUser(false)} onImport=${openImport} onPicture=${() => setOverlay('picture')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
+        ${session.household ? html`<${Screen} key=${shown + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} onAddIncome=${() => setOverlay('income')} owner=${tab === 'shop' ? canShop && !(owner && shopUser) : owner} asUser=${owner && tab === 'shop' && shopUser} onOwnerView=${() => setShopAsUser(false)} onImport=${openImport} onPicture=${() => setOverlay('picture')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
       ${railOn && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} onFloat=${() => setMode('float')} onHide=${() => setMode('button')} />`}
@@ -242,7 +242,7 @@ export function Shell({ tab, session }) {
       <${BottomNav} tabs=${tabs} tab=${tab} badges=${badges} onAdd=${() => setOverlay('add')} />
 
       ${overlay === 'profile' && html`<${ProfileSheet} answers=${answers} start=${profileView} profile=${profile} hid=${session.household ? session.household.household_id : null} userId=${session.user.id} theme=${effectiveTheme} onTheme=${toggleTheme} onSignOut=${session.signOut} onClose=${close} />`}
-      ${(overlay === 'add' || overlay === 'voice') && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => openImport(null)} startVoice=${overlay === 'voice'} />`}
+      ${(overlay === 'add' || overlay === 'voice' || overlay === 'income') && session.household && html`<${AddSheet} data=${data} onClose=${close} onImport=${() => openImport(null)} startVoice=${overlay === 'voice'} startIncome=${overlay === 'income'} />`}
       ${overlay === 'talk' && html`<${Sheet} title="שיחה קולית עם היועץ" onClose=${close}>
         ${session.household && data.status === 'ready' ? html`<${AdvisorPanel} data=${data} session=${session} screen=${tab} startTalk=${true} />` : html`<${Loading} />`}
       <//>`}

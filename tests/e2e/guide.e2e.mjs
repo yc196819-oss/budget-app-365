@@ -53,7 +53,7 @@ test('the guide resumes at the first step not done, and saving the income ticks 
   await page.close();
 });
 
-test('sorting everything without a category: the advisor suggests per merchant, one save sorts every line, undo restores', async () => {
+test('sorting everything without a category: a choice is saved at once, the advisor\'s suggestions with one tap, and leaving the sheet loses nothing', async () => {
   const db = withLoose(makeFakeDb());
   const { page, errors } = await open(db);
   const sent = [];
@@ -75,14 +75,49 @@ test('sorting everything without a category: the advisor suggests per merchant, 
   await page.waitForSelector('text=היועץ הציע ל-1 בתי עסק');
   assert.equal(sent.length, 1);
   assert.equal(String(sent[0].text).split('\n').length, 2, 'each merchant once');
+  // Chosen by hand: saved the moment it is chosen, before any "save".
   await sheet.locator('select[aria-label="קטגוריה לתרומה לעמותה"]').selectOption('home');
-  await sheet.locator('text=לשמור 2 בתי עסק').click();
-  await page.waitForSelector('text=סווגו 3 תנועות');
+  for (let i = 0; i < 30 && db.tables.transactions.find((t) => t.id === 'l3').category_id !== 'home'; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.transactions.find((t) => t.id === 'l3').category_id, 'home', 'saved at once');
+  await sheet.locator('.sort-row.saved').first().waitFor();
+  // The advisor's suggestion waits for one tap.
+  await sheet.locator('text=לשמור את הצעות היועץ (1)').click();
+  await page.waitForSelector('text=סווגו 1 תנועות');
   assert.deepEqual(['l1', 'l2', 'l3'].map((id) => db.tables.transactions.find((t) => t.id === id).category_id), ['home', 'home', 'home']);
+  await sheet.locator('text=סיימתי').click();
   // Seen once: the notice does not come back.
   await page.reload();
   await page.waitForSelector('.hero');
   assert.equal(await page.locator('.import-notice').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('sorting, as a friend did it: choices saved one by one, a break to add a category, and back: nothing lost; Bit payments one by one', async () => {
+  const db = withLoose(makeFakeDb());
+  const d = iso(new Date());
+  // Made-up Bit payments: each is something else.
+  for (let i = 0; i < 3; i++) db.tables.transactions.push({ id: 'bit' + i, household_id: 'h1', type: 'expense', amount: 40 + i * 10, description: 'BIT', tx_date: d, category_id: null, source: 'pdf', created_at: '2026-11-01T18:14:44Z' });
+  const { page, errors } = await open(db);
+  await page.locator('.import-notice').locator('text=לסווג עכשיו').click();
+  const sheet = page.locator('.sort-sheet');
+  await sheet.waitFor();
+  // Two merchants and three Bit payments, each on its own line.
+  assert.equal(await sheet.locator('.sort-row').count(), 5);
+  assert.equal(await sheet.locator('.sort-row', { hasText: 'BIT' }).count(), 3);
+  // One Bit payment sorted: only that one.
+  await sheet.locator('.sort-row', { hasText: '₪60' }).locator('select').selectOption('food');
+  await sheet.locator('.sort-row', { hasText: 'משכנתא' }).locator('select').selectOption('home');
+  for (let i = 0; i < 30 && db.tables.transactions.find((t) => t.id === 'l1').category_id !== 'home'; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.transactions.find((t) => t.id === 'bit2').category_id, 'food');
+  assert.equal(db.tables.transactions.find((t) => t.id === 'bit0').category_id, null, 'the other Bit payments untouched');
+  // A break (the sheet closed), then back: what was chosen is kept, the rest still waits.
+  await page.keyboard.press('Escape');
+  await sheet.waitFor({ state: 'detached' });
+  await page.goto(page.url().split('#')[0] + '#/money');
+  await page.waitForSelector('.tabs');
+  assert.equal(db.tables.transactions.find((t) => t.id === 'l1').category_id, 'home');
+  assert.equal(db.tables.transactions.find((t) => t.id === 'bit2').category_id, 'food');
   assert.deepEqual(errors, []);
   await page.close();
 });

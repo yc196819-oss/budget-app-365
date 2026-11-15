@@ -1,3 +1,4 @@
+import { isGeneric } from './money.js';
 // "Always file X as Y": the household's own rules, chosen after a correction.
 // They come first when a statement is read, before past choices and the AI. Pure.
 import { merchantKey } from './money.js';
@@ -23,7 +24,8 @@ export function applyRules(items, rules) {
 
 // After a category change: ask to keep it as a rule, unless that is already the rule.
 export function shouldAskRule(rules, tx, category_id, subcategory_id) {
-  if (!category_id || !ruleKey(tx.description)) return false;
+  // ("Always" makes no sense for a Bit payment or a transfer: each is something else.)
+  if (!category_id || !ruleKey(tx.description) || isGeneric(tx.description)) return false;
   const r = findRule(rules, tx.type, tx.description);
   return !(r && r.category_id === category_id && (r.subcategory_id || null) === (subcategory_id || null));
 }

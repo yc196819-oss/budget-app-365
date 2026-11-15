@@ -9,7 +9,7 @@ import { splitText, inParts } from '../domain/pdftext.js';
 import { looksLikeJunk } from '../domain/repair.js';
 import { reportError } from '../lib/telemetry.js';
 import { issuerOf } from '../domain/sources.js';
-import { parseCsv, rowsToTransactions, fromAi, importPrompt, categorizePrompt, categorizeText, waitingMerchants, applyAiCategories, prepare, categorizeFromHistory } from '../domain/statement.js';
+import { parseCsv, rowsToTransactions, fromAi, importPrompt, categorizePrompt, categorizeText, waitingMerchants, applyAiCategories, prepare, categorizeFromHistory, categorizeByWords } from '../domain/statement.js';
 
 // Reads a statement file into import items, ready for review.
 // Tables (Excel, CSV) are read here, on the device; only the names of
@@ -122,6 +122,8 @@ export async function readStatement(file, { categories, history, rules = [], tod
   // The household's own rules first, then their past choices, then the AI for the rest.
   items = applyRules(items, rules);
   items = items.map((t) => (t.auto === 'rule' ? t : categorizeFromHistory([t], history)[0]));
+  // What the words say plainly (an investment platform): no AI needed.
+  items = categorizeByWords(items, categories);
   const sent = waitingMerchants(items);
   if (sent.length && aiEnabled()) {
     const groups = [];

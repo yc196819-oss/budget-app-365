@@ -1,6 +1,6 @@
 // How much went on one thing over the last 12 months: a category, a
 // sub-category, or a business. Pure.
-import { monthShare, merchantKey, MONTH_NAMES } from './money.js';
+import { monthShare, merchantKey, MONTH_NAMES, isGeneric } from './money.js';
 
 const isExpense = (t) => t.type !== 'income';
 
@@ -26,6 +26,8 @@ export function spendStats(series, months) {
 // The words to search for "every purchase at this place": the chain's name
 // (its first word), so "שופרסל דיל" and "שופרסל אקספרס" both count.
 export function chainQuery(description) {
+  // (All "Bit" payments are not one shop.)
+  if (isGeneric(description)) return '';
   const key = merchantKey(description);
   const first = key.split(' ')[0] || '';
   return first.length >= 3 ? first : key;

@@ -4,7 +4,7 @@
 // data says so, so the guide picks up where the person left off, on any
 // device and after signing in again. Pure.
 
-import { sameMerchant } from './money.js';
+import { sameMerchant, isGeneric } from './money.js';
 
 const DAY = 86400000;
 
@@ -18,7 +18,8 @@ export const STEPS = [
 ];
 
 // Transactions without a category, in the last `days`.
-export function looseTxs(txs, today = new Date(), days = 120) {
+// (13 months: a first upload often brings a year of statements.)
+export function looseTxs(txs, today = new Date(), days = 400) {
   const since = today.getTime() - days * DAY;
   return (txs || []).filter((t) => !t.category_id && new Date(t.tx_date).getTime() >= since);
 }
@@ -55,7 +56,8 @@ export function looseGroups(txs, limit = 150) {
     const type = t.type === 'income' ? 'income' : 'expense';
     const g = groups.find((x) => x.type === type && sameMerchant(x.description, t.description));
     if (g) { g.ids.push(t.id); g.total += Number(t.amount) || 0; }
-    else groups.push({ key: 'g' + groups.length, type, description: t.description, amount: Number(t.amount) || 0, ids: [t.id], total: Number(t.amount) || 0 });
+    // (Keyed by its first line, so a row keeps its place when others are sorted.)
+    else groups.push({ key: 'g' + t.id, type, description: t.description, date: t.tx_date, generic: isGeneric(t.description), amount: Number(t.amount) || 0, ids: [t.id], total: Number(t.amount) || 0 });
   }
   return groups.sort((a, b) => b.total - a.total).slice(0, limit);
 }
