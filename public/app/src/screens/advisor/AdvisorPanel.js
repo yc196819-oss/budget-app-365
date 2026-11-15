@@ -170,6 +170,8 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     } catch (err) {
       setConv((cur) => cur && { ...cur, messages: cur.messages.filter((m) => !m.pending) });
       setError(err.name === 'AbortError' ? '' : (err.message || 'משהו השתבש. נסו שוב.'));
+      // The picture waits in the box again, to try once more without picking it again.
+      if (pic) setImage(pic);
     }
     abort.current = null;
     setBusy(false);

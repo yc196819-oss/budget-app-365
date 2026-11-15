@@ -1137,7 +1137,9 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, aiQuota, async (r
   // only; never stored or logged.
   let image = null;
   if (req.body && req.body.image) {
-    if (!isOwnerEmail(req.authEmail)) return res.status(403).json({ error: 'צירוף תמונה עוד לא זמין.' });
+    // Asked of the auth server: a session remembered from a few minutes ago
+    // carries no email (see requireAuth), so the email cannot be read from it.
+    if (!(await isAdmin(req.authUserId).catch(() => false))) return res.status(403).json({ error: 'צירוף תמונה עוד לא זמין.' });
     if (!ANTHROPIC_KEY) return res.status(503).json({ error: 'היועץ לא יכול לקרוא תמונות כרגע.' });
     image = advisorImage.parseImage(req.body.image);
     if (image.error) return res.status(400).json({ error: image.error });
