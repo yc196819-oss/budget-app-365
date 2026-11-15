@@ -1730,7 +1730,8 @@ const isOwnerEmail = (email) => ops.isOwnerEmail(email, ADMIN_EMAILS, OWNER_HASH
 // owner's personal one (FEEDBACK_TO can name another).
 const FEEDBACK_TO = String(process.env.FEEDBACK_TO || ADMIN_EMAILS.find((e) => e.startsWith('budgetapp')) || ADMIN_EMAILS[0] || '').toLowerCase().trim();
 // The owner's own accounts, by id (asked of the auth server, kept 10 minutes):
-// left out of every count on the dashboard.
+// left out of every count on the dashboard. The demo account too (DEMO_EMAIL):
+// the owner uses it to show and try the app, which is not anyone's real use.
 let ownerIdsCache = { at: 0, ids: [] };
 // Whole lists, never cut at 1,000 (see ops.pageAll). Same { data, error }
 // shape as a single query, so callers stay as they were.
@@ -1746,7 +1747,7 @@ const listAllUsers = () => ops.pageAll(async (_from, _to, page) => {
 }).then((users) => ({ data: { users }, error: null }), (error) => ({ data: null, error }));
 async function ownerIds(allUsers) {
   if (allUsers) {
-    ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => isOwnerEmail(u.email)).map((u) => u.id) };
+    ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => isOwnerEmail(u.email) || isDemoEmail(u.email)).map((u) => u.id) };
   } else if (Date.now() - ownerIdsCache.at > 10 * 60 * 1000 && supabaseAdmin) {
     const { data } = await listAllUsers();
     return ownerIds((data && data.users) || []);
@@ -2485,6 +2486,7 @@ app.post('/api/cron/prices', async (req, res) => {
 // to show what the app does today. Only the account named by DEMO_EMAIL,
 // and only if its household is marked as a demo ("הדגמה" in its name).
 const DEMO_EMAIL = String(process.env.DEMO_EMAIL || 'demo.family@budgetapp-demo.com').toLowerCase();
+function isDemoEmail(email) { return !!email && String(email).toLowerCase() === DEMO_EMAIL; }
 async function demoAccount() {
   const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   const user = ((list && list.users) || []).find((u) => String(u.email || '').toLowerCase() === DEMO_EMAIL);
