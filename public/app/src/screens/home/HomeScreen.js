@@ -75,7 +75,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   const items = attention({ txs: data.txs, categories: data.categories, budgets: data.budgets, cards: onPicture ? [] : data.cards, today, plan, dupeOk, transferDays: days });
   const top = topCategories(data.txs, data.categories, data.budgets, today);
 
-  const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} />`;
+  const guide = html`<${SetupGuide} data=${data} userId=${userId} onImport=${onImport} onAdd=${onAdd} onAsk=${onAsk || (() => {})} onPicture=${onPicture} />`;
   if (!data.txs.length) {
     return html`<div class="stack">
       <${AnswerNotice} userId=${userId} />
@@ -116,8 +116,8 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       <${RepairCard} data=${data} />
       <${ImportNotice} data=${data} onImport=${onImport} />
       <${MonthlyAsk} userId=${userId} data=${data} />
-      ${guide}
       ${onPicture && html`<${PictureCard} data=${data} onOpen=${onPicture} />`}
+      ${guide}
       <${Hero} plan=${plan} catName=${catName} onImport=${onImport} onOpen=${() => { planSheet.close(); setSheet({ kind: 'hero' }); }} />
       <${InstallCard} />
       <${TripFound} data=${data} trips=${trips} />
