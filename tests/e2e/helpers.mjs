@@ -92,6 +92,8 @@ function applyFilters(rows, params) {
 }
 
 export async function mockSupabase(page, db, calls = []) {
+  // The shopping tab: not shared with this made-up family (a test can say otherwise).
+  await page.route('**/api/shop/access', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"shop":false}' }));
   // "Tell your friends" in the profile: a code and nobody joined yet.
   await page.route('**/api/share', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"code":"a1b2c3","joined":0}' }));
   // The server's version, for the owner's dashboard only.

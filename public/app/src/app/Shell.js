@@ -30,7 +30,7 @@ import { AddSheet } from '../screens/add/AddSheet.js';
 import { ImportSheet } from '../screens/import/ImportSheet.js';
 import { PictureSheet, PictureCheck } from '../screens/picture/Picture.js';
 import { useOwner } from '../lib/owner.js';
-import { useShopAsUser, setShopAsUser } from '../lib/viewAs.js';
+import { useShopAsUser, setShopAsUser, useShopAccess } from '../lib/viewAs.js';
 import { sharedFiles, dropShared } from '../lib/shared.js';
 import { ShareSheet } from '../screens/import/ShareSheet.js';
 import { LearnSheet } from '../screens/learn/LearnSheet.js';
@@ -58,6 +58,8 @@ export function Shell({ tab, session }) {
   const owner = useOwner(session.user && session.user.email);
   // The owner trying the shopping tab as a regular family sees it.
   const shopUser = useShopAsUser();
+  // The shopping tab: the owner, and whoever is in a household with him.
+  const canShop = useShopAccess(session.user && session.user.id, owner);
   // The account or card an upload is for, when it was started from one.
   const [importFor, setImportFor] = useState(null);
   const [importFile, setImportFile] = useState(null);
@@ -212,9 +214,9 @@ export function Shell({ tab, session }) {
       <${ToastHost} />
     </main>`;
   }
-  // The shopping tab: for now the owner's only (others try it by a link).
-  const tabs = owner ? TABS : TABS.filter((t) => t.key !== 'shop');
-  const shown = !owner && tab === 'shop' ? 'home' : tab;
+  // The shopping tab: for now the owner's and his household's (others try it by a link).
+  const tabs = canShop ? TABS : TABS.filter((t) => t.key !== 'shop');
+  const shown = !canShop && tab === 'shop' ? 'home' : tab;
   const Screen = SCREENS[shown];
   const title = tabLabel(shown);
   const close = () => setOverlay(null);
@@ -231,7 +233,7 @@ export function Shell({ tab, session }) {
             <button type="button" class="icon-btn only-mobile" aria-label=${answers > 0 ? 'פרופיל והגדרות, יש תשובה לפנייה שלך' : 'פרופיל והגדרות'} style="position:relative" onClick=${() => { setProfileView('main'); setOverlay('profile'); }}>${profile.initials}${answers > 0 && html`<span class="fb-dot" aria-hidden="true">${answers}</span>`}</button>
           </div>
         </header>
-        ${session.household ? html`<${Screen} key=${shown + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} owner=${owner && !(tab === 'shop' && shopUser)} asUser=${owner && tab === 'shop' && shopUser} onOwnerView=${() => setShopAsUser(false)} onImport=${openImport} onPicture=${() => setOverlay('picture')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
+        ${session.household ? html`<${Screen} key=${shown + ':' + visit} data=${data} dec=${dec} onAdd=${() => setOverlay('add')} owner=${tab === 'shop' ? canShop && !(owner && shopUser) : owner} asUser=${owner && tab === 'shop' && shopUser} onOwnerView=${() => setShopAsUser(false)} onImport=${openImport} onPicture=${() => setOverlay('picture')} onLearn=${() => setOverlay('learn')} onAsk=${askAdvisor} userId=${session.user.id} />`
           : html`<${SoonCard} stage="חשבון" title="עוד לא מחוברים למשק בית" items=${['פתחו את הגרסה הנוכחית פעם אחת כדי ליצור משק בית או להצטרף להזמנה, ואז חזרו לכאן']} />`}
       </main>
       ${railOn && html`<${AdvisorRail} data=${data} session=${session} screen=${tab} onFloat=${() => setMode('float')} onHide=${() => setMode('button')} />`}

@@ -1747,7 +1747,7 @@ const listAllUsers = () => ops.pageAll(async (_from, _to, page) => {
 }).then((users) => ({ data: { users }, error: null }), (error) => ({ data: null, error }));
 async function ownerIds(allUsers) {
   if (allUsers) {
-    ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => isOwnerEmail(u.email) || isDemoEmail(u.email)).map((u) => u.id) };
+    ownerIdsCache = { at: Date.now(), ids: allUsers.filter((u) => isOwnerEmail(u.email) || isDemoEmail(u.email)).map((u) => u.id), real: allUsers.filter((u) => isOwnerEmail(u.email)).map((u) => u.id) };
   } else if (Date.now() - ownerIdsCache.at > 10 * 60 * 1000 && supabaseAdmin) {
     const { data } = await listAllUsers();
     return ownerIds((data && data.users) || []);
@@ -1848,6 +1848,25 @@ app.post('/api/admin/ask', requireAuth, async (req, res) => {
     console.error('admin ask failed:', err.message);
     return res.status(502).json({ error: 'לא התקבלה תשובה. נסו שוב.' });
   }
+});
+
+// The shopping tab's full version (the price comparison, the advisor's list,
+// receipts): for now the owner, and whoever shares a household with him (his
+// partner). Not the demo account's household.
+async function shopAllowed(userId) {
+  if (!supabaseAdmin || !userId) return false;
+  if (await isAdmin(userId)) return true;
+  await ownerIds();
+  const owners = ownerIdsCache.real || [];
+  if (!owners.length) return false;
+  const { data: mine } = await supabaseAdmin.from('memberships').select('household_id').eq('user_id', userId);
+  const hids = (mine || []).map((m) => m.household_id);
+  if (!hids.length) return false;
+  const { data: shared } = await supabaseAdmin.from('memberships').select('user_id').in('household_id', hids).in('user_id', owners).limit(1);
+  return !!(shared && shared.length);
+}
+app.get('/api/shop/access', requireAuth, async (req, res) => {
+  try { return res.json({ shop: await shopAllowed(req.authUserId) }); } catch (_e) { return res.json({ shop: false }); }
 });
 
 // The owner's accounts only (ADMIN_EMAILS), with the email confirmed; asked
@@ -1987,7 +2006,7 @@ app.post('/api/prices/fetch', requireAuth, async (req, res) => {
     const hid = String((req.body && req.body.hid) || '');
     if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
     // While the catalog grows ("בקרוב" for everyone else), only the owner searches.
-    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
+    if (!PRICES_OPEN && !(await shopAllowed(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
     // Families never wait for the price service: what our catalog does not
     // have yet is written down, and the owner's next load brings it in.
     if (!(await isAdmin(req.authUserId))) {
@@ -2264,7 +2283,7 @@ app.post('/api/prices/area', requireAuth, async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
     const hid = String((req.body && req.body.hid) || '');
     if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
-    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
+    if (!PRICES_OPEN && !(await shopAllowed(req.authUserId))) return res.status(403).json({ error: 'השוואת המחירים עוד לא פתוחה. בקרוב!' });
     const at = area.place(String((req.body && req.body.city_code) || ''));
     if (!at) return res.status(400).json({ error: 'לא מצאנו את היישוב. נסו לבחור מהרשימה.' });
     const hood = String((req.body && req.body.hood) || '').replace(/\s+/g, ' ').trim().slice(0, 60) || null;
@@ -2355,7 +2374,7 @@ app.post('/api/receipts/scan', requireAuth, aiLimiter, aiQuota, async (req, res)
   try {
     const { hid, fileData, mimeType } = req.body || {};
     if (!(await isHouseholdMember(req.authUserId, String(hid || '')))) return res.status(403).json({ error: 'not allowed' });
-    if (!PRICES_OPEN && !(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'בקרוב!' });
+    if (!PRICES_OPEN && !(await shopAllowed(req.authUserId))) return res.status(403).json({ error: 'בקרוב!' });
     if (!ANTHROPIC_KEY && !GEMINI_KEY && !GROK_KEY) return res.status(503).json({ error: 'קריאת קבלות לא זמינה כרגע.' });
     if (!fileData || !/^image\/(png|jpe?g|webp)$/i.test(String(mimeType || ''))) return res.status(400).json({ error: 'צריך תמונה (JPG או PNG).' });
     const ai = await generateWithFallback({ prompt: receipts.PROMPT, text: '', fileData, mimeType, effort: 'low', maxTokens: 8000, json: true, model: ANTHROPIC_FILES_MODEL });

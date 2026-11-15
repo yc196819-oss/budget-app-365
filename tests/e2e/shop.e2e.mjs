@@ -800,3 +800,31 @@ test('a regular family has no shopping tab for now: not in the menu, and its add
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('the owner\'s partner (in his household) gets the whole shopping tab in her own account', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  await page.clock.setFixedTime(TODAY);
+  const errors = collectErrors(page);
+  const db = makeFakeDb(TODAY);
+  db.tables.shopping_items = [{ id: 's1', household_id: db.hid, name: 'חלב', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+  db.tables.households = [{ id: db.hid, shop_area: null }];
+  db.tables.household_area = [{ household_id: db.hid, city_code: '2610', city: 'בית שמש', hood: null }];
+  db.tables.household_stores = [];
+  await mockSupabase(page, db);
+  // The server says she shares a household with the owner.
+  await page.route('**/api/shop/access', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"shop":true}' }));
+  await signIn(page, server.base);
+  await page.goto(server.base + '/app/#/shop');
+  await page.reload();
+  await page.locator('.shop-add').waitFor();
+  assert.equal(await page.locator('.bottom-nav .nav-item[href="#/shop"]').count(), 1);
+  // The full version: the comparison and the advisor, not the "soon" preview.
+  await page.locator('.shop-prices-cta').waitFor();
+  assert.equal(await page.locator('.adv-cta').count(), 1);
+  assert.equal(await page.locator('.price-teaser').count(), 0);
+  // And nothing of the owner's board.
+  await page.click('button[aria-label^="פרופיל והגדרות"]');
+  assert.equal(await page.locator('text=לוח בעלים').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
