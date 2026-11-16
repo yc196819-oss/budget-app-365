@@ -75,3 +75,22 @@ export function useShopping(hid) {
   const patch = (fn) => setState((s) => ({ ...s, items: fn(s.items) }));
   return { ...state, reload, patch };
 }
+
+// A ready cart made this home's own by the advisor (its usual buying), as
+// the advisor's list JSON; the app checks it (parseList) before showing it.
+export async function personalCart(cart, usual, onList, request = '') {
+  const { api } = await import('../lib/api.js');
+  const j = await api('/api/ai/shop-cart', { method: 'POST', body: { cart, usual, onList, request } });
+  return j && j.list ? j.list : null;
+}
+
+// A recipe (a link, its text or a photo) read by the advisor into its
+// ingredients: { title, servings, items }. The photo is made smaller first
+// and is not kept.
+export async function readRecipe({ url = '', text = '', file = null } = {}) {
+  const { api } = await import('../lib/api.js');
+  let image = null;
+  if (file) { const { shrinkImage } = await import('./feedback.js'); image = await shrinkImage(file, 1024 * 1024); }
+  const j = await api('/api/ai/recipe', { method: 'POST', body: { url: url || undefined, text: text || undefined, image: image || undefined } });
+  return j && j.recipe ? j.recipe : null;
+}

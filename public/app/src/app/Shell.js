@@ -29,10 +29,10 @@ import { ProfileSheet } from '../screens/profile/ProfileSheet.js';
 import { AddSheet } from '../screens/add/AddSheet.js';
 import { ImportSheet } from '../screens/import/ImportSheet.js';
 import { PictureSheet, PictureCheck } from '../screens/picture/Picture.js';
-import { useOwner } from '../lib/owner.js';
+import { useOwner, isOwnerEmail } from '../lib/owner.js';
 import { useShopAsUser, setShopAsUser, useShopAccess } from '../lib/viewAs.js';
 import { sharedFiles, dropShared } from '../lib/shared.js';
-import { sendToAdvisor } from '../lib/advisorInbox.js';
+import { sendToAdvisor, sendRecipe } from '../lib/advisorInbox.js';
 import { ShareSheet } from '../screens/import/ShareSheet.js';
 import { LearnSheet } from '../screens/learn/LearnSheet.js';
 import { ToastHost } from '../components/ToastHost.js';
@@ -70,7 +70,18 @@ export function Shell({ tab, session }) {
   const [shared, setShared] = useState(null);
   useEffect(() => {
     if (!session.household) return;
-    sharedFiles().then((list) => { if (list.length) { setShared(list[0]); setOverlay('shared'); track('share_in'); } });
+    sharedFiles().then(async (list) => {
+      if (!list.length) return;
+      // Words shared (a recipe page's link or text): a recipe for the cart (the owner first).
+      if (/^text\//.test(list[0].type || '')) {
+        const text = await list[0].text().catch(() => '');
+        dropShared();
+        if (await isOwnerEmail(session.user && session.user.email)) { sendRecipe({ text }); track('share_recipe'); go('shop'); }
+        else showToast('אפשר לשתף לכאן פירוטים (אקסל, PDF או תמונה).');
+        return;
+      }
+      setShared(list[0]); setOverlay('shared'); track('share_in');
+    });
   }, [session.household && session.household.household_id]);
   // An upload started from "complete the picture" comes back to it (to its ✓).
   const [backTo, setBackTo] = useState(null);
@@ -249,7 +260,7 @@ export function Shell({ tab, session }) {
       <//>`}
       ${overlay === 'learn' && html`<${LearnSheet} userId=${session.user.id} householdId=${session.household ? session.household.household_id : null} data=${session.household && data.status === 'ready' ? data : null} onClose=${close} />`}
       ${overlay === 'import' && session.household && data.status === 'ready' && html`<${ImportSheet} key=${importFor ? importFor.id : 'any'} data=${data} source=${importFor} file=${importFile} onClose=${() => { setImportFile(null); setOverlay(backTo); setBackTo(null); }} />`}
-      ${overlay === 'shared' && shared && session.household && data.status === 'ready' && html`<${ShareSheet} data=${data} file=${shared} onPick=${(src) => { const f = shared; dropShared(); setShared(null); track('share_pick'); openImport(src, f); }} onClose=${() => { dropShared(); setShared(null); setOverlay(null); }} onAdvisor=${() => { const f = shared; dropShared(); setShared(null); setOverlay(null); track('share_advisor'); sendToAdvisor(f); askAdvisor(); }} />`}
+      ${overlay === 'shared' && shared && session.household && data.status === 'ready' && html`<${ShareSheet} data=${data} file=${shared} onPick=${(src) => { const f = shared; dropShared(); setShared(null); track('share_pick'); openImport(src, f); }} onClose=${() => { dropShared(); setShared(null); setOverlay(null); }} onAdvisor=${() => { const f = shared; dropShared(); setShared(null); setOverlay(null); track('share_advisor'); sendToAdvisor(f); askAdvisor(); }} onRecipe=${owner ? () => { const f = shared; dropShared(); setShared(null); setOverlay(null); track('share_recipe'); sendRecipe({ file: f }); go('shop'); } : null} />`}
       ${overlay === 'picture' && session.household && data.status === 'ready' && html`<${PictureSheet} data=${data} onClose=${close} onUpload=${(src) => { setBackTo('picture'); openImport(src); }} />`}
       ${overlay === 'advisor' && !railOn && html`<${Sheet} title="היועץ" onClose=${close}>
         ${desktop && html`<span class="adv-modes"><button type="button" class="btn-text rail-pin" onClick=${() => setMode('side')}>להציג קבוע בצד המסך</button> · <button type="button" class="btn-text float-pin" onClick=${() => setMode('float')}>כחלון צף</button></span>`}

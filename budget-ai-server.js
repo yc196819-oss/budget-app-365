@@ -1105,6 +1105,20 @@ const ADVISOR_STYLE = `מספרים: העתק כל סכום בדיוק כמו ש
 עדכונים: האפליקציה מעדכנת לבד את היתרות בחשבונות, ההכנסה הצפויה של כל אחד, יעדים, תקציבים, הלוואות, תשלומים קבועים או בתשלומים למספר ידוע של חודשים (הם נכנסים לתחזית), וגם רושמת לבד הכנסה שכבר נכנסה או הוצאה שכבר ירדה ("המשכורת נכנסה", "הלימודים ירדו"), מתוך מה שמספרים לך, אלא אם ביקשו לא לעדכן. במקרה כזה כתוב בקצרה שזה נרשם (יופיע מתחת לתשובה עם אפשרות ביטול). אל תבקש להזין ביד או "דרך ה-+" משהו שכבר סיפרו לך, ואל תטען שמשהו מופיע במערכת אם הוא לא בנתונים.
 מחיקת תנועות: כשהמשתמש מבקש למחוק תנועה שגויה, אמור שהאפליקציה תציג מתחת לשיחה את התנועות למחיקה לאישור שלו (ומה שנמחק אפשר לשחזר 30 יום). אל תאמר שאינך יכול.
 טעויות בנתונים: אל תטען שיש טעות, כפילות או חיוב כפול בלי לראות אותו בתנועות עצמן. ב-topMerchants, total3Months הוא סך כל החיובים ב-3 החודשים (charges חיובים, ואם eachCharge מופיע כל חיוב הוא בסכום הזה), לא סכום של חיוב אחד.`;
+// A shopping list written in the conversation (when the data has `shopping`):
+// the app shows it as a list the person can size, check and add to "קניות".
+const SHOP_LIST_RULE = `
+רשימת קניות: כשמבקשים ממך רשימת קניות (לשבוע, לשבת, לחג, לאירוע, לארוחה), כתוב משפט או שניים, ואז בשורה נפרדת: @@רשימה: ואחריו JSON בשורה אחת:
+{"title":"רשימה לשבת","people":6,"kosher":"מהדרין","items":[{"name":"עגבניות","qty":1.5,"unit":"ק\\"ג","aisle":"produce","scale":true}]}
+- people: מספר האנשים שנאמר בבקשה; אם לא נאמר, shopping.people; אם גם אין, 4. הכמויות (qty) לפי המספר הזה, כמספר בלבד, והיחידה ב-unit (ק"ג, גרם, ליטר, יח', בקבוקים, חבילות, שישיות, או ריק למספר יחידות).
+- scale:false למה שלא תלוי במספר האנשים (נרות, תבלינים, חבילה אחת של מוצר ניקיון).
+- קודם מה שהבית הזה קונה בדרך כלל (shopping.usual, מהקבלות וממה שסומן ברשימה), אם זה מתאים לבקשה, ואחר כך מה שחסר לבקשה. אל תכלול מה שכבר ב-shopping.onList.
+- כשרות: לפי מה שנאמר בבקשה, אחרת לפי shopping.kosher. kosher הוא שם קצר לכותרת, או ריק.
+- aisle אחד מ: produce, bakery, dairy, meat, dry, frozen, drinks, clean, care, baby, other.
+- עד 40 פריטים, שמות קצרים כמו שכותבים ברשימה (בלי מותגים, אלא אם הבית קונה מותג מסוים).
+- אם מבקשים לשנות רשימה שכתבת ("בלי בשר", "תוסיף סלטים", "ל-3 אנשים"), כתוב את כל הרשימה מחדש עם השינוי.
+- אל תכתוב מחירים או כמה זה יעלה: האפליקציה מחשבת לבד לפי מחירי הרשתות. אם יש lastPrice, אפשר להזכיר מה שילמו בפעם האחרונה.
+שורת @@רשימה: באה לפני שורת ${SUGG_MARK}.`;
 // How the app works (screens, buttons, what can and cannot be done), from
 // the same guide the app uses for its instant answers.
 let APP_GUIDE = '';
@@ -1156,7 +1170,7 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimit
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders && res.flushHeaders();
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender) + devicePart(device) + (image ? advisorImage.IMAGE_NOTE : ''));
+  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender) + devicePart(device) + (image ? advisorImage.IMAGE_NOTE : '') + (summary && summary.shopping ? SHOP_LIST_RULE : ''));
   // The household's numbers and lines (about 6-8k tokens at most).
   const text = JSON.stringify(summary || {}).slice(0, 24000);
   try {
@@ -1199,6 +1213,76 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimit
     console.error('advice-chat-stream failed:', err.message);
     send({ error: 'היועץ לא הצליח לענות כרגע. נסו שוב בעוד דקה.' });
     return res.end();
+  }
+});
+
+// A recipe (a link, its text, or a photo) read into what to buy. Pictures
+// and pages are read for the answer only, never kept.
+const recipe = require('./server/recipe');
+app.post('/api/ai/recipe', requireAuth, aiLimiter, advisorImageLimiter, aiQuota, async (req, res) => {
+  try {
+    if (!ANTHROPIC_KEY) return res.status(503).json({ error: 'קריאת מתכונים לא זמינה כרגע.' });
+    const { url, text, image } = req.body || {};
+    let src = { title: '', text: String(text || '').slice(0, 9000) };
+    if (url) {
+      const html = await recipe.fetchPage(url).catch((e) => { throw Object.assign(new Error(e.message), { user: 'לא הצלחנו לפתוח את הקישור. אפשר להדביק את המתכון כטקסט.' }); });
+      src = recipe.recipeText(html);
+    }
+    let img = null;
+    if (image) { img = advisorImage.parseImage(image); if (img.error) return res.status(400).json({ error: img.error }); }
+    if (!src.text && !img) return res.status(400).json({ error: 'צריך קישור, טקסט או תמונה של מתכון.' });
+    const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 2500, effort: 'low', content: advisorImage.chatContent(recipe.RECIPE_PROMPT + (src.title ? '\nשם הדף: ' + src.title : '') + '\n\n' + src.text, img) });
+    const r = await fetch(cr.url, cr.init);
+    if (!r.ok) throw new Error('Claude ' + r.status);
+    const j = await r.json();
+    recordAi('claude', ANTHROPIC_MODEL, (j.usage && j.usage.input_tokens) || 0, (j.usage && j.usage.output_tokens) || 0);
+    const out = ((j.content || []).find((c) => c.type === 'text') || {}).text || '';
+    const from = out.indexOf('{');
+    const to = out.lastIndexOf('}');
+    if (from < 0 || to <= from) return res.status(502).json({ error: 'לא הצלחנו לקרוא את המתכון.' });
+    const parsed = JSON.parse(out.slice(from, to + 1));
+    if (!parsed || !Array.isArray(parsed.items) || !parsed.items.length) return res.status(422).json({ error: 'לא מצאנו כאן מתכון עם מצרכים.' });
+    return res.json({ recipe: { title: String(parsed.title || src.title || 'מתכון').slice(0, 60), servings: Number(parsed.servings) || 4, items: parsed.items.slice(0, 40) } });
+  } catch (err) {
+    console.error('recipe failed:', err.message);
+    return res.status(502).json({ error: err.user || 'לא הצלחנו לקרוא את המתכון כרגע. נסו שוב.' });
+  }
+});
+
+// A ready cart (week, Shabbat, a holiday, guests) made this home's own: the
+// advisor swaps the general names for what the home buys (its receipts and
+// lists), adds a few of its usual things that fit, and keeps the amounts for
+// the number of people. Only asked when the home has a buying history; the
+// answer is the same list the app shows (the app checks it).
+app.post('/api/ai/shop-cart', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  try {
+    const { cart, usual, onList, request } = req.body || {};
+    if (!cart || !Array.isArray(cart.items) || !cart.items.length) return res.status(400).json({ error: 'cart is required' });
+    const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
+    const base = {
+      title: clip(cart.title, 40), people: Math.max(1, Math.min(30, Number(cart.people) || 4)), kosher: clip(cart.kosher, 30),
+      items: cart.items.slice(0, 40).map((i) => ({ name: clip(i.name, 40), qty: Number(i.qty) || null, unit: clip(i.unit, 16), aisle: clip(i.aisle, 12), scale: i.scale !== false }))
+    };
+    const home = (Array.isArray(usual) ? usual : []).slice(0, 40).map((u) => ({ name: clip(u.name, 40), times: Number(u.times) || 0, qty: clip(u.qty, 20) }));
+    const prompt = `אתה מכין סל קניות למשפחה בישראל. קיבלת סל מוכן (base) ואת מה שהבית הזה קונה בדרך כלל (usual: שם, כמה פעמים קנו, כמות רגילה).
+התאם את הסל לבית הזה:
+- החלף שם כללי בשם שהבית קונה כשזה אותו מוצר (למשל "גבינה לבנה" -> "גבינה לבנה 5%" אם זה מה שקונים).
+- הוסף עד 6 מוצרים מ-usual שמתאימים לסוג הסל (${base.title}), ולא יותר.
+- אל תוסיף מה שכבר ב-onList, ואל תערבב בשר וחלב בארוחה שכתוב בה "חלבית" או "בשרית".
+- הכמויות (qty) לפי ${base.people} אנשים, כמספר, ביחידה ב-unit. scale:false למה שלא תלוי במספר האנשים.
+- aisle אחד מ: produce, bakery, dairy, meat, dry, frozen, drinks, clean, care, baby, other.
+${request ? 'בקשה מיוחדת של המשתמש: ' + clip(request, 200) + '\n' : ''}החזר JSON בלבד, בלי טקסט נוסף, באותו מבנה: {"title":"...","people":${base.people},"kosher":"...","items":[{"name":"...","qty":1,"unit":"...","aisle":"...","scale":true}]}`;
+    const text = JSON.stringify({ base, usual: home, onList: (Array.isArray(onList) ? onList : []).slice(0, 60).map((n) => clip(n, 40)) });
+    const ai = await generateWithFallback({ prompt, text, effort: 'low', maxTokens: 3000 });
+    const out = String(ai.output || '');
+    const from = out.indexOf('{');
+    const to = out.lastIndexOf('}');
+    if (from < 0 || to <= from) return res.status(502).json({ error: 'no list' });
+    const list = JSON.parse(out.slice(from, to + 1));
+    return res.json({ list });
+  } catch (err) {
+    console.error('shop-cart failed:', err.message);
+    return res.status(502).json({ error: 'היועץ לא הצליח להתאים את הסל כרגע.' });
   }
 });
 

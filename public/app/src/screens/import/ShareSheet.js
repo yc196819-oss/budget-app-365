@@ -9,7 +9,7 @@ import { useState } from 'preact/hooks';
 // bank by bank (each bank account, then the cards charged to it), with a
 // guess from the file's name (the company, the card's last 4 digits). Then
 // the usual upload, which finds the month in the file.
-export function ShareSheet({ data, file, onPick, onClose, onAdvisor }) {
+export function ShareSheet({ data, file, onPick, onClose, onAdvisor, onRecipe = null }) {
   // A picture can be a statement, or something to ask the advisor about
   // (a receipt, a bill): asked first. Files from the bank go straight on.
   const [asStatement, setAsStatement] = useState(!onAdvisor || !/^image\//.test(file.type || ''));
@@ -25,6 +25,10 @@ export function ShareSheet({ data, file, onPick, onClose, onAdvisor }) {
           <span class="pg-tile"><${Icon} name="spark" size=${20} /></span>
           <span class="share-opt-t"><b>לשאול את היועץ</b><small>קבלה, חשבון או הצעת מחיר. התמונה לא נשמרת.</small></span>
         </button>
+        ${onRecipe && html`<button type="button" class="share-opt" onClick=${onRecipe}>
+          <span class="pg-tile"><${Icon} name="money" size=${20} /></span>
+          <span class="share-opt-t"><b>מתכון לרשימת קניות</b><small>היועץ יוציא ממנו מה צריך לקנות</small></span>
+        </button>`}
       </div>
     <//>`;
   }

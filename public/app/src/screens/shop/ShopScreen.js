@@ -12,7 +12,8 @@ import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
 import { go } from '../../lib/go.js';
 import { PricePanel, PriceTeaser } from './PricePanel.js';
-import { AdvisorList } from './AdvisorList.js';
+import { CartBuilder } from './CartBuilder.js';
+import { takeRecipe } from '../../lib/advisorInbox.js';
 import { Receipts } from './Receipts.js';
 import { loadReceipts } from '../../data/receipts.js';
 
@@ -63,6 +64,15 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   const [intro, setIntro] = useState(() => !readLocal(INTRO_KEY, ''));
   const [prices, setPrices] = useState(false);
   const [advisor, setAdvisor] = useState(false);
+  // A recipe shared from the phone: "the advisor fills a cart" opens on it.
+  const [sharedRecipe, setSharedRecipe] = useState(null);
+  useEffect(() => {
+    if (!owner) return undefined;
+    const take = () => { const r = takeRecipe(); if (r) { setSharedRecipe(r); setAdvisor(true); } };
+    take();
+    window.addEventListener('recipe-shared', take);
+    return () => window.removeEventListener('recipe-shared', take);
+  }, [owner]);
   const [receipts, setReceipts] = useState([]);
   const closeIntro = () => { writeLocal(INTRO_KEY, '1'); setIntro(false); };
   useEffect(() => { if (owner && data.hid) loadReceipts(data.hid).then(setReceipts).catch(() => setReceipts([])); }, [data.hid, owner]);
@@ -145,8 +155,8 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         ${canListen() && html`<button type="button" class=${'icon-btn shop-mic' + (listening ? ' on' : '')} aria-label="להוסיף בקול" onClick=${voice}><${Icon} name="mic" size=${19} /></button>`}
         <button type="submit" class="btn" disabled=${busy || !text.trim()}>להוסיף</button>
       </form>
-      ${owner && html`<button type="button" class="card adv-cta" onClick=${() => { setAdvisor(true); track('shop_advisor_open'); }}><span class="adv-spark" aria-hidden="true"><${Icon} name="spark" size=${18} /></span><span><b>היועץ ממליץ: רשימה לשבוע</b><small class="muted">לפי מה שאתם קונים בדרך כלל ומספר הנפשות בבית. עורכים ומוסיפים בלחיצה.</small></span><span aria-hidden="true">‹</span></button>`}
-      ${owner && advisor && html`<${AdvisorList} items=${items} people=${data.people} onClose=${() => setAdvisor(false)} onAdd=${(list) => add(list, 'advisor').then(() => track('shop_advisor_add'))} />`}
+      ${owner && html`<button type="button" class="card adv-cta" onClick=${() => { setAdvisor(true); track('shop_advisor_open'); }}><span class="adv-spark" aria-hidden="true"><${Icon} name="spark" size=${18} /></span><span><b>היועץ מכין עגלה</b><small class="muted">לשבוע, לשבת, לחג או לאורחים: לפי מספר האנשים ומה שאתם קונים בדרך כלל.</small></span><span aria-hidden="true">‹</span></button>`}
+      ${owner && advisor && html`<${CartBuilder} hid=${data.hid} items=${items} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }} onAdded=${() => { shop.reload && shop.reload(); track('shop_advisor_add'); }} />`}
       ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} receipts=${receipts} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}
       ${groups.map((g) => html`<div class="shop-group" key=${g.aisle}>
