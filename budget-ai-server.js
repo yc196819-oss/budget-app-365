@@ -1216,6 +1216,43 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimit
   }
 });
 
+// A ready cart (week, Shabbat, a holiday, guests) made this home's own: the
+// advisor swaps the general names for what the home buys (its receipts and
+// lists), adds a few of its usual things that fit, and keeps the amounts for
+// the number of people. Only asked when the home has a buying history; the
+// answer is the same list the app shows (the app checks it).
+app.post('/api/ai/shop-cart', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  try {
+    const { cart, usual, onList, request } = req.body || {};
+    if (!cart || !Array.isArray(cart.items) || !cart.items.length) return res.status(400).json({ error: 'cart is required' });
+    const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
+    const base = {
+      title: clip(cart.title, 40), people: Math.max(1, Math.min(30, Number(cart.people) || 4)), kosher: clip(cart.kosher, 30),
+      items: cart.items.slice(0, 40).map((i) => ({ name: clip(i.name, 40), qty: Number(i.qty) || null, unit: clip(i.unit, 16), aisle: clip(i.aisle, 12), scale: i.scale !== false }))
+    };
+    const home = (Array.isArray(usual) ? usual : []).slice(0, 40).map((u) => ({ name: clip(u.name, 40), times: Number(u.times) || 0, qty: clip(u.qty, 20) }));
+    const prompt = `אתה מכין סל קניות למשפחה בישראל. קיבלת סל מוכן (base) ואת מה שהבית הזה קונה בדרך כלל (usual: שם, כמה פעמים קנו, כמות רגילה).
+התאם את הסל לבית הזה:
+- החלף שם כללי בשם שהבית קונה כשזה אותו מוצר (למשל "גבינה לבנה" -> "גבינה לבנה 5%" אם זה מה שקונים).
+- הוסף עד 6 מוצרים מ-usual שמתאימים לסוג הסל (${base.title}), ולא יותר.
+- אל תוסיף מה שכבר ב-onList, ואל תערבב בשר וחלב בארוחה שכתוב בה "חלבית" או "בשרית".
+- הכמויות (qty) לפי ${base.people} אנשים, כמספר, ביחידה ב-unit. scale:false למה שלא תלוי במספר האנשים.
+- aisle אחד מ: produce, bakery, dairy, meat, dry, frozen, drinks, clean, care, baby, other.
+${request ? 'בקשה מיוחדת של המשתמש: ' + clip(request, 200) + '\n' : ''}החזר JSON בלבד, בלי טקסט נוסף, באותו מבנה: {"title":"...","people":${base.people},"kosher":"...","items":[{"name":"...","qty":1,"unit":"...","aisle":"...","scale":true}]}`;
+    const text = JSON.stringify({ base, usual: home, onList: (Array.isArray(onList) ? onList : []).slice(0, 60).map((n) => clip(n, 40)) });
+    const ai = await generateWithFallback({ prompt, text, effort: 'low', maxTokens: 3000 });
+    const out = String(ai.output || '');
+    const from = out.indexOf('{');
+    const to = out.lastIndexOf('}');
+    if (from < 0 || to <= from) return res.status(502).json({ error: 'no list' });
+    const list = JSON.parse(out.slice(from, to + 1));
+    return res.json({ list });
+  } catch (err) {
+    console.error('shop-cart failed:', err.message);
+    return res.status(502).json({ error: 'היועץ לא הצליח להתאים את הסל כרגע.' });
+  }
+});
+
 // Called once a day by Supabase pg_cron (job "advisor-task-reminders").
 // Auth: X-Cron-Secret must equal app_secrets.cron_secret (service-role only table).
 app.post('/api/tasks/remind-due', async (req, res) => {

@@ -75,3 +75,30 @@ test('what is already on the list is not added again; the rest is added sized', 
     { name: 'נרות שבת', qty: '1 חבילה', aisle: 'other' }
   ]);
 });
+
+import { fromTemplate, personal, TEMPLATES } from '../public/app/src/domain/shopTemplates.js';
+
+test('ready carts are sized to the people; fixed things stay one package; dairy and meat are apart', () => {
+  assert.deepEqual(TEMPLATES.map((t) => t.key), ['week', 'shabbat', 'holiday', 'guests']);
+  const s = fromTemplate('shabbat', 6);
+  assert.equal(s.people, 6);
+  const at = (l, n) => l.items.find((i) => i.name === n);
+  assert.equal(qtyText(at(s, 'חלות'), 6, s.people), '4');
+  assert.equal(qtyText(at(s, 'יין לקידוש'), 6, s.people), '2 בקבוקים');
+  assert.equal(qtyText(at(s, 'נרות שבת'), 6, s.people), '1 חבילה');
+  assert.equal(qtyText(at(s, 'חלות'), 2, s.people), '1');
+  const dairy = fromTemplate('guests', 10, { meal: 'dairy' });
+  const meat = fromTemplate('guests', 10, { meal: 'meat' });
+  assert.equal(dairy.title, 'ארוחה חלבית לאורחים');
+  assert.ok(!dairy.items.some((i) => /בשר|עוף/.test(i.name)), 'no meat in a dairy meal');
+  assert.ok(!meat.items.some((i) => /גבינ|שמנת|חלב/.test(i.name)), 'no dairy in a meat meal');
+  assert.equal(qtyText(at(meat, 'בשר / עוף לצלייה'), 10, 10), '3.5 ק"ג');
+  assert.equal(fromTemplate('nope', 3), null);
+  assert.equal(fromTemplate('week', 0).people, 4, 'no number: four');
+});
+
+test('a cart is made personal only when the home has bought enough things more than once', () => {
+  assert.equal(personal([]), false);
+  assert.equal(personal([{ times: 2 }, { times: 3 }, { times: 1 }, { times: 5 }]), false);
+  assert.equal(personal([{ times: 2 }, { times: 3 }, { times: 2 }, { times: 5 }]), true);
+});

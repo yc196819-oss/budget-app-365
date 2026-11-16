@@ -9,21 +9,32 @@ import { addItems } from '../../data/shopping.js';
 import { money } from '../../domain/format.js';
 import { track } from '../../lib/telemetry.js';
 
-// The advisor's shopping list: the number of people typed in (the amounts
-// follow it), the products as tiles (several in a row on a computer, two on a
-// phone), a department at a time, and a checkout bar with what the cart costs
-// at the cheapest chain. A tile slid aside (or ✕) leaves the cart and can be
-// put back. Nothing is added to "קניות" until the button.
-export function ShopListCard({ list, hid, people: homePeople, onList = [] }) {
-  const [people, setPeople] = useState(list.people || homePeople || 4);
-  const [typed, setTyped] = useState(String(list.people || homePeople || 4));
+// What the advisor says while it fills the cart (the first time it shows).
+const STEPS = ['בודק מה אתם קונים בדרך כלל', 'מתאים לכמות האנשים', 'מסדר לפי מחלקות בסופר'];
+
+// The advisor's shopping list: filled before the person's eyes (one line at
+// a time), the number of people typed in (the amounts follow it), a simple
+// list by department, and at the bottom what the cart costs at the cheapest
+// chain. The prices of each line show only when a chain is opened. A line
+// taken out (✕) can be put back. Nothing is added to "קניות" until the button.
+export function ShopListCard({ list, hid, people: homePeople, onList = [], build = true, onAdded = null }) {
+  const start = list.people || homePeople || 4;
+  const [people, setPeople] = useState(start);
+  const [typed, setTyped] = useState(String(start));
   const inCart = list.items.filter((i) => !alreadyOn(i.name, onList));
   const [out, setOut] = useState(() => new Set());
-  const [aisle, setAisle] = useState('all');
   const [state, setState] = useState(null); // null | 'adding' | { added } | { error }
-  // The chains' prices for these products, read once; the cost is worked out
-  // again here on every change (no waiting).
-  const [prices, setPrices] = useState('loading'); // 'loading' | { catalog, pref, area } | 'none'
+  // Filling: the steps, then the lines one by one.
+  const [step, setStep] = useState(build ? 0 : STEPS.length);
+  useEffect(() => {
+    if (!build) return undefined;
+    const t = setInterval(() => setStep((s) => { if (s >= STEPS.length) { clearInterval(t); return s; } return s + 1; }), 650);
+    return () => clearInterval(t);
+  }, []);
+  const filling = step < STEPS.length;
+  // The chains' prices, read once; the cost is worked out here on every change.
+  const [prices, setPrices] = useState('loading');
+  const [open, setOpen] = useState(null); // the chain whose prices are shown
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -35,89 +46,68 @@ export function ShopListCard({ list, hid, people: homePeople, onList = [] }) {
 
   const checked = new Set(inCart.map((i) => i.name).filter((n) => !out.has(n)));
   const items = toItems(list, people, checked, onList);
-  const cost = useMemo(() => {
-    if (!prices || typeof prices !== 'object' || !items.length) return null;
+  const chains = useMemo(() => {
+    if (!prices || typeof prices !== 'object' || !items.length) return [];
     const lines = items.map((it, n) => ({ id: 'l' + n, name: it.name, qty: it.qty }));
     const cat = withoutChains(nearby(prices.catalog, !!prices.area, prices.area ? prices.area.stores : null), hiddenChains(prices.pref));
     const rows = basket(chooseAll(lines, cat, prices.pref || 'any'), (c) => count((lines.find((l) => l.id === c.id) || {}).qty, c.pick));
-    const best = rows.find((r) => !chainNote(r.chain)) || rows[0];
-    return best ? { name: best.name, total: best.total, found: items.length - best.missing } : null;
+    // Cheapest first, the ones open every day before the rest; three at most.
+    return [...rows.filter((r) => !chainNote(r.chain)), ...rows.filter((r) => chainNote(r.chain))].slice(0, 3)
+      .map((r) => ({ ...r, found: items.length - r.missing, byName: Object.fromEntries((r.lines || []).map((l) => [items[Number(String(l.id).slice(1))].name, l])) }));
   }, [prices, people, out.size]);
+  const best = chains[0] || null;
+  const shownChain = open && chains.find((c) => c.chain === open);
 
-  const type = (v) => {
-    setTyped(v);
-    const n = Math.round(Number(v));
-    if (n >= 1 && n <= 30) setPeople(n);
-  };
-  const aisles = AISLES.filter((a) => inCart.some((i) => i.aisle === a.key));
-  const shown = inCart.filter((i) => aisle === 'all' || i.aisle === aisle);
+  const type = (v) => { setTyped(v); const n = Math.round(Number(v)); if (n >= 1 && n <= 30) setPeople(n); };
+  const groups = AISLES.map((a) => ({ ...a, rows: inCart.filter((i) => i.aisle === a.key) })).filter((g) => g.rows.length);
   const take = (name) => { setOut((s) => new Set([...s, name])); track('advisor_list_out'); };
   const back = (name) => setOut((s) => { const n = new Set(s); n.delete(name); return n; });
   const add = async () => {
     setState('adding');
-    try { await addItems(hid, items); track('advisor_list_add'); setState({ added: items.length }); }
+    try { await addItems(hid, items); track('advisor_list_add'); setState({ added: items.length }); if (onAdded) onAdded(); }
     catch (_e) { setState({ error: 'לא נשמר. נסו שוב.' }); }
   };
   const have = list.items.filter((i) => alreadyOn(i.name, onList)).map((i) => i.name);
+  let n = 0;
 
-  return html`<div class="cart-card">
+  return html`<div class=${'cart-card' + (filling ? ' filling' : '')}>
     <div class="cart-head">
       <div class="cart-title"><b>${list.title}</b>${list.kosher && html`<span class="cart-tag">כשר: ${list.kosher}</span>`}</div>
       <label class="cart-people">ל-<input class="cart-num num" type="number" inputmode="numeric" min="1" max="30" value=${typed} aria-label="כמה אנשים"
-        onInput=${(e) => type(e.currentTarget.value)} onBlur=${() => setTyped(String(people))} /> ${people === 1 ? 'איש' : 'אנשים'}</label>
+        onInput=${(e) => type(e.currentTarget.value)} onBlur=${() => setTyped(String(people))} disabled=${filling} /> ${people === 1 ? 'איש' : 'אנשים'}</label>
     </div>
-    ${aisles.length > 1 && html`<div class="cart-chips" role="tablist">
-      <button type="button" role="tab" aria-selected=${String(aisle === 'all')} onClick=${() => setAisle('all')}>הכל <span class="num">${inCart.length}</span></button>
-      ${aisles.map((a) => html`<button type="button" role="tab" key=${a.key} aria-selected=${String(aisle === a.key)} onClick=${() => setAisle(a.key)}>${a.label}</button>`)}
-    </div>`}
-    <div class="cart-grid">
-      ${shown.map((it) => (out.has(it.name)
-        ? html`<button type="button" class="cart-tile gone" key=${it.name} onClick=${() => back(it.name)}><span class="cart-n">${it.name}</span><span class="cart-back">להחזיר</span></button>`
-        : html`<${Tile} key=${it.name} name=${it.name} qty=${qtyText(it, people, list.people)} changed=${it.scale && people !== list.people} onOut=${() => take(it.name)} />`))}
-    </div>
-    ${have.length > 0 && html`<span class="cart-have">כבר ברשימה שלכם: ${have.join(', ')}. לא יתווספו שוב.</span>`}
-    ${state && state.added != null
+    ${filling
+      ? html`<div class="cart-fill" role="status" aria-live="polite">
+          <span class="cart-fill-orb" aria-hidden="true"><${Icon} name="spark" size=${18} /></span>
+          <span class="cart-fill-t"><b>היועץ מכין לכם את העגלה…</b>${STEPS.map((s, i) => html`<small key=${i} class=${i < step ? 'done' : i === step ? 'now' : ''}>${i < step ? '✓ ' : ''}${s}</small>`)}</span>
+        </div>`
+      : html`<div class="cart-list">
+          ${groups.map((g) => html`<div class="cart-grp" key=${g.key}><small>${g.label}</small>
+            ${g.rows.map((it) => { const i = n++; const gone = out.has(it.name); const line = shownChain && shownChain.byName[it.name];
+              return html`<div class=${'cl-row' + (gone ? ' gone' : '')} key=${it.name} style=${'--i:' + i}>
+                <span class="cart-n">${it.name}</span>
+                ${!gone && html`<span class=${'cart-q num' + (it.scale && people !== start ? ' ch' : '')} key=${people}>${qtyText(it, people, list.people)}</span>`}
+                ${!gone && shownChain && html`<span class="cart-p num">${line && line.product ? money(line.cost != null ? line.cost : line.price) : '—'}</span>`}
+                ${gone
+                  ? html`<button type="button" class="cart-back" onClick=${() => back(it.name)}>להחזיר</button>`
+                  : html`<button type="button" class="cart-x" aria-label=${'להוציא ' + it.name} onClick=${() => take(it.name)}><${Icon} name="x" size=${14} /></button>`}
+              </div>`; })}
+          </div>`)}
+        </div>`}
+    ${!filling && have.length > 0 && html`<span class="cart-have">כבר ברשימה שלכם: ${have.join(', ')}. לא יתווספו שוב.</span>`}
+    ${!filling && shownChain && html`<div class="cart-chains" role="tablist" aria-label="מחירים לפי רשת">${chains.map((c) => html`<button type="button" role="tab" key=${c.chain} aria-selected=${String(c.chain === open)} onClick=${() => setOpen(c.chain)}>
+      <b>${c.name}</b><span class="num">${money(c.total)}</span>${c.found < items.length ? html`<small>${c.found} מתוך ${items.length}</small>` : ''}</button>`)}</div>`}
+    ${!filling && (state && state.added != null
       ? html`<div class="cart-done" role="status"><${Icon} name="check" size=${18} /> נוספו ${state.added === 1 ? 'פריט אחד' : state.added + ' פריטים'} ל"קניות"</div>`
       : html`<div class="cart-pay">
-        <span class="cart-sum" role="status" aria-live="polite">
+        <button type="button" class="cart-sum" disabled=${!best} aria-expanded=${String(!!shownChain)} onClick=${() => { setOpen(shownChain ? null : best.chain); if (!shownChain) track('advisor_list_prices'); }}>
           ${prices === 'loading' ? html`<small>בודק מחירים ברשתות…</small>`
-            : cost ? html`<b class="num">≈ ${money(cost.total)}</b><small>ב${cost.name} · ${cost.found === items.length ? items.length + ' מוצרים' : cost.found + ' מתוך ' + items.length + ' נמצאו'}</small>`
+            : best ? html`<small>הכי זול: ${best.name}</small><b class="num">≈ ${money(best.total)}</b><small class="cart-open">${shownChain ? 'להסתיר מחירים' : 'לראות מחירים ›'}</small>`
             : html`<b class="num">${items.length} מוצרים</b><small>${items.length ? 'לא מצאנו מחירים' : 'העגלה ריקה'}</small>`}
-        </span>
-        <button type="button" class="cart-add" disabled=${!items.length || state === 'adding'} onClick=${add}>${state === 'adding' ? 'מוסיף…' : html`להוסיף ל"קניות" <${Icon} name="plus" size=${16} />`}</button>
-      </div>`}
+        </button>
+        <button type="button" class="cart-add" disabled=${!items.length || state === 'adding'} onClick=${add}>${state === 'adding' ? 'מוסיף…' : html`להוסיף ל"קניות" (${items.length})`}</button>
+      </div>`)}
     ${state && state.error && html`<span class="adv-err" role="alert">${state.error}</span>`}
-    <small class="cart-hint">מחליקים מוצר הצידה (או ✕) כדי להוציא אותו. רוצים לשנות? כתבו ליועץ, למשל "בלי בשר"</small>
-  </div>`;
-}
-
-// One product: slid aside (more than a third of its width) it leaves the
-// cart; the ✕ does the same for a mouse or a keyboard.
-function Tile({ name, qty, changed, onOut }) {
-  const [dx, setDx] = useState(0);
-  const start = useRef(null);
-  const down = (e) => {
-    if (e.target.closest('button')) return;
-    start.current = { x: e.clientX, y: e.clientY, w: e.currentTarget.offsetWidth };
-    // Followed past the tile's edge (a tile is narrow).
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_e) { /* not supported */ }
-  };
-  const move = (e) => {
-    if (!start.current) return;
-    const d = e.clientX - start.current.x;
-    if (Math.abs(e.clientY - start.current.y) > 24 && Math.abs(d) < 12) { start.current = null; setDx(0); return; }
-    setDx(d);
-  };
-  const up = () => {
-    if (!start.current) return;
-    const far = Math.abs(dx) > start.current.w / 3;
-    start.current = null;
-    if (far) onOut(); else setDx(0);
-  };
-  return html`<div class="cart-tile" style=${dx ? 'transform:translateX(' + dx + 'px) rotate(' + (dx / 40) + 'deg);opacity:' + Math.max(0.2, 1 - Math.abs(dx) / 220) : ''}
-    onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}>
-    <span class="cart-n">${name}</span>
-    ${qty ? html`<span class=${'cart-q num' + (changed ? ' ch' : '')} key=${qty}>${qty}</span>` : html`<span class="cart-q"></span>`}
-    <button type="button" class="cart-x" aria-label=${'להוציא ' + name} onClick=${onOut}><${Icon} name="x" size=${14} /></button>
+    ${!filling && html`<small class="cart-hint">רוצים לשנות? כתבו ליועץ, למשל "בלי בשר" או "תוסיף סלטים"</small>`}
   </div>`;
 }

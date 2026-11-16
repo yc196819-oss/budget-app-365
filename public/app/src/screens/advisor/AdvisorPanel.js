@@ -172,7 +172,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       const reply = parseReply(raw);
       const finalText = reply.text || 'לא התקבלה תשובה. נסו לנסח אחרת.';
       answered = reply.text || null;
-      setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me, ...(list ? { list } : {}) } : m)) });
+      setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me, ...(list ? { list, fresh: true } : {}) } : m)) });
       setSuggestions(reply.suggestions);
       // The full reply is saved, with the follow-ups, as the current app does.
       await addMessage({ conversationId: c.id, hid, userId: me, role: 'ai', text: raw || finalText });
@@ -332,7 +332,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
             : m.role === 'user' && String(m.text || '').startsWith(PIC_MARK)
               ? html`${m.thumb && html`<img class="adv-thumb" src=${m.thumb} alt="התמונה שצורפה" />`}<span class="adv-pic-line"><${Icon} name="image" size=${15} />${PIC_MARK}${m.thumb ? '' : ' (לא נשמרת)'}</span><span>${String(m.text).slice(PIC_MARK.length + 3)}</span>`
               : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
-          ${m.list && hid && html`<${ShopListCard} list=${m.list} hid=${hid} people=${data.people} onList=${(shop && shop.onList) || []} />`}
+          ${m.list && hid && html`<${ShopListCard} list=${m.list} hid=${hid} people=${data.people} onList=${(shop && shop.onList) || []} build=${!!m.fresh} />`}
           ${m.howto && html`<div class="adv-howto">
             <small class="faint">תשובה מהירה מהמדריך של האפליקציה</small>
             <div class="adv-howto-actions">

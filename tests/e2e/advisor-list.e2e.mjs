@@ -53,10 +53,14 @@ async function open({ email = OWNER, catalog = {} } = {}) {
   return { page, db, asked, errors };
 }
 
-test('the advisor writes a list as a cart: sized to the people, built on what this home buys, added to "קניות" on one tap', async () => {
+test('the advisor writes a list as a cart: filled before your eyes, sized to the people, built on what this home buys, added on one tap', async () => {
   const { page, db, asked, errors } = await open();
   const card = page.locator('.cart-card');
   await card.waitFor();
+  // The advisor fills the cart first, then the list shows.
+  await card.locator('.cart-fill').waitFor();
+  await card.locator('.cl-row').first().waitFor();
+  assert.equal(await card.locator('.cart-fill').count(), 0);
   // What it was built on: the purchases (receipts too), the list, the people.
   const shop = asked[0].summary.shopping;
   assert.deepEqual(shop.usual[0], { name: 'חלות', times: 2, qty: '2', lastPrice: 12.9 });
@@ -65,8 +69,10 @@ test('the advisor writes a list as a cart: sized to the people, built on what th
   assert.match(await card.locator('.cart-title').textContent(), /רשימה לשבת.*כשר: מהדרין/);
   assert.doesNotMatch(await page.locator('.adv-msg.ai').last().textContent(), /@@|"items"/);
   // Eggs are on the list already: not in the cart, said once.
-  assert.equal(await card.locator('.cart-tile', { hasText: 'ביצים' }).count(), 0);
+  assert.equal(await card.locator('.cl-row', { hasText: 'ביצים' }).count(), 0);
   assert.match(await card.locator('.cart-have').textContent(), /ביצים/);
+  // No price next to a line until a chain is opened.
+  assert.equal(await card.locator('.cart-p').count(), 0);
   // Six people, then three (typed in): the amounts follow; the candles stay one package.
   const q = async () => card.locator('.cart-q').allTextContents();
   assert.deepEqual(await q(), ['1.5 ק"ג', '4', '2 בקבוקים', '1 חבילה']);
@@ -76,28 +82,17 @@ test('the advisor writes a list as a cart: sized to the people, built on what th
   assert.deepEqual(await q(), ['750 גרם', '2', '1 בקבוק', '1 חבילה']);
   await ppl.fill('12');
   assert.deepEqual(await q(), ['3 ק"ג', '8', '4 בקבוקים', '1 חבילה']);
-  // Nonsense is not taken; leaving the box puts back the last good number.
+  // Nonsense is not taken.
   await ppl.fill('0');
   assert.deepEqual(await q(), ['3 ק"ג', '8', '4 בקבוקים', '1 חבילה']);
   await ppl.fill('3');
-  // A department at a time.
-  await card.locator('.cart-chips button', { hasText: 'מאפים' }).click();
-  assert.deepEqual(await card.locator('.cart-n').allTextContents(), ['חלות']);
-  await card.locator('.cart-chips button', { hasText: 'הכל' }).click();
-  // Out of the cart (✕), back, and out again by sliding it aside.
+  // Out of the cart, back, and out again.
   await card.locator('button[aria-label="להוציא נרות שבת"]').click();
-  assert.match(await card.locator('.cart-tile.gone').textContent(), /נרות שבת.*להחזיר/);
-  await card.locator('.cart-tile.gone').click();
-  assert.equal(await card.locator('.cart-tile.gone').count(), 0);
-  const tile = card.locator('.cart-tile', { hasText: 'נרות שבת' });
-  const box = await tile.boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height - 12);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 - 40, box.y + box.height - 12, { steps: 4 });
-  await page.mouse.move(box.x - box.width, box.y + box.height - 12, { steps: 6 });
-  await page.mouse.up();
-  await card.locator('.cart-tile.gone').waitFor();
-  assert.match(await card.locator('.cart-pay').textContent(), /3 מוצרים/);
+  assert.match(await card.locator('.cl-row.gone').textContent(), /נרות שבת.*להחזיר/);
+  await card.locator('.cl-row.gone .cart-back').click();
+  assert.equal(await card.locator('.cl-row.gone').count(), 0);
+  await card.locator('button[aria-label="להוציא נרות שבת"]').click();
+  assert.match(await card.locator('.cart-add').textContent(), /\(3\)/);
   await card.locator('.cart-add').click();
   await card.locator('.cart-done').waitFor();
   const added = db.tables.shopping_items.filter((i) => !['s1', 's2', 's3'].includes(i.id)).map((i) => [i.name, i.qty, i.aisle]);
@@ -107,28 +102,34 @@ test('the advisor writes a list as a cart: sized to the people, built on what th
   await page.close();
 });
 
-test('the cart says what it costs at the cheapest chain, and follows the people and what is taken out', async () => {
+test('the cheapest chain at the bottom; opening it shows each line\'s price, and the other chains', async () => {
   // (Vegetables are sold by the kilo; the rest by the unit.)
   const offer = (name, a, b, unit = 'יחידות') => [{ barcode: name, name, names: name, qty: 1, unit, offers: [{ chain: 'x', chain_name: 'רשת א', price: a }, { chain: 'y', chain_name: 'רשת ב', price: b }], kosher: {} }];
   const cat = { 'עגבני': offer('עגבניות', 6, 7, 'ק"ג'), 'חלה': offer('חלה', 10, 9), 'יין': offer('יין לקידוש', 30, 32), 'נרות': offer('נרות שבת', 12, 12) };
   const { page } = await open({ catalog: cat });
   const card = page.locator('.cart-card');
-  await card.waitFor();
-  await page.waitForFunction(() => /≈/.test(document.querySelector('.cart-sum').textContent));
-  const ring = async () => (await card.locator('.cart-sum').textContent()).replace(/\s+/g, ' ');
-  const before = await ring();
-  assert.match(before, /₪\s?\d/);
-  assert.match(before, /4 מוצרים/);
+  await card.locator('.cl-row').first().waitFor();
+  await page.waitForFunction(() => /הכי זול/.test(document.querySelector('.cart-sum').textContent));
+  const sum = async () => (await card.locator('.cart-sum').textContent()).replace(/\s+/g, ' ');
+  const before = await sum();
+  assert.match(before, /הכי זול: רשת א.*≈ ₪\s?\d/);
+  assert.equal(await card.locator('.cart-p').count(), 0);
+  await card.locator('.cart-sum').click();
+  assert.equal(await card.locator('.cart-p').count(), 4, 'a price for each line');
+  assert.equal(await card.locator('.cart-chains button').count(), 2);
+  assert.equal(await card.locator('.cart-chains button[aria-selected="true"]').textContent().then((t) => /רשת א/.test(t)), true);
+  await card.locator('.cart-chains button', { hasText: 'רשת ב' }).click();
+  assert.equal(await card.locator('.cart-chains button[aria-selected="true"]').textContent().then((t) => /רשת ב/.test(t)), true);
+  // Taking a line out changes the cost.
   await card.locator('button[aria-label="להוציא יין לקידוש"]').click();
   await page.waitForFunction((b) => document.querySelector('.cart-sum').textContent.replace(/\s+/g, ' ') !== b, before);
-  assert.match(await ring(), /3 מוצרים/);
   await page.close();
 });
 
 test('with no prices found the cart says so, and still adds', async () => {
   const { page } = await open();
   const card = page.locator('.cart-card');
-  await card.waitFor();
+  await card.locator('.cl-row').first().waitFor();
   await page.waitForFunction(() => !/בודק מחירים/.test(document.querySelector('.cart-sum').textContent));
   assert.match(await card.locator('.cart-sum').textContent(), /לא מצאנו מחירים/);
   assert.equal(await card.locator('.cart-add').isDisabled(), false);

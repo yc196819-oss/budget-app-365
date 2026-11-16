@@ -75,3 +75,11 @@ export function useShopping(hid) {
   const patch = (fn) => setState((s) => ({ ...s, items: fn(s.items) }));
   return { ...state, reload, patch };
 }
+
+// A ready cart made this home's own by the advisor (its usual buying), as
+// the advisor's list JSON; the app checks it (parseList) before showing it.
+export async function personalCart(cart, usual, onList, request = '') {
+  const { api } = await import('../lib/api.js');
+  const j = await api('/api/ai/shop-cart', { method: 'POST', body: { cart, usual, onList, request } });
+  return j && j.list ? j.list : null;
+}

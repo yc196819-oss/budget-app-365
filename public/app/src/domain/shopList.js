@@ -49,7 +49,7 @@ export function parseList(raw) {
 const KG = /^(ק"ג|קג|קילו|ק״ג)$/;
 const GRAM = /^(גרם|גר'?)$/;
 const LITER = /^(ליטר|ל')$/;
-const ONE = { 'בקבוקים': 'בקבוק', 'חבילות': 'חבילה', 'יחידות': 'יחידה', 'שישיות': 'שישייה', 'קופסאות': 'קופסה', 'שקיות': 'שקית', 'מגשים': 'מגש', 'קרטונים': 'קרטון' };
+const ONE = { 'גביעים': 'גביע', 'בקבוקים': 'בקבוק', 'חבילות': 'חבילה', 'יחידות': 'יחידה', 'שישיות': 'שישייה', 'קופסאות': 'קופסה', 'שקיות': 'שקית', 'מגשים': 'מגש', 'קרטונים': 'קרטון' };
 const MANY = Object.fromEntries(Object.entries(ONE).map(([m, o]) => [o, m]));
 const fmt = (n) => String(Math.round(n * 10) / 10);
 export function qtyText(item, people, basePeople) {

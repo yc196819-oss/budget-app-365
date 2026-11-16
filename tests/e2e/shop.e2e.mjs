@@ -390,7 +390,7 @@ test('prices for everyone else: a "coming soon" preview with sample products, an
   assert.deepEqual(errors, []);
 });
 
-test('the advisor\'s week (the owner first): what the home buys again and the basics for the people at home, edited, then on the list', async () => {
+test('the advisor fills a cart (the owner first): a ready one for Shabbat, sized to the people, filled before your eyes, then on the list', async () => {
   const { page, db, errors } = await open(390, (d) => {
     d.tables.households = [{ id: d.hid, shop_area: null, people: 4 }];
     d.tables.shopping_items = [
@@ -398,28 +398,58 @@ test('the advisor\'s week (the owner first): what the home buys again and the ba
       { id: 's1', household_id: d.hid, name: 'עגבניות', qty: null, aisle: 'produce', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }
     ];
   }, OWNER);
+  let asked = 0;
+  await page.route('**/api/ai/shop-cart', (r) => { asked++; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"list":null}' }); });
   await page.click('.adv-cta');
-  await page.waitForSelector('.adv-rows li');
-  const first = await page.locator('.adv-rows li').first().textContent();
-  assert.match(first, /במבה.*קונים בדרך כלל/);
-  assert.equal(await page.locator('.adv-rows li', { hasText: 'עגבניות' }).count(), 0, 'already on the list');
-  assert.equal(await page.locator('.adv-rows li', { hasText: 'לחם' }).locator('.adv-qty').inputValue(), '×2');
-  // Six at home: bigger amounts.
-  await page.click('.adv-people button[aria-label="עוד אחד"]');
-  await page.click('.adv-people button[aria-label="עוד אחד"]');
-  assert.equal(await page.locator('.adv-rows li', { hasText: 'לחם' }).locator('.adv-qty').inputValue(), '×3');
-  // Not the paper this week; more milk.
-  await page.locator('.adv-rows li', { hasText: 'נייר טואלט' }).locator('input[type="checkbox"]').uncheck();
-  await page.locator('.adv-rows li', { hasText: 'חלב 3%' }).locator('.adv-qty').fill('×8');
-  const n = await page.locator('.adv-rows input[type="checkbox"]:checked').count();
-  await page.click(`.adv-list button:has-text("להוסיף לרשימה (${n})")`);
-  for (let i = 0; i < 50 && db.tables.shopping_items.length < 2 + n; i++) await page.waitForTimeout(100);
+  const build = page.locator('.cart-builder button:has-text("להכין את העגלה")');
+  assert.equal(await build.isDisabled(), true, 'what for, first');
+  // Guests: dairy or meat is asked.
+  await page.click('.cb-kind:has-text("ארוחה לאורחים")');
+  assert.equal(await build.isDisabled(), true);
+  await page.click('.cb-meal button:has-text("חלבית")');
+  assert.equal(await build.isDisabled(), false);
+  await page.click('.cb-kind:has-text("לשבת")');
+  assert.equal(await page.locator('.cb-meal').count(), 0);
+  assert.equal(await page.locator('.cart-builder input[aria-label="כמה אנשים"]').inputValue(), '4', 'the people at home');
+  await page.locator('.cart-builder input[aria-label="כמה אנשים"]').fill('6');
+  await build.click();
+  await page.locator('.cart-fill').waitFor();
+  await page.locator('.cart-card .cl-row').first().waitFor({ timeout: 10000 });
+  assert.equal(asked, 0, 'no buying history yet: the ready cart, no AI');
+  assert.match(await page.locator('.cart-title').textContent(), /סל לשבת/);
+  assert.equal(await page.locator('.cl-row', { hasText: 'חלות' }).locator('.cart-q').textContent(), '4');
+  assert.equal(await page.locator('.cl-row', { hasText: 'נרות שבת' }).locator('.cart-q').textContent(), '1 חבילה');
+  await page.click('button[aria-label="להוציא נרות שבת"]');
+  const n = Number((await page.locator('.cart-add').textContent()).match(/\((\d+)\)/)[1]);
+  await page.click('.cart-add');
+  await page.locator('.cart-done').waitFor();
   const added = db.tables.shopping_items.slice(2);
   assert.equal(added.length, n);
-  assert.ok(!added.some((x) => x.name === 'נייר טואלט'));
-  assert.equal(added.find((x) => x.name === 'חלב 3%').qty, '×8');
-  assert.equal(added.find((x) => x.name === 'חזה עוף').aisle, 'meat');
+  assert.ok(!added.some((x) => x.name === 'נרות שבת'));
+  assert.equal(added.find((x) => x.name === 'חלות').qty, '4');
   assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a home that has bought enough before: the advisor makes the ready cart its own', async () => {
+  const bought = (id, name, day) => ({ id, household_id: 'h1', name, qty: null, aisle: 'dairy', done: true, created_at: day, cleared_at: day });
+  const { page } = await open(390, (d) => {
+    d.tables.households = [{ id: d.hid, shop_area: null, people: 3 }];
+    d.tables.shopping_items = ['גבינה לבנה 5%', 'במבה', 'קפה טורקי', 'פיתות'].flatMap((n, i) => [bought('a' + i, n, '2026-11-01T10:00:00Z'), bought('b' + i, n, '2026-11-08T10:00:00Z')]);
+  }, OWNER);
+  const sent = [];
+  await page.route('**/api/ai/shop-cart', (r) => {
+    sent.push(JSON.parse(r.request().postData()));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ list: { title: 'סל לשבוע', people: 3, items: [{ name: 'גבינה לבנה 5%', qty: 3, unit: 'גביעים', aisle: 'dairy' }, { name: 'פיתות', qty: 2, unit: 'חבילות', aisle: 'bakery' }] } }) });
+  });
+  await page.click('.adv-cta');
+  await page.click('.cb-kind:has-text("לשבוע")');
+  await page.click('.cart-builder button:has-text("להכין את העגלה")');
+  await page.locator('.cart-card .cl-row').first().waitFor({ timeout: 10000 });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].cart.title, 'סל לשבוע');
+  assert.ok(sent[0].usual.some((u) => u.name === 'קפה טורקי' && u.times === 2));
+  assert.deepEqual(await page.locator('.cart-card .cart-n').allTextContents(), ['פיתות', 'גבינה לבנה 5%']);
   await page.close();
 });
 
