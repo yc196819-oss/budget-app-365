@@ -2210,6 +2210,46 @@ async function runFreeLoad() {
   // Kept, so how each chain did can be read the next morning (no table: skipped).
   await supabaseAdmin.from('price_load_runs').insert({ started_at: seedJob.startedAt, ended_at: seedJob.endedAt, added: seedJob.added, error: seedJob.error, chains: seedJob.chainsDone }).then(() => {}, () => {});
 }
+// In the morning (pg_cron job "prices-morning"): the chains last night's load
+// could not read get one more try. Osher Ad had no files yet at 5:15 in the
+// morning two nights in a row, and had them by 7:15. The night's record says
+// how it went (retriedMorning), for the morning check.
+async function runMorningRetry() {
+  if (seedJob.running) return { skipped: 'running' };
+  const { data: run } = await supabaseAdmin.from('price_load_runs').select('id,started_at,chains').order('started_at', { ascending: false }).limit(1).maybeSingle();
+  if (!run || Date.now() - Date.parse(run.started_at) > 12 * 3600000) return { skipped: 'no run' };
+  const chains = Array.isArray(run.chains) ? run.chains : [];
+  const keys = prices.retryLater(chains);
+  if (!keys.length) return { retried: [] };
+  seedJob.running = true;
+  const out = [];
+  try {
+    const { data: storeNames } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,store_id,name').order('chain').order('store_id'));
+    const onlineMap = online.onlineStores(storeNames || []);
+    for (const key of keys) {
+      const [r] = await pricefiles.allChains(priceFetch, { only: [key], avoid: onlineMap });
+      const at = chains.findIndex((c) => c.key === key);
+      let entry;
+      if (r.error || !r.rows.length) {
+        entry = { ...chains[at], retriedMorning: true, error: String(r.error || 'no rows').replace(/ \(.*$/, '') + ' (גם בבוקר)' };
+      } else {
+        let error = null;
+        await saveCatalog(r.rows).catch((e) => { error = 'save: ' + String(e.message || e).slice(0, 60); });
+        const deals = error ? null : await savePromos(r.key, r.storeId, r.rows).catch(() => null);
+        entry = { key: r.key, name: r.name, count: r.count, error, deals, retried: true, retriedMorning: true };
+      }
+      if (at >= 0) chains[at] = entry;
+      out.push({ key, count: entry.count || 0, error: entry.error || null });
+      console.log('prices (morning):', key, entry.count || 0, entry.error || 'ok');
+    }
+    await supabaseAdmin.from('price_load_runs').update({ chains }).eq('id', run.id).then(() => {}, () => {});
+  } catch (err) {
+    console.error('morning price retry failed:', err.message);
+  } finally {
+    seedJob.running = false;
+  }
+  return { retried: out };
+}
 // ── prices by the family's area ──
 const area = require('./server/area');
 // Every chain's list of branches, kept for finding the branch near a family.
@@ -2672,6 +2712,22 @@ app.post('/api/cron/prices', async (req, res) => {
     const a = Buffer.from(given), b = Buffer.from(expected);
     if (!expected || a.length !== b.length || !require('crypto').timingSafeEqual(a, b)) return res.status(401).json({ error: 'unauthorized' });
     if (!seedJob.running) runFreeLoad();
+    return res.json({ started: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+// Every morning (pg_cron job "prices-morning"): one more try for the chains
+// the night could not read.
+app.post('/api/cron/prices-morning', async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const given = String(req.headers['x-cron-secret'] || '');
+    const { data: sec } = await supabaseAdmin.from('app_secrets').select('value').eq('key', 'cron_secret').maybeSingle();
+    const expected = sec && sec.value ? String(sec.value) : '';
+    const a = Buffer.from(given), b = Buffer.from(expected);
+    if (!expected || a.length !== b.length || !require('crypto').timingSafeEqual(a, b)) return res.status(401).json({ error: 'unauthorized' });
+    runMorningRetry().catch((e) => console.error('morning price retry failed:', e.message));
     return res.json({ started: true });
   } catch (err) {
     return res.status(500).json({ error: 'failed' });
