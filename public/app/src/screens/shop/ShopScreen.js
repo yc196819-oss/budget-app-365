@@ -14,6 +14,8 @@ import { go } from '../../lib/go.js';
 import { PricePanel, PriceTeaser } from './PricePanel.js';
 import { CartBuilder } from './CartBuilder.js';
 import { StoreMode } from './StoreMode.js';
+import { FinishSheet, TripsCard, TripsSheet } from './Trips.js';
+import { loadTrips } from '../../data/shopTrips.js';
 import { takeRecipe } from '../../lib/advisorInbox.js';
 import { Receipts } from './Receipts.js';
 import { loadReceipts } from '../../data/receipts.js';
@@ -67,6 +69,11 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   const [advisor, setAdvisor] = useState(false);
   // In the store: the list on the whole screen (the owner first).
   const [store, setStore] = useState(false);
+  // Shopping trips: "סיימתי לקנות" saves one (the owner first), and the history.
+  const [trips, setTrips] = useState([]);
+  const [finishing, setFinishing] = useState(false);
+  const [history, setHistory] = useState(null); // null: closed; '' the list; an id: that trip
+  useEffect(() => { if (owner && data.hid) loadTrips(data.hid).then(setTrips).catch(() => setTrips([])); }, [data.hid, owner]);
   // A recipe shared from the phone: "the advisor fills a cart" opens on it.
   const [sharedRecipe, setSharedRecipe] = useState(null);
   useEffect(() => {
@@ -160,7 +167,12 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         <button type="submit" class="btn" disabled=${busy || !text.trim()}>להוסיף</button>
       </form>
       ${owner && html`<button type="button" class="card adv-cta" onClick=${() => { setAdvisor(true); track('shop_advisor_open'); }}><span class="adv-spark" aria-hidden="true"><${Icon} name="spark" size=${18} /></span><span><b>היועץ מכין עגלה</b><small class="muted">לשבוע, לשבת, לחג או לאורחים: לפי מספר האנשים ומה שאתם קונים בדרך כלל.</small></span><span aria-hidden="true">‹</span></button>`}
-      ${owner && store && html`<${StoreMode} items=${items} onToggle=${toggle} onFinish=${finish} onClose=${() => setStore(false)} />`}
+      ${owner && store && html`<${StoreMode} items=${items} onToggle=${toggle} onFinish=${() => setFinishing(true)} onClose=${() => setStore(false)} />`}
+      ${owner && finishing && html`<${FinishSheet} data=${data} items=${items} onClose=${() => setFinishing(false)}
+        onDone=${(trip, withReceipt) => { setFinishing(false); setTrips((t) => [trip, ...t]); shop.reload(); if (withReceipt) setHistory(trip.id); }} />`}
+      ${owner && history !== null && html`<${TripsSheet} data=${data} trips=${trips} items=${items} start=${history || null} onClose=${() => setHistory(null)}
+        onChanged=${(t) => setTrips((all) => all.map((x) => (x.id === t.id ? { ...x, ...t } : x)))}
+        onRemoved=${(ids) => shop.patch((all) => all.filter((x) => !ids.includes(x.id)))} />`}
       ${owner && advisor && html`<${CartBuilder} hid=${data.hid} items=${items} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }} onAdded=${() => { shop.reload && shop.reload(); track('shop_advisor_add'); }} />`}
       ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} receipts=${receipts} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}
@@ -175,7 +187,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
           </div>`)}
         </div>
       </div>`)}
-      ${bought > 0 && html`<button type="button" class="btn shop-finish" onClick=${finish}>סיימתי לקנות (${bought} נקנו)</button>`}
+      ${bought > 0 && html`<button type="button" class="btn shop-finish" onClick=${owner ? () => setFinishing(true) : finish}>סיימתי לקנות (${bought} נקנו)</button>`}
       <div class="shop-print" aria-hidden="true">
         <h1>רשימת קניות</h1>
         <p>${new Date().toLocaleDateString('he-IL')}${fb ? ' · נשאר לסופר החודש: ' + money(Math.max(0, fb.left)) : ''}</p>
@@ -195,6 +207,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         <span class="muted" style="font-size:13px">${fb.left < 0 ? 'עברתם את התקציב ל' + fb.name + ' ב-' + money(-fb.left) : 'מתוך ' + money(fb.budget) + ' ל' + fb.name + ' · הוצאתם ' + money(fb.spent)}</span>
         ${fb.left > 0 && html`<span class="shop-week">כדי לעמוד בתקציב: עד <b class="num">${money(perWeek(fb.left))}</b> לשבוע עד סוף החודש</span>`}
       </div>`}
+      ${owner && html`<${TripsCard} trips=${trips} onOpen=${() => { setHistory(''); track('shop_trips_open'); }} />`}
       ${owner && html`<${Receipts} hid=${data.hid} receipts=${receipts}
         onSaved=${(out) => { if (out.saved) setReceipts((r) => [out.saved, ...r]); if (out.history.length) shop.patch((all) => [...all, ...out.history.filter((h) => !all.some((a) => a.id === h.id))]); }}
         onAddToList=${(list) => add(list, 'receipt')} />`}
