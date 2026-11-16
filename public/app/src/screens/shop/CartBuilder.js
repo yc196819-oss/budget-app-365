@@ -2,6 +2,7 @@ import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
+import { CartDraw } from '../../components/CartDraw.js';
 import { TEMPLATES, fromTemplate, personal } from '../../domain/shopTemplates.js';
 import { shopContext, parseList, LIST_MARK } from '../../domain/shopList.js';
 import { personalCart } from '../../data/shopping.js';
@@ -67,7 +68,7 @@ export function CartBuilder({ hid, items, receipts = [], people: homePeople, onC
         <label class="cart-people cb-people">כמה אנשים? <input class="cart-num num" type="number" inputmode="numeric" min="1" max="30" value=${typed} aria-label="כמה אנשים" onInput=${(e) => setTyped(e.currentTarget.value)} /></label>
         <button type="button" class="btn" disabled=${!ready} onClick=${build}><${Icon} name="spark" size=${16} /> להכין את העגלה</button>`}
       ${filling && html`<div class="cart-fill" role="status" aria-live="polite">
-        <span class="cart-fill-orb" aria-hidden="true"><${Icon} name="spark" size=${18} /></span>
+        <${CartDraw} />
         <span class="cart-fill-t"><b>היועץ מכין לכם את העגלה…</b>${STEPS.map((s, i) => html`<small key=${i} class=${i < step ? 'done' : i === step ? 'now' : ''}>${i < step ? '✓ ' : ''}${s}</small>`)}</span>
       </div>`}
       ${!filling && list && html`<${ShopListCard} list=${list} hid=${hid} people=${people} onList=${(ctx && ctx.onList) || []} build=${false} onAdded=${onAdded} />

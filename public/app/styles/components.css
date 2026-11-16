@@ -1908,10 +1908,23 @@ body.chat-open { overflow: hidden; }
 .cart-card .cart-num::-webkit-outer-spin-button, .cart-card .cart-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .cart-builder .cart-num:focus, .cart-card .cart-num:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* the advisor filling the cart */
-.cart-fill { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border-radius: 18px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.cart-fill-orb { width: 36px; height: 36px; flex: none; border-radius: 50%; display: grid; place-items: center; color: var(--accent-ink);
-  background: conic-gradient(from 0deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #fff), var(--accent)); animation: cart-spin 1.4s linear infinite; }
-@keyframes cart-spin { to { transform: rotate(360deg); } }
+.cart-fill { display: flex; align-items: center; gap: 16px; padding: 14px; border-radius: 18px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+/* the cart drawn while the advisor fills it */
+.cd { width: 96px; height: 68px; flex: none; overflow: visible; }
+.cd-line { fill: none; stroke: var(--accent); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 260; stroke-dashoffset: 260; animation: cd-draw 3.2s ease-in-out infinite; }
+.cd-handle { animation-delay: 0s; }
+.cd-body { animation-delay: .15s; }
+.cd-rail { animation-delay: .45s; opacity: .6; }
+.cd-wheel { animation-delay: .6s; }
+.cd-wheel.w2 { animation-delay: .7s; }
+@keyframes cd-draw { 0% { stroke-dashoffset: 260; opacity: 1; } 35% { stroke-dashoffset: 0; } 85% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+.cd-item { opacity: 0; transform-box: fill-box; animation: cd-drop 3.2s cubic-bezier(.3,.7,.4,1) infinite; }
+.cd-item.i0 { fill: var(--accent); animation-delay: .9s; }
+.cd-item.i1 { fill: color-mix(in srgb, var(--accent) 60%, var(--text)); animation-delay: 1.15s; }
+.cd-item.i2 { fill: color-mix(in srgb, var(--accent) 45%, transparent); animation-delay: 1.4s; }
+.cd-item.i3 { fill: color-mix(in srgb, var(--text) 55%, transparent); animation-delay: 1.65s; }
+@keyframes cd-drop { 0% { opacity: 0; transform: translateY(-26px); } 12% { opacity: 1; } 28% { transform: translateY(16px); } 34% { transform: translateY(12px); } 40%, 70% { opacity: 1; transform: translateY(14px); } 85%, 100% { opacity: 0; transform: translateY(14px); } }
+@media (prefers-reduced-motion: reduce) { .cd-line { animation: none; stroke-dashoffset: 0; } .cd-item { animation: none; opacity: 1; transform: translateY(14px); } }
 .cart-fill-t { display: flex; flex-direction: column; gap: 4px; }
 .cart-fill-t b { font-size: 15px; }
 .cart-card .cart-fill-t small { font-size: 13px; font-weight: 400; color: var(--muted); opacity: .45; transition: opacity .3s, color .3s; }
@@ -1959,7 +1972,7 @@ body.chat-open { overflow: hidden; }
 @container (max-width: 380px) { .cart-add { padding: 0 14px; font-size: 14px; } .cart-sum b { font-size: 19px; } }
 .cart-done { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; color: var(--accent); min-height: 58px; border-radius: 20px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .cart-card .cart-hint { display: block; font-size: 12px; font-weight: 400; color: var(--muted); text-align: center; opacity: .85; line-height: 1.5; }
-@media (prefers-reduced-motion: reduce) { .cart-q.ch, .cl-row, .cart-p, .cart-fill-orb { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .cart-q.ch, .cl-row, .cart-p { animation: none; } }
 
 /* "the advisor fills a cart": what for, dairy or meat, how many people */
 .cb-kinds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }

@@ -1,6 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
+import { CartDraw } from '../../components/CartDraw.js';
 import { AISLES } from '../../domain/shopping.js';
 import { qtyText, toItems, alreadyOn } from '../../domain/shopList.js';
 import { chooseAll, basket, count, nearby, withoutChains, hiddenChains, chainNote } from '../../domain/prices.js';
@@ -78,7 +79,7 @@ export function ShopListCard({ list, hid, people: homePeople, onList = [], build
     </div>
     ${filling
       ? html`<div class="cart-fill" role="status" aria-live="polite">
-          <span class="cart-fill-orb" aria-hidden="true"><${Icon} name="spark" size=${18} /></span>
+          <${CartDraw} />
           <span class="cart-fill-t"><b>היועץ מכין לכם את העגלה…</b>${STEPS.map((s, i) => html`<small key=${i} class=${i < step ? 'done' : i === step ? 'now' : ''}>${i < step ? '✓ ' : ''}${s}</small>`)}</span>
         </div>`
       : html`<div class="cart-list">
