@@ -18,3 +18,16 @@ test('after the night\'s load, chains whose site did not answer or had no files 
   assert.deepEqual(retryLater([]), []);
   assert.deepEqual(retryLater(null), []);
 });
+
+// The morning try reads the night's record as it was saved: a chain the
+// night already tried three times ("no files (גם בניסיון השני והשלישי)") is
+// tried once more; its online shop (a delivery point with no file) is not.
+test('the morning try takes the chains the night could not read, not the online shops', () => {
+  const night = [
+    { key: 'shufersal', count: 7508, error: null },
+    { key: 'osher-ad', count: 0, error: 'no files (גם בניסיון השני והשלישי)', retried: true, retriedLate: true },
+    { key: 'keshet-online', count: 0, error: 'no file for branch', online: true },
+    { key: 'good-pharm-online', count: 0, error: 'no file for branch', online: true }
+  ];
+  assert.deepEqual(retryLater(night), ['osher-ad']);
+});
