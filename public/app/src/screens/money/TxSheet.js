@@ -8,6 +8,7 @@ import { chainQuery } from '../../domain/spend.js';
 import { money } from '../../domain/format.js';
 import { setCategory, restoreCategories, deleteWithUndo, snapshot, markTransfer, updateTx } from '../../data/household.js';
 import { isRefund, fromRefund } from '../../domain/moves.js';
+import { txEdit } from '../../domain/sources.js';
 import { listRules, saveRule } from '../../data/rules.js';
 import { shouldAskRule } from '../../domain/rules.js';
 import { Icon } from '../../components/Icon.js';
@@ -22,6 +23,9 @@ export function TxSheet({ tx, txs, categories, members, onClose, onMerchant, wai
   // After a change: offer to keep it as a rule for this merchant.
   const [ask, setAsk] = useState(null);
   const [rules, setRules] = useState([]);
+  // Fixing a mistake: the amount, the day or the name.
+  const [edit, setEdit] = useState(null);
+  const [editErr, setEditErr] = useState('');
   const hid = snapshot().hid;
   useEffect(() => { if (hid) listRules(hid).then(setRules).catch(() => setRules([])); }, [hid]);
   const byId = new Map(categories.map((c) => [c.id, c]));
@@ -59,6 +63,22 @@ export function TxSheet({ tx, txs, categories, members, onClose, onMerchant, wai
     } catch (_e) { showToast('הכלל לא נשמר. נסו שוב.'); }
   };
 
+  const startEdit = () => { setEditErr(''); setEdit({ amount: String(Math.abs(Number(tx.amount))), date: tx.tx_date, description: tx.description || '' }); };
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    const { patch, error } = txEdit(tx, edit);
+    if (error) { setEditErr(error); return; }
+    if (!patch) { setEdit(null); return; }
+    const back = Object.fromEntries(Object.keys(patch).map((k) => [k, k === 'original' ? null : tx[k]]));
+    setBusy(true);
+    try {
+      await updateTx(tx.id, patch);
+      setEdit(null);
+      showToast('התנועה עודכנה', { undo: () => updateTx(tx.id, back).catch(() => showToast('הביטול נכשל. נסו שוב.')) });
+    } catch (_e) { setEditErr('לא נשמר. נסו שוב.'); }
+    setBusy(false);
+  };
+
   const remove = () => {
     const undo = deleteWithUndo(tx.id);
     onClose();
@@ -81,6 +101,13 @@ export function TxSheet({ tx, txs, categories, members, onClose, onMerchant, wai
       <span style="flex:1;min-width:0;display:flex;flex-direction:column"><b style="font-size:19px">${tx.description}</b><span class="muted" style="font-size:13px">${dayLabel(tx.tx_date, new Date())}</span></span>
       <b class=${'num' + (income ? ' income' : '')} style=${'font-size:22px;' + (income ? 'color:var(--income)' : '')}>${(income ? '+' : '−') + money(Math.abs(Number(tx.amount)))}</b>
     </div>
+    ${edit ? html`<form class="card stack tx-edit" onSubmit=${saveEdit} aria-label="עריכת התנועה">
+      <label>סכום<input class="input num" type="text" inputmode="decimal" value=${edit.amount} onInput=${(e) => setEdit({ ...edit, amount: e.currentTarget.value })} aria-label="סכום" /></label>
+      <label>תאריך<input class="input" type="date" value=${edit.date} onInput=${(e) => setEdit({ ...edit, date: e.currentTarget.value })} aria-label="תאריך" /></label>
+      <label>תיאור<input class="input" type="text" maxLength="120" value=${edit.description} onInput=${(e) => setEdit({ ...edit, description: e.currentTarget.value })} aria-label="תיאור" /></label>
+      ${editErr && html`<span class="price-warn" role="alert">${editErr}</span>`}
+      <div class="tx-edit-acts"><button type="submit" class="btn" disabled=${busy}>לשמור</button><button type="button" class="btn btn-ghost" onClick=${() => setEdit(null)}>ביטול</button></div>
+    </form>` : html`<button type="button" class="btn btn-ghost tx-edit-go" onClick=${startEdit}><${Icon} name="edit" size=${16} />לתקן סכום, תאריך או תיאור</button>`}
     ${onMerchant && !income && (() => {
       // Every purchase at this place in the last 12 months, in one tap.
       const q = chainQuery(tx.description);

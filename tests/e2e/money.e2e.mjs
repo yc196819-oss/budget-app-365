@@ -109,6 +109,42 @@ test('changing a category applies to the same merchant and can be undone', async
   await page.close();
 });
 
+test('fixing a mistake: the amount, the day and the name of a transaction, saved, and undone in one tap', async () => {
+  const { page, db, errors } = await openMoney();
+  await page.click('button[aria-label="החודש הקודם"]');
+  await page.locator('.row', { hasText: 'סונול' }).first().click();
+  await page.waitForSelector('.sheet');
+  await page.click('.tx-edit-go');
+  await page.waitForSelector('.tx-edit');
+  const was = db.tables.transactions.filter((t) => t.description === 'סונול').map((t) => ({ id: t.id, amount: t.amount, tx_date: t.tx_date }));
+  // A wrong amount says so and saves nothing.
+  await page.fill('.tx-edit input[aria-label="סכום"]', '0');
+  await page.click('.tx-edit .btn:not(.btn-ghost)');
+  assert.equal(await page.locator('.tx-edit [role=alert]').textContent(), 'סכום לא תקין');
+  await page.fill('.tx-edit input[aria-label="סכום"]', '312.5');
+  const day = await page.inputValue('.tx-edit input[aria-label="תאריך"]');
+  const newDay = day.slice(0, 8) + '03';
+  await page.fill('.tx-edit input[aria-label="תאריך"]', newDay);
+  await page.fill('.tx-edit input[aria-label="תיאור"]', 'סונול תחנת העיר');
+  await page.click('.tx-edit .btn:not(.btn-ghost)');
+  await page.waitForSelector('.toast');
+  const edited = db.tables.transactions.find((t) => t.description === 'סונול תחנת העיר');
+  assert.ok(edited, 'saved');
+  assert.equal(Number(edited.amount), 312.5);
+  assert.equal(edited.tx_date, newDay);
+  assert.match(await page.locator('.sheet').textContent(), /סונול תחנת העיר.*₪313/);
+  // Undo puts it back as it was.
+  await page.click('.toast button');
+  for (let i = 0; i < 30 && db.tables.transactions.find((t) => t.id === edited.id).description !== 'סונול'; i++) await page.waitForTimeout(100);
+  const back = db.tables.transactions.find((t) => t.id === edited.id);
+  const orig = was.find((w) => w.id === edited.id);
+  assert.equal(back.description, 'סונול');
+  assert.equal(Number(back.amount), Number(orig.amount));
+  assert.equal(back.tx_date, orig.tx_date);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('delete hides at once, undo brings it back, nothing is deleted in the database', async () => {
   const { page, db } = await openMoney();
   const before = db.tables.transactions.length;

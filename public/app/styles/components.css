@@ -2090,3 +2090,9 @@ body.store-on { overflow: hidden; }
 .twin-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
 .twin-where { font-size: 12px; font-weight: 700; color: var(--accent); }
 @media (max-width: 420px) { .twin-row { grid-template-columns: 1fr auto; } .twin-row .twin-where { grid-column: 1 / -1; } }
+
+/* fixing a transaction: amount, date, description */
+.tx-edit { gap: 10px; }
+.tx-edit label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.tx-edit-acts { display: flex; gap: 8px; }
+.tx-edit-acts .btn { flex: 1; }
