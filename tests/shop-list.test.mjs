@@ -102,3 +102,22 @@ test('a cart is made personal only when the home has bought enough things more t
   assert.equal(personal([{ times: 2 }, { times: 3 }, { times: 1 }, { times: 5 }]), false);
   assert.equal(personal([{ times: 2 }, { times: 3 }, { times: 2 }, { times: 5 }]), true);
 });
+
+import { recipeItems, mergeItems, isPantry } from '../public/app/src/domain/shopList.js';
+
+test('a recipe is sized from its servings to the list, its pantry things marked', () => {
+  const r = { title: 'שקשוקה', servings: 4, items: [{ name: 'ביצים', qty: 6, unit: "יח'", aisle: 'dairy' }, { name: 'שמן זית', qty: 3, unit: 'כפות', pantry: true }, { name: 'מלח', qty: null, unit: '' }, { name: 'עגבניות', qty: 0.8, unit: 'ק"ג' }] };
+  const items = recipeItems(r, 6);
+  assert.deepEqual(items.map((i) => [i.name, i.qty, i.pantry, i.from]), [['ביצים', 9, false, 'recipe'], ['שמן זית', 4.5, true, 'recipe'], ['מלח', null, true, 'recipe'], ['עגבניות', 1.2, false, 'recipe']]);
+  assert.equal(isPantry('פלפל שחור גרוס'), true);
+  assert.equal(isPantry('פלפל אדום'), false);
+  assert.deepEqual(recipeItems({ items: [] }, 4), []);
+});
+
+test('a recipe added to a cart: the same product in the same unit becomes one line', () => {
+  const cart = [{ name: 'עגבניות', qty: 1.5, unit: 'ק"ג', aisle: 'produce', scale: true }, { name: 'חלות', qty: 4, unit: '', scale: true }];
+  const more = [{ name: 'עגבניות', qty: 1.2, unit: 'ק"ג', from: 'recipe' }, { name: 'ביצים', qty: 9, unit: "יח'", from: 'recipe' }, { name: 'חלות', qty: 2, unit: 'יח' }];
+  const m = mergeItems(cart, more);
+  assert.deepEqual(m.map((i) => [i.name, i.qty]), [['עגבניות', 2.7], ['חלות', 4], ['ביצים', 9]]);
+  assert.equal(cart[0].qty, 1.5, 'the cart itself is not changed');
+});

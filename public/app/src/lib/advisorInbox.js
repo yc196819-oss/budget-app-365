@@ -12,3 +12,9 @@ export function takeAdvisorImage() {
   waiting = null;
   return f;
 }
+
+// A recipe shared from the phone, on its way to "the advisor fills a cart":
+// { text } or { file }. In memory only.
+let recipeWaiting = null;
+export function sendRecipe(r) { recipeWaiting = r; try { window.dispatchEvent(new CustomEvent('recipe-shared')); } catch (_e) { /* tests */ } }
+export function takeRecipe() { const r = recipeWaiting; recipeWaiting = null; return r; }

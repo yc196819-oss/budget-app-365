@@ -1216,6 +1216,39 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimit
   }
 });
 
+// A recipe (a link, its text, or a photo) read into what to buy. Pictures
+// and pages are read for the answer only, never kept.
+const recipe = require('./server/recipe');
+app.post('/api/ai/recipe', requireAuth, aiLimiter, advisorImageLimiter, aiQuota, async (req, res) => {
+  try {
+    if (!ANTHROPIC_KEY) return res.status(503).json({ error: 'קריאת מתכונים לא זמינה כרגע.' });
+    const { url, text, image } = req.body || {};
+    let src = { title: '', text: String(text || '').slice(0, 9000) };
+    if (url) {
+      const html = await recipe.fetchPage(url).catch((e) => { throw Object.assign(new Error(e.message), { user: 'לא הצלחנו לפתוח את הקישור. אפשר להדביק את המתכון כטקסט.' }); });
+      src = recipe.recipeText(html);
+    }
+    let img = null;
+    if (image) { img = advisorImage.parseImage(image); if (img.error) return res.status(400).json({ error: img.error }); }
+    if (!src.text && !img) return res.status(400).json({ error: 'צריך קישור, טקסט או תמונה של מתכון.' });
+    const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 2500, effort: 'low', content: advisorImage.chatContent(recipe.RECIPE_PROMPT + (src.title ? '\nשם הדף: ' + src.title : '') + '\n\n' + src.text, img) });
+    const r = await fetch(cr.url, cr.init);
+    if (!r.ok) throw new Error('Claude ' + r.status);
+    const j = await r.json();
+    recordAi('claude', ANTHROPIC_MODEL, (j.usage && j.usage.input_tokens) || 0, (j.usage && j.usage.output_tokens) || 0);
+    const out = ((j.content || []).find((c) => c.type === 'text') || {}).text || '';
+    const from = out.indexOf('{');
+    const to = out.lastIndexOf('}');
+    if (from < 0 || to <= from) return res.status(502).json({ error: 'לא הצלחנו לקרוא את המתכון.' });
+    const parsed = JSON.parse(out.slice(from, to + 1));
+    if (!parsed || !Array.isArray(parsed.items) || !parsed.items.length) return res.status(422).json({ error: 'לא מצאנו כאן מתכון עם מצרכים.' });
+    return res.json({ recipe: { title: String(parsed.title || src.title || 'מתכון').slice(0, 60), servings: Number(parsed.servings) || 4, items: parsed.items.slice(0, 40) } });
+  } catch (err) {
+    console.error('recipe failed:', err.message);
+    return res.status(502).json({ error: err.user || 'לא הצלחנו לקרוא את המתכון כרגע. נסו שוב.' });
+  }
+});
+
 // A ready cart (week, Shabbat, a holiday, guests) made this home's own: the
 // advisor swaps the general names for what the home buys (its receipts and
 // lists), adds a few of its usual things that fit, and keeps the amounts for

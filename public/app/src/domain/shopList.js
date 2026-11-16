@@ -115,3 +115,36 @@ export function toItems(list, people, checked, onList = []) {
     .filter((it) => checked.has(it.name) && !alreadyOn(it.name, onList))
     .map((it) => ({ name: it.name, qty: qtyText(it, people, list.people) || null, aisle: it.aisle }));
 }
+
+// What most homes keep already (marked "יש בבית" from the start; it can be undone).
+const PANTRY = /(^|\s)(מלח|פלפל שחור|סוכר|שמן|קמח|אורז|תבלין|תבלינים|כמון|פפריקה|כורכום|קינמון|אבקת אפייה|סודה לשתייה|חומץ|מים|אורגנו|בזיליקום יבש|פלפל לבן)(\s|$)/;
+export const isPantry = (name) => PANTRY.test(clean(name, 60));
+
+// A recipe's ingredients as lines of a list for `basePeople` people (the
+// recipe serves `servings`): sized, marked as the recipe's, and what the
+// home surely has marked so.
+export function recipeItems(recipe, basePeople) {
+  const servings = Number(recipe && recipe.servings) > 0 ? Number(recipe.servings) : 4;
+  const parsed = parseList(LIST_MARK + JSON.stringify({ items: (recipe && recipe.items) || [] }));
+  if (!parsed) return [];
+  const pantry = new Map(((recipe && recipe.items) || []).map((i) => [clean(i && i.name, 40), !!(i && i.pantry)]));
+  return parsed.items.map((it) => ({
+    ...it,
+    qty: it.qty != null && it.scale ? Math.round((it.qty * basePeople / servings) * 100) / 100 : it.qty,
+    from: 'recipe',
+    pantry: pantry.get(it.name) || isPantry(it.name)
+  }));
+}
+
+// Lines added to a list (a recipe into this week's cart): the same product
+// in the same unit is one line with both amounts; the rest are added.
+export function mergeItems(items, more) {
+  const out = items.map((i) => ({ ...i }));
+  for (const m of more) {
+    const same = out.find((i) => key(i.name) === key(m.name));
+    if (same && same.unit === m.unit && same.qty != null && m.qty != null) { same.qty = Math.round((same.qty + m.qty) * 100) / 100; continue; }
+    if (same) continue;
+    out.push({ ...m });
+  }
+  return out;
+}

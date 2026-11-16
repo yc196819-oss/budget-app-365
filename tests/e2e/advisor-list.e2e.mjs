@@ -142,3 +142,47 @@ test('everyone else: no shopping data is sent to the advisor yet', async () => {
   assert.equal(asked[0].summary.shopping, undefined);
   await page.close();
 });
+
+test('a recipe added to the cart: its lines join (the same product is one line), what the home has is marked "יש בבית"', async () => {
+  const { page } = await open();
+  const sent = [];
+  await page.route('**/api/ai/recipe', (r) => {
+    sent.push(JSON.parse(r.request().postData()));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ recipe: { title: 'שקשוקה', servings: 4, items: [
+      { name: 'עגבניות', qty: 1, unit: 'ק"ג', aisle: 'produce' }, { name: 'פלפל אדום', qty: 2, unit: "יח'", aisle: 'produce' },
+      { name: 'שמן זית', qty: 3, unit: 'כפות', pantry: true }, { name: 'מלח', qty: null, unit: '' }] } }) });
+  });
+  const card = page.locator('.cart-card');
+  await card.locator('.cl-row').first().waitFor();
+  const before = Number((await card.locator('.cart-add').textContent()).match(/\((\d+)\)/)[1]);
+  await card.locator('.cart-more').click();
+  await card.locator('.rcp-tabs button', { hasText: 'טקסט' }).click();
+  await card.locator('textarea[aria-label="טקסט המתכון"]').fill('שקשוקה ל-4: קילו עגבניות, 2 פלפלים אדומים, 3 כפות שמן זית, מלח');
+  await card.locator('.rcp button:has-text("לקרוא את המתכון")').click();
+  await card.locator('.cl-row', { hasText: 'פלפל אדום' }).waitFor();
+  assert.match(sent[0].text, /שקשוקה/);
+  // Tomatoes: the cart's 1.5 kg (for 6) and the recipe's 1 kg for 4, sized for 6.
+  assert.equal(await card.locator('.cl-row', { hasText: 'עגבניות' }).count(), 1);
+  assert.equal(await card.locator('.cl-row', { hasText: 'עגבניות' }).locator('.cart-q').textContent(), '3 ק"ג');
+  // Oil and salt: already at home, out of the cart, and can be put back.
+  assert.match(await card.locator('.cl-row', { hasText: 'שמן זית' }).textContent(), /יש בבית/);
+  assert.match(await card.locator('.cl-row', { hasText: 'מלח' }).textContent(), /יש בבית/);
+  assert.equal(Number((await card.locator('.cart-add').textContent()).match(/\((\d+)\)/)[1]), before + 1, 'only the pepper is new to buy');
+  await card.locator('button[aria-label="יש לי פלפל אדום"]').click();
+  assert.equal(Number((await card.locator('.cart-add').textContent()).match(/\((\d+)\)/)[1]), before);
+  await card.locator('button[aria-label="יש לי שמן זית"]').click();
+  assert.equal(Number((await card.locator('.cart-add').textContent()).match(/\((\d+)\)/)[1]), before + 1);
+  await page.close();
+});
+
+test('a recipe the advisor cannot read: says so, and the cart stays as it was', async () => {
+  const { page } = await open();
+  await page.route('**/api/ai/recipe', (r) => r.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'לא הצלחנו לפתוח את הקישור. אפשר להדביק את המתכון כטקסט.' }) }));
+  const card = page.locator('.cart-card');
+  await card.locator('.cl-row').first().waitFor();
+  await card.locator('.cart-more').click();
+  await card.locator('input[aria-label="קישור למתכון"]').fill('https://recipes.example.co.il/x');
+  await card.locator('.rcp button:has-text("לקרוא את המתכון")').click();
+  assert.match(await card.locator('.rcp [role="alert"]').textContent(), /אפשר להדביק את המתכון כטקסט/);
+  await page.close();
+});

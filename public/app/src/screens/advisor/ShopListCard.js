@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { CartDraw } from '../../components/CartDraw.js';
 import { AISLES } from '../../domain/shopping.js';
-import { qtyText, toItems, alreadyOn } from '../../domain/shopList.js';
+import { qtyText, toItems, alreadyOn, mergeItems, recipeItems } from '../../domain/shopList.js';
+import { RecipeInput } from '../shop/RecipeInput.js';
 import { chooseAll, basket, count, nearby, withoutChains, hiddenChains, chainNote } from '../../domain/prices.js';
 import { searchPrices, getKosherPref, getArea } from '../../data/prices.js';
 import { addItems } from '../../data/shopping.js';
@@ -22,8 +23,13 @@ export function ShopListCard({ list, hid, people: homePeople, onList = [], build
   const start = list.people || homePeople || 4;
   const [people, setPeople] = useState(start);
   const [typed, setTyped] = useState(String(start));
-  const inCart = list.items.filter((i) => !alreadyOn(i.name, onList));
-  const [out, setOut] = useState(() => new Set());
+  // Recipes added to this cart (their lines join it; the same product is one line).
+  const [extra, setExtra] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const full = extra.length ? { ...list, items: mergeItems(list.items, extra) } : list;
+  const inCart = full.items.filter((i) => !alreadyOn(i.name, onList));
+  // Out of the cart: taken out, or "יש לי" (what most homes keep starts so).
+  const [out, setOut] = useState(() => new Set(list.items.filter((i) => i.pantry).map((i) => i.name)));
   const [state, setState] = useState(null); // null | 'adding' | { added } | { error }
   // Filling: the steps, then the lines one by one.
   const [step, setStep] = useState(build ? 0 : STEPS.length);
@@ -43,10 +49,18 @@ export function ShopListCard({ list, hid, people: homePeople, onList = [], build
       .then(([catalog, pref, area]) => { if (alive.current) setPrices({ catalog, pref, area }); })
       .catch(() => { if (alive.current) setPrices('none'); });
     return () => { alive.current = false; };
-  }, []);
+  }, [extra.length]);
+  const addRecipe = (r) => {
+    const more = recipeItems(r, list.people || start);
+    setExtra((e) => [...e, ...more]);
+    setOut((o) => new Set([...o, ...more.filter((i) => i.pantry).map((i) => i.name)]));
+    setAdding(false);
+    setPrices('loading');
+    track('advisor_list_recipe');
+  };
 
   const checked = new Set(inCart.map((i) => i.name).filter((n) => !out.has(n)));
-  const items = toItems(list, people, checked, onList);
+  const items = toItems(full, people, checked, onList);
   const chains = useMemo(() => {
     if (!prices || typeof prices !== 'object' || !items.length) return [];
     const lines = items.map((it, n) => ({ id: 'l' + n, name: it.name, qty: it.qty }));
@@ -55,7 +69,7 @@ export function ShopListCard({ list, hid, people: homePeople, onList = [], build
     // Cheapest first, the ones open every day before the rest; three at most.
     return [...rows.filter((r) => !chainNote(r.chain)), ...rows.filter((r) => chainNote(r.chain))].slice(0, 3)
       .map((r) => ({ ...r, found: items.length - r.missing, byName: Object.fromEntries((r.lines || []).map((l) => [items[Number(String(l.id).slice(1))].name, l])) }));
-  }, [prices, people, out.size]);
+  }, [prices, people, out.size, extra.length]);
   const best = chains[0] || null;
   const shownChain = open && chains.find((c) => c.chain === open);
 
@@ -85,16 +99,22 @@ export function ShopListCard({ list, hid, people: homePeople, onList = [], build
       : html`<div class="cart-list">
           ${groups.map((g) => html`<div class="cart-grp" key=${g.key}><small>${g.label}</small>
             ${g.rows.map((it) => { const i = n++; const gone = out.has(it.name); const line = shownChain && shownChain.byName[it.name];
-              return html`<div class=${'cl-row' + (gone ? ' gone' : '')} key=${it.name} style=${'--i:' + i}>
+              const rec = it.from === 'recipe' || it.pantry;
+              return html`<div class=${'cl-row' + (gone ? (rec ? ' has' : ' gone') : '')} key=${it.name} style=${'--i:' + i}>
                 <span class="cart-n">${it.name}</span>
                 ${!gone && html`<span class=${'cart-q num' + (it.scale && people !== start ? ' ch' : '')} key=${people}>${qtyText(it, people, list.people)}</span>`}
                 ${!gone && shownChain && html`<span class="cart-p num">${line && line.product ? money(line.cost != null ? line.cost : line.price) : '—'}</span>`}
-                ${gone
+                ${rec
+                  ? html`<button type="button" class=${'cart-home' + (gone ? ' on' : '')} aria-pressed=${String(gone)} aria-label=${'יש לי ' + it.name} onClick=${() => (gone ? back(it.name) : take(it.name))}>${gone ? '✓ יש בבית' : 'יש לי'}</button>`
+                  : gone
                   ? html`<button type="button" class="cart-back" onClick=${() => back(it.name)}>להחזיר</button>`
                   : html`<button type="button" class="cart-x" aria-label=${'להוציא ' + it.name} onClick=${() => take(it.name)}><${Icon} name="x" size=${14} /></button>`}
               </div>`; })}
           </div>`)}
         </div>`}
+    ${!filling && !(state && state.added != null) && (adding
+      ? html`<${RecipeInput} onRecipe=${addRecipe} onCancel=${() => setAdding(false)} />`
+      : html`<button type="button" class="cart-more" onClick=${() => setAdding(true)}><${Icon} name="plus" size=${15} /> להוסיף מתכון לעגלה</button>`)}
     ${!filling && have.length > 0 && html`<span class="cart-have">כבר ברשימה שלכם: ${have.join(', ')}. לא יתווספו שוב.</span>`}
     ${!filling && shownChain && html`<div class="cart-chains" role="tablist" aria-label="מחירים לפי רשת">${chains.map((c) => html`<button type="button" role="tab" key=${c.chain} aria-selected=${String(c.chain === open)} onClick=${() => setOpen(c.chain)}>
       <b>${c.name}</b><span class="num">${money(c.total)}</span>${c.found < items.length ? html`<small>${c.found} מתוך ${items.length}</small>` : ''}</button>`)}</div>`}

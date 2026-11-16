@@ -4,7 +4,8 @@ import { Sheet } from '../../components/Sheet.js';
 import { Icon } from '../../components/Icon.js';
 import { CartDraw } from '../../components/CartDraw.js';
 import { TEMPLATES, fromTemplate, personal } from '../../domain/shopTemplates.js';
-import { shopContext, parseList, LIST_MARK } from '../../domain/shopList.js';
+import { shopContext, parseList, LIST_MARK, recipeItems } from '../../domain/shopList.js';
+import { RecipeInput } from './RecipeInput.js';
 import { personalCart } from '../../data/shopping.js';
 import { getKosherPref } from '../../data/prices.js';
 import { ShopListCard } from '../advisor/ShopListCard.js';
@@ -17,8 +18,11 @@ const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 // (dairy or meat), for the number of people at home. A ready cart, made this
 // home's own by the advisor when the home has bought enough before (its
 // receipts and lists); shown being filled, then as the advisor's list.
-export function CartBuilder({ hid, items, receipts = [], people: homePeople, onClose, onAdded }) {
-  const [kind, setKind] = useState(null);
+// The kinds offered: the ready ones, and a recipe (a link, its text or a photo).
+const KINDS = [...TEMPLATES, { key: 'recipe', label: 'ממתכון', hint: 'קישור, טקסט או תמונה של מתכון' }];
+
+export function CartBuilder({ hid, items, receipts = [], people: homePeople, onClose, onAdded, shared = null }) {
+  const [kind, setKind] = useState(shared ? 'recipe' : null);
   const [meal, setMeal] = useState(null);
   const [typed, setTyped] = useState(String(homePeople || 4));
   const [list, setList] = useState(null);
@@ -33,6 +37,15 @@ export function CartBuilder({ hid, items, receipts = [], people: homePeople, onC
     return () => clearTimeout(t);
   }, [step]);
 
+  // A recipe read: its ingredients, sized for the people, are the cart.
+  const fromRecipe = async (r) => {
+    setStep(0);
+    track('shop_cart_recipe');
+    const kosher = await getKosherPref(hid).catch(() => null);
+    setCtx(shopContext({ items, receipts, people, kosher }));
+    await wait(1600);
+    setList({ title: r.title || 'מתכון', people, kosher: '', items: recipeItems(r, people) });
+  };
   const build = async () => {
     setStep(0);
     track('shop_cart_build', { kind });
@@ -59,14 +72,16 @@ export function CartBuilder({ hid, items, receipts = [], people: homePeople, onC
     <div class="stack cart-builder">
       ${step < 0 && html`
         <span class="muted" style="font-size:14px;line-height:1.55">בחרו לאיזה צורך, והיועץ ימלא את העגלה לפי מספר האנשים${receipts.length ? ' ולפי מה שאתם קונים בדרך כלל' : ''}.</span>
-        <div class="cb-kinds" role="radiogroup" aria-label="לאיזה צורך">${TEMPLATES.map((t) => html`<button type="button" role="radio" key=${t.key} aria-checked=${String(kind === t.key)} class="cb-kind" onClick=${() => { setKind(t.key); if (t.key !== 'guests') setMeal(null); }}>
+        <div class="cb-kinds" role="radiogroup" aria-label="לאיזה צורך">${KINDS.map((t) => html`<button type="button" role="radio" key=${t.key} aria-checked=${String(kind === t.key)} class=${'cb-kind' + (t.key === 'recipe' ? ' wide' : '')} onClick=${() => { setKind(t.key); if (t.key !== 'guests') setMeal(null); }}>
           <b>${t.label}</b><small>${t.hint}</small></button>`)}</div>
         ${kind === 'guests' && html`<div class="cb-meal" role="radiogroup" aria-label="איזו ארוחה">
           <span>איזו ארוחה?</span>
           ${[['dairy', 'חלבית'], ['meat', 'בשרית']].map(([k, l]) => html`<button type="button" role="radio" key=${k} aria-checked=${String(meal === k)} onClick=${() => setMeal(k)}>${l}</button>`)}
         </div>`}
         <label class="cart-people cb-people">כמה אנשים? <input class="cart-num num" type="number" inputmode="numeric" min="1" max="30" value=${typed} aria-label="כמה אנשים" onInput=${(e) => setTyped(e.currentTarget.value)} /></label>
-        <button type="button" class="btn" disabled=${!ready} onClick=${build}><${Icon} name="spark" size=${16} /> להכין את העגלה</button>`}
+        ${kind === 'recipe'
+          ? html`<${RecipeInput} onRecipe=${fromRecipe} start=${shared} />`
+          : html`<button type="button" class="btn" disabled=${!ready} onClick=${build}><${Icon} name="spark" size=${16} /> להכין את העגלה</button>`}`}
       ${filling && html`<div class="cart-fill" role="status" aria-live="polite">
         <${CartDraw} />
         <span class="cart-fill-t"><b>היועץ מכין לכם את העגלה…</b>${STEPS.map((s, i) => html`<small key=${i} class=${i < step ? 'done' : i === step ? 'now' : ''}>${i < step ? '✓ ' : ''}${s}</small>`)}</span>

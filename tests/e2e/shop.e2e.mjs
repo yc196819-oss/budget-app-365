@@ -431,6 +431,40 @@ test('the advisor fills a cart (the owner first): a ready one for Shabbat, sized
   await page.close();
 });
 
+test('a cart from a recipe link: read by the advisor, sized for the people, pantry things marked', async () => {
+  const { page, db } = await open(390, (d) => { d.tables.households = [{ id: d.hid, shop_area: null, people: 6 }]; d.tables.shopping_items = []; }, OWNER);
+  const sent = [];
+  await page.route('**/api/ai/recipe', (r) => {
+    sent.push(JSON.parse(r.request().postData()));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ recipe: { title: 'שקשוקה', servings: 4, items: [{ name: 'ביצים', qty: 6, unit: "יח'", aisle: 'dairy' }, { name: 'שמן זית', qty: 3, unit: 'כפות', pantry: true }] } }) });
+  });
+  await page.click('.adv-cta');
+  await page.click('.cb-kind:has-text("ממתכון")');
+  await page.locator('input[aria-label="קישור למתכון"]').fill('https://recipes.example.co.il/shakshuka');
+  await page.click('.rcp button:has-text("לקרוא את המתכון")');
+  await page.locator('.cart-card .cl-row').first().waitFor({ timeout: 10000 });
+  assert.equal(sent[0].url, 'https://recipes.example.co.il/shakshuka');
+  assert.match(await page.locator('.cart-title').textContent(), /שקשוקה/);
+  assert.equal(await page.locator('.cl-row', { hasText: 'ביצים' }).locator('.cart-q').textContent(), "9 יח'");
+  assert.match(await page.locator('.cl-row', { hasText: 'שמן זית' }).textContent(), /יש בבית/);
+  await page.click('.cart-add');
+  await page.locator('.cart-done').waitFor();
+  assert.deepEqual(db.tables.shopping_items.map((i) => i.name), ['ביצים']);
+  await page.close();
+});
+
+test('a recipe page shared from the phone opens the cart from a recipe, with its link', async () => {
+  const { page } = await open(390, (d) => { d.tables.households = [{ id: d.hid, shop_area: null, people: 4 }]; d.tables.shopping_items = []; }, OWNER);
+  await page.evaluate(async () => {
+    const c = await caches.open('shared-files');
+    await c.put('/shared/0', new Response('שקשוקה של סבתא\nhttps://recipes.example.co.il/shakshuka', { headers: { 'content-type': 'text/plain; charset=utf-8', 'x-name': 'shared.txt', 'x-at': String(Date.now()) } }));
+  });
+  await page.goto(server.base + '/app/?action=shared');
+  await page.locator('.cart-builder .rcp').waitFor({ timeout: 10000 });
+  assert.match(await page.locator('textarea[aria-label="טקסט המתכון"]').inputValue(), /שקשוקה של סבתא[\s\S]*recipes\.example/);
+  await page.close();
+});
+
 test('a home that has bought enough before: the advisor makes the ready cart its own', async () => {
   const bought = (id, name, day) => ({ id, household_id: 'h1', name, qty: null, aisle: 'dairy', done: true, created_at: day, cleared_at: day });
   const { page } = await open(390, (d) => {

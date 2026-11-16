@@ -53,6 +53,11 @@ async function receiveShare(req) {
     const cache = await caches.open(SHARED);
     for (const k of await cache.keys()) await cache.delete(k);
     let i = 0;
+    // Shared words, not a file (a recipe page's link or text): kept as a text.
+    if (!files.length) {
+      const words = [form.get('title'), form.get('text'), form.get('url')].map((x) => String(x || '').trim()).filter(Boolean).filter((x, n, all) => all.indexOf(x) === n).join('\n').slice(0, 20000);
+      if (words) await cache.put('/shared/0', new Response(words, { headers: { 'content-type': 'text/plain; charset=utf-8', 'x-name': encodeURIComponent('shared.txt'), 'x-at': String(Date.now()) } }));
+    }
     for (const f of files) {
       await cache.put('/shared/' + (i++), new Response(f, { headers: { 'content-type': f.type || 'application/octet-stream', 'x-name': encodeURIComponent(f.name || 'file'), 'x-at': String(Date.now()) } }));
     }
