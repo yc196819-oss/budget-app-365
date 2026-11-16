@@ -431,6 +431,10 @@ export function withKeys(items) {
 // carries the card's charge day, then duplicates flagged. A line that is
 // already here with its real date starts unchecked.
 export function prepare(items, history, opts) {
+  // A shopping expense (from "סיימתי לקנות") is not a reason to leave a
+  // card's line out: the line is saved, and the household is asked which
+  // of the two to keep (see shopTwins).
+  history = (history || []).filter((t) => t.source !== 'shop');
   const { items: fixed } = fixChargeDay(items, history);
   return flagDuplicates(withKeys(fixed), history, opts).map((t) => (t.dupeHere
     ? { ...t, dupe: 'likely', dupeOf: t.dupeHere, include: false }

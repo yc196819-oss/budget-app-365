@@ -159,7 +159,7 @@ export async function load(hid, userId, { force = false } = {}) {
   emit();
 }
 
-export async function addTransaction({ type = 'expense', amount, description, category_id = null, subcategory_id = null, tx_date, paid = {} }) {
+export async function addTransaction({ type = 'expense', amount, description, category_id = null, subcategory_id = null, tx_date, paid = {}, source = 'manual' }) {
   track('tx_add');
   const row = {
     household_id: state.hid,
@@ -172,7 +172,7 @@ export async function addTransaction({ type = 'expense', amount, description, ca
     subcategory_id,
     nature: 'variable',
     spread: 'month',
-    source: 'manual',
+    source,
     // The card it was paid with (card_id, account_id, payment_method), if chosen.
     ...(type === 'income' ? {} : paid)
   };

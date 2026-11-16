@@ -95,6 +95,7 @@ test('finishing a shopping remembers it: the previous list and what you usually 
   const prev = page.locator('.shop-side .card', { hasText: 'הרשימה מהפעם הקודמת' });
   assert.match(await prev.textContent(), /אורז, קפה/);
   await page.locator('.shop-finish').click();
+  await page.click('.trip-finish .btn-ghost');
   await page.waitForFunction(() => !document.querySelector('.shop-finish'));
   // What was bought left the list; what was not stays for next time.
   assert.deepEqual(await page.locator('.shop-item .shop-name').allTextContents(), ['שמפו']);
@@ -484,6 +485,203 @@ test('a home that has bought enough before: the advisor makes the ready cart its
   assert.equal(sent[0].cart.title, 'סל לשבוע');
   assert.ok(sent[0].usual.some((u) => u.name === 'קפה טורקי' && u.times === 2));
   assert.deepEqual(await page.locator('.cart-card .cart-n').allTextContents(), ['פיתות', 'גבינה לבנה 5%']);
+  await page.close();
+});
+
+test('in the store (the owner first): big tiles by department, a tap marks bought and back, the screen kept on, finishing from there', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [
+      { id: 'a1', household_id: d.hid, name: 'עגבניות', aisle: 'produce', qty: '1 ק"ג', done: false, created_at: '2026-11-07T10:00:00Z' },
+      { id: 'a2', household_id: d.hid, name: 'חלב', aisle: 'dairy', done: false, created_at: '2026-11-07T10:00:00Z' },
+      { id: 'a3', household_id: d.hid, name: 'לחם', aisle: 'bakery', done: false, created_at: '2026-11-07T10:00:00Z' }
+    ];
+  });
+  // A made-up wake lock, to see that the screen is asked to stay on and let go.
+  await page.evaluate(() => {
+    window.__lock = { asked: 0, released: 0 };
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => { window.__lock.asked++; return { release: async () => { window.__lock.released++; } }; } } });
+  });
+  await page.click('.store-go');
+  await page.waitForSelector('.store');
+  await page.waitForFunction(() => window.__lock.asked === 1);
+  assert.deepEqual(await page.locator('.store-aisle h2').evaluateAll((h) => h.map((x) => x.firstChild.textContent.trim())), ['ירקות ופירות', 'מאפים', 'מוצרי חלב']);
+  assert.match(await page.locator('.store-tile', { hasText: 'עגבניות' }).textContent(), /1 ק"ג/);
+  assert.match(await page.locator('.store-title').textContent(), /נקנו 0 מתוך 3/);
+  // Big enough for a thumb in a shop.
+  const box = await page.locator('.store-tile').first().boundingBox();
+  assert.ok(box.height >= 70 && box.width >= 150, JSON.stringify(box));
+  await page.locator('.store-tile', { hasText: 'חלב' }).click();
+  await page.waitForSelector('.store-tile.done');
+  assert.match(await page.locator('.store-title').textContent(), /נקנו 1 מתוך 3/);
+  for (let i = 0; i < 30 && !db.tables.shopping_items.find((x) => x.id === 'a2').done; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.shopping_items.find((x) => x.id === 'a2').done, true);
+  // A second tap takes it back.
+  await page.locator('.store-tile', { hasText: 'חלב' }).click();
+  await page.waitForFunction(() => !document.querySelector('.store-tile.done'));
+  await page.locator('.store-tile', { hasText: 'חלב' }).click();
+  await page.locator('.store-tile', { hasText: 'לחם' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.store-tile.done').length === 2);
+  // Hiding what was bought leaves what is still to find.
+  await page.click('.store-hide');
+  await page.waitForSelector('.store-hide.on');
+  assert.deepEqual(await page.locator('.store-tile .store-n').allTextContents(), ['עגבניות']);
+  await page.click('.store-hide');
+  // Finishing from the store: the screen lets go, and the trip is saved.
+  await page.click('.store-foot .btn');
+  await page.waitForFunction(() => !document.querySelector('.store'));
+  await page.waitForFunction(() => window.__lock.released === 1);
+  await page.waitForSelector('.trip-finish');
+  await page.click('.trip-finish .btn-ghost');
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 1);
+  assert.deepEqual(await page.locator('.shop-item .shop-name').allTextContents(), ['עגבניות']);
+  assert.ok(db.tables.shopping_items.find((x) => x.id === 'a3').cleared_at);
+  assert.equal(db.tables.shop_trips.length, 1);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('finishing a shopping saves a trip: the bought leave, the rest stay, a typed total is an expense of the supermarket, and the history shows it', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [
+      { id: 'f1', household_id: d.hid, name: 'אורז', aisle: 'dry', done: true, created_at: '2026-11-07T10:00:00Z' },
+      { id: 'f2', household_id: d.hid, name: 'קפה', aisle: 'dry', done: true, created_at: '2026-11-07T10:00:00Z' },
+      { id: 'f3', household_id: d.hid, name: 'קשיו', aisle: 'dry', done: false, created_at: '2026-11-07T10:00:00Z' }
+    ];
+  });
+  const before = db.tables.transactions.length;
+  await page.click('.shop-finish');
+  await page.waitForSelector('.trip-finish');
+  assert.match(await page.locator('.trip-box.ok').textContent(), /2/);
+  assert.match(await page.locator('.trip-box.left').textContent(), /1/);
+  assert.match(await page.locator('.trip-why').textContent(), /נוכל לחסוך לכם יותר/);
+  await page.selectOption('.trip-finish select', 'x');
+  await page.fill('.trip-finish input[aria-label="כמה שילמתם"]', '250');
+  await page.click('.trip-finish .btn-ghost');
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 1);
+  const trip = db.tables.shop_trips[0];
+  assert.equal(trip.chain, 'x');
+  assert.equal(trip.bought, 2);
+  assert.equal(trip.left_over, 1);
+  assert.deepEqual(db.tables.shopping_items.filter((i) => i.trip_id === trip.id).map((i) => i.id).sort(), ['f1', 'f2']);
+  // The total is an expense of the supermarket, waiting for the card's charge.
+  assert.equal(db.tables.transactions.length, before + 1);
+  const tx = db.tables.transactions.find((t) => t.id === trip.tx_id);
+  assert.equal(tx.source, 'shop');
+  assert.equal(Number(tx.amount), 250);
+  assert.equal(tx.subcategory_id, 'super');
+  // The history: what is left, and the trip without a receipt.
+  await page.click('.trips-card');
+  await page.waitForSelector('.trip-row');
+  assert.match(await page.locator('.trip-left').textContent(), /נשאר להשלים · 1/);
+  assert.match(await page.locator('.trip-row').textContent(), /2 מוצרים · 1 נשארו/);
+  assert.match(await page.locator('.trip-row').textContent(), /בלי קבלה/);
+  await page.click('.trip-row');
+  await page.waitForSelector('.trip-nudge');
+  await page.waitForFunction(() => document.querySelectorAll('.trip-view .chip').length === 2);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a receipt for a trip: its prices against ours at the same chain, a big gap marked to check, and its total becomes the expense', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shop_trips = [{ id: 'tr1', household_id: d.hid, finished_at: '2026-11-07T12:00:00Z', chain: 'x', chain_name: 'רשת א', bought: 2, left_over: 0, receipt_id: null, tx_id: null, total: null }];
+    d.tables.shopping_items = [{ id: 'g1', household_id: d.hid, name: 'חלב', aisle: 'dairy', done: true, created_at: '2026-11-06T10:00:00Z', cleared_at: '2026-11-07T12:00:00Z', trip_id: 'tr1' }];
+  });
+  await priceRoutes(page, { db });
+  await page.route('**/api/receipts/scan', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ store: 'רשת א', date: '2026-11-07', total: 26.1, items: [{ name: 'חלב 3%', qty: 1, price: 6.2 }, { name: 'ביצים', qty: 1, price: 19.9 }] }) }));
+  const before = db.tables.transactions.length;
+  await page.click('.trips-card');
+  await page.click('.trip-row');
+  await page.waitForSelector('.trip-nudge');
+  await page.setInputFiles('.trip-nudge input[type=file]', { name: 'r.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') });
+  await page.waitForSelector('.trip-table');
+  assert.match(await page.locator('.trip-table tr.st-check').textContent(), /ביצים.*19\.90.*14\.90/);
+  assert.match(await page.locator('.trip-table tr.st-ok').textContent(), /חלב/);
+  assert.match(await page.locator('.trip-sum .warn').textContent(), /1\s*לבדוק/);
+  // Saved with the trip, and its total is the trip's expense.
+  assert.equal(db.tables.shop_receipts[0].trip_id, 'tr1');
+  assert.equal(db.tables.shop_trips[0].receipt_id, db.tables.shop_receipts[0].id);
+  assert.equal(db.tables.transactions.length, before + 1);
+  assert.equal(Number(db.tables.transactions.find((t) => t.source === 'shop').amount), 26.1);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a thing not bought three trips in a row is offered to take off the list', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shop_trips = ['01', '03', '05'].map((day, i) => ({ id: 'q' + i, household_id: d.hid, finished_at: '2026-11-' + day + 'T12:00:00Z', chain: null, chain_name: null, bought: 1, left_over: 1 }));
+    d.tables.shopping_items = [
+      { id: 'h1', household_id: d.hid, name: 'ציפורן להבדלה', aisle: 'dry', done: false, created_at: '2026-10-25T10:00:00Z' },
+      { id: 'h2', household_id: d.hid, name: 'חלב', aisle: 'dairy', done: false, created_at: '2026-11-04T10:00:00Z' }
+    ];
+  });
+  await page.click('.trips-card');
+  await page.waitForSelector('.trip-stale');
+  assert.match(await page.locator('.trip-stale').textContent(), /"ציפורן להבדלה" לא נקנה 3 קניות ברצף/);
+  await page.click('.trip-stale button');
+  await page.waitForFunction(() => !document.querySelector('.trip-stale'));
+  assert.deepEqual(db.tables.shopping_items.map((i) => i.id), ['h2']);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('a shopping expense and the card\'s line of the same business: both shown on the home screen, and only the household decides', async () => {
+  const { page, db, errors } = await open(1280, (d) => {
+    d.tables.transactions.push(
+      { id: 'sh1', household_id: d.hid, type: 'expense', amount: 600, description: 'רשת א', tx_date: '2026-11-05', source: 'shop', category_id: 'food', subcategory_id: 'super', created_at: '2026-11-05T10:00:00Z' },
+      { id: 'cd1', household_id: d.hid, type: 'expense', amount: 612.4, description: 'רשת א סניף העיר', tx_date: '2026-11-06', source: 'import', card_id: 'c1', category_id: 'food', subcategory_id: 'super', created_at: '2026-11-06T10:00:00Z' }
+    );
+  });
+  await page.goto(server.base + '/app/#/');
+  await page.waitForSelector('.shoptwin');
+  const text = await page.locator('.shoptwin').textContent();
+  assert.match(text, /אולי אותה קנייה נרשמה פעמיים/);
+  assert.match(text, /600/);
+  assert.match(text, /612\.4/);
+  // "Two different purchases": nothing is removed, and it is not asked again.
+  await page.click('.shoptwin .btn-ghost');
+  await page.waitForFunction(() => !document.querySelector('.shoptwin'));
+  assert.ok(db.tables.transactions.find((t) => t.id === 'sh1'));
+  await page.reload();
+  await page.waitForSelector('.hero, .calm-hero, main');
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('.shoptwin').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('the same purchase: the shopping expense goes and the card\'s charge stays', async () => {
+  const { page, db, errors } = await open(1280, (d) => {
+    d.tables.transactions.push(
+      { id: 'sh2', household_id: d.hid, type: 'expense', amount: 600, description: 'רשת א', tx_date: '2026-11-05', source: 'shop', category_id: 'food', created_at: '2026-11-05T10:00:00Z' },
+      { id: 'cd2', household_id: d.hid, type: 'expense', amount: 612.4, description: 'רשת א', tx_date: '2026-11-05', source: 'import', card_id: 'c1', category_id: 'food', created_at: '2026-11-05T10:00:00Z' }
+    );
+  });
+  await page.goto(server.base + '/app/#/');
+  await page.waitForSelector('.shoptwin');
+  await page.click('.shoptwin .btn:not(.btn-ghost)');
+  await page.waitForFunction(() => !document.querySelector('.shoptwin'));
+  assert.equal(db.tables.transactions.find((t) => t.id === 'sh2'), undefined);
+  assert.ok(db.tables.transactions.find((t) => t.id === 'cd2'));
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('the store mode: Escape and ✕ leave it, and a phone with no wake lock still works', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 'b1', household_id: d.hid, name: 'אורז', aisle: 'dry', done: false, created_at: '2026-11-07T10:00:00Z' }];
+  });
+  await page.evaluate(() => { Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: undefined }); });
+  await page.click('.store-go');
+  await page.waitForSelector('.store');
+  // Ready for keys once the screen has taken over the page.
+  await page.waitForFunction(() => document.body.classList.contains('store-on'));
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.store'));
+  await page.click('.store-go');
+  await page.click('.store-x');
+  await page.waitForFunction(() => !document.querySelector('.store'));
+  assert.deepEqual(errors, []);
   await page.close();
 });
 

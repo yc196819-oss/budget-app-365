@@ -8,6 +8,34 @@ import { readLocal, writeLocal } from '../../lib/storage.js';
 import { track } from '../../lib/telemetry.js';
 import { showToast } from '../../lib/toast.js';
 import { Icon } from '../../components/Icon.js';
+import { shopTwins } from '../../domain/shopTrips.js';
+import { dropShopExpense } from '../../data/shopTrips.js';
+
+const dmy = (iso) => Number(iso.slice(8, 10)) + '.' + Number(iso.slice(5, 7)) + '.' + iso.slice(2, 4);
+
+// A shopping expense (from "סיימתי לקנות" or its receipt) and a line from the
+// card's statement that look like one purchase: both are shown, and the
+// household decides. Nothing is removed without them.
+function ShopTwin({ twin, cards, onKeep }) {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { track('shoptwin_shown'); }, [twin.key]);
+  const same = async () => {
+    setBusy(true);
+    track('shoptwin_same');
+    try { await dropShopExpense(twin.shop.id); showToast('נשאר רק החיוב מהכרטיס.'); } catch (_e) { showToast('לא נמחק. נסו שוב.'); setBusy(false); }
+  };
+  const card = twin.line.card_id && cards.find((c) => c.id === twin.line.card_id);
+  const row = (t, where) => html`<li class="twin-row"><span class="twin-where">${where}</span><b>${t.description}</b><span class="num">${dmy(t.tx_date)}</span><b class="num">₪${Number(t.amount).toLocaleString('he-IL', { maximumFractionDigits: 2 })}</b></li>`;
+  return html`<section class="card stack repair-card shoptwin" role="status" aria-label="אולי אותה קנייה פעמיים">
+    <b class="repair-title"><${Icon} name="bulb" size=${20} />אולי אותה קנייה נרשמה פעמיים</b>
+    <span class="muted repair-text">אחת מ"סיימתי לקנות" ואחת מהפירוט${card ? ' של ' + card.name : ''}. אותו בית עסק, בהפרש של עד 3 ימים. מה נכון?</span>
+    <ul class="twin-list">${row(twin.shop, 'מהקניות')}${row(twin.line, card ? 'מהכרטיס' : 'מהפירוט')}</ul>
+    <div class="repair-actions">
+      <button type="button" class="btn" disabled=${busy} onClick=${same}>זו אותה קנייה. להשאיר רק את החיוב מהכרטיס</button>
+      <button type="button" class="btn btn-ghost" disabled=${busy} onClick=${onKeep}>אלה שתי קניות שונות</button>
+    </div>
+  </section>`;
+}
 
 const skipKey = (hid) => 'repair:skip:' + hid;
 const readSkips = (hid) => { try { return new Set(JSON.parse(readLocal(skipKey(hid), '[]'))); } catch (_e) { return new Set(); } };
@@ -20,7 +48,14 @@ export function RepairCard({ data }) {
   const [skipped, setSkipped] = useState(() => readSkips(data.hid));
   const [busy, setBusy] = useState(false);
   const issue = findRepairs(data.txs, skipped)[0] || null;
+  const twin = issue ? null : shopTwins(data.txs, skipped)[0] || null;
   useEffect(() => { if (issue) track('repair_shown'); }, [issue && issue.key]);
+  const skip = (key) => {
+    const next = new Set(skipped); next.add(key);
+    writeLocal(skipKey(data.hid), JSON.stringify([...next]));
+    setSkipped(next);
+  };
+  if (twin) return html`<${ShopTwin} twin=${twin} cards=${data.cards || []} onKeep=${() => { skip(twin.key); track('shoptwin_keep'); }} />`;
   if (!issue) return null;
 
   const keep = () => {
