@@ -13,6 +13,7 @@ import { track } from '../../lib/telemetry.js';
 import { go } from '../../lib/go.js';
 import { PricePanel, PriceTeaser } from './PricePanel.js';
 import { CartBuilder } from './CartBuilder.js';
+import { StoreMode } from './StoreMode.js';
 import { takeRecipe } from '../../lib/advisorInbox.js';
 import { Receipts } from './Receipts.js';
 import { loadReceipts } from '../../data/receipts.js';
@@ -64,6 +65,8 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   const [intro, setIntro] = useState(() => !readLocal(INTRO_KEY, ''));
   const [prices, setPrices] = useState(false);
   const [advisor, setAdvisor] = useState(false);
+  // In the store: the list on the whole screen (the owner first).
+  const [store, setStore] = useState(false);
   // A recipe shared from the phone: "the advisor fills a cart" opens on it.
   const [sharedRecipe, setSharedRecipe] = useState(null);
   useEffect(() => {
@@ -141,6 +144,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
       <div class="shop-head">
         <span class="muted" style="font-size:14px">עוזרים לכם לחסוך בסופר: רשימה אחת לכל הבית, וכמה נשאר לסופר החודש. ${!intro && html`<button type="button" class="btn-text shop-what" onClick=${() => setIntro(true)}>מה זה?</button>`}</span>
         <span class="shop-tools">
+          ${owner && html`<button type="button" class="btn store-go" onClick=${() => { setStore(true); track('shop_store'); }} disabled=${!open.some((i) => !i.done)}><${Icon} name="cart" size=${17} />מצב בחנות</button>`}
           <a class="btn btn-ghost" href=${mailHref} aria-disabled=${String(!open.some((i) => !i.done))}><${Icon} name="mail" size=${17} />לשלוח במייל</a>
           <button type="button" class="btn btn-ghost" onClick=${copy} disabled=${!open.some((i) => !i.done)}>להעתיק</button>
           <button type="button" class="btn btn-ghost" onClick=${() => window.print()} disabled=${!open.some((i) => !i.done)}>להדפיס</button>
@@ -156,6 +160,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         <button type="submit" class="btn" disabled=${busy || !text.trim()}>להוסיף</button>
       </form>
       ${owner && html`<button type="button" class="card adv-cta" onClick=${() => { setAdvisor(true); track('shop_advisor_open'); }}><span class="adv-spark" aria-hidden="true"><${Icon} name="spark" size=${18} /></span><span><b>היועץ מכין עגלה</b><small class="muted">לשבוע, לשבת, לחג או לאורחים: לפי מספר האנשים ומה שאתם קונים בדרך כלל.</small></span><span aria-hidden="true">‹</span></button>`}
+      ${owner && store && html`<${StoreMode} items=${items} onToggle=${toggle} onFinish=${finish} onClose=${() => setStore(false)} />`}
       ${owner && advisor && html`<${CartBuilder} hid=${data.hid} items=${items} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }} onAdded=${() => { shop.reload && shop.reload(); track('shop_advisor_add'); }} />`}
       ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} receipts=${receipts} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}

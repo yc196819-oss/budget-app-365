@@ -487,6 +487,71 @@ test('a home that has bought enough before: the advisor makes the ready cart its
   await page.close();
 });
 
+test('in the store (the owner first): big tiles by department, a tap marks bought and back, the screen kept on, finishing from there', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [
+      { id: 'a1', household_id: d.hid, name: 'עגבניות', aisle: 'produce', qty: '1 ק"ג', done: false, created_at: '2026-11-07T10:00:00Z' },
+      { id: 'a2', household_id: d.hid, name: 'חלב', aisle: 'dairy', done: false, created_at: '2026-11-07T10:00:00Z' },
+      { id: 'a3', household_id: d.hid, name: 'לחם', aisle: 'bakery', done: false, created_at: '2026-11-07T10:00:00Z' }
+    ];
+  });
+  // A made-up wake lock, to see that the screen is asked to stay on and let go.
+  await page.evaluate(() => {
+    window.__lock = { asked: 0, released: 0 };
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => { window.__lock.asked++; return { release: async () => { window.__lock.released++; } }; } } });
+  });
+  await page.click('.store-go');
+  await page.waitForSelector('.store');
+  await page.waitForFunction(() => window.__lock.asked === 1);
+  assert.deepEqual(await page.locator('.store-aisle h2').evaluateAll((h) => h.map((x) => x.firstChild.textContent.trim())), ['ירקות ופירות', 'מאפים', 'מוצרי חלב']);
+  assert.match(await page.locator('.store-tile', { hasText: 'עגבניות' }).textContent(), /1 ק"ג/);
+  assert.match(await page.locator('.store-title').textContent(), /נקנו 0 מתוך 3/);
+  // Big enough for a thumb in a shop.
+  const box = await page.locator('.store-tile').first().boundingBox();
+  assert.ok(box.height >= 70 && box.width >= 150, JSON.stringify(box));
+  await page.locator('.store-tile', { hasText: 'חלב' }).click();
+  await page.waitForSelector('.store-tile.done');
+  assert.match(await page.locator('.store-title').textContent(), /נקנו 1 מתוך 3/);
+  for (let i = 0; i < 30 && !db.tables.shopping_items.find((x) => x.id === 'a2').done; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.shopping_items.find((x) => x.id === 'a2').done, true);
+  // A second tap takes it back.
+  await page.locator('.store-tile', { hasText: 'חלב' }).click();
+  await page.waitForFunction(() => !document.querySelector('.store-tile.done'));
+  await page.locator('.store-tile', { hasText: 'חלב' }).click();
+  await page.locator('.store-tile', { hasText: 'לחם' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.store-tile.done').length === 2);
+  // Hiding what was bought leaves what is still to find.
+  await page.click('.store-hide');
+  await page.waitForSelector('.store-hide.on');
+  assert.deepEqual(await page.locator('.store-tile .store-n').allTextContents(), ['עגבניות']);
+  await page.click('.store-hide');
+  // Finishing from the store: what was bought leaves the list, the screen lets go.
+  await page.click('.store-foot .btn');
+  await page.waitForFunction(() => !document.querySelector('.store'));
+  await page.waitForFunction(() => window.__lock.released === 1);
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 1);
+  assert.deepEqual(await page.locator('.shop-item .shop-name').allTextContents(), ['עגבניות']);
+  assert.ok(db.tables.shopping_items.find((x) => x.id === 'a3').cleared_at);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('the store mode: Escape and ✕ leave it, and a phone with no wake lock still works', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 'b1', household_id: d.hid, name: 'אורז', aisle: 'dry', done: false, created_at: '2026-11-07T10:00:00Z' }];
+  });
+  await page.evaluate(() => { Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: undefined }); });
+  await page.click('.store-go');
+  await page.waitForSelector('.store');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.store'));
+  await page.click('.store-go');
+  await page.click('.store-x');
+  await page.waitForFunction(() => !document.querySelector('.store'));
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('people who are not the owner do not see the advisor\'s week yet', async () => {
   const { page } = await openRegular(390);
   await page.waitForSelector('.shop-add');
