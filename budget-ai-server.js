@@ -1105,6 +1105,20 @@ const ADVISOR_STYLE = `מספרים: העתק כל סכום בדיוק כמו ש
 עדכונים: האפליקציה מעדכנת לבד את היתרות בחשבונות, ההכנסה הצפויה של כל אחד, יעדים, תקציבים, הלוואות, תשלומים קבועים או בתשלומים למספר ידוע של חודשים (הם נכנסים לתחזית), וגם רושמת לבד הכנסה שכבר נכנסה או הוצאה שכבר ירדה ("המשכורת נכנסה", "הלימודים ירדו"), מתוך מה שמספרים לך, אלא אם ביקשו לא לעדכן. במקרה כזה כתוב בקצרה שזה נרשם (יופיע מתחת לתשובה עם אפשרות ביטול). אל תבקש להזין ביד או "דרך ה-+" משהו שכבר סיפרו לך, ואל תטען שמשהו מופיע במערכת אם הוא לא בנתונים.
 מחיקת תנועות: כשהמשתמש מבקש למחוק תנועה שגויה, אמור שהאפליקציה תציג מתחת לשיחה את התנועות למחיקה לאישור שלו (ומה שנמחק אפשר לשחזר 30 יום). אל תאמר שאינך יכול.
 טעויות בנתונים: אל תטען שיש טעות, כפילות או חיוב כפול בלי לראות אותו בתנועות עצמן. ב-topMerchants, total3Months הוא סך כל החיובים ב-3 החודשים (charges חיובים, ואם eachCharge מופיע כל חיוב הוא בסכום הזה), לא סכום של חיוב אחד.`;
+// A shopping list written in the conversation (when the data has `shopping`):
+// the app shows it as a list the person can size, check and add to "קניות".
+const SHOP_LIST_RULE = `
+רשימת קניות: כשמבקשים ממך רשימת קניות (לשבוע, לשבת, לחג, לאירוע, לארוחה), כתוב משפט או שניים, ואז בשורה נפרדת: @@רשימה: ואחריו JSON בשורה אחת:
+{"title":"רשימה לשבת","people":6,"kosher":"מהדרין","items":[{"name":"עגבניות","qty":1.5,"unit":"ק\\"ג","aisle":"produce","scale":true}]}
+- people: מספר האנשים שנאמר בבקשה; אם לא נאמר, shopping.people; אם גם אין, 4. הכמויות (qty) לפי המספר הזה, כמספר בלבד, והיחידה ב-unit (ק"ג, גרם, ליטר, יח', בקבוקים, חבילות, שישיות, או ריק למספר יחידות).
+- scale:false למה שלא תלוי במספר האנשים (נרות, תבלינים, חבילה אחת של מוצר ניקיון).
+- קודם מה שהבית הזה קונה בדרך כלל (shopping.usual, מהקבלות וממה שסומן ברשימה), אם זה מתאים לבקשה, ואחר כך מה שחסר לבקשה. אל תכלול מה שכבר ב-shopping.onList.
+- כשרות: לפי מה שנאמר בבקשה, אחרת לפי shopping.kosher. kosher הוא שם קצר לכותרת, או ריק.
+- aisle אחד מ: produce, bakery, dairy, meat, dry, frozen, drinks, clean, care, baby, other.
+- עד 40 פריטים, שמות קצרים כמו שכותבים ברשימה (בלי מותגים, אלא אם הבית קונה מותג מסוים).
+- אם מבקשים לשנות רשימה שכתבת ("בלי בשר", "תוסיף סלטים", "ל-3 אנשים"), כתוב את כל הרשימה מחדש עם השינוי.
+- אל תכתוב מחירים או כמה זה יעלה: האפליקציה מחשבת לבד לפי מחירי הרשתות. אם יש lastPrice, אפשר להזכיר מה שילמו בפעם האחרונה.
+שורת @@רשימה: באה לפני שורת ${SUGG_MARK}.`;
 // How the app works (screens, buttons, what can and cannot be done), from
 // the same guide the app uses for its instant answers.
 let APP_GUIDE = '';
@@ -1156,7 +1170,7 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimit
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders && res.flushHeaders();
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender) + devicePart(device) + (image ? advisorImage.IMAGE_NOTE : ''));
+  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender) + devicePart(device) + (image ? advisorImage.IMAGE_NOTE : '') + (summary && summary.shopping ? SHOP_LIST_RULE : ''));
   // The household's numbers and lines (about 6-8k tokens at most).
   const text = JSON.stringify(summary || {}).slice(0, 24000);
   try {

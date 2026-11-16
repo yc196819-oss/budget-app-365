@@ -3,6 +3,7 @@
 // parsing the reply, and conversation helpers. No DOM, no network.
 
 import { MONTH_NAMES, monthShare, monthsBack, merchantKey } from './money.js';
+import { parseList } from './shopList.js';
 import { monthPlan } from './home.js';
 import { householdForecast, verdict } from './forecast.js';
 import { openLoans, loanPlan } from './assets.js';
@@ -177,6 +178,8 @@ export function normalizeMessages(rows, legacy, ownerId) {
       ...(m.role === 'advice'
         ? { id: m.id, role: 'ai', text: adviceText(m.data), author_id: m.author_id }
         : { id: m.id, role: m.role, text: m.role === 'ai' ? parseReply(m.text).text : String(m.text || ''), author_id: m.author_id }),
+      // A shopping list the advisor wrote shows again as a list.
+      ...(m.role === 'ai' && parseList(m.text) ? { list: parseList(m.text) } : {}),
       ...(m.created_at ? { created_at: m.created_at } : {})
     }));
 }

@@ -19,6 +19,12 @@ import { matchHowto, profileHint } from '../../content/howto.js';
 import { go } from '../../lib/go.js';
 import { shrinkImage } from '../../data/feedback.js';
 import { takeAdvisorImage } from '../../lib/advisorInbox.js';
+import { useOwner } from '../../lib/owner.js';
+import { parseList, shopContext, LIST_MARK } from '../../domain/shopList.js';
+import { ShopListCard } from './ShopListCard.js';
+import { loadShopping } from '../../data/shopping.js';
+import { loadReceipts } from '../../data/receipts.js';
+import { getKosherPref } from '../../data/prices.js';
 
 // A picture goes with the question. It is read for the
 // answer and not kept: the conversation keeps only this line and the answer.
@@ -71,6 +77,13 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   // The picture waiting to go with the next question: { data, name } | null.
   const [image, setImage] = useState(null);
   const [picNote, setPicNote] = useState(false);
+  // Shopping lists in the conversation (the owner first): what this home buys
+  // (its list's history, receipts included), the people and the kashrut.
+  const owner = useOwner(session.user && session.user.email);
+  const [shop, setShop] = useState(null);
+  const loadShop = () => (owner && hid ? Promise.all([loadShopping(hid).catch(() => []), loadReceipts(hid).catch(() => []), getKosherPref(hid).catch(() => null)])
+    .then(([items, receipts, kosher]) => { const c = shopContext({ items, receipts, people: data.people, kosher }); setShop(c); return c; }) : Promise.resolve(null));
+  useEffect(() => { loadShop(); }, [owner, hid]);
   const attach = async (file) => {
     if (!file) return;
     setError('');
@@ -138,7 +151,10 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       if (!memories.current) memories.current = await loadMemories(hid).catch(() => []);
       const dec = decisionsSnapshot();
       const sharedDecisions = dec.status === 'ready' ? forAdvisor(dec.decisions, dec.votes, Object.keys(names)) : [];
-      const summary = buildSummary({ ...data, sharedDecisions, userId: me, userName: realName(names[me]), memories: memories.current, screen });
+      const base = buildSummary({ ...data, sharedDecisions, userId: me, userName: realName(names[me]), memories: memories.current, screen });
+      // First, so a long summary cut on the server keeps it.
+      const shopNow = owner ? (await loadShop()) || shop : null;
+      const summary = shopNow ? { shopping: shopNow, ...base } : base;
       let raw = '';
       abort.current = new AbortController();
       await streamReply({ summary, history, message: msg, authorName: realName(names[me]), authorGender: genderOf(data.genders, me), ...(pic ? { image: pic.data } : {}) }, (delta) => {
@@ -149,11 +165,14 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       const truths = truthsOf(summary);
       // And what the person wrote in this conversation ("1,380" stays 1,380).
       for (const m of [...(c.messages || []), { role: 'user', text: msg }]) if (m.role === 'user') for (const x of String(m.text || '').match(/\d[\d,]*(?:\.\d+)?/g) || []) { const v = Math.round(Number(x.replace(/,/g, ''))); if (v >= 1000) truths.add(v); }
-      raw = fixSums(alignNumbers(raw, truths));
+      // (Not the list's amounts: they are the list's, not the screen's numbers.)
+      const cut = raw.indexOf(LIST_MARK);
+      raw = cut >= 0 ? fixSums(alignNumbers(raw.slice(0, cut), truths)) + raw.slice(cut) : fixSums(alignNumbers(raw, truths));
+      const list = parseList(raw);
       const reply = parseReply(raw);
       const finalText = reply.text || 'לא התקבלה תשובה. נסו לנסח אחרת.';
       answered = reply.text || null;
-      setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me } : m)) });
+      setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me, ...(list ? { list } : {}) } : m)) });
       setSuggestions(reply.suggestions);
       // The full reply is saved, with the follow-ups, as the current app does.
       await addMessage({ conversationId: c.id, hid, userId: me, role: 'ai', text: raw || finalText });
@@ -313,6 +332,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
             : m.role === 'user' && String(m.text || '').startsWith(PIC_MARK)
               ? html`${m.thumb && html`<img class="adv-thumb" src=${m.thumb} alt="התמונה שצורפה" />`}<span class="adv-pic-line"><${Icon} name="image" size=${15} />${PIC_MARK}${m.thumb ? '' : ' (לא נשמרת)'}</span><span>${String(m.text).slice(PIC_MARK.length + 3)}</span>`
               : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
+          ${m.list && hid && html`<${ShopListCard} list=${m.list} hid=${hid} people=${data.people} onList=${(shop && shop.onList) || []} />`}
           ${m.howto && html`<div class="adv-howto">
             <small class="faint">תשובה מהירה מהמדריך של האפליקציה</small>
             <div class="adv-howto-actions">
