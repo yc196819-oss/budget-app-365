@@ -36,6 +36,9 @@ async function open(width = 1280, setup = () => {}, email = OWNER) {
   if (regularView) await page.evaluate(() => localStorage.setItem('owner:shop-as-user', '1'));
   await page.goto(server.base + '/app/#/shop');
   await page.reload();
+  // The owner sees "הרשימות שלי" first: into the (first) list.
+  await page.waitForSelector('.shop-add, .sl-chat');
+  if (!(await page.locator('.shop-add').count())) await page.locator('.sl-chat').first().click();
   await page.waitForSelector('.shop-add');
   return { page, db, errors };
 }
@@ -1078,6 +1081,8 @@ test('the owner\'s partner (in his household) gets the whole shopping tab in her
   await signIn(page, server.base);
   await page.goto(server.base + '/app/#/shop');
   await page.reload();
+  // The same lists as the owner ("הרשימות שלי"), and into one.
+  await page.locator('.sl-chat').first().click();
   await page.locator('.shop-add').waitFor();
   assert.equal(await page.locator('.bottom-nav .nav-item[href="#/shop"]').count(), 1);
   // The full version: the comparison and the advisor, not the "soon" preview.
@@ -1087,6 +1092,40 @@ test('the owner\'s partner (in his household) gets the whole shopping tab in her
   // And nothing of the owner's board.
   await page.click('button[aria-label^="פרופיל והגדרות"]');
   assert.equal(await page.locator('text=לוח בעלים').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('"הרשימות שלי": the lists like chats; a new list opens, items go into it, and back shows both with what is in them', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 'k1', household_id: d.hid, name: 'חלב', aisle: 'dairy', done: false, created_at: '2026-11-07T10:00:00Z' }];
+  });
+  // Opened into the first list (made for what was already on it).
+  assert.equal(db.tables.shopping_lists.length, 1);
+  assert.equal(await page.locator('.shop-listhead h2').textContent(), 'הרשימה שלי');
+  await page.click('.shop-listhead .back-btn');
+  await page.waitForSelector('.sl-chat');
+  assert.match(await page.locator('.sl-chat').first().textContent(), /הרשימה שלי.*חלב.*0 מתוך 1/);
+  await page.click('.sl-new');
+  await page.fill('#sl-name', 'לשבת');
+  await page.click('.sl-new-form .btn');
+  await page.waitForSelector('.shop-listhead');
+  assert.equal(await page.locator('.shop-listhead h2').textContent(), 'לשבת');
+  assert.equal(await page.locator('.shop-item').count(), 0, 'a new list is empty');
+  await page.locator('.shop-add .input').fill('חלות, יין');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 2);
+  const shabbat = db.tables.shopping_lists.find((l) => l.name === 'לשבת');
+  assert.deepEqual(db.tables.shopping_items.filter((i) => i.list_id === shabbat.id).map((i) => i.name).sort(), ['חלות', 'יין']);
+  await page.click('.shop-listhead .back-btn');
+  await page.waitForFunction(() => document.querySelectorAll('.sl-chat').length === 2);
+  const rows = await page.locator('.sl-chat').allTextContents();
+  assert.ok(rows.some((r) => /לשבת.*חלות, יין/.test(r)) && rows.some((r) => /הרשימה שלי.*חלב/.test(r)), rows.join(' | '));
+  // A list with things on it is not closed.
+  await page.locator('.sl-chat', { hasText: 'הרשימה שלי' }).click();
+  await page.click('.shop-archive');
+  await page.waitForSelector('.toast');
+  assert.ok(!db.tables.shopping_lists.find((l) => l.name === 'הרשימה שלי').archived_at);
   assert.deepEqual(errors, []);
   await page.close();
 });

@@ -6,7 +6,9 @@ import { parseItems, aisleOf, grouped, usual, previousList, onList, listText, pe
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { categoryRows } from '../../domain/money.js';
 import { money } from '../../domain/format.js';
-import { useShopping, addItems, setDone, removeItem, finishShopping, getArea, setArea } from '../../data/shopping.js';
+import { useShopping, addItems, setDone, removeItem, finishShopping, getArea, setArea, loadLists, createList, archiveList } from '../../data/shopping.js';
+import { ShopLists } from './ShopLists.js';
+import { listOf } from '../../domain/shopLists.js';
 import { canListen, listen } from '../../lib/speech.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
@@ -84,6 +86,18 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
     return () => window.removeEventListener('recipe-shared', take);
   }, [owner]);
   const [receipts, setReceipts] = useState([]);
+  // Several lists (the owner first): null before they load or without the
+  // table (one list, as before). openList: the list on screen, null for "הרשימות שלי".
+  const [lists, setLists] = useState(null);
+  const [openList, setOpenList] = useState(null);
+  useEffect(() => {
+    if (!owner || !data.hid) return;
+    loadLists(data.hid).then(async (ls) => {
+      // The first time, a list for what is already on it.
+      if (ls && !ls.length) { try { ls = [await createList(data.hid, 'הרשימה שלי')]; } catch (_e) { ls = null; } }
+      setLists(ls);
+    }).catch(() => setLists(null));
+  }, [data.hid, owner]);
   const closeIntro = () => { writeLocal(INTRO_KEY, '1'); setIntro(false); };
   useEffect(() => { if (owner && data.hid) loadReceipts(data.hid).then(setReceipts).catch(() => setReceipts([])); }, [data.hid, owner]);
   useEffect(() => { if (data.hid) getArea(data.hid).then((a) => setAreaText(a)).catch(() => setAreaText('')); }, [data.hid]);
@@ -91,12 +105,34 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   if (shop.status === 'loading' || data.status !== 'ready') return html`<${Loading} label="טוען את הרשימה…" />`;
   if (shop.status === 'error') return html`<div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו לטעון את הרשימה</b><button type="button" class="btn btn-ghost" onClick=${shop.reload}>לנסות שוב</button></div>`;
 
-  const items = shop.items;
+  const all = shop.items;
+  const withLists = owner && Array.isArray(lists) && lists.length > 0;
+  // "הרשימות שלי": the lists, before any one of them.
+  if (withLists && !openList) {
+    const newList = async (name, kind = null) => { const l = await createList(data.hid, name, kind); setLists((ls) => [...ls, l]); return l; };
+    return html`<div class="shop shop-home">
+      <p class="shop-trial" role="note"><b>בהרצה:</b> הטאב חדש ועוד משתפר. ראיתם משהו לא תקין? <button type="button" class="btn-text shop-trial-talk" onClick=${() => go('profile/feedback')}>כתבו לנו</button>.</p>
+      <${ShopLists} lists=${lists} items=${all} trips=${trips}
+        onOpen=${(id) => { setOpenList(id); track('shop_list_open'); window.scrollTo(0, 0); }}
+        onCreate=${async (name) => { try { const l = await newList(name); setOpenList(l.id); track('shop_list_new'); } catch (_e) { showToast('הרשימה לא נוצרה. נסו שוב.'); } }}
+        onAdvisor=${() => { setAdvisor(true); track('shop_advisor_open'); }}
+        onTrips=${(id) => setHistory(id)} />
+      ${advisor && html`<${CartBuilder} hid=${data.hid} items=${all} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }}
+        toList=${async (list) => (await newList(String((list && list.title) || 'רשימה מהיועץ').slice(0, 60), 'advisor')).id}
+        onAdded=${(id) => { shop.reload(); setAdvisor(false); if (id) setOpenList(id); track('shop_advisor_add'); }} />`}
+      ${history !== null && html`<${TripsSheet} data=${data} trips=${trips} items=${all} start=${history || null} onClose=${() => setHistory(null)}
+        onChanged=${(t) => setTrips((x) => x.map((y) => (y.id === t.id ? { ...y, ...t } : y)))}
+        onRemoved=${(ids) => shop.patch((x) => x.filter((y) => !ids.includes(y.id)))} />`}
+    </div>`;
+  }
+  const current = withLists ? lists.find((l) => l.id === openList) : null;
+  // On screen: this list's items (with the history, for "usual" and "last time").
+  const items = withLists ? all.filter((i) => i.cleared_at || listOf(i, lists) === openList) : all;
   const groups = grouped(items);
   const open = items.filter((i) => !i.cleared_at);
   const bought = open.filter((i) => i.done).length;
-  const usualList = usual(items);
-  const prev = previousList(items);
+  const usualList = usual(all);
+  const prev = previousList(all);
   const fb = foodBudget(data, new Date());
   // Who added an item matters only when more than one person shops.
   const many = Object.keys(data.members || {}).length > 1;
@@ -106,7 +142,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
     if (!fresh.length) { showToast(list.length === 1 ? list[0].name + ' כבר ברשימה' : 'הכול כבר ברשימה'); return; }
     setBusy(true);
     try {
-      const rows = await addItems(data.hid, fresh);
+      const rows = await addItems(data.hid, fresh, withLists ? openList : null);
       shop.patch((all) => [...all, ...rows.filter((r) => !all.some((a) => a.id === r.id))]);
       track(from === 'typed' ? 'shop_add' : 'shop_reuse');
     } catch (_e) { showToast('לא נוסף. נסו שוב.'); }
@@ -148,6 +184,8 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
     ${asUser && html`<div class="card shop-asuser" role="status"><span><b>תצוגת משתמש רגיל</b><small class="muted">כך משפחה רגילה רואה את הקניות, בלי הניסויים של לוח הבעלים.</small></span>
       ${onOwnerView && html`<button type="button" class="btn btn-ghost" onClick=${onOwnerView}>לחזור לתצוגת הבעלים</button>`}</div>`}
     <section class="shop-main stack">
+      ${current && html`<div class="shop-listhead"><button type="button" class="back-btn" aria-label="לכל הרשימות" onClick=${() => setOpenList(null)}>→</button><h2>${current.name}</h2>
+        <button type="button" class="btn-text shop-archive" onClick=${async () => { if (open.length) { showToast('ברשימה עוד יש מוצרים. "סיימתי לקנות" או הורידו אותם, ואז אפשר לסגור.'); return; } try { await archiveList(current.id); setLists((ls) => ls.filter((l) => l.id !== current.id)); setOpenList(null); showToast('הרשימה נסגרה'); } catch (_e) { showToast('לא נסגרה. נסו שוב.'); } }}>לסגור את הרשימה</button></div>`}
       <div class="shop-head">
         <span class="muted" style="font-size:14px">עוזרים לכם לחסוך בסופר: רשימה אחת לכל הבית, וכמה נשאר לסופר החודש. ${!intro && html`<button type="button" class="btn-text shop-what" onClick=${() => setIntro(true)}>מה זה?</button>`}</span>
         <span class="shop-tools">
@@ -173,7 +211,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
       ${owner && history !== null && html`<${TripsSheet} data=${data} trips=${trips} items=${items} start=${history || null} onClose=${() => setHistory(null)}
         onChanged=${(t) => setTrips((all) => all.map((x) => (x.id === t.id ? { ...x, ...t } : x)))}
         onRemoved=${(ids) => shop.patch((all) => all.filter((x) => !ids.includes(x.id)))} />`}
-      ${owner && advisor && html`<${CartBuilder} hid=${data.hid} items=${items} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }} onAdded=${() => { shop.reload && shop.reload(); track('shop_advisor_add'); }} />`}
+      ${owner && advisor && html`<${CartBuilder} hid=${data.hid} items=${items} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }} toList=${withLists ? async () => openList : null} onAdded=${() => { shop.reload && shop.reload(); track('shop_advisor_add'); }} />`}
       ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} receipts=${receipts} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}
       ${groups.map((g) => html`<div class="shop-group" key=${g.aisle}>

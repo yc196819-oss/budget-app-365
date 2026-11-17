@@ -19,7 +19,7 @@ const STEPS = ['בודק מה אתם קונים בדרך כלל', 'מתאים ל
 // list by department, and at the bottom what the cart costs at the cheapest
 // chain. The prices of each line show only when a chain is opened. A line
 // taken out (✕) can be put back. Nothing is added to "קניות" until the button.
-export function ShopListCard({ list, hid, people: homePeople, onList = [], build = true, onAdded = null }) {
+export function ShopListCard({ list, hid, people: homePeople, onList = [], build = true, onAdded = null, toList = null }) {
   const start = list.people || homePeople || 4;
   const [people, setPeople] = useState(start);
   const [typed, setTyped] = useState(String(start));
@@ -79,7 +79,7 @@ export function ShopListCard({ list, hid, people: homePeople, onList = [], build
   const back = (name) => setOut((s) => { const n = new Set(s); n.delete(name); return n; });
   const add = async () => {
     setState('adding');
-    try { await addItems(hid, items); track('advisor_list_add'); setState({ added: items.length }); if (onAdded) onAdded(); }
+    try { const listId = toList ? await toList(list) : null; await addItems(hid, items, listId); track('advisor_list_add'); setState({ added: items.length }); if (onAdded) onAdded(listId); }
     catch (_e) { setState({ error: 'לא נשמר. נסו שוב.' }); }
   };
   const have = list.items.filter((i) => alreadyOn(i.name, onList)).map((i) => i.name);

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'preact/hooks';
 // other within a second. Finished shoppings stay (cleared_at) for 120 days,
 // for "the previous list" and "what you usually buy".
 const DAYS = 120;
-const COLS = 'id,name,qty,aisle,done,added_by,created_at,done_at,cleared_at,barcode,trip_id';
+const COLS = 'id,name,qty,aisle,done,added_by,created_at,done_at,cleared_at,barcode,trip_id,list_id';
 
 export async function loadShopping(hid) {
   const since = new Date(Date.now() - DAYS * 86400000).toISOString();
@@ -14,16 +14,17 @@ export async function loadShopping(hid) {
   let { data, error } = await get(COLS);
   // Before the prices update reaches the database there is no barcode column:
   // the list still loads, without the chosen products.
-  if (error && /barcode/.test(String(error.message || ''))) ({ data, error } = await get(COLS.replace(',barcode', '').replace(',trip_id', '')));
+  if (error && /barcode/.test(String(error.message || ''))) ({ data, error } = await get(COLS.replace(',barcode', '').replace(',trip_id', '').replace(',list_id', '')));
   if (error) throw error;
   return data || [];
 }
 
-export async function addItems(hid, items) {
+export async function addItems(hid, items, listId = null) {
   if (!items.length) return [];
-  const rows = items.map((i) => ({ household_id: hid, name: i.name, qty: i.qty || null, aisle: i.aisle || 'other' }));
+  const rows = items.map((i) => ({ household_id: hid, name: i.name, qty: i.qty || null, aisle: i.aisle || 'other', ...(listId ? { list_id: listId } : {}) }));
+  if (listId) touchList(listId);
   let { data, error } = await sb.from('shopping_items').insert(rows).select(COLS);
-  if (error && /barcode/.test(String(error.message || ''))) ({ data, error } = await sb.from('shopping_items').insert(rows).select(COLS.replace(',barcode', '').replace(',trip_id', '')));
+  if (error && /barcode/.test(String(error.message || ''))) ({ data, error } = await sb.from('shopping_items').insert(rows).select(COLS.replace(',barcode', '').replace(',trip_id', '').replace(',list_id', '')));
   if (error) throw error;
   return data || [];
 }
@@ -93,4 +94,29 @@ export async function readRecipe({ url = '', text = '', file = null } = {}) {
   if (file) { const { shrinkImage } = await import('./feedback.js'); image = await shrinkImage(file, 1024 * 1024); }
   const j = await api('/api/ai/recipe', { method: 'POST', body: { url: url || undefined, text: text || undefined, image: image || undefined } });
   return j && j.recipe ? j.recipe : null;
+}
+
+// ── lists ──
+const LCOLS = 'id,name,kind,created_at,updated_at,archived_at';
+export async function loadLists(hid) {
+  const { data, error } = await sb.from('shopping_lists').select(LCOLS).eq('household_id', hid).is('archived_at', null).order('created_at', { ascending: true });
+  if (error) return null; // before the table: one list, as before
+  return data || [];
+}
+export async function createList(hid, name, kind = null) {
+  const { data, error } = await sb.from('shopping_lists').insert({ household_id: hid, name, kind }).select(LCOLS).single();
+  if (error) throw error;
+  return data;
+}
+export async function renameList(id, name) {
+  const { error } = await sb.from('shopping_lists').update({ name, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+}
+// A list no longer needed: hidden (its items stay in the history).
+export async function archiveList(id) {
+  const { error } = await sb.from('shopping_lists').update({ archived_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+}
+function touchList(id) {
+  sb.from('shopping_lists').update({ updated_at: new Date().toISOString() }).eq('id', id).then(() => {}, () => {});
 }
