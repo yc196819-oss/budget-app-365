@@ -23,6 +23,18 @@ const gSet = (k, v) => writeLocal('guest:' + k, JSON.stringify(v));
 // for the whole list), and only what is missing is asked of the price
 // service through the server.
 
+// The products by barcode (for a receipt's lines): { [barcode]: product },
+// in the same shape as searchPrices' products. Read only.
+export async function pricesByBarcode(codes) {
+  const list = [...new Set((codes || []).map((c) => String(c || '').replace(/\D/g, '')).filter((c) => c.length >= 4 && c.length <= 14))].slice(0, 200);
+  if (!list.length || GUEST) return {};
+  const { data, error } = await sb.rpc('price_by_barcodes', { p_barcodes: list });
+  if (error) throw error;
+  const out = {};
+  for (const r of data || []) out[r.barcode] = { ...r, names: String(r.names || '').split(' | ').filter(Boolean), offers: (r.offers || []).map((o) => (o && o.chain_name ? { ...o, chain_name: chainHe(o.chain_name) } : o)) };
+  return out;
+}
+
 // The products for every item on the list, as { [typed name]: [products] }.
 // Items per request: 15 take ~3 seconds in the database at most (40 took
 // ~8, the limit of a signed-in request).

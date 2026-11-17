@@ -2086,6 +2086,13 @@ body.store-on { overflow: hidden; }
 .trip-table tr.st-ok .dot { background: #2F7A5B; }
 .trip-table tr.st-check .dot { background: #B4541A; }
 .trip-table tr.st-check td { background: color-mix(in srgb, #B4541A 10%, transparent); }
+.trip-table tr.st-promo .dot, .trip-table tr.st-cheaper .dot { background: #2F6FB4; }
+.trip-table .trip-st { display: block; font-size: 12.5px; color: var(--muted); margin-inline-start: 14px; }
+.trip-table tr.st-check .trip-st { color: #B4541A; font-weight: 600; }
+.trip-table tr.st-promo .trip-st, .trip-table tr.st-cheaper .trip-st { color: #2F6FB4; }
+.trip-table .trip-kg { display: block; font-size: 11.5px; }
+.trip-fair { margin: 0; font-size: 14.5px; line-height: 1.6; }
+.trip-fair .good-t { color: #2F7A5B; }
 .twin-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .twin-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
 .twin-where { font-size: 12px; font-weight: 700; color: var(--accent); }

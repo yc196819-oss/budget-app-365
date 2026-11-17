@@ -585,6 +585,53 @@ test('finishing a shopping saves a trip: the bought leave, the rest stay, a type
   await page.close();
 });
 
+test('a receipt with barcodes: found by barcode (not by a similar name), deals shown, kilo prices, and the sums are over the same products', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shop_trips = [{ id: 'tr1', household_id: d.hid, finished_at: '2026-11-07T12:00:00Z', chain: 'x', chain_name: 'רשת א', bought: 2, left_over: 0, receipt_id: null, tx_id: null, total: null }];
+  });
+  await priceRoutes(page, { db });
+  const asked = { codes: null, names: [] };
+  const off = (price, promos = []) => ({ chain: 'x', chain_name: 'רשת א', price, promos });
+  await page.route('**/rest/v1/rpc/price_by_barcodes', (r) => {
+    asked.codes = JSON.parse(r.request().postData()).p_barcodes;
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+      { barcode: '7290000000011', name: 'מיץ ענבים טבעי 1 ליטר', names: '', qty: 1, unit: 'ליטר', offers: [off(11.9)] },
+      { barcode: '7290000000028', name: 'ג\'ל כביסה 5 ליטר', names: '', qty: 5, unit: 'ליטר', offers: [off(39.9, [{ text: '2 ב-64', unit_price: 32, need: 2, everyone: true }])] }
+    ]) });
+  });
+  await page.route('**/rest/v1/rpc/price_search', (r) => {
+    const qs = JSON.parse(r.request().postData()).p_queries;
+    asked.names.push(...qs);
+    const rows = [];
+    qs.forEach((q, k) => { if (/דג/.test(q)) rows.push({ q: k + 1, barcode: '2001', name: 'דג פילה', names: '', qty: 1, unit: 'ק"ג', kosher: {}, offers: [off(59.9)] }); });
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) });
+  });
+  await page.route('**/api/receipts/scan', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ store: 'רשת א', date: '2026-11-07', total: 200, items: [
+    { name: 'מיץ ענבים', code: '7290000000011', qty: 1, price: 9.6 },
+    { name: 'ג\'ל כביסה', code: '7290000000028', qty: 1, price: 32 },
+    { name: 'דג פילה', code: '8611', qty: 1.5, price: 90, unit_price: 60, weighed: true },
+    { name: 'שקית', qty: 1, price: 0.6 }
+  ] }) }));
+  await page.click('.trips-card');
+  await page.click('.trip-row');
+  await page.waitForSelector('.trip-nudge');
+  await page.setInputFiles('.trip-nudge input[type=file]', { name: 'r.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') });
+  await page.waitForSelector('.trip-table');
+  // The barcodes were asked; by name only what they did not find.
+  assert.deepEqual(asked.codes.sort(), ['7290000000011', '7290000000028', '8611']);
+  assert.ok(!asked.names.some((n) => /מיץ|כביסה/.test(n)), 'nothing found by barcode is searched by name');
+  assert.match(await page.locator('.trip-table tr', { hasText: 'ג\'ל כביסה' }).textContent(), /במבצע · 2 ב-64.*32\.00.*39\.90/);
+  assert.match(await page.locator('.trip-table tr', { hasText: 'מיץ ענבים' }).textContent(), /זול מאצלנו.*9\.60.*11\.90/);
+  assert.match(await page.locator('.trip-table tr', { hasText: 'דג פילה' }).textContent(), /לפי שם.*60\.00\s*לק"ג.*59\.90\s*לק"ג/);
+  assert.equal(await page.locator('.trip-table tr.st-check').count(), 0);
+  assert.match(await page.locator('.trip-sum').textContent(), /3\/4\s*מוצרים הושוו/);
+  // 9.60 + 32 + 60×1.5 = 131.60 paid; 11.90 + 39.90 + 59.90×1.5 = 141.65 regular.
+  assert.match(await page.locator('.trip-fair').textContent(), /על 3 המוצרים שהושוו שילמתם ₪131\.60.*₪141\.65.*חסכתם ₪10\.05/);
+  assert.equal(db.tables.shop_receipts[0].items[0].code, '7290000000011', 'the barcodes are kept with the receipt');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('a receipt for a trip: its prices against ours at the same chain, a big gap marked to check, and its total becomes the expense', async () => {
   const { page, db, errors } = await open(390, (d) => {
     d.tables.shop_trips = [{ id: 'tr1', household_id: d.hid, finished_at: '2026-11-07T12:00:00Z', chain: 'x', chain_name: 'רשת א', bought: 2, left_over: 0, receipt_id: null, tx_id: null, total: null }];
