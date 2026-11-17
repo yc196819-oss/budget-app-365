@@ -920,7 +920,14 @@ function todayRows({ users = [], events = [], calls = [], errors = [], now = new
 
 // The owner's evening email: the same sentence as "who came in today?",
 // one line per person, and how many requests wait. Pure.
-function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
+// heavyAi: how many AI actions each home past the heads-up line used this month.
+function heavyAiLine(heavyAi = []) {
+  if (!heavyAi.length) return '';
+  const top = Math.max(...heavyAi);
+  return (heavyAi.length === 1 ? 'בית אחד עבר' : heavyAi.length + ' בתים עברו') + ' 300 פעולות AI החודש (הכי הרבה: ' + top + ' מתוך ' + AI_MONTHLY_DEFAULT + '). אם צריך, אפשר להגדיל לו את המכסה.';
+}
+function ownerDigestMail({ day, summary, items = [], waiting = 0, link, heavyAi = [] }) {
+  const heavy = heavyAiLine(heavyAi);
   const origin = String(link).replace(/\/app\/?.*$/, '');
   const dmy = String(day || '').split('-').reverse().join('.');
   const k = (x, one, many) => (!x ? '' : x === 1 ? one : x + ' ' + many);
@@ -932,11 +939,12 @@ function ownerDigestMail({ day, summary, items = [], waiting = 0, link }) {
   const inner = '<p style="margin:0 0 12px;font-size:20px;font-weight:bold;color:#2B2118">היום באפליקציה · ' + escHtml(dmy) + '</p>'
     + '<p style="margin:0 0 16px;font-size:16px;line-height:1.65;color:#2B2118">' + escHtml(summary) + '</p>'
     + (waiting ? '<p style="margin:0 0 16px;padding:10px 14px;background:#FBF4EA;border-radius:12px;font-size:15px;color:#5B4B3D">' + (waiting === 1 ? 'פנייה אחת מחכה לתשובה.' : waiting + ' פניות מחכות לתשובה.') + '</p>' : '')
+    + (heavy ? '<p style="margin:0 0 16px;padding:10px 14px;background:#FBF4EA;border-radius:12px;font-size:15px;color:#5B4B3D">' + escHtml(heavy) + '</p>' : '')
     + (rows ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px">' + rows + '</table>' : '')
     + mailButton(link + '?go=profile/admin#/home', 'ללוח הבעלים');
   const subject = (items.length ? 'היום: ' + (items.length === 1 ? 'משתמש אחד נכנס' : items.length + ' משתמשים נכנסו') : 'היום: אף אחד לא נכנס')
     + (needs.length ? ', ' + (needs.length === 1 ? 'אחד צריך עזרה' : needs.length + ' צריכים עזרה') : '') + (waiting ? ', ' + (waiting === 1 ? 'פנייה אחת מחכה' : waiting + ' פניות מחכות') : '');
-  const text = 'היום באפליקציה · ' + dmy + '\n\n' + summary + (waiting ? '\n' + waiting + ' פניות מחכות לתשובה.' : '') + '\n\n'
+  const text = 'היום באפליקציה · ' + dmy + '\n\n' + summary + (waiting ? '\n' + waiting + ' פניות מחכות לתשובה.' : '') + (heavy ? '\n' + heavy : '') + '\n\n'
     + items.slice(0, 30).map((p) => '• ' + nameOf(p) + (p.newToday ? ' (חדש היום)' : '') + ': ' + did(p) + (p.health ? ' · ' + p.health.label : '')).join('\n') + '\n\nללוח הבעלים: ' + link + '?go=profile/admin#/home';
   return { subject, text, html: mailShell({ origin, inner, footer: 'סיכום יומי לבעל האפליקציה. החשבונות שלך לא נספרים.' }) };
 }
@@ -949,4 +957,4 @@ function isOwnerEmail(email, emails = [], hashes = []) {
   if (emails.includes(e)) return true;
   return hashes.includes(require('crypto').createHash('sha256').update(e).digest('hex'));
 }
-module.exports = { isOwnerEmail, mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, ON_BOARD, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };
+module.exports = { isOwnerEmail, mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, heavyAiLine, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, ON_BOARD, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };
