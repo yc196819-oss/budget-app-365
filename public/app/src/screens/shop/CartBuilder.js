@@ -21,7 +21,7 @@ const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 // The kinds offered: the ready ones, and a recipe (a link, its text or a photo).
 const KINDS = [...TEMPLATES, { key: 'recipe', label: 'ממתכון', hint: 'קישור, טקסט או תמונה של מתכון' }];
 
-export function CartBuilder({ hid, items, receipts = [], people: homePeople, onClose, onAdded, shared = null }) {
+export function CartBuilder({ hid, items, receipts = [], people: homePeople, onClose, onAdded, shared = null, toList = null }) {
   const [kind, setKind] = useState(shared ? 'recipe' : null);
   const [meal, setMeal] = useState(null);
   const [typed, setTyped] = useState(String(homePeople || 4));
@@ -86,7 +86,7 @@ export function CartBuilder({ hid, items, receipts = [], people: homePeople, onC
         <${CartDraw} />
         <span class="cart-fill-t"><b>היועץ מכין לכם את העגלה…</b>${STEPS.map((s, i) => html`<small key=${i} class=${i < step ? 'done' : i === step ? 'now' : ''}>${i < step ? '✓ ' : ''}${s}</small>`)}</span>
       </div>`}
-      ${!filling && list && html`<${ShopListCard} list=${list} hid=${hid} people=${people} onList=${(ctx && ctx.onList) || []} build=${false} onAdded=${onAdded} />
+      ${!filling && list && html`<${ShopListCard} list=${list} hid=${hid} people=${people} onList=${(ctx && ctx.onList) || []} build=${false} onAdded=${onAdded} toList=${toList} />
         <button type="button" class="btn-text" onClick=${() => { setList(null); setStep(-1); }}>עגלה אחרת</button>`}
     </div>
   <//>`;
