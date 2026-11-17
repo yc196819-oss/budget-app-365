@@ -14,7 +14,11 @@ const advisorImage = require('./server/advisorImage');
 const { loadActive } = require('./server/active');
 const { measure } = require('./server/latency');
 const { parseImport, shapeOf } = require('./server/importParse');
-const STRICT_LIST = '\n\nחשוב: ענה רק במערך JSON תקין, בלי שום מילה לפניו או אחריו. מספרים בלי פסיקים של אלפים. אם בקטע הזה אין עסקאות (למשל דף סיכום או פרטי לקוח), החזר [] בלבד.';
+// The advisor reads the data; it does not change it. Users were told "תיקנתי"
+// and then that it must be done by hand.
+const AI_HEADS_UP = 300;
+const NO_FAKE_FIX ='אתה לא יכול לשנות נתונים באפליקציה: לא תנועות, לא קטגוריות, לא סכומים ולא תאריכים. לעולם אל תכתוב שתיקנת, שינית, עדכנת, העברת או מחקת משהו. כשמבקשים ממך תיקון, כתוב בקצרה את הצעדים המדויקים לפי המדריך (למשל כסף ← תנועות ← לוחצים על התנועה ← ...), ואם יש בנתונים את התנועה, ציין את התאריך, השם והסכום שלה כדי שיהיה קל למצוא. מה שאתה כן יכול: לזכור העדפה או החלטה לשיחות הבאות.';
+const STRICT_LIST ='\n\nחשוב: ענה רק במערך JSON תקין, בלי שום מילה לפניו או אחריו. מספרים בלי פסיקים של אלפים. אם בקטע הזה אין עסקאות (למשל דף סיכום או פרטי לקוח), החזר [] בלבד.';
 const learn = require('./server/learn');
 const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
@@ -1139,6 +1143,7 @@ function buildChatPrompt(summary, history, message, authorName, fixContext, auth
 בשיחה יכולים להשתתף שני בני הזוג; ההודעה הנוכחית נכתבה על ידי ${authorName || 'אחד מבני הבית'}.${authorGender === 'f' ? ' פנה אליה בלשון נקבה.' : authorGender === 'm' ? ' פנה אליו בלשון זכר.' : ' אם צריך לפנות אליו או אליה, נסח בלי מגדר (למשל "כדאי", "אפשר").'}
 הנתונים (JSON) כוללים categorySpendingHistory ברמת משק הבית, personalCategoryBreakdown של המשתמש, תקציבים, יעדים ומשימות. ענה על סמך המספרים בפועל, בלי markdown ובלי כותרות.
 ${ADVISOR_STYLE}${appGuidePart()}
+${NO_FAKE_FIX}
 בהחלטות גדולות (משכנתא, השקעות) תן מידע, חישובים ושאלות לבדיקה, וציין שכדאי להתייעץ עם יועץ מורשה; אל תמליץ על נייר ערך או מוצר ספציפי.
 אם בנתונים יש memories (החלטות והעדפות שבני הזוג קבעו בעבר): התחשב בהן כעובדה, אל תציע משהו שסותר אותן אלא אם שואלים, ואם משהו השתנה — שאל.
 בנתונים יש גם את פירוט ההוצאה: topMerchants (בתי העסק שהכי הרבה כסף הלך אליהם ב-3 החודשים האחרונים), recurring (חיובים שחוזרים כל חודש בסכום דומה: מנויים וחשבונות קבועים), recentTransactions (התנועות האחרונות), וגם accounts, cards, loans, installments. כשהשאלה נוגעת להם, ענה לפי השורות האמיתיות ושמות בתי העסק (למשל איזה מנוי לבטל, לאן הלך הכסף באוכל), ולא בהכללות.
@@ -1208,6 +1213,8 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimit
     return res.end();
   } catch (err) {
     console.error('advice-chat-stream failed:', err.message);
+    // Seen in the owner's errors (the kind of failure only, never the conversation).
+    reportServerError(new Error('advisor: ' + String(err && err.message || 'failed').slice(0, 160)), 'POST /api/ai/advice-chat-stream');
     send({ error: 'היועץ לא הצליח לענות כרגע. נסו שוב בעוד דקה.' });
     return res.end();
   }
@@ -3005,7 +3012,9 @@ app.post('/api/admin/daily/run', async (req, res) => {
     if (ops.israelClock().hour !== 23 && !(req.body && req.body.now)) return res.json({ ok: true, skipped: 'not 23:00 in Israel' });
     const { day, items } = await todayItems();
     const { count } = await supabaseAdmin.from('feedback').select('id', { count: 'exact', head: true }).eq('closed', false).eq('archived', false).eq('last_by', 'user');
-    const mail = ops.ownerDigestMail({ day, summary: todaySummary(items), items, waiting: count || 0, link: appLinkOf(req) });
+    // Homes past half of the monthly AI limit: a heads-up before anyone is stopped.
+    const { data: heavy } = await supabaseAdmin.from('ai_usage').select('household_id,count').eq('month', israelToday().slice(0, 7)).gte('count', AI_HEADS_UP);
+    const mail = ops.ownerDigestMail({ day, summary: todaySummary(items), items, waiting: count || 0, link: appLinkOf(req), heavyAi: (heavy || []).map((h) => Number(h.count) || 0) });
     await sendMailWithFallback({ to: FEEDBACK_TO, ...mail });
     return res.json({ ok: true, people: items.length });
   } catch (err) {
