@@ -194,6 +194,7 @@ export function importPrompt(categories, today) {
     + 'amount הוא הסכום בשקלים שחויב (עמודת "סכום ₪" או "סכום חיוב"), לא הסכום המקורי במטבע זר ולא סכום העסקה המלא. '
     + 'בעסקה בתשלומים ("תשלום 3 מתוך 14"): installment הוא {"n":3,"of":14}, ו-date הוא מועד החיוב של התשלום הזה, לא תאריך העסקה המקורי. '
     + 'אם בפירוט כמה כרטיסים, card הוא 4 הספרות האחרונות של הכרטיס שהשורה שייכת אליו.\n\n' + categoryTreeText(categories)
+    + '\n\nאם בקטע הזה אין עסקאות (דף סיכום, פרטי לקוח), החזר [] בלבד.'
     + '\n\nהחזר JSON בלבד, בלי markdown, מערך:\n[{"date":"YYYY-MM-DD","description":"...","amount":מספר חיובי,"type":"expense"|"income","category_id":"id של קטגוריית השורש או null","subcategory_id":"id של תת-קטגוריה או null","installment":{"n":מספר,"of":מספר} או null,"card":"1234" או null}]';
 }
 

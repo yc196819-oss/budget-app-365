@@ -13,6 +13,8 @@ const { claudeRequest, isRetryable } = require('./server/claude');
 const advisorImage = require('./server/advisorImage');
 const { loadActive } = require('./server/active');
 const { measure } = require('./server/latency');
+const { parseImport, shapeOf } = require('./server/importParse');
+const STRICT_LIST = '\n\nחשוב: ענה רק במערך JSON תקין, בלי שום מילה לפניו או אחריו. מספרים בלי פסיקים של אלפים. אם בקטע הזה אין עסקאות (למשל דף סיכום או פרטי לקוח), החזר [] בלבד.';
 const learn = require('./server/learn');
 const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
@@ -905,34 +907,25 @@ app.post('/api/ai/import', requireAuth, aiLimiter, aiQuota, async (req, res) => 
     // Reading a statement is structured work: little thinking, room for a
     // long JSON answer (a part of the statement is ~40 lines; a cut-off
     // answer would fall through to the next provider).
-    const aiResult = await generateWithFallback({ prompt, text, fileData, mimeType, effort: 'low', maxTokens: 32000, json: true, model: ANTHROPIC_FILES_MODEL });
-    const output = aiResult.output || '[]';
-    let parsed = null;
-    try {
-      parsed = JSON.parse(extractJsonText(output));
-    } catch (_err) {
-      const candidate = String(output).match(/\[[\s\S]*\]/);
-      if (candidate && candidate[0]) {
-        try {
-          parsed = JSON.parse(candidate[0]);
-        } catch (_err2) {
-          parsed = null;
-        }
-      }
+    let aiResult = await generateWithFallback({ prompt, text, fileData, mimeType, effort: 'low', maxTokens: 32000, json: true, model: ANTHROPIC_FILES_MODEL });
+    // Forgiving of what models write around the JSON (see server/importParse.js).
+    let parsed = parseImport(aiResult.output);
+    if (!Array.isArray(parsed)) {
+      // Once more, asked plainly for the list only (a summary page answered in words).
+      const first = shapeOf(aiResult.output);
+      aiResult = await generateWithFallback({ prompt: prompt + STRICT_LIST, text, fileData, mimeType, effort: 'low', maxTokens: 32000, json: true, model: ANTHROPIC_FILES_MODEL });
+      parsed = parseImport(aiResult.output);
+      if (!Array.isArray(parsed)) reportServerError(new Error('import: unreadable AI answer twice (' + aiResult.provider + ') ' + first + ' / ' + shapeOf(aiResult.output)), 'POST /api/ai/import');
     }
-
-    // {"transactions":[...]} is the same answer in a wrapper.
-    if (parsed && !Array.isArray(parsed) && typeof parsed === 'object') parsed = Object.values(parsed).find(Array.isArray) || null;
     if (!Array.isArray(parsed)) {
       // An answer we cannot read is a failure, not "no transactions".
-      reportServerError(new Error('import: unreadable AI answer (' + aiResult.provider + ')'), 'POST /api/ai/import');
       return res.status(502).json({ error: 'ה-AI החזיר תשובה לא קריאה. נסו שוב.', aiProvider: aiResult.provider });
     }
 
     return res.json({
       transactions: parsed,
       output: JSON.stringify(parsed),
-      rawOutput: output,
+      rawOutput: aiResult.output,
       aiProvider: aiResult.provider,
       aiModel: aiResult.model,
       attemptedProviders: aiResult.attempted
