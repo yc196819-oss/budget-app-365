@@ -363,7 +363,9 @@ export function withoutSaved(rows, saved) {
   const kind = (t) => (t.nature === 'refund' || t.type === 'transfer_in' ? 'income' : t.type === 'transfer_out' ? 'expense' : t.type || 'expense');
   const key = (t) => [t.tx_date, Math.abs(Number(t.amount)).toFixed(2), String(t.description || '').trim(), t.card_id || '', t.account_id || '', kind(t)].join('|');
   const left = new Map();
-  for (const t of saved || []) left.set(key(t), (left.get(key(t)) || 0) + 1);
+  // A line the household edited is known by what the file said (its original).
+  const asFiled = (t) => (t.original && typeof t.original === 'object' ? { ...t, ...t.original } : t);
+  for (const t of (saved || []).map(asFiled)) left.set(key(t), (left.get(key(t)) || 0) + 1);
   return (rows || []).filter((r) => {
     const k = key(r), n = left.get(k) || 0;
     if (n > 0) { left.set(k, n - 1); return false; }
@@ -413,4 +415,26 @@ export function looseFiles({ imports = [], txs = [] } = {}) {
     g.n++;
   }
   return [...loose.values()].filter((g) => g.n > 0 && !g.tied);
+}
+
+// An edit of one transaction (amount, date, description), checked: the
+// patch to save, or { error } in plain Hebrew. A Bit refund (a minus
+// expense) keeps its sign. An imported line keeps what the file said the
+// first time it is edited, so the same file uploaded again is recognised.
+export function txEdit(tx, { amount, date, description }, today = new Date()) {
+  const n = Math.round(Number(String(amount).replace(/[^\d.]/g, '')) * 100) / 100;
+  if (!(n > 0) || n >= 10000000) return { error: 'סכום לא תקין' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) || isNaN(Date.parse(date + 'T12:00:00Z'))) return { error: 'תאריך לא תקין' };
+  const limit = new Date(today.getTime() + 366 * 86400000).toISOString().slice(0, 10);
+  if (date < '2000-01-01' || date > limit) return { error: 'תאריך לא תקין' };
+  const d = String(description || '').trim().slice(0, 120);
+  if (!d) return { error: 'כתבו תיאור' };
+  const patch = {};
+  const signed = Number(tx.amount) < 0 ? -n : n;
+  if (Math.abs(signed - Number(tx.amount)) > 0.001) patch.amount = signed;
+  if (date !== tx.tx_date) patch.tx_date = date;
+  if (d !== String(tx.description || '').trim()) patch.description = d;
+  if (!Object.keys(patch).length) return { patch: null };
+  if (tx.import_id && !tx.original) patch.original = { tx_date: tx.tx_date, amount: Number(tx.amount), description: tx.description || '' };
+  return { patch };
 }

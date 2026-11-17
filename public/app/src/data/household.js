@@ -438,7 +438,7 @@ export async function addImported(rows, { fileName = null, kind = null, source =
   // another tab or device) is not saved again.
   const dates = rows.map((r) => r.tx_date).filter(Boolean).sort();
   if (dates.length) {
-    const { data: saved, error: readErr } = await sb.from('transactions').select('tx_date,amount,description,card_id,account_id,type')
+    const { data: saved, error: readErr } = await sb.from('transactions').select('tx_date,amount,description,card_id,account_id,type,original')
       .eq('household_id', state.hid).gte('tx_date', dates[0]).lte('tx_date', dates[dates.length - 1]).limit(5000);
     if (!readErr) rows = withoutSaved(rows, saved || []);
   }
