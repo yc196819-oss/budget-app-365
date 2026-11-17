@@ -89,7 +89,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
     if (a.to === 'dupe-ok') {
       writeLocal(dupeKey, JSON.stringify([...new Set([...local, a.key])]));
       setDupeVer((v) => v + 1);
-      try { await keepBoth(a.key); showToast('נשמר: שתי קניות נפרדות. לא נשאל עליהן שוב, גם לא את בן או בת הזוג.'); }
+      try { await keepBoth(a.key); showToast(a.toast || 'נשמר: שתי קניות נפרדות. לא נשאל עליהן שוב, גם לא את בן או בת הזוג.'); }
       catch (_e) { showToast('נשמר במכשיר הזה. לא הצלחנו לשמור לכל משק הבית, ננסה שוב בפעם הבאה.'); }
       return;
     }

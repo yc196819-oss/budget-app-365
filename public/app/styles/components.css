@@ -2096,3 +2096,20 @@ body.store-on { overflow: hidden; }
 .tx-edit label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .tx-edit-acts { display: flex; gap: 8px; }
 .tx-edit-acts .btn { flex: 1; }
+
+/* a recurring payment that got dearer */
+.att-rise { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; }
+.ar-top { display: flex; align-items: center; gap: 12px; }
+.ar-ic { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; flex: none; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+.ar-t { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ar-t b { font-size: 16px; }
+.ar-t small { font-size: 13px; color: var(--muted); }
+.ar-pct { font-weight: 800; font-size: 13px; color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+.ar-price { display: flex; align-items: baseline; gap: 10px; margin-top: 10px; }
+.ar-price s { color: var(--muted); font-size: 16px; }
+.ar-price span { color: var(--muted); }
+.ar-price b { font-family: var(--font-display); font-size: 30px; line-height: 1.1; }
+.ar-price small { color: var(--muted); font-size: 13px; }
+.ar-year { font-size: 14px; font-weight: 700; color: var(--warn); }
+.ar-acts { display: flex; gap: 8px; margin-top: 12px; }
+.ar-acts .btn { flex: 1; }

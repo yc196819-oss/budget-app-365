@@ -11,6 +11,7 @@ const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
 const { claudeRequest, isRetryable } = require('./server/claude');
 const advisorImage = require('./server/advisorImage');
+const { loadActive } = require('./server/active');
 const learn = require('./server/learn');
 const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
@@ -1588,8 +1589,9 @@ app.post('/api/alerts/run', async (req, res) => {
     await supabaseAdmin.from('app_events').delete().lt('at', ago(180)).then(() => {}, () => {});
     await supabaseAdmin.from('app_errors').delete().lt('at', ago(180)).then(() => {}, () => {});
     await supabaseAdmin.from('ai_calls').delete().lt('at', ago(180)).then(() => {}, () => {});
-    const { data: hhs } = await supabaseAdmin.from('memberships').select('household_id');
-    const ids = [...new Set((hhs || []).map((m) => m.household_id))];
+    // Only households someone opened in the last 14 days.
+    const { all, active } = await loadActive(supabaseAdmin);
+    const ids = all.filter((h) => active.has(h));
     let created = 0;
     for (const hid of ids) {
       let alerts = [];
@@ -1604,7 +1606,7 @@ app.post('/api/alerts/run', async (req, res) => {
           body: fresh[0].title + (fresh.length > 1 ? ` ועוד ${fresh.length - 1}` : ''), url: '/app/#/home' });
       }
     }
-    return res.json({ ok: true, households: ids.length, created });
+    return res.json({ ok: true, households: ids.length, skipped: all.length - ids.length, created });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -1616,9 +1618,11 @@ app.post('/api/checkin/run', async (req, res) => {
     if (!(await checkCronSecret(req))) return res.status(401).json({ error: 'unauthorized' });
     const today = israelToday();
     const weekStart = addDaysIso(today, -new Date(today + 'T12:00:00Z').getUTCDay()); // Sunday
-    const { data: hhs } = await supabaseAdmin.from('memberships').select('household_id');
-    const ids = [...new Set((hhs || []).map((m) => m.household_id))];
+    // Only households someone opened in the last 14 days.
+    const { all, active } = await loadActive(supabaseAdmin);
+    const ids = all.filter((h) => active.has(h));
     let made = 0;
+    let quiet = 0;
     for (const hid of ids) {
       const since = addDaysIso(weekStart, -56);
       const [{ data: tx }, { data: cats }, { data: tasks }, { data: goals }] = await Promise.all([
@@ -1629,6 +1633,9 @@ app.post('/api/checkin/run', async (req, res) => {
       ]);
       const lastWeekStart = addDaysIso(weekStart, -7);
       const exp = (tx || []).filter((t) => t.type === 'expense');
+      // Nothing spent in 8 weeks (no statement yet): nothing to talk about,
+      // no AI call and no notification.
+      if (!exp.length) { quiet += 1; continue; }
       const thisWeek = exp.filter((t) => t.tx_date >= lastWeekStart && t.tx_date < weekStart);
       const spentWeek = thisWeek.reduce((s, t) => s + Number(t.amount), 0);
       const avgWeek = exp.filter((t) => t.tx_date < lastWeekStart).reduce((s, t) => s + Number(t.amount), 0) / 7;
@@ -1659,7 +1666,7 @@ app.post('/api/checkin/run', async (req, res) => {
         await pushHousehold(hid, { title: '📅 רבע השעה הזוגית שלכם מוכנה', body: `השבוע יצאו ₪${summary.spentWeek.toLocaleString('he-IL')}. ${decisions.length ? decisions.length + ' החלטות קטנות מחכות לכם.' : ''}`.trim(), url: '/app/#/plans/checkin' });
       }
     }
-    return res.json({ ok: true, households: ids.length, created: made });
+    return res.json({ ok: true, households: ids.length, skipped: all.length - ids.length, quiet, created: made });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
