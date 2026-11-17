@@ -2113,3 +2113,24 @@ body.store-on { overflow: hidden; }
 .ar-year { font-size: 14px; font-weight: 700; color: var(--warn); }
 .ar-acts { display: flex; gap: 8px; margin-top: 12px; }
 .ar-acts .btn { flex: 1; }
+
+/* the advisor proposes changes; nothing changes before "כן" */
+.fix-card { margin-top: 10px; border: 1.5px solid color-mix(in srgb, var(--accent) 40%, var(--line)); border-radius: 16px; padding: 12px; background: color-mix(in srgb, var(--accent) 5%, var(--surface)); display: flex; flex-direction: column; gap: 8px; }
+.fix-card.is-done { border-color: color-mix(in srgb, var(--income) 40%, var(--line)); background: var(--surface); }
+.fix-card.fix-none { font-size: 13.5px; color: var(--muted); }
+.fix-t { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--accent); }
+.fix-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fix-rows li { padding: 8px 0; border-bottom: 1px dashed var(--line); display: flex; flex-direction: column; gap: 3px; }
+.fix-rows li:last-child { border-bottom: 0; }
+.fix-tx { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.fix-ch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13.5px; }
+.fix-ch s { color: var(--muted); }
+.fix-ch b { color: var(--income); }
+.fix-acts { display: flex; gap: 8px; }
+.fix-acts .btn { flex: 1; min-height: 40px; }
+.fix-note { font-size: 12px; color: var(--muted); }
+.fix-ok { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--income); }
+.fix-ok .btn-text { margin-inline-start: auto; }
+.fix-ok.fix-back { color: var(--muted); font-weight: 600; }
+.fix-rule { display: flex; flex-direction: column; gap: 8px; font-size: 14px; border-top: 1px solid var(--line); padding-top: 8px; }
+.adv-msg .fix-card .fix-note, .fix-card small.fix-note { font-weight: 400; font-size: 12px; color: var(--muted); }

@@ -22,6 +22,8 @@ import { takeAdvisorImage } from '../../lib/advisorInbox.js';
 import { useOwner } from '../../lib/owner.js';
 import { parseList, shopContext, LIST_MARK } from '../../domain/shopList.js';
 import { ShopListCard } from './ShopListCard.js';
+import { FixCard } from './FixCard.js';
+import { wantsFix, candidatesFor, categoryNames, parseFix, FIX_MARK } from '../../domain/advisorFix.js';
 import { loadShopping } from '../../data/shopping.js';
 import { loadReceipts } from '../../data/receipts.js';
 import { getKosherPref } from '../../data/prices.js';
@@ -157,7 +159,12 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       const summary = shopNow ? { shopping: shopNow, ...base } : base;
       let raw = '';
       abort.current = new AbortController();
-      await streamReply({ summary, history, message: msg, authorName: realName(names[me]), authorGender: genderOf(data.genders, me), ...(pic ? { image: pic.data } : {}) }, (delta) => {
+      // A fix asked for: the transactions it is about go with the question,
+      // and the advisor may propose changes (shown, made only on "כן").
+      const earlier = c.messages.filter((m) => m.role === 'user' && !m.local).map((m) => m.text);
+      const candidates = !pic && wantsFix(msg) ? candidatesFor(msg, data.txs, data.categories, earlier) : [];
+      const fixAsk = candidates.length ? { candidates, categories: categoryNames(data.categories) } : {};
+      await streamReply({ summary, history, message: msg, authorName: realName(names[me]), authorGender: genderOf(data.genders, me), ...fixAsk, ...(pic ? { image: pic.data } : {}) }, (delta) => {
         raw += delta;
         setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m === aiMsg || (m.pending && m.role === 'ai') ? { ...m, text: parseReply(raw).text } : m)) });
       }, abort.current.signal);
@@ -166,13 +173,15 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       // And what the person wrote in this conversation ("1,380" stays 1,380).
       for (const m of [...(c.messages || []), { role: 'user', text: msg }]) if (m.role === 'user') for (const x of String(m.text || '').match(/\d[\d,]*(?:\.\d+)?/g) || []) { const v = Math.round(Number(x.replace(/,/g, ''))); if (v >= 1000) truths.add(v); }
       // (Not the list's amounts: they are the list's, not the screen's numbers.)
-      const cut = raw.indexOf(LIST_MARK);
+      const marks = [raw.indexOf(LIST_MARK), raw.indexOf(FIX_MARK)].filter((i) => i >= 0);
+      const cut = marks.length ? Math.min(...marks) : -1;
       raw = cut >= 0 ? fixSums(alignNumbers(raw.slice(0, cut), truths)) + raw.slice(cut) : fixSums(alignNumbers(raw, truths));
       const list = parseList(raw);
+      const fix = candidates.length ? parseFix(raw, data.txs, data.categories) : null;
       const reply = parseReply(raw);
       const finalText = reply.text || 'לא התקבלה תשובה. נסו לנסח אחרת.';
       answered = reply.text || null;
-      setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me, ...(list ? { list, fresh: true } : {}) } : m)) });
+      setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me, ...(list ? { list, fresh: true } : {}), ...(fix ? { fix } : {}) } : m)) });
       setSuggestions(reply.suggestions);
       // The full reply is saved, with the follow-ups, as the current app does.
       await addMessage({ conversationId: c.id, hid, userId: me, role: 'ai', text: raw || finalText });
@@ -332,6 +341,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
             : m.role === 'user' && String(m.text || '').startsWith(PIC_MARK)
               ? html`${m.thumb && html`<img class="adv-thumb" src=${m.thumb} alt="התמונה שצורפה" />`}<span class="adv-pic-line"><${Icon} name="image" size=${15} />${PIC_MARK}${m.thumb ? '' : ' (לא נשמרת)'}</span><span>${String(m.text).slice(PIC_MARK.length + 3)}</span>`
               : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
+          ${m.fix && hid && html`<${FixCard} fix=${m.fix} hid=${hid} categories=${data.categories} />`}
           ${m.list && hid && html`<${ShopListCard} list=${m.list} hid=${hid} people=${data.people} onList=${(shop && shop.onList) || []} build=${!!m.fresh} />`}
           ${m.howto && html`<div class="adv-howto">
             <small class="faint">תשובה מהירה מהמדריך של האפליקציה</small>
