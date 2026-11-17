@@ -76,3 +76,24 @@ test('what you paid last time: only for the same kind of product as the one comp
   assert.equal(lastPaid('שמן', rec).price, 29.9, 'with nothing to compare to, as before');
   assert.equal(lastPaid('חלב', rec, milk).price, 5.9, 'the same milk: shown');
 });
+
+test('a line keeps the barcode printed on it, and a weighed line its weight and kilo price', () => {
+  const r = parseReceipt(JSON.stringify({ store: 'סופר לדוגמה', items: [
+    { name: 'מיץ ענבים', code: '7290000000011', qty: 1, price: 9.6 },
+    { name: 'דג פילה', code: '8611-770', qty: 1.536, price: 92.01, unit_price: '59.90' },
+    { name: 'חסה', code: '12', qty: 1, price: 5.9, unit_price: 5.9 },
+    { name: 'גבינה', code: null, qty: 1, price: 10 }
+  ] }), { today });
+  assert.equal(r.items[0].code, '7290000000011');
+  assert.deepEqual(r.items[1], { name: 'דג פילה', qty: 1.536, price: 92.01, code: '8611770', weighed: true, unit_price: 59.9 });
+  assert.equal(r.items[2].code, undefined, 'too short to be a code');
+  assert.equal(r.items[2].unit_price, undefined, 'not weighed: no kilo price');
+  assert.equal(r.items[3].code, undefined);
+  assert.match(PROMPT, /code/);
+  assert.match(PROMPT, /unit_price/);
+});
+
+test('a weighed line in what you usually buy: no "×2" for 1.5 kilos', () => {
+  const h = historyItems({ items: [{ name: 'בטטה', qty: 1.536, price: 9, weighed: true }, { name: 'יוגורט', qty: 3, price: 15 }] });
+  assert.deepEqual(h.map((i) => i.qty), [null, '×3']);
+});

@@ -4,10 +4,12 @@
 
 const PROMPT = [
   'זו תמונה של קבלה מסופרמרקט או חנות בישראל. קרא אותה והחזר JSON בלבד, בלי טקסט נוסף, במבנה:',
-  '{"store":"שם החנות או הרשת","date":"YYYY-MM-DD","total":0,"items":[{"name":"שם המוצר","qty":1,"price":0}]}',
+  '{"store":"שם החנות או הרשת","date":"YYYY-MM-DD","total":0,"items":[{"name":"שם המוצר","code":"7290000000000","qty":1,"price":0,"unit_price":null}]}',
   'כללים:',
   '- name: שם המוצר כפי שכתוב, בעברית, בלי ברקוד ובלי קוד פנימי. אם השם מקוצר (למשל "חלב תנו 3%"), השלם למשהו מובן ("חלב תנובה 3%") רק כשברור.',
-  '- qty: כמה יחידות נקנו (מספר). מוצר במשקל: 1.',
+  '- code: הברקוד או הקוד שמודפס בשורה של המוצר (ספרות בלבד). אם אין: null.',
+  '- qty: כמה יחידות נקנו (מספר). מוצר במשקל: המשקל בק"ג (למשל 1.536).',
+  '- unit_price: במוצר במשקל, המחיר לק"ג שכתוב בשורה (למשל 59.90). אחרת null.',
   '- price: הסכום ששולם על השורה כולה, בשקלים, אחרי הנחה של אותה שורה אם כתובה מתחתיה.',
   '- אל תכלול שורות שאינן מוצרים: סה"כ, מע"מ, עודף, אמצעי תשלום, פיקדון בקבוקים, שקית, הנחת מועדון כללית, נקודות.',
   '- total: הסכום הכולל לתשלום. date: תאריך הקנייה. מה שלא כתוב או לא קריא: null.',
@@ -40,7 +42,18 @@ function parseReceipt(output, { today = new Date() } = {}) {
     if (!(qty > 0) || qty > 99) qty = 1;
     let price = num(it.price);
     if (!(price > 0) || price > 5000) price = null;
-    items.push({ name, qty: Math.round(qty * 1000) / 1000, price: price === null ? null : Math.round(price * 100) / 100 });
+    const line = { name, qty: Math.round(qty * 1000) / 1000, price: price === null ? null : Math.round(price * 100) / 100 };
+    // The barcode (or the store's own code) printed on the line: the price
+    // check finds the product by it.
+    const code = String((it && it.code) ?? '').replace(/\D/g, '');
+    if (code.length >= 3 && code.length <= 14) line.code = code;
+    // Weighed: a weight in kilos, and the kilo price when it is written.
+    if (!Number.isInteger(line.qty)) {
+      line.weighed = true;
+      const kg = num(it.unit_price);
+      if (kg > 0 && kg < 1000) line.unit_price = Math.round(kg * 100) / 100;
+    }
+    items.push(line);
     if (items.length >= 120) break;
   }
   if (!items.length) return { error: 'no_items' };

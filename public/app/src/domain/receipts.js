@@ -31,7 +31,7 @@ export function historyItems(receipt) {
     const k = name.replace(/["'׳״]/g, '');
     if (name.length < 2 || seen.has(k)) continue;
     seen.add(k);
-    out.push({ name, qty: it.qty > 1 ? '×' + Math.round(it.qty) : null, aisle: aisleOf(name) });
+    out.push({ name, qty: it.qty > 1 && Number.isInteger(it.qty) && !it.weighed ? '×' + it.qty : null, aisle: aisleOf(name) });
   }
   return out;
 }

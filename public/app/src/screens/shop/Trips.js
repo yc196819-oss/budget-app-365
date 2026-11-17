@@ -7,7 +7,7 @@ import { shortName } from '../../domain/receipts.js';
 import { chainHe } from '../../domain/prices.js';
 import { finishTrip, setTripExpense, attachReceipt, loadReceipt, loadTripItems, removeItems } from '../../data/shopTrips.js';
 import { scanReceipt } from '../../data/receipts.js';
-import { searchPrices, getArea } from '../../data/prices.js';
+import { searchPrices, pricesByBarcode, getArea } from '../../data/prices.js';
 import { money } from '../../domain/format.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
@@ -98,32 +98,45 @@ export function TripsCard({ trips, onOpen }) {
   </button>`;
 }
 
+// What each status says, short.
+const STATUS = { check: 'יקר מאצלנו', promo: 'במבצע', cheaper: 'זול מאצלנו', ok: 'כמו אצלנו', none: '' };
+
 function CompareView({ receipt, trip }) {
   const [lines, setLines] = useState(null);
   useEffect(() => {
     let live = true;
-    const names = [...new Set((receipt.items || []).filter((l) => l.price > 0).map((l) => shortName(l.name) || l.name))];
-    searchPrices(names).then((found) => { if (live) setLines(compareReceipt(receipt, found, { chain: trip.chain, chainName: trip.chain_name || receipt.store })); })
-      .catch(() => { if (live) setLines([]); });
+    const opts = { chain: trip.chain, chainName: trip.chain_name || receipt.store };
+    const items = (receipt.items || []).filter((l) => l.price > 0);
+    // By the barcodes on the receipt first (exact); by name only what they
+    // did not find.
+    (async () => {
+      const byCode = await pricesByBarcode(items.map((l) => l.code)).catch(() => ({}));
+      const first = compareReceipt(receipt, {}, { ...opts, byCode });
+      const names = [...new Set(items.filter((l, i) => first[i].ours == null).map((l) => shortName(l.name) || l.name))];
+      const found = names.length ? await searchPrices(names).catch(() => ({})) : {};
+      if (live) setLines(compareReceipt(receipt, found, { ...opts, byCode }));
+    })().catch(() => { if (live) setLines([]); });
     return () => { live = false; };
   }, [receipt.id]);
   if (!lines) return html`<div class="muted trip-loading" role="status">משווים למחירים שלנו…</div>`;
   const s = compareSummary(lines);
-  const order = { check: 0, ok: 1, none: 2 };
+  const order = { check: 0, promo: 1, cheaper: 2, ok: 3, none: 4 };
+  const unit = (l) => (l.weighed ? html`<small class="muted trip-kg">לק"ג</small>` : '');
   return html`<div class="stack trip-compare">
     <div class="trip-sum">
       <div><b class="num">${fmt(receiptTotal(receipt))}</b><span>בקבלה</span></div>
-      <div><b class="num">${s.known ? fmt(s.ours) : '—'}</b><span>לפי המחירים שלנו${s.known ? ' (' + s.known + ' מוצרים)' : ''}</span></div>
-      <div class=${s.check ? 'warn' : 'good'}><b class="num">${s.check || '✓'}</b><span>${s.check ? 'לבדוק' : 'תואם'}</span></div>
+      <div><b class="num">${s.known}/${s.total}</b><span>מוצרים הושוו</span></div>
+      <div class=${s.check ? 'warn' : 'good'}><b class="num">${s.check || '✓'}</b><span>${s.check ? 'לבדוק' : 'אין חיוב יתר'}</span></div>
     </div>
-    <table class="trip-table"><thead><tr><th>מוצר</th><th>בקבלה</th><th>אצלנו</th></tr></thead><tbody>
+    ${s.known > 0 && html`<p class="trip-fair">על ${s.known} המוצרים שהושוו שילמתם <b class="num">${fmt(s.paid)}</b>. במחיר הרגיל אצלנו הם <b class="num">${fmt(s.ours)}</b>${s.saved > 0 ? html`, כלומר <b class="good-t">חסכתם ${fmt(s.saved)}</b> במבצעים` : ''}.</p>`}
+    <table class="trip-table"><thead><tr><th>מוצר</th><th>שילמתם</th><th>אצלנו</th></tr></thead><tbody>
       ${[...lines].sort((a, b) => order[a.status] - order[b.status]).map((l, i) => html`<tr key=${i} class=${'st-' + l.status}>
-        <td><span class="dot" aria-hidden="true"></span>${l.name}</td>
-        <td class="num">${fmt(l.paid)}</td>
-        <td class="num">${l.ours != null ? fmt(l.ours) : html`<small class="muted">${l.other ? 'מוצר אחר?' : 'אין אצלנו'}</small>`}</td>
+        <td><span class="dot" aria-hidden="true"></span>${l.name}${STATUS[l.status] && html`<small class="trip-st">${STATUS[l.status]}${l.promo && l.status !== 'ok' ? ' · ' + l.promo : ''}${l.by === 'name' ? ' · לפי שם' : ''}</small>`}</td>
+        <td class="num">${fmt(l.paid)}${unit(l)}</td>
+        <td class="num">${l.ours != null ? html`${fmt(l.ours)}${unit(l)}` : html`<small class="muted">${l.other ? 'מוצר אחר?' : 'אין אצלנו'}</small>`}</td>
       </tr>`)}
     </tbody></table>
-    <small class="muted">מסומן "לבדוק" כשהפער גדול מ-15% או מ-3 ₪ (הגדול מביניהם). אולי מבצע שנגמר, מוצר אחר, או מחיר שלא עודכן אצלנו.</small>
+    <small class="muted">"אצלנו" הוא המחיר הרגיל ברשת. "במבצע": שילמתם פחות, ויש עכשיו מבצע ברשת. "זול מאצלנו": שילמתם פחות בלי מבצע שאנחנו מכירים (אולי מבצע בסניף). "לבדוק": שילמתם יותר מ-15% או מ-3 ₪ מעל המחיר שלנו.</small>
   </div>`;
 }
 

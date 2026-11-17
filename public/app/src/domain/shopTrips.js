@@ -54,44 +54,94 @@ const sameChain = (offer, chain, chainName) => {
   return !!n && !!(offer.chain_name || offer.chain) && similarText(offer.chain_name || offer.chain, n);
 };
 
-// One unit's price on a receipt line (a line of 3 yogurts at ₪15 is ₪5 each).
+// A weighed line: a weight in kilos (not a whole number of units).
+export const isWeighed = (line) => !!line && (line.weighed === true || (Number(line.qty) > 0 && !Number.isInteger(Number(line.qty))));
+
+// One unit's price on a receipt line (a line of 3 yogurts at ₪15 is ₪5
+// each); a weighed line's is its kilo price (written, or the line ÷ kilos).
 export function unitPaid(line) {
+  if (isWeighed(line)) {
+    if (line.unit_price > 0) return Math.round(Number(line.unit_price) * 100) / 100;
+    return Math.round((Number(line.price) / Number(line.qty)) * 100) / 100;
+  }
   const q = line.qty > 0 && line.qty < 50 && Number.isInteger(line.qty) ? line.qty : 1;
   return Math.round((Number(line.price) / q) * 100) / 100;
 }
+// How many units (or kilos) the line is.
+const unitsOf = (line) => (isWeighed(line) ? Number(line.qty) : line.qty > 0 && line.qty < 50 && Number.isInteger(line.qty) ? line.qty : 1);
 
-// Every receipt line with the price we have for it at the same chain:
-//   { name, paid, ours, product, status: 'ok' | 'check' | 'none' }
-// `found` is what searchPrices answered, by the line's short name. A product
-// whose price is far from the receipt's (another size or kind) is not
-// compared: 'none'.
-export function compareReceipt(receipt, found, { chain = null, chainName = null } = {}) {
+// A product sold by the kilo (its price is a kilo price): a size of one
+// kilo, or no size at all.
+const byKilo = (p) => { const z = sizeOfProduct(p); return !z || (z.unit === 'kg' && z.qty === 1); };
+
+// Every receipt line with the regular price we have for it at the same
+// chain, and its deals now:
+//   { name, paid, ours, units, weighed, product, by: 'code' | 'name',
+//     promo: the deal's text, status }
+// status:
+//   'ok'      the price we have;
+//   'promo'   less than ours, and the chain has a deal on it now;
+//   'cheaper' less than ours, a deal we do not know of (the branch's own?);
+//   'check'   more than ours (by more than 15% or ₪3);
+//   'none'    not found at this chain, or a far price (another product).
+// `byCode` (pricesByBarcode) is tried first, by the barcode printed on the
+// line: exact. Otherwise `found` (searchPrices, by the line's short name):
+// the best name, and of those the price nearest to what was paid; a price
+// far from it (under 60% or over 160%) is taken for another product.
+export function compareReceipt(receipt, found, { chain = null, chainName = null, byCode = {} } = {}) {
   const name = chainName || (receipt && receipt.store) || '';
   return ((receipt && receipt.items) || []).filter((l) => l.price > 0).map((l) => {
-    const q = shortName(l.name) || l.name;
     const paid = unitPaid(l);
-    let best = null;
-    for (const p of found[q] || []) {
-      const offer = validOffers(p).find((o) => sameChain(o, chain, name));
-      if (!offer) continue;
-      const s = score(q, p);
-      if (s > 0 && (!best || s > best.s)) best = { s, p, price: offer.price };
+    const units = unitsOf(l);
+    const weighed = isWeighed(l);
+    const base = { name: l.name, paid, units, weighed, ours: null, product: null, by: null, promo: null };
+    let pick = null;
+    const coded = l.code && byCode && byCode[l.code];
+    const codeOffer = coded && validOffers(coded).find((o) => sameChain(o, chain, name));
+    if (codeOffer) pick = { p: coded, offer: codeOffer, by: 'code' };
+    else {
+      const q = shortName(l.name) || l.name;
+      let best = null;
+      for (const p of found[q] || []) {
+        if (weighed && !byKilo(p)) continue;
+        const offer = validOffers(p).find((o) => sameChain(o, chain, name));
+        if (!offer) continue;
+        const s = score(q, p);
+        const near = Math.abs(Math.log(paid / offer.price));
+        if (s > 0 && (!best || s > best.s || (s === best.s && near < best.near))) best = { s, near, p, offer };
+      }
+      if (best) {
+        const r = paid / best.offer.price;
+        if (r < 0.6 || r > 1.6) return { ...base, product: best.p.name, status: 'none', other: true };
+        pick = { p: best.p, offer: best.offer, by: 'name' };
+      }
     }
-    if (!best) return { name: l.name, paid, ours: null, product: null, status: 'none' };
-    // Weighed things: the receipt has a kilo price only when the line says so.
-    const sz = sizeOfProduct(best.p);
-    const r = paid / best.price;
-    if (r < 0.4 || r > 2.5) return { name: l.name, paid, ours: null, product: best.p.name, status: 'none', other: true, sz };
-    return { name: l.name, paid, ours: best.price, product: best.p.name, status: gapToCheck(paid, best.price) ? 'check' : 'ok' };
+    if (!pick) return { ...base, status: 'none' };
+    const ours = Number(pick.offer.price);
+    const deals = (pick.offer.promos || []).filter((p) => p.unit_price > 0 && p.unit_price < ours);
+    const deal = deals[0] || null;
+    const line = { ...base, ours, product: pick.p.name, by: pick.by, promo: deal ? deal.text || null : null };
+    // (A few agorot less is the same price.)
+    if (!gapToCheck(paid, ours) && paid >= ours - Math.max(0.3, ours * 0.03)) return { ...line, status: 'ok' };
+    if (paid < ours) return { ...line, status: deal ? 'promo' : 'cheaper' };
+    return { ...line, status: gapToCheck(paid, ours) ? 'check' : 'ok' };
   });
 }
 
+// The comparison in totals, over the lines found only (so the two sums are
+// of the same things): what was paid for them, what they cost at our regular
+// price, how much the deals saved, and how many were not found.
 export function compareSummary(lines) {
   const known = lines.filter((l) => l.ours != null);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const paid = r2(known.reduce((s, l) => s + l.paid * (l.units || 1), 0));
+  const ours = r2(known.reduce((s, l) => s + l.ours * (l.units || 1), 0));
   return {
-    paid: Math.round(known.reduce((s, l) => s + l.paid, 0) * 100) / 100,
-    ours: Math.round(known.reduce((s, l) => s + l.ours, 0) * 100) / 100,
+    paid,
+    ours,
+    saved: r2(Math.max(0, ours - paid)),
     check: lines.filter((l) => l.status === 'check').length,
+    promo: lines.filter((l) => l.status === 'promo' || l.status === 'cheaper').length,
     known: known.length,
     total: lines.length
   };
