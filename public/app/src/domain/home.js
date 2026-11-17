@@ -7,6 +7,7 @@ import { linesToAsk } from './moves.js';
 import { isoDate, parseDate, monthShare, sameMerchant, merchantKey, categoryRows, totalsFor, monthsBack } from './money.js';
 import { bestDuplicate, isCardCharge } from './statement.js';
 import { money } from './format.js';
+import { priceRises } from './rises.js';
 
 export function daysInMonth(y, m) {
   return new Date(y, m + 1, 0).getDate();
@@ -348,6 +349,13 @@ export function attention({ txs, categories, budgets, cards, today, plan, limit 
   if (dupes.length) {
     const d = dupes[dupes.length - 1];
     items.push({ kind: 'dupe', tone: 'warn', title: 'חיוב כפול ב' + d.tx.description + '?', detail: money(d.tx.amount) + ' ב-' + dm(d.of.tx_date) + ' ושוב ב-' + dm(d.tx.tx_date) + '.', action: { label: 'לבדוק', to: 'tx', id: d.tx.id }, second: { label: 'שתיהן נכונות, להשאיר', to: 'dupe-ok', key: dupePair(d) } });
+  }
+
+  // A recurring payment that got dearer (the household can say it knows).
+  const rise = priceRises(txs, today).find((r) => !dupeOk.has(r.key));
+  if (rise) {
+    items.push({ kind: 'rise', tone: 'warn', rise, title: rise.name + ' התייקר', detail: 'מ-' + money(rise.from) + ' ל-' + money(rise.to) + ' בחודש, ' + money(rise.perYear) + ' יותר בשנה.',
+      action: { label: 'לבדוק מה השתנה', to: 'tx', id: rise.tx.id }, second: { label: 'ידוע לי', to: 'dupe-ok', key: rise.key, toast: 'נשמר. לא נזכיר את ההתייקרות הזו שוב.' } });
   }
 
   const loose = txs.filter((t) => !t.category_id && monthShare(t, mo) > 0);

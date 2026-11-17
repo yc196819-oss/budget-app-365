@@ -77,3 +77,25 @@ test('everyone gets the calm home, with the balance update and install on screen
   assert.deepEqual(errors(), []);
   await page.close();
 });
+
+test('a recurring payment that got dearer: the old price, the new one and the year, and "ידוע לי" hides it for the household', async () => {
+  const { page, db, errors } = await open({ setup: (d) => {
+    d.tables.dupe_ok = [];
+    // Everything else in order, so this is what needs attention.
+    d.tables.transactions = d.tables.transactions.filter((t) => t.tx_date < '2026-08-01' || t.type === 'income' || t.category_id);
+    for (const [m, a] of [['08', 180], ['09', 180], ['10', 180], ['11', 202]]) d.tables.transactions.push({ id: 'ins' + m, household_id: d.hid, type: 'expense', amount: a, description: 'ביטוח בדוי', tx_date: '2026-' + m + '-04', category_id: 'home', nature: 'fixed' });
+  } });
+  const card = page.locator('.att-rise');
+  await card.waitFor();
+  const text = await card.textContent();
+  assert.match(text, /ביטוח בדוי התייקר/);
+  assert.match(text, /\+12%/);
+  assert.match(text, /₪180.*₪202/);
+  assert.match(text, /₪264 יותר בשנה/);
+  await card.locator('text=ידוע לי').click();
+  await page.waitForFunction(() => !document.querySelector('.att-rise'));
+  for (let i = 0; i < 30 && !db.tables.dupe_ok.length; i++) await page.waitForTimeout(100);
+  assert.deepEqual(db.tables.dupe_ok.map((r) => r.pair), ['rise:ins11']);
+  assert.deepEqual(errors(), []);
+  await page.close();
+});
