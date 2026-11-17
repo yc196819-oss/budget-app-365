@@ -124,6 +124,12 @@ function aiMonthlyLimit(own, fallback) {
   const f = Number(fallback);
   return Number.isFinite(f) && f > 0 ? f : AI_MONTHLY_DEFAULT;
 }
+// An AI action that failed on our side (the AI or the server: 5xx) is given
+// back, so a person is not charged for our failures. A mistake in the request
+// (4xx) still counts: it is how a runaway loop is stopped.
+function aiRefundable(status) {
+  return Number(status) >= 500;
+}
 
 // The owner's weekly view: people grouped by the week they signed up
 // (weeks start on Sunday), and how far each group got: a household, data of
@@ -957,4 +963,4 @@ function isOwnerEmail(email, emails = [], hashes = []) {
   if (emails.includes(e)) return true;
   return hashes.includes(require('crypto').createHash('sha256').update(e).digest('hex'));
 }
-module.exports = { isOwnerEmail, mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, heavyAiLine, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, ON_BOARD, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };
+module.exports = { isOwnerEmail, mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, aiRefundable,AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, heavyAiLine, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, ON_BOARD, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };

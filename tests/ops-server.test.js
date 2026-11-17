@@ -508,6 +508,15 @@ test('AI actions a month: the household\'s own limit, else a default far above r
   assert.ok(ops.AI_MONTHLY_DEFAULT >= 450, 'never below the busiest household today');
 });
 
+test('an AI action that failed on our side is given back; a bad request still counts', () => {
+  assert.equal(ops.aiRefundable(502), true, 'the AI answered something unreadable, or was down');
+  assert.equal(ops.aiRefundable(500), true);
+  assert.equal(ops.aiRefundable(503), true);
+  assert.equal(ops.aiRefundable(200), false);
+  assert.equal(ops.aiRefundable(400), false, 'a malformed request counts (a runaway loop is stopped)');
+  assert.equal(ops.aiRefundable(429), false);
+});
+
 test('by week of sign-up: how far each group got; "back" only once a week has passed', () => {
   const now = new Date('2026-11-08T10:00:00Z'); // a Sunday
   const day = (d) => new Date(now.getTime() - d * 86400000).toISOString();
