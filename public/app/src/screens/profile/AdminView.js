@@ -502,7 +502,7 @@ export function AdminView({ onBack, onClose = null, hid = null }) {
       ${live && html`<span class="admin-pill" role="status"><span class="admin-dot" aria-hidden="true"></span><b class="num">${live.users}</b> עכשיו</span>`}
     </div>
     ${s === undefined && html`<span class="muted">טוען…</span>`}
-    ${!open && ver && html`<span class="admin-ver faint">גרסת השרת: <b class="num">${ver.version || 'לא ידוע'}</b>${ver.startedAt ? ' · עלה ' + new Date(ver.startedAt).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : ''}</span>`}
+    ${!open && ver && html`<span class="admin-ver faint">גרסת השרת: <b class="num">${ver.version || 'לא ידוע'}</b>${ver.startedAt ? ' · עלה ' + new Date(ver.startedAt).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : ''}${ver.db ? html` · מסד הנתונים: <b class="num" title=${'בין ' + ver.db.min + ' ל-' + ver.db.max + ' מ"ש'}>${ver.db.ms} מ"ש</b>` : ''}</span>`}
     ${s === null && html`<span class="muted">הנתונים לא זמינים כרגע.</span>`}
     ${!open && k && html`
       <${Record} daily=${s.daily} />

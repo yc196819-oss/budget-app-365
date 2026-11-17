@@ -12,6 +12,7 @@ const webpush = require('web-push');
 const { claudeRequest, isRetryable } = require('./server/claude');
 const advisorImage = require('./server/advisorImage');
 const { loadActive } = require('./server/active');
+const { measure } = require('./server/latency');
 const learn = require('./server/learn');
 const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
@@ -881,7 +882,9 @@ app.get('/api/admin/health', requireAuth, async (req, res) => {
     smtpConfigured: !!mailer,
     resendConfigured: !!RESEND_API_KEY,
     brevoConfigured: !!(BREVO_API_KEY && BREVO_FROM),
-    pushConfigured: PUSH_CONFIGURED
+    pushConfigured: PUSH_CONFIGURED,
+    // One small database call, timed (the server's distance from the database).
+    db: supabaseAdmin ? await measure(async () => { const { error } = await supabaseAdmin.from('app_flags').select('key').limit(1); if (error) throw error; }) : null
   });
 });
 
