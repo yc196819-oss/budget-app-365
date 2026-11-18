@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   holidaysBetween, nextHoliday, previousOccurrence, lastHolidayExtra, holidayGoalName, defaultHolidayItems, quarterOf, checkinDue
 } from '../public/app/src/domain/calendar.js';
-import { baseline, forecast, verdict, cutIdeas } from '../public/app/src/domain/forecast.js';
+import { baseline, forecast, verdict, cutIdeas, fixedItems, oneOffs, samePayee } from '../public/app/src/domain/forecast.js';
 
 let n = 0;
 const tx = (o) => ({ id: 'x' + (++n), type: 'expense', amount: 100, spread: 'month', nature: 'variable', category_id: 'food', ...o });
@@ -59,6 +59,51 @@ function history() {
 
 test('baseline: the household\'s regular month', () => {
   assert.deepEqual(baseline(history(), TODAY), { income: 15000, fixed: 5000, variable: 8000 });
+});
+
+test('baseline: rent marked fixed before stays fixed when last month\'s import marked it variable; it is not in the variable average', () => {
+  const txs = history().filter((t) => t.description !== 'משכנתא');
+  txs.push(tx({ amount: 3900, nature: 'fixed', tx_date: '2026-07-01', description: 'שכירות (עדכון החל מ-15/7)' }));
+  txs.push(tx({ amount: 4700, nature: 'fixed', tx_date: '2026-08-01', description: 'שכירות' }));
+  // The last full month: the same rent, imported as "variable".
+  txs.push(tx({ amount: 4700, nature: 'variable', tx_date: '2026-09-01', description: 'שכירות' }));
+  // A one-time line marked fixed (not a regular payment) and a fixed payment of every month.
+  txs.push(tx({ amount: 3000, nature: 'fixed', tx_date: '2026-07-20', description: 'ביטוח רכב חד פעמי' }));
+  for (const m of ['07', '08', '09']) txs.push(tx({ amount: 650, nature: 'fixed', tx_date: '2026-' + m + '-05', description: 'גמ"ח הוראת קבע' }));
+  const b = baseline(txs, TODAY);
+  assert.equal(b.fixed, 4700 + 650, 'the rent at its latest amount, once; the monthly payment; not the one-time line');
+  assert.equal(b.variable, 8000, 'the rent is not in the variable average');
+  const items = fixedItems(txs, TODAY);
+  assert.deepEqual(items.map((it) => [it.desc, it.amount]).sort(), [['גמ"ח הוראת קבע', 650], ['שכירות (עדכון החל מ-15/7)', 4700]]);
+});
+
+test('baseline: big one-time lines are left out, and a month with a trip does not set the regular month', () => {
+  const txs = history();
+  // One-time: furniture, a flight, a deposit to investments (nothing like them in the other months).
+  txs.push(tx({ amount: 3700, tx_date: '2026-07-20', description: 'שולחן וספה' }));
+  txs.push(tx({ amount: 2300, tx_date: '2026-08-14', description: 'טיסה לחו"ל' }));
+  txs.push(tx({ amount: 3500, tx_date: '2026-09-03', description: 'הפקדה להשקעות' }));
+  // Not one-time: a big line that comes back (therapy every month), and a small one.
+  for (const m of ['07', '08', '09']) txs.push(tx({ amount: 1600, tx_date: '2026-' + m + '-18', description: 'טיפולים' }));
+  txs.push(tx({ amount: 900, tx_date: '2026-09-22', description: 'השכרת רכב' }));
+  assert.deepEqual(oneOffs(txs, TODAY).map((t) => t.description).sort(), ['טיסה לחו"ל', 'הפקדה להשקעות', 'שולחן וספה'].sort());
+  // Months: 9,600 / 9,600 / 10,500 -> the middle one.
+  assert.equal(baseline(txs, TODAY).variable, 9600);
+  const fc = forecast({ txs, today: TODAY, startBalance: 0 });
+  assert.deepEqual(fc.skipped.map((x) => x.amount).sort((a, b) => a - b), [2300, 3500, 3700]);
+});
+
+test('the same payee written two ways is one payee; different payees are not', () => {
+  assert.equal(samePayee('לייבוביץ', 'ליבוביץ חוג'), true);
+  assert.equal(samePayee('תשלום לליבוביץ על טיפולים', 'לייבוביץ'), false, 'a different first word');
+  assert.equal(samePayee('שכירות', 'שכירות (עדכון)'), true);
+  assert.equal(samePayee('רמי לוי', 'רמ לו'), false, 'short words are not matched loosely');
+  assert.equal(samePayee('ויקטורי', 'קרפור'), false);
+  // A big payment to the same payee every month is not a one-time line.
+  const txs = history();
+  txs.push(tx({ amount: 1000, tx_date: '2026-07-18', description: 'ליבוביץ חוג' }));
+  txs.push(tx({ amount: 1700, tx_date: '2026-08-18', description: 'לייבוביץ' }));
+  assert.deepEqual(oneOffs(txs, TODAY), []);
 });
 
 test('forecast: six months, balance carried month to month', () => {
