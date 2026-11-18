@@ -791,6 +791,55 @@ body.chat-open { overflow: hidden; }
   .shop-print .pc { width: 12px; height: 12px; border: 1.5px solid #000; flex: none; }
 }
 
+/* A report of an advisor conversation: on screen, and as a PDF through print.
+   The cover is the guide's dark card; then the amounts as tiles, and lists. */
+.chat-report { display: flex; flex-direction: column; gap: 12px; }
+.chat-report-print { display: flex; flex-direction: column; gap: 12px; }
+.cr-cover { position: relative; overflow: hidden; border-radius: 24px; padding: 20px 20px 18px; color: #FBF4EA; background: radial-gradient(120% 140% at 100% 0, #5a3412 0, #2a1d14 55%, #1a130e 100%); display: flex; flex-direction: column; gap: 6px; }
+.cr-cover::after { content: ''; position: absolute; width: 190px; height: 190px; border-radius: 50%; background: #E9A35B22; inset-inline-end: -60px; bottom: -90px; pointer-events: none; }
+.cr-cover small { opacity: .78; font-size: 13px; font-weight: 600; }
+.cr-cover h3 { margin: 0; font-family: var(--font-display); font-size: 27px; line-height: 1.15; }
+.cr-cover p { margin: 4px 0 0; font-size: 15px; line-height: 1.65; opacity: .92; position: relative; z-index: 1; }
+.cr-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; position: relative; z-index: 1; }
+.cr-pills span { font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: #FBF4EA1F; border: 1px solid #FBF4EA2E; }
+.cr-sec { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 14px 16px; }
+.cr-sec h4 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.cr-ico { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-tint); color: var(--accent); flex: none; }
+.cr-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cr-tile { border-radius: var(--radius-m); background: var(--surface-2); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cr-tile b { font-family: var(--font-display); font-size: 24px; line-height: 1.1; color: var(--accent); }
+.cr-tile span { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.cr-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.cr-list li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; line-height: 1.5; border-top: 1px solid var(--line); }
+.cr-list li:first-child { border-top: 0; padding-top: 0; }
+.cr-mark { width: 18px; height: 18px; border-radius: 6px; border: 1.8px solid var(--muted); flex: none; margin-top: 2px; display: grid; place-items: center; }
+.cr-mark.done { border-color: var(--income); background: var(--income); color: #fff; }
+.cr-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; margin-top: 8px; }
+.cr-foot { margin: 0; font-size: 12px; color: var(--faint); text-align: center; }
+.cr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cr-actions .btn { flex: 1; min-width: 96px; width: auto; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.cr-actions .cr-pdf { flex-basis: 100%; }
+/* Printed from a copy put straight in the page body (#print-root), so it
+   starts at the top of the first page and runs on to the next ones. */
+#print-root { display: none; }
+@media print {
+  body:has(> #print-root) > :not(#print-root) { display: none !important; }
+  #print-root { display: block; }
+  #print-root, #print-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #print-root .chat-report-print { color: #221A13; font-size: 12pt; gap: 10px; }
+  #print-root .cr-cover h3 { font-size: 24pt; }
+  #print-root .cr-sec { background: #fff; border-color: #E3D7C8; break-inside: avoid; }
+  #print-root .cr-ico { background: #F6E3CC; color: #92490A; }
+  #print-root .cr-tile { background: #F6F1EA; }
+  #print-root .cr-tile b { color: #92490A; }
+  #print-root .cr-tile span, #print-root .cr-foot { color: #6B5948; }
+  #print-root .cr-list li { border-color: #E3D7C8; }
+  #print-root .cr-mark { border-color: #6B5948; }
+  #print-root .cr-mark.done { border-color: #1A6A42; background: #1A6A42; }
+  #print-root .cr-dot { background: #92490A; }
+}
+@page { margin: 16mm 14mm; }
+
 /* Owner dashboard tables */
 .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .admin-table th { text-align: start; color: var(--muted); font-weight: 700; padding: 4px 6px; white-space: nowrap; }

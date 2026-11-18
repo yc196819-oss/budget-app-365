@@ -186,3 +186,47 @@ test('a recipe the advisor cannot read: says so, and the cart stays as it was', 
   assert.match(await card.locator('.rcp [role="alert"]').textContent(), /אפשר להדביק את המתכון כטקסט/);
   await page.close();
 });
+
+test('a report of the conversation (the owner first): summary, decisions, tasks, the amounts table; saved as a PDF through print, or sent on WhatsApp', async () => {
+  const { page, errors } = await open();
+  await page.locator('.cart-card').waitFor();
+  const sent = [];
+  await page.route('**/api/ai/chat-report', (r) => {
+    sent.push(JSON.parse(r.request().postData()));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ report: { summary: 'ביקשתם רשימה לשבת ל-6 נפשות, כשר למהדרין.', decisions: ['קונים לשבת לפי הרשימה'], tasks: ['לבדוק מה כבר יש בבית'], amounts: [{ label: 'נפשות', amount: 6 }] } }) });
+  });
+  await page.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed += 1; window.__root = (document.querySelector('#print-root') || {}).textContent || ''; }; });
+  await page.click('.adv-bar button:has-text("דוח")');
+  const rep = page.locator('.chat-report-print');
+  await rep.waitFor();
+  const text = await rep.textContent();
+  assert.match(text, /דוח על השיחה/);
+  assert.match(text, /ביקשתם רשימה לשבת/);
+  assert.match(text, /מה החלטתם.*קונים לשבת לפי הרשימה/);
+  assert.match(text, /מה נשאר לעשות.*לבדוק מה כבר יש בבית/);
+  assert.match(text, /סכומים שעלו בשיחה₪6נפשות/);
+  // Sent: the conversation's questions and answers.
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].messages.map((m) => m.role), ['user', 'ai']);
+  assert.match(sent[0].messages[0].text, /רשימה לשבת/);
+  await page.click('.cr-actions button:has-text("לשמור כ-PDF")');
+  assert.equal(await page.evaluate(() => window.__printed), 1);
+  // Printed from a copy straight in the page body (so it starts at the top of the page).
+  assert.match(await page.evaluate(() => window.__root), /^דוח על השיחה.*ביקשתם רשימה לשבת/);
+  const wa = await page.locator('.cr-actions a:has-text("וואטסאפ")').getAttribute('href');
+  assert.match(decodeURIComponent(wa), /^https:\/\/wa\.me\/\?text=דוח על השיחה: .*\n.*\n\nבקצרה\nביקשתם רשימה לשבת/);
+  // Back to the conversation, as it was.
+  await page.click('.chat-report button:has-text("חזרה לשיחה")');
+  await page.locator('.cart-card').waitFor();
+  assert.equal(await page.locator('.chat-report').count(), 0);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('everyone else: no report button yet', async () => {
+  const { page } = await open({ email: null });
+  await page.waitForSelector('.adv-msg.ai:not(:has(.adv-thinking))');
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('.adv-bar button:has-text("דוח")').count(), 0);
+  await page.close();
+});
