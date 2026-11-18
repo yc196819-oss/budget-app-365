@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHOPS, LOGOS, deliveryFor, searchLink, orderLink, pasteLink, pasteText, logoKey, logoSrc, shopKey, GUESS_FEE } from '../public/app/src/domain/chainShops.js';
+import { existsSync } from 'node:fs';
+import { SHOPS, LOGOS, DARK_LOGOS, logoDark, deliveryFor, searchLink, orderLink, pasteLink, pasteText, logoKey, logoSrc, shopKey, GUESS_FEE } from '../public/app/src/domain/chainShops.js';
 import { basket, chainNote } from '../public/app/src/domain/prices.js';
 
 test('each online shop has its own delivery and smallest order; an unknown fee is about ₪35.90', () => {
@@ -35,11 +36,15 @@ test('links: search a product on the chain\'s site, order there, paste a whole l
   assert.equal(pasteText([{ name: 'חלב', qty: '×2' }, { name: 'לחם' }, { name: 'קנוי', done: true }, { name: ' ' }]), 'חלב ×2\nלחם');
 });
 
-test('logos: served by our server for the chains checked; every address is https on the chain\'s site or its media server', () => {
-  assert.equal(logoSrc('rami-levy-online'), '/api/chain-logo/rami-levy');
-  assert.equal(logoKey('shefa-birkat'), 'shefa-birkat-hashem', 'an old name of the same chain');
+test('logos: kept in the app; every chain on the list has its file, and a chain whose site refused keeps its letter', () => {
+  assert.equal(logoSrc('victory-online'), '/app/assets/chains/victory.png');
+  assert.equal(logoSrc('rami-levy'), null, 'its site refuses a download: the letter stays');
+  assert.equal(logoDark('city-market'), true, 'a white logo, on a dark tile');
+  assert.equal(logoDark('victory'), false);
+  assert.equal(logoKey('shuk-hayir'), 'shuk-hair', 'an old name of the same chain');
   assert.equal(logoSrc('dor-alon'), null, 'the group\'s logo is not the shop\'s: the letter stays');
-  for (const [k, u] of Object.entries(LOGOS)) assert.match(u, /^https:\/\/[a-z0-9.-]+\//, k);
+  for (const k of LOGOS) assert.ok(existsSync(new URL('../public/app/assets/chains/' + k + '.png', import.meta.url)), k);
+  for (const k of DARK_LOGOS) assert.ok(LOGOS.includes(k), k);
   for (const [k, s] of Object.entries(SHOPS)) {
     for (const u of [s.order, s.search, s.paste].filter(Boolean)) assert.match(u, /^https:\/\//, k);
     if (s.search) assert.ok(s.search.includes('{q}'), k);

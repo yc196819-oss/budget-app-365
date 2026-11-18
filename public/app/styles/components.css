@@ -1625,6 +1625,7 @@ body.chat-open { overflow: hidden; }
 /* A chain's logo on a light chip (logos are made for white), or its letter. */
 .pp-logo { flex: none; width: 34px; height: 22px; border-radius: 6px; background: #fff; display: grid; place-items: center; overflow: hidden; }
 .pp-logo img { max-width: 30px; max-height: 18px; object-fit: contain; }
+.pp-logo.dark { background: #1E2A44; }
 .pp-logo-l { width: 22px; border-radius: 50%; background: #ffffff26; color: inherit; font-size: 12px; font-weight: 800; }
 /* The chain's own shop: delivery, smallest order, and a link to order there. */
 .pp-shop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
