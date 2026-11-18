@@ -3,7 +3,7 @@ import { partnerWord, genderOf, realName } from '../../domain/people.js';
 import { track } from '../../lib/telemetry.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { buildSummary, parseReply, starters, newTitle, historyFor, STOP_MARK } from '../../domain/advisor.js';
+import { buildSummary, parseReply, starters, newTitle, historyFor, STOP_MARK, updateMark, undoMark } from '../../domain/advisor.js';
 import { alignNumbers, truthsOf, asOfLabel, fixSums } from '../../domain/numbers.js';
 import { listConversations, openConversation, createConversation, addMessage, setPrivate, loadMemories, streamReply } from '../../data/advisor.js';
 import { setAiEnabled, autoLearn } from '../../lib/settings.js';
@@ -67,6 +67,24 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   const [updated, setUpdated] = useState([]);
   const [updatedOpen, setUpdatedOpen] = useState(false);
   const [report, setReport] = useState(false);
+  const [appliedOpen, setAppliedOpen] = useState(false);
+  const [pastHidden, setPastHidden] = useState(false);
+  // Saved in the conversation: what the advisor changed (and what was undone),
+  // so a later report and the reopened conversation still say it.
+  const recordApplied = (convId, lines) => {
+    if (!convId || !lines.length) return;
+    setConv((cur) => (cur && cur.id === convId ? { ...cur, applied: [...(cur.applied || []), ...lines.map((text) => ({ text, undone: false }))] } : cur));
+    addMessage({ conversationId: convId, hid, userId: me, role: 'ai', text: updateMark(lines) }).catch(() => {});
+  };
+  const recordUndo = (convId, line) => {
+    if (!convId) return;
+    setConv((cur) => {
+      if (!cur || cur.id !== convId) return cur;
+      let hit = false;
+      return { ...cur, applied: (cur.applied || []).map((x) => (!hit && !x.undone && x.text === line ? ((hit = true), { ...x, undone: true }) : x)) };
+    });
+    addMessage({ conversationId: convId, hid, userId: me, role: 'ai', text: undoMark(line) }).catch(() => {});
+  };
   // Transactions the person asked to delete, waiting for their yes.
   const [toDelete, setToDelete] = useState(null);
   const memories = useRef(null);
@@ -116,7 +134,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [conv]);
 
   const open = async (id) => {
-    setError(''); setSuggestions([]); setLearn(null); setOffer(false); setUpdated([]); setUpdatedOpen(false);
+    setError(''); setSuggestions([]); setLearn(null); setOffer(false); setUpdated([]); setUpdatedOpen(false); setAppliedOpen(false); setPastHidden(false);
     try { setConv(await openConversation(id)); } catch (_err) { setError('לא הצלחנו לפתוח את השיחה. נסו שוב.'); }
   };
 
@@ -279,17 +297,18 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       if (!items.length) return;
       const { done } = await applyLearnings(items, { hid, userId: me, conversationId: c.id });
       memories.current = null;
-      if (done.length) { setUpdated(done.map((it) => ({ ...it, undone: false }))); track('learn_auto'); }
+      if (done.length) { setUpdated(done.map((it) => ({ ...it, undone: false, convId: c.id }))); recordApplied(c.id, done.map(describeItem)); track('learn_auto'); }
     } catch (_err) { /* the conversation goes on; "what I learned" still works */ }
   };
   const confirmDelete = async () => {
     setToDelete((d) => ({ ...d, status: 'saving' }));
     const { done, failed } = await applyLearnings(toDelete.items, { hid, userId: me, conversationId: conv && conv.id });
     setToDelete({ items: done, status: failed.length ? 'failed' : 'done' });
+    if (conv && done.length) recordApplied(conv.id, done.map(describeItem));
   };
   const undoOne = async (i) => {
     const it = updated[i];
-    try { await undoLearning(it, { hid }); memories.current = null; setUpdated((u) => u.map((x, j) => (j === i ? { ...x, undone: true } : x))); track('learn_undo'); } catch (_err) { setError('הביטול לא נשמר. נסו שוב.'); }
+    try { await undoLearning(it, { hid }); memories.current = null; setUpdated((u) => u.map((x, j) => (j === i ? { ...x, undone: true } : x))); recordUndo(it.convId || (conv && conv.id), describeItem(it)); track('learn_undo'); } catch (_err) { setError('הביטול לא נשמר. נסו שוב.'); }
   };
 
   const startLearn = async () => {
@@ -307,6 +326,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   const applyLearn = async (chosen) => {
     setLearn((l) => ({ ...l, status: 'saving' }));
     const result = await applyLearnings(chosen, { hid, userId: me, conversationId: conv.id });
+    if (result && result.done && result.done.length) recordApplied(conv.id, result.done.map(describeItem));
     markLearned(conv.id, conv.messages.length);
     memories.current = null;
     setLearn({ status: 'done', result });
@@ -351,7 +371,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
         ${conv.id && mine && html`<button type="button" class="chip" aria-pressed=${String(conv.is_private)} onClick=${togglePrivate}>${conv.is_private ? html`<${Icon} name="lock" size=${16} />פרטית` : html`<${Icon} name="together" size=${16} />משותפת`}</button>`}
       </div>
       ${!mine && html`<span class="faint" style="font-size:14px">שיחה ש${memberName(conv.user_id)} פתח/ה. אפשר להמשיך אותה.</span>`}
-      ${report ? html`<${ChatReport} conv=${conv} messages=${reportMessages(conv.messages, memberName)} updated=${updated} onClose=${() => setReport(false)} />` : learn ? html`<${LearnReview} state=${learn} onChange=${(items) => setLearn((l) => ({ ...l, items }))} onApply=${applyLearn} onCancel=${closeLearn} onRetry=${startLearn} />` : html`
+      ${report ? html`<${ChatReport} conv=${conv} messages=${reportMessages(conv.messages, memberName)} changes=${(conv.applied || []).filter((x) => !x.undone).map((x) => x.text)} onClose=${() => setReport(false)} />` : learn ? html`<${LearnReview} state=${learn} onChange=${(items) => setLearn((l) => ({ ...l, items }))} onApply=${applyLearn} onCancel=${closeLearn} onRetry=${startLearn} />` : html`
       <div class="adv-log" ref=${logRef} aria-live="polite">
         ${conv.messages.length === 0 && html`<div class="muted" style="font-size:14px;text-align:center;padding:16px 0">שאלו כל דבר על הכסף שלכם</div>`}
         ${conv.messages.map((m, i) => html`<div class=${'adv-msg ' + (m.role === 'user' ? (m.author_id === me ? 'me' : 'partner') : 'ai')} key=${m.id || i}>
@@ -378,12 +398,19 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       ${updated.length > 0 && html`<div class="card learn-auto" role="status">
         <div class="learn-auto-head">
           <button type="button" class="learn-auto-toggle" aria-expanded=${String(updatedOpen)} onClick=${() => setUpdatedOpen((o) => !o)}><${Icon} name="edit" size=${16} />${updated.length === 1 ? 'עדכנתי דבר אחד לפי השיחה' : 'עדכנתי ' + updated.length + ' דברים לפי השיחה'}<span class="learn-auto-more">${updatedOpen ? 'להסתיר' : 'לראות'}</span></button>
-          <button type="button" class="btn-text" onClick=${() => { setUpdated([]); setUpdatedOpen(false); }}>הבנתי</button>
+          <button type="button" class="btn-text" onClick=${() => { setUpdated([]); setUpdatedOpen(false); setPastHidden(true); }}>הבנתי</button>
         </div>
         ${updatedOpen && updated.map((it, i) => html`<div class="learn-auto-row" style="display:flex;align-items:center;gap:8px;font-size:14px">
           <span style=${'flex:1;' + (it.undone ? 'text-decoration:line-through;opacity:.55' : '')}>${describeItem(it)}</span>
           ${it.undone ? html`<span class="faint" style="font-size:14px">בוטל</span>` : html`<button type="button" class="btn-text" style="font-size:14px" onClick=${() => undoOne(i)}>ביטול</button>`}
         </div>`)}
+      </div>`}
+      ${updated.length === 0 && !pastHidden && (conv.applied || []).some((x) => !x.undone) && html`<div class="card learn-auto learn-past" role="note">
+        <div class="learn-auto-head">
+          <button type="button" class="learn-auto-toggle" aria-expanded=${String(appliedOpen)} onClick=${() => setAppliedOpen((o) => !o)}><${Icon} name="edit" size=${16} />${(() => { const n = conv.applied.filter((x) => !x.undone).length; return n === 1 ? 'השיחה הזו עדכנה דבר אחד באפליקציה' : 'השיחה הזו עדכנה ' + n + ' דברים באפליקציה'; })()}<span class="learn-auto-more">${appliedOpen ? 'להסתיר' : 'לראות'}</span></button>
+          <button type="button" class="btn-text" onClick=${() => { setPastHidden(true); setAppliedOpen(false); }}>הבנתי</button>
+        </div>
+        ${appliedOpen && conv.applied.filter((x) => !x.undone).map((x) => html`<div class="learn-auto-row" style="font-size:14px">${x.text}</div>`)}
       </div>`}
       ${toDelete && html`<div class="card learn-delete stack" role="status" style="gap:8px;border:1px solid var(--danger)">
         <b style="font-size:15px;display:flex;align-items:center;gap:6px">${toDelete.status === 'done' ? 'נמחק' : toDelete.status === 'failed' ? 'חלק לא נמחק. נסו שוב.' : 'למחוק את התנועות האלה?'}</b>

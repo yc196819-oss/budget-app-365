@@ -1,7 +1,7 @@
 import { sb } from '../lib/supabase.js';
 import { track } from '../lib/telemetry.js';
 import { CONFIG } from '../config.js';
-import { normalizeMessages, parseSse } from '../domain/advisor.js';
+import { normalizeMessages, parseSse, appliedFrom } from '../domain/advisor.js';
 
 // Advisor conversations live in the same tables as the current app:
 // advisor_conversations (one row per conversation, shared with the
@@ -25,7 +25,7 @@ export async function openConversation(id) {
   ]);
   if (conv.error) throw conv.error;
   const c = conv.data;
-  return { id: c.id, title: c.title, user_id: c.user_id, is_private: !!c.is_private, messages: normalizeMessages(rows.data || [], c.messages, c.user_id) };
+  return { id: c.id, title: c.title, user_id: c.user_id, is_private: !!c.is_private, messages: normalizeMessages(rows.data || [], c.messages, c.user_id), applied: appliedFrom(rows.data || []) };
 }
 
 export async function createConversation({ hid, userId, title, isPrivate = false }) {

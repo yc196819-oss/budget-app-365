@@ -172,6 +172,28 @@ export function newTitle(firstMessage, screen, today = new Date()) {
 // Saved after a question the person stopped before it was answered: the
 // question shows as stopped, and neither goes to the AI again.
 export const STOP_MARK = '@@נעצר';
+// Saved when the advisor changed something from the conversation (the lines
+// as they were shown), and when one of them was undone. Not shown as
+// messages and never sent to the AI; the report and the reopened
+// conversation say what it changed.
+export const UPDATE_MARK = '@@עודכן:';
+export const UNDO_MARK = '@@בוטל:';
+const isMark = (m) => m.role === 'ai' && /^@@(עודכן|בוטל):/.test(String(m.text || ''));
+const readMark = (t, mark) => { try { const v = JSON.parse(String(t).slice(mark.length)); return Array.isArray(v) ? v.map(String) : [String(v)]; } catch (_e) { return []; } };
+
+// What the conversation changed in the app, in order, with what was undone.
+export function appliedFrom(rows) {
+  const out = [];
+  for (const m of rows || []) {
+    const t = String((m && m.text) || '');
+    if (!m || m.role !== 'ai') continue;
+    if (t.startsWith(UPDATE_MARK)) readMark(t, UPDATE_MARK).forEach((text) => out.push({ text, undone: false }));
+    else if (t.startsWith(UNDO_MARK)) readMark(t, UNDO_MARK).forEach((text) => { const hit = out.find((x) => x.text === text && !x.undone); if (hit) hit.undone = true; });
+  }
+  return out;
+}
+export const updateMark = (lines) => UPDATE_MARK + JSON.stringify(lines);
+export const undoMark = (line) => UNDO_MARK + JSON.stringify([line]);
 
 export function normalizeMessages(rows, legacy, ownerId) {
   const list = (rows && rows.length ? rows : (Array.isArray(legacy) ? legacy.filter((m) => !m.pending).map((m) => ({ ...m, author_id: m.author_id || ownerId })) : []));
@@ -179,7 +201,7 @@ export function normalizeMessages(rows, legacy, ownerId) {
   list.forEach((m, i) => { if (m.role === 'ai' && String(m.text || '').trim() === STOP_MARK) for (let j = i - 1; j >= 0; j--) if (list[j].role === 'user') { stoppedAt.add(j); break; } });
   return list
     .map((m, i) => (stoppedAt.has(i) ? { ...m, stopped: true } : m))
-    .filter((m) => !(m.role === 'ai' && String(m.text || '').trim() === STOP_MARK))
+    .filter((m) => !(m.role === 'ai' && String(m.text || '').trim() === STOP_MARK) && !isMark(m))
     .filter((m) => m.role === 'user' || m.role === 'ai' || m.role === 'advice')
     // With when it was written, if known: the advisor's numbers are as of then.
     .map((m) => ({
