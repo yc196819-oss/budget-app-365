@@ -64,41 +64,21 @@ export function pasteText(items) {
     .map((i) => String(i.name).trim() + (i.qty ? ' ' + String(i.qty).trim() : '')).join('\n');
 }
 
-// The chains whose logo the server keeps (served from /api/chain-logo/<key>):
-// the image file on each chain's own site, checked by hand. A chain not here
-// keeps its letter.
-export const LOGOS = {
-  'rami-levy': 'https://www.rami-levy.co.il/images/new_logo.png',
-  shufersal: 'https://www.shufersal.co.il/online/medias/sys_master/root/h18/hc4/11095082172446/logo-online.png',
-  'osher-ad': 'https://osherad.co.il/wp-content/uploads/2022/05/logo_osherad.svg',
-  yochananof: 'https://www.yochananof.co.il/pwa/ios/512.png',
-  victory: 'https://d2yk3mljcbz59g.cloudfront.net/media/2026/07/0f6965cf-b3ea-4c96-b503-19ee407daa1c.svg',
-  'tiv-taam': 'https://d226b0iufwcjmj.cloudfront.net/retailers/1062/logo/1722333933467.png',
-  carrefour: 'https://d226b0iufwcjmj.cloudfront.net/retailers/1540/logo/1774438836316.png',
-  'super-yuda': 'https://d226b0iufwcjmj.cloudfront.net/retailers/1492/logo/1701077319899.png',
-  'hazi-hinam': 'https://cdn.hazi-hinam.co.il/app/V_1.3029/assets/images/header_logo.svg',
-  'machsanei-hashuk': 'https://d226b0iufwcjmj.cloudfront.net/retailers/1107/logo.png',
-  'shuk-hair': 'https://d226b0iufwcjmj.cloudfront.net/retailers/1254/logo.png',
-  'super-sapir': 'https://d226b0iufwcjmj.cloudfront.net/retailers/1339/logo/1719137685691.png',
-  'stop-market': 'https://www.stopmarket.co.il/wp-content/uploads/2021/06/logo3.d110a0.webp',
-  politzer: 'https://d226b0iufwcjmj.cloudfront.net/retailers/1450/logo.png',
-  'salach-dabach': 'https://sdabach.co.il/wp-content/uploads/2024/09/Untitled-2.png',
-  keshet: 'https://d226b0iufwcjmj.cloudfront.net/retailers/1219/logo/1723367587440.png',
-  'fresh-market': 'https://d226b0iufwcjmj.cloudfront.net/retailers/1522/logo/1704358979286.png',
-  'good-pharm': 'https://goodpharm.co.il/wp-content/uploads/2018/08/GOOD@1.5x.png',
-  bareket: 'https://super-bareket.co.il/wp-content/uploads/2015/03/logo.png',
-  'mishnat-yosef': 'https://mishnatyosef.org/assets/logo-lg-a1d09199.svg',
-  'shefa-birkat-hashem': 'https://shefa-bh.co.il/wp-content/uploads/2025/07/%D7%9C%D7%95%D7%92%D7%95-%D7%A9%D7%A4%D7%A2.svg',
-  'maayan-2000': 'https://branches.m2000.co.il/images/mLogo.png',
-  yellow: 'https://app.yellow.co.il/media/1061/yellow_logo222x62.png',
-  'city-market': 'https://city-market.co.il/wp-content/uploads/2026/06/Mask-group.png'
-};
-// The logo's address on our server, or null (the chain keeps its letter).
+// The chains whose logo is kept in the app (public/app/assets/chains/<key>.png),
+// downloaded once from each chain's own site, trimmed and resized. A chain not
+// here keeps its letter (some chains' sites refuse a download).
+export const LOGOS = ['bareket', 'carrefour', 'city-market', 'fresh-market', 'good-pharm', 'hazi-hinam', 'keshet', 'maayan-2000',
+  'machsanei-hashuk', 'mishnat-yosef', 'politzer', 'salach-dabach', 'shuk-hair', 'stop-market', 'super-sapir', 'super-yuda',
+  'tiv-taam', 'victory', 'yellow'];
+// A white logo, shown on a dark tile.
+export const DARK_LOGOS = ['city-market'];
+// The logo's file in the app, or null (the chain keeps its letter).
 // (Two old names of the same chains in the price files.)
 const SAME = { 'shefa-birkat': 'shefa-birkat-hashem', 'shuk-hayir': 'shuk-hair' };
 export function logoKey(chain) {
   const k = shopKey(chain);
   const key = SAME[k] || k;
-  return LOGOS[key] ? key : null;
+  return LOGOS.includes(key) ? key : null;
 }
-export const logoSrc = (chain) => { const k = logoKey(chain); return k ? '/api/chain-logo/' + k : null; };
+export const logoSrc = (chain) => { const k = logoKey(chain); return k ? '/app/assets/chains/' + k + '.png' : null; };
+export const logoDark = (chain) => DARK_LOGOS.includes(logoKey(chain));

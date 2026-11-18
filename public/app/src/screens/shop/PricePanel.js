@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
-import { logoSrc, orderLink, searchLink, pasteLink, pasteText } from '../../domain/chainShops.js';
+import { logoSrc, logoDark, orderLink, searchLink, pasteLink, pasteText } from '../../domain/chainShops.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces, getClubs, setClubs, getChainsShown, setChainsShown } from '../../data/prices.js';
@@ -87,13 +87,13 @@ function Photo({ p, name }) {
   return url ? html`<span class="price-img"><img src=${url} alt="" loading="lazy" /></span>` : html`<span class="price-img sign" aria-hidden="true"><${Icon} name=${SIGN[aisleOf((p && p.name) || name)] || 'cart'} size=${18} stroke=${1.7} /></span>`;
 }
 
-// A chain's logo (kept by our server), or its first letter when there is
+// A chain's logo (kept in the app), or its first letter when there is
 // none or it does not load.
 function ChainLogo({ chain, name }) {
   const [bad, setBad] = useState(false);
   const src = logoSrc(chain);
   const letter = String(name || '').trim().charAt(0);
-  return src && !bad ? html`<span class="pp-logo"><img src=${src} alt="" loading="lazy" onError=${() => setBad(true)} /></span>` : html`<span class="pp-logo pp-logo-l" aria-hidden="true">${letter}</span>`;
+  return src && !bad ? html`<span class=${'pp-logo' + (logoDark(chain) ? ' dark' : '')}><img src=${src} alt="" loading="lazy" onError=${() => setBad(true)} /></span>` : html`<span class="pp-logo pp-logo-l" aria-hidden="true">${letter}</span>`;
 }
 
 function Product({ p, children }) {

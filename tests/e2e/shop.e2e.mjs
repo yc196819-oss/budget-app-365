@@ -30,8 +30,8 @@ async function open(width = 1280, setup = () => {}, email = OWNER) {
   setup(db);
   const errors = collectErrors(page);
   await mockSupabase(page, db);
-  // The chains' logos (our server fetches them from the chains' sites; no internet here).
-  await page.route('**/api/chain-logo/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }));
+  // The chains' logos (files in the app; a tiny stand-in keeps the tests fast).
+  await page.route('**/assets/chains/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }));
   await signIn(page, server.base);
   if (email) await page.evaluate((e) => { const k = 'sb-bwwupwbakefjhwropdin-auth-token'; const x = JSON.parse(localStorage.getItem(k)); x.user.email = e; localStorage.setItem(k, JSON.stringify(x)); }, email);
   // The regular view: what a family will see, tried by the owner (the switch on his board).
@@ -1038,7 +1038,7 @@ test('comparison first: a card at the top of the tab opens the list compared; ea
   await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   const logos = [];
-  await page.route('**/api/chain-logo/**', (r) => { logos.push(r.request().url().split('/').pop()); return r.fulfill({ status: 200, contentType: 'image/png', body: png }); });
+  await page.route('**/assets/chains/**', (r) => { logos.push(r.request().url().split('/').pop().replace('.png', '')); return r.fulfill({ status: 200, contentType: 'image/png', body: png }); });
   // Back to "הרשימות שלי": the comparison is the first thing there.
   await page.click('.shop-listhead .back-btn');
   const card = page.locator('.sl-compare');
@@ -1060,8 +1060,8 @@ test('comparison first: a card at the top of the tab opens the list compared; ea
   await page.click('.pp-row-h');
   assert.equal(await page.locator('.pp-find').getAttribute('href'), 'https://www.rami-levy.co.il/he/online/search?q=' + encodeURIComponent('חלב 3% בשקית'));
   // Logos from our own address, for the chains we have; a made-up chain keeps its letter.
-  await page.waitForFunction(() => document.querySelectorAll('.pp-logo img').length === 2);
-  assert.deepEqual([...new Set(logos)].sort(), ['rami-levy', 'super-sapir']);
+  await page.waitForFunction(() => document.querySelectorAll('.pp-logo img').length === 1);
+  assert.deepEqual([...new Set(logos)].sort(), ['super-sapir'], 'Rami Levy keeps its letter (its site refuses a download)');
   assert.equal((await page.locator('.pp-bar', { hasText: 'רשת א' }).locator('.pp-logo-l').textContent()).trim(), 'ר');
   // Back to the lists: the comparison closes.
   await page.click('.shop-listhead .back-btn');
