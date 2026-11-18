@@ -460,3 +460,23 @@ test('a bank account whose current-account statement is not uploaded: one tap in
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('the guide\'s logo tiles: a wide logo fits whole inside its tile, and a dark logo keeps its dark tile', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.bank_accounts = [{ id: 'a1', household_id: d.hid, name: 'עו״ש', provider: 'pagi', balance: 1 }];
+    d.tables.credit_cards = [{ id: 'c1', household_id: d.hid, name: 'דיינרס', provider: 'diners', billing_day: 10 }, { id: 'c2', household_id: d.hid, name: 'מקס', provider: 'max', billing_day: 10 }];
+    d.tables.imports = [];
+  });
+  await page.click('.pic-card');
+  await page.waitForSelector('.pg .pg-tile img');
+  await page.waitForFunction(() => [...document.querySelectorAll('.pg .pg-tile img')].every((i) => i.complete));
+  const boxes = await page.$$eval('.pg .pg-tile', (tiles) => tiles.filter((t) => t.querySelector('img')).map((t) => {
+    const a = t.getBoundingClientRect(); const b = t.querySelector('img').getBoundingClientRect();
+    return { inside: b.left >= a.left - 0.5 && b.right <= a.right + 0.5 && b.top >= a.top - 0.5 && b.bottom <= a.bottom + 0.5, w: b.width, bg: getComputedStyle(t).backgroundColor, alt: t.querySelector('img').alt };
+  }));
+  assert.equal(boxes.length, 3);
+  for (const b of boxes) { assert.ok(b.inside, b.alt + ': the whole logo is inside its tile'); assert.ok(b.w > 20, b.alt + ': not shrunk to nothing'); }
+  assert.equal(boxes.find((b) => b.alt === 'דיינרס').bg, 'rgb(22, 35, 63)', 'the dark logo on its dark tile');
+  await page.close();
+  assert.deepEqual(errors, []);
+});
