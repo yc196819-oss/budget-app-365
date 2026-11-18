@@ -169,9 +169,17 @@ export function newTitle(firstMessage, screen, today = new Date()) {
 
 // Messages from advisor_messages rows; conversations from before the
 // per-message table keep theirs in advisor_conversations.messages.
+// Saved after a question the person stopped before it was answered: the
+// question shows as stopped, and neither goes to the AI again.
+export const STOP_MARK = '@@נעצר';
+
 export function normalizeMessages(rows, legacy, ownerId) {
   const list = (rows && rows.length ? rows : (Array.isArray(legacy) ? legacy.filter((m) => !m.pending).map((m) => ({ ...m, author_id: m.author_id || ownerId })) : []));
+  const stoppedAt = new Set();
+  list.forEach((m, i) => { if (m.role === 'ai' && String(m.text || '').trim() === STOP_MARK) for (let j = i - 1; j >= 0; j--) if (list[j].role === 'user') { stoppedAt.add(j); break; } });
   return list
+    .map((m, i) => (stoppedAt.has(i) ? { ...m, stopped: true } : m))
+    .filter((m) => !(m.role === 'ai' && String(m.text || '').trim() === STOP_MARK))
     .filter((m) => m.role === 'user' || m.role === 'ai' || m.role === 'advice')
     // With when it was written, if known: the advisor's numbers are as of then.
     .map((m) => ({
@@ -180,7 +188,8 @@ export function normalizeMessages(rows, legacy, ownerId) {
         : { id: m.id, role: m.role, text: m.role === 'ai' ? parseReply(m.text).text : String(m.text || ''), author_id: m.author_id }),
       // A shopping list the advisor wrote shows again as a list.
       ...(m.role === 'ai' && parseList(m.text) ? { list: parseList(m.text) } : {}),
-      ...(m.created_at ? { created_at: m.created_at } : {})
+      ...(m.created_at ? { created_at: m.created_at } : {}),
+      ...(m.stopped ? { stopped: true } : {})
     }));
 }
 
@@ -194,9 +203,10 @@ export function adviceText(d) {
   return parts.filter(Boolean).join('\n');
 }
 
-// History sent with a question: user and advisor turns only.
+// History sent with a question: user and advisor turns only (not a
+// question the person stopped).
 export function historyFor(messages, memberName) {
-  return messages.filter((m) => m.role === 'user' || m.role === 'ai').map((m) => ({ role: m.role, text: m.text, author: m.role === 'user' ? memberName(m.author_id) : undefined }));
+  return messages.filter((m) => (m.role === 'user' || m.role === 'ai') && !m.stopped).map((m) => ({ role: m.role, text: m.text, author: m.role === 'user' ? memberName(m.author_id) : undefined }));
 }
 
 // Server-sent events: "data: {...}\n\n" chunks -> objects. Returns the rest.

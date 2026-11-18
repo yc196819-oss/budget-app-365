@@ -144,11 +144,13 @@ test('while the advisor thinks, an animated indicator shows; it gives way to the
   await page.click('.adv-compose button[type="submit"]');
   await page.waitForSelector('.adv-msg.ai .adv-thinking .dots i');
   assert.match(await page.locator('.adv-thinking').textContent(), /היועץ חושב/);
-  assert.equal(await page.locator('.adv-compose .spinner').count(), 1);
+  // While it thinks, "ask" gives way to "stop".
+  assert.equal(await page.locator('.adv-compose .adv-stop').count(), 1);
   release();
   await page.waitForSelector('.adv-msg.ai:has-text("תשובה קצרה.")');
   assert.equal(await page.locator('.adv-thinking').count(), 0);
-  assert.equal(await page.locator('.adv-compose .spinner').count(), 0);
+  assert.equal(await page.locator('.adv-compose .adv-stop').count(), 0);
+  assert.equal(await page.locator('.adv-compose button[type="submit"]').count(), 1);
   await page.close();
 });
 
@@ -272,4 +274,37 @@ test('typing right away as the advisor opens: the box keeps the cursor, so Enter
   await page.waitForTimeout(300);
   assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('aria-label')), 'שאלה ליועץ');
   await page.close();
+});
+
+test('stopping the advisor while it answers: the question stays, marked, and is back in the box to edit and send again', async () => {
+  const { page, errors, db } = await open();
+  // An answer that does not come (the advisor is still "thinking").
+  let release;
+  await page.route('**/api/ai/advice-chat-stream', (r) => new Promise((res) => { release = res; }).then(() => r.abort()).catch(() => {}));
+  await page.click('.ask-fab');
+  await page.waitForSelector('[aria-label="שאלה ליועץ"]');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'כמה אפשר להוציא על אוכל השבוע?');
+  await page.click('.adv-compose button[type="submit"]');
+  const stop = page.locator('.adv-stop');
+  await stop.waitFor();
+  assert.match(await stop.textContent(), /לעצור/);
+  await stop.click();
+  await page.locator('.adv-stopped').waitFor();
+  const msgs = await page.locator('.adv-msg').allTextContents();
+  assert.equal(msgs.length, 1, 'no answer bubble left behind: ' + JSON.stringify(msgs));
+  assert.match(msgs[0], /כמה אפשר להוציא על אוכל השבוע\?.*נעצר לפני שענה/);
+  const box = page.locator('[aria-label="שאלה ליועץ"]');
+  assert.equal(await box.inputValue(), 'כמה אפשר להוציא על אוכל השבוע?');
+  assert.equal(await box.isEnabled(), true, 'it can be edited');
+  assert.equal(await page.locator('.adv-stop').count(), 0);
+  assert.equal(await page.locator('.adv-err').count(), 0, 'stopping is not an error');
+  // Saved: opened again, the question still shows as stopped.
+  for (let i = 0; i < 30 && !db.tables.advisor_messages.some((m) => m.text === '@@נעצר'); i++) await page.waitForTimeout(100);
+  await page.click('.adv-bar .btn-text');
+  await page.locator('.adv .row', { hasText: 'כמה אפשר להוציא' }).click();
+  await page.locator('.adv-stopped').waitFor();
+  assert.equal(await page.locator('.adv-msg').count(), 1, 'the saved mark is not shown as a message');
+  if (release) release();
+  await page.close();
+  assert.deepEqual(errors.filter((e) => !/abort|Failed to fetch|ERR_/i.test(e)), []);
 });

@@ -129,8 +129,11 @@ test('by default the advisor updates the data from the conversation by itself, s
   await page.click('.adv-compose button[type="submit"]');
   const note = page.locator('.learn-auto');
   await note.waitFor();
+  // One line first (the conversation keeps its room); a tap shows what changed.
+  assert.match(await note.textContent(), /^עדכנתי \d+ דברים לפי השיחהלראותהבנתי$/);
+  assert.equal(await note.locator('.learn-auto-row').count(), 0);
+  await note.locator('.learn-auto-toggle').click();
   const text = await note.textContent();
-  assert.match(text, /עדכנתי לפי השיחה/);
   assert.match(text, /תקציב רכב: ₪700 \(היה ₪900\)/);
   assert.match(text, /יעד חדש: חופשה ביוון/);
   assert.match(text, /יעד קרן חירום: נחסך ₪15,000/);
@@ -148,6 +151,10 @@ test('by default the advisor updates the data from the conversation by itself, s
   await note.locator('.learn-auto-row', { hasText: 'יעד חדש' }).locator('button:has-text("ביטול")').click();
   await note.locator('.learn-auto-row', { hasText: 'יעד חדש' }).locator('text=בוטל').waitFor();
   assert.ok(!db.tables.goals.some((g) => g.name === 'חופשה ביוון'));
+  assert.equal(db.tables.goals.find((g) => g.id === 'g1').saved_amount, 15000);
+  // "הבנתי" puts the note away; what was done stays done.
+  await note.locator('button:has-text("הבנתי")').click();
+  assert.equal(await page.locator('.learn-auto').count(), 0);
   assert.equal(db.tables.goals.find((g) => g.id === 'g1').saved_amount, 15000);
   assert.deepEqual(errors, []);
   await page.close();
@@ -242,6 +249,7 @@ test('told that a salary came in, the advisor records it by itself (with undo), 
   await page.click('.adv-compose button[type="submit"]');
   const note = page.locator('.learn-auto');
   await note.waitFor();
+  await note.locator('.learn-auto-toggle').click();
   assert.match(await note.textContent(), /נרשמה הכנסה: משכורת יוסי ₪?4,580/);
   for (let i = 0; i < 30 && db.tables.transactions.length === before; i++) await page.waitForTimeout(100);
   const added = db.tables.transactions.find((t) => t.description === 'משכורת יוסי');
