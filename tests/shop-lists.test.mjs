@@ -34,3 +34,11 @@ test('when, and a list name', () => {
   assert.equal(cleanName('  לשבת   הזאת '), 'לשבת הזאת');
   assert.equal(cleanName('   '), null);
 });
+
+test('compare first: the list with the most still to buy; nothing when all is bought', async () => {
+  const { compareFirst } = await import('../public/app/src/domain/shopLists.js');
+  const rows = [{ id: 'a', name: 'שבת', count: 3, done: 3 }, { id: 'b', name: 'שבועית', count: 8, done: 2 }, { id: 'c', name: 'פארם', count: 2, done: 0 }];
+  assert.deepEqual([compareFirst(rows).id, compareFirst(rows).left], ['b', 6]);
+  assert.equal(compareFirst([rows[0]]), null);
+  assert.equal(compareFirst([]), null);
+});

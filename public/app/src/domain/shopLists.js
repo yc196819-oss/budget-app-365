@@ -26,6 +26,15 @@ export function listRows(lists, items) {
   }).sort((a, b) => String(b.last).localeCompare(String(a.last)));
 }
 
+// The list to compare first at the top of the tab: the one with the most
+// still to buy (the most recent of those), or null when nothing is left.
+export function compareFirst(rows) {
+  const left = (rows || []).map((r) => ({ r, n: r.count - r.done })).filter((x) => x.n > 0);
+  if (!left.length) return null;
+  const best = left.reduce((a, b) => (b.n > a.n ? b : a));
+  return { ...best.r, left: best.n };
+}
+
 // "היום", "אתמול", "לפני 3 ימים", or the date.
 export function whenText(iso, now = new Date()) {
   if (!iso) return '';

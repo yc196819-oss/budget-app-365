@@ -30,6 +30,8 @@ async function open(width = 1280, setup = () => {}, email = OWNER) {
   setup(db);
   const errors = collectErrors(page);
   await mockSupabase(page, db);
+  // The chains' logos (our server fetches them from the chains' sites; no internet here).
+  await page.route('**/api/chain-logo/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }));
   await signIn(page, server.base);
   if (email) await page.evaluate((e) => { const k = 'sb-bwwupwbakefjhwropdin-auth-token'; const x = JSON.parse(localStorage.getItem(k)); x.user.email = e; localStorage.setItem(k, JSON.stringify(x)); }, email);
   // The regular view: what a family will see, tried by the owner (the switch on his board).
@@ -1018,9 +1020,55 @@ test('online and in the shop are two prices: the chain online is compared on its
   const hero = page.locator('.pp-hero');
   await hero.waitFor();
   // 20 × ₪3.40 + ₪35.90 delivery = ₪103.90, against 20 × ₪5.90 = ₪118 in the shop.
-  assert.match(await hero.textContent(), /₪103\.90ברשת א אונליין.*כולל משלוח של בערך ₪35\.90.*בחנות: הכי משתלם ברשת ב, ₪118\.00/, 'a made-up chain: its delivery price is said as about');
+  assert.match(await hero.textContent(), /₪103\.90ברשת א אונליין.*משלוח בערך ₪35\.90.*לא אימתנו את מחיר המשלוח.*בחנות: הכי משתלם ברשת ב, ₪118\.00/, 'a made-up chain: its delivery price is said as about');
   assert.match(await page.locator('.pp-bar', { hasText: 'רשת א אונליין' }).textContent(), /אונליין · כולל משלוח.*כולל משלוח בערך ₪35\.90/);
   assert.equal(await page.locator('.pp-bar').count(), 3, 'the shop and the online shop: two bars, and the other chain');
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
+test('comparison first: a card at the top of the tab opens the list compared; each online shop with its own delivery, smallest order, order link and product search', async () => {
+  const { page, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: '×10', aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+  }, OWNER);
+  // Made-up prices at two real online shops (their terms are the chains' own).
+  await page.route('**/rest/v1/rpc/price_search', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ q: 1, barcode: '1001', name: 'חלב 3% בשקית', names: '', qty: 1, unit: 'ליטר', kosher: {},
+    offers: [{ chain: 'super-sapir-online', chain_name: 'סופר ספיר אונליין', price: 3 }, { chain: 'rami-levy-online', chain_name: 'רמי לוי אונליין', price: 4 }, { chain: 'x', chain_name: 'רשת א', price: 9 }] }]) }));
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const logos = [];
+  await page.route('**/api/chain-logo/**', (r) => { logos.push(r.request().url().split('/').pop()); return r.fulfill({ status: 200, contentType: 'image/png', body: png }); });
+  // Back to "הרשימות שלי": the comparison is the first thing there.
+  await page.click('.shop-listhead .back-btn');
+  const card = page.locator('.sl-compare');
+  await card.waitFor();
+  assert.match(await card.textContent(), /כמה "הרשימה שלי" תעלה\?.*מוצר אחד/);
+  await card.click();
+  const hero = page.locator('.pp-hero');
+  await hero.waitFor();
+  // 10 × ₪3 + about ₪35.90 at Super Sapir (by area), under its ₪200 minimum.
+  assert.match(await hero.textContent(), /₪65\.90בסופר ספיר אונליין/);
+  assert.match(await page.locator('.pp-ship').textContent(), /משלוח בערך ₪35\.90 · מינימום להזמנה ₪200\.00הרשימה מתחת למינימום/);
+  assert.equal(await page.locator('.pp-order').getAttribute('href'), 'https://www.supersapir.co.il/');
+  assert.match(await page.locator('.pp-bar', { hasText: 'סופר ספיר' }).textContent(), /מתחת למינימום ₪200\.00/);
+  // Rami Levy online: its own fee, said for sure.
+  await page.locator('.pp-bar', { hasText: 'רמי לוי' }).click();
+  assert.match(await page.locator('.pp-ship').textContent(), /^משלוח ₪35\.90$/);
+  assert.equal(await page.locator('.pp-order').getAttribute('href'), 'https://www.rami-levy.co.il/he');
+  // A product, searched on that chain's site.
+  await page.click('.pp-row-h');
+  assert.equal(await page.locator('.pp-find').getAttribute('href'), 'https://www.rami-levy.co.il/he/online/search?q=' + encodeURIComponent('חלב 3% בשקית'));
+  // Logos from our own address, for the chains we have; a made-up chain keeps its letter.
+  await page.waitForFunction(() => document.querySelectorAll('.pp-logo img').length === 2);
+  assert.deepEqual([...new Set(logos)].sort(), ['rami-levy', 'super-sapir']);
+  assert.equal((await page.locator('.pp-bar', { hasText: 'רשת א' }).locator('.pp-logo-l').textContent()).trim(), 'ר');
+  // Back to the lists: the comparison closes.
+  await page.click('.shop-listhead .back-btn');
+  await page.locator('.sl-compare').waitFor();
+  await page.locator('.sl-chat').first().click();
+  await page.waitForSelector('.shop-add');
+  assert.equal(await page.locator('.price-panel').count(), 0);
   await page.close();
   assert.deepEqual(errors, []);
 });

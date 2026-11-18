@@ -875,6 +875,8 @@ async function sendMailWithFallback({ userId, to, subject, html, text, headers }
 const STARTED_AT = new Date().toISOString();
 // Public: only that the server is up. The details are for the owner.
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+// The chains' logos, from our own address (see server/chainLogos.js).
+app.get('/api/chain-logo/:key', require('./server/chainLogos.js').handler);
 app.get('/api/admin/health', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   const availableAiProviders = getAvailableAiProviders();

@@ -1617,10 +1617,24 @@ body.chat-open { overflow: hidden; }
 .pp-save { font-size: 13.5px; opacity: .85; margin-top: 2px; }
 .pp-save b { color: #F3C88F; }
 .pp-bars { position: relative; z-index: 1; display: grid; gap: 4px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #ffffff1c; }
-.pp-bar { display: grid; grid-template-columns: minmax(84px, 9rem) 1fr auto; align-items: center; gap: 4px 10px; background: none; border: 0; color: inherit; font: inherit; text-align: start; padding: 6px 8px; border-radius: 12px; cursor: pointer; }
+.pp-bar { display: grid; grid-template-columns: minmax(110px, 11rem) 1fr auto; align-items: center; gap: 4px 10px; background: none; border: 0; color: inherit; font: inherit; text-align: start; padding: 6px 8px; border-radius: 12px; cursor: pointer; }
 .pp-bar:hover { background: #ffffff0d; }
 .pp-bar.on { background: #ffffff17; }
-.pp-bar-n { font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-bar-n { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13.5px; font-weight: 700; }
+.pp-bar-n > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A chain's logo on a light chip (logos are made for white), or its letter. */
+.pp-logo { flex: none; width: 34px; height: 22px; border-radius: 6px; background: #fff; display: grid; place-items: center; overflow: hidden; }
+.pp-logo img { max-width: 30px; max-height: 18px; object-fit: contain; }
+.pp-logo-l { width: 22px; border-radius: 50%; background: #ffffff26; color: inherit; font-size: 12px; font-weight: 800; }
+/* The chain's own shop: delivery, smallest order, and a link to order there. */
+.pp-shop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
+.pp-ship { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 5px 10px; border-radius: 999px; background: #ffffff14; }
+.pp-ship svg { color: #F3C88F; flex: none; }
+.pp-ship em { font-style: normal; font-weight: 700; margin-inline-start: 6px; color: #F3C88F; }
+.pp-ship.warn { background: color-mix(in srgb, #F3C88F 22%, transparent); }
+.pp-order { width: auto; padding: 6px 14px; font-size: 13.5px; color: #FBF4EA; border-color: #ffffff40; background: #ffffff10; }
+.pp-shop .btn-text { color: #F3C88F; }
+.pp-find { display: inline-block; margin-bottom: 6px; }
 .pp-bar-t { display: flex; height: 6px; border-radius: 6px; background: #ffffff14; overflow: hidden; }
 /* What the missing products would add: striped, not counted in the price. */
 .pp-bar-gap { display: block; height: 100%; background: repeating-linear-gradient(-45deg, #ffffff40 0 3px, transparent 3px 6px); }
@@ -2153,6 +2167,12 @@ body.store-on { overflow: hidden; }
 .sl-new-form { display: flex; gap: 8px; flex-wrap: wrap; }
 .sl-new-form .input { flex: 1; min-width: 160px; }
 .sl-chats { padding: 0; overflow: hidden; }
+.sl-compare { width: 100%; display: flex; align-items: center; gap: 12px; padding: 16px; border: 0; font: inherit; text-align: start; cursor: pointer; color: #FBF4EA; background: radial-gradient(120% 130% at 100% 0, #5a3412 0, #2a1d14 55%, #17110c 100%); border-radius: 20px; }
+.sl-compare .sl-mid small { color: #FBF4EAcc; white-space: normal; overflow: visible; }
+.pp-ship-note { flex-basis: 100%; font-size: 12px; opacity: .75; }
+.sl-compare .sl-mid b { font-size: 17px; }
+.sl-compare-ic { flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: #ffffff1a; color: #F3C88F; }
+.sl-compare-go { flex: none; font-weight: 800; color: #2a1d14; background: var(--fx-gold); border-radius: 999px; padding: 7px 14px; font-size: 14px; }
 .sl-chat { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 14px; border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; color: var(--text); text-align: start; cursor: pointer; }
 .sl-chat:last-child { border-bottom: 0; }
 .sl-chat:hover { background: var(--surface-2); }

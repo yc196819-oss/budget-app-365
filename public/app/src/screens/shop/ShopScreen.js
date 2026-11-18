@@ -116,7 +116,8 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         onOpen=${(id) => { setOpenList(id); track('shop_list_open'); window.scrollTo(0, 0); }}
         onCreate=${async (name) => { try { const l = await newList(name); setOpenList(l.id); track('shop_list_new'); } catch (_e) { showToast('הרשימה לא נוצרה. נסו שוב.'); } }}
         onAdvisor=${() => { setAdvisor(true); track('shop_advisor_open'); }}
-        onTrips=${(id) => setHistory(id)} />
+        onTrips=${(id) => setHistory(id)}
+        onCompare=${(id) => { setOpenList(id); setPrices(true); track('price_open_first'); }} />
       ${advisor && html`<${CartBuilder} hid=${data.hid} items=${all} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }}
         toList=${async (list) => (await newList(String((list && list.title) || 'רשימה מהיועץ').slice(0, 60), 'advisor')).id}
         onAdded=${(id) => { shop.reload(); setAdvisor(false); if (id) setOpenList(id); track('shop_advisor_add'); }} />`}
@@ -184,8 +185,9 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
     ${asUser && html`<div class="card shop-asuser" role="status"><span><b>תצוגת משתמש רגיל</b><small class="muted">כך משפחה רגילה רואה את הקניות, בלי הניסויים של לוח הבעלים.</small></span>
       ${onOwnerView && html`<button type="button" class="btn btn-ghost" onClick=${onOwnerView}>לחזור לתצוגת הבעלים</button>`}</div>`}
     <section class="shop-main stack">
-      ${current && html`<div class="shop-listhead"><button type="button" class="back-btn" aria-label="לכל הרשימות" onClick=${() => setOpenList(null)}>→</button><h2>${current.name}</h2>
+      ${current && html`<div class="shop-listhead"><button type="button" class="back-btn" aria-label="לכל הרשימות" onClick=${() => { setOpenList(null); setPrices(false); }}>→</button><h2>${current.name}</h2>
         <button type="button" class="btn-text shop-archive" onClick=${async () => { if (open.length) { showToast('ברשימה עוד יש מוצרים. "סיימתי לקנות" או הורידו אותם, ואז אפשר לסגור.'); return; } try { await archiveList(current.id); setLists((ls) => ls.filter((l) => l.id !== current.id)); setOpenList(null); showToast('הרשימה נסגרה'); } catch (_e) { showToast('לא נסגרה. נסו שוב.'); } }}>לסגור את הרשימה</button></div>`}
+      ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} receipts=${receipts} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       <div class="shop-head">
         <span class="muted" style="font-size:14px">עוזרים לכם לחסוך בסופר: רשימה אחת לכל הבית, וכמה נשאר לסופר החודש. ${!intro && html`<button type="button" class="btn-text shop-what" onClick=${() => setIntro(true)}>מה זה?</button>`}</span>
         <span class="shop-tools">
@@ -212,7 +214,6 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         onChanged=${(t) => setTrips((all) => all.map((x) => (x.id === t.id ? { ...x, ...t } : x)))}
         onRemoved=${(ids) => shop.patch((all) => all.filter((x) => !ids.includes(x.id)))} />`}
       ${owner && advisor && html`<${CartBuilder} hid=${data.hid} items=${items} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }} toList=${withLists ? async () => openList : null} onAdded=${() => { shop.reload && shop.reload(); track('shop_advisor_add'); }} />`}
-      ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} receipts=${receipts} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}
       ${groups.map((g) => html`<div class="shop-group" key=${g.aisle}>
         <h2 class="shop-aisle"><${Icon} name=${AISLE_ICON[g.aisle] || 'cart'} size=${15} stroke=${1.8} />${g.label}<span class="shop-aisle-n">${g.items.filter((i) => !i.done).length || ''}</span></h2>
