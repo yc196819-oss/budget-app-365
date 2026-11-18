@@ -273,9 +273,14 @@ async function aiQuota(req, res, next) {
     const month = israelToday().slice(0, 7);
     const { data: used } = await supabaseAdmin.rpc('bump_ai_usage', { p_household: m.household_id, p_month: month });
     const limit = ops.aiMonthlyLimit(hh && hh.ai_monthly_limit, process.env.AI_MONTHLY_DEFAULT);
+    const giveBack = () => supabaseAdmin.rpc('unbump_ai_usage', { p_household: m.household_id, p_month: month }).then(() => {}, () => {});
     if (Number(used) > limit) {
+      // A request stopped by the quota did not use the AI: not counted.
+      giveBack();
       return res.status(429).json({ error: `הגעתם למכסת ה-AI החודשית (${limit} פעולות). היא מתאפסת בתחילת החודש הבא.`, quota: { used: Number(used) - 1, limit } });
     }
+    // A failure on our side is given back (see ops.aiRefundable).
+    res.on('finish', () => { if (ops.aiRefundable(res.statusCode)) giveBack(); });
     return next();
   } catch (err) {
     // Never block a person on a quota bug; the daily cap for the whole app
