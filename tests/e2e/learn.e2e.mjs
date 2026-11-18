@@ -262,3 +262,33 @@ test('told that a salary came in, the advisor records it by itself (with undo), 
   assert.ok(!db.tables.transactions.some((t) => t.id === added.id));
   await page.close();
 });
+
+test('what the advisor changed is saved in the conversation: reopened later, it says what it changed (what was undone is left out)', async () => {
+  const { page, db, errors } = await open();
+  await page.fill('[aria-label="שאלה ליועץ"]', 'החלטנו: רכב 700 בחודש, ויש לנו כבר 15,000 בקרן החירום');
+  await page.click('.adv-compose button[type="submit"]');
+  const note = page.locator('.learn-auto');
+  await note.waitFor();
+  await note.locator('.learn-auto-toggle').click();
+  const rows = await note.locator('.learn-auto-row').count();
+  await note.locator('.learn-auto-row', { hasText: 'תקציב רכב' }).locator('button:has-text("ביטול")').click();
+  await note.locator('.learn-auto-row', { hasText: 'תקציב רכב' }).locator('text=בוטל').waitFor();
+  // Saved as marks in the conversation, not as messages.
+  for (let i = 0; i < 30 && !db.tables.advisor_messages.some((m) => String(m.text).startsWith('@@בוטל:')); i++) await page.waitForTimeout(100);
+  assert.ok(db.tables.advisor_messages.some((m) => m.conversation_id === 'c1' && String(m.text).startsWith('@@עודכן:')));
+  assert.ok(db.tables.advisor_messages.some((m) => m.conversation_id === 'c1' && String(m.text).startsWith('@@בוטל:')));
+  // Reopened: one line, what it changed, without the undone one.
+  await page.click('.adv-bar .btn-text');
+  await page.locator('.adv .row', { hasText: 'תכנון לשנה הבאה' }).click();
+  const past = page.locator('.learn-past');
+  await past.waitFor();
+  assert.match(await past.textContent(), new RegExp('השיחה הזו עדכנה ' + (rows - 1) + ' דברים באפליקציה'));
+  await past.locator('.learn-auto-toggle').click();
+  assert.doesNotMatch(await past.textContent(), /תקציב רכב/);
+  assert.match(await past.textContent(), /יעד חדש: חופשה ביוון/);
+  assert.equal(await page.locator('.adv-msg', { hasText: '@@' }).count(), 0, 'no mark shown as a message');
+  await past.locator('button:has-text("הבנתי")').click();
+  assert.equal(await page.locator('.learn-past').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

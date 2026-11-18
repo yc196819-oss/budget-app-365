@@ -2,7 +2,6 @@ import { html } from '../../lib/html.js';
 import { useEffect, useState } from 'preact/hooks';
 import { track } from '../../lib/telemetry.js';
 import { askChatReport } from '../../data/advisor.js';
-import { describeItem } from '../../domain/learn.js';
 import { reportText } from '../../domain/chatReport.js';
 import { Icon } from '../../components/Icon.js';
 
@@ -31,9 +30,9 @@ function printReport() {
 
 // A report of the conversation (the owner first): the AI writes the words;
 // the amounts are only ones written in the conversation, and "updated in
-// the app" is what the advisor really changed here. Saved as a PDF through
+// the app" is what the advisor really changed in this conversation (saved). Saved as a PDF through
 // the browser's own print dialog, copied, or sent on WhatsApp.
-export function ChatReport({ conv, messages, updated, onClose }) {
+export function ChatReport({ conv, messages, changes = [], onClose }) {
   const [state, setState] = useState({ status: 'loading' });
   const load = () => {
     setState({ status: 'loading' });
@@ -41,7 +40,6 @@ export function ChatReport({ conv, messages, updated, onClose }) {
   };
   useEffect(load, []);
 
-  const changes = (updated || []).filter((it) => !it.undone).map(describeItem);
   const title = String(conv.title || 'שיחה עם היועץ').replace(/ — [\d.]+$/, '');
   const when = dateHe();
 

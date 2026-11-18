@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseReply, buildSummary, starters, newTitle, normalizeMessages, adviceText, historyFor, parseSse, SUGG_MARK, STOP_MARK } from '../public/app/src/domain/advisor.js';
+import { parseReply, buildSummary, starters, newTitle, normalizeMessages, adviceText, historyFor, parseSse, SUGG_MARK, STOP_MARK, appliedFrom, updateMark, undoMark } from '../public/app/src/domain/advisor.js';
 
 test('parseReply splits the answer from the follow-up suggestions', () => {
   assert.deepEqual(parseReply('כדאי לקצץ באוכל בחוץ.\n' + SUGG_MARK + ' כמה בדיוק? | ומה עם הרכב?|'), { text: 'כדאי לקצץ באוכל בחוץ.', suggestions: ['כמה בדיוק?', 'ומה עם הרכב?'] });
@@ -95,4 +95,18 @@ test('a stopped question: shown as stopped when the conversation opens again, an
   assert.equal(msgs.filter((m) => m.stopped).length, 1);
   const h = historyFor(msgs, () => 'יוסי');
   assert.deepEqual(h.map((x) => x.text), ['כמה נשאר?', 'נשארו 1,200.', 'ואם נקנה רק בסופר הזול השבוע?', 'תחסכו בערך 150.']);
+});
+
+test('what a conversation changed is saved in it: read back in order, an undone one marked, never shown as a message', () => {
+  const rows = [
+    { id: '1', role: 'user', text: 'רכב 700 בחודש, ויש 15,000 בקרן', author_id: 'u1' },
+    { id: '2', role: 'ai', text: 'רשמתי.', author_id: 'u1' },
+    { id: '3', role: 'ai', text: updateMark(['תקציב רכב: ₪700 (היה ₪900)', 'יעד קרן חירום: נחסך ₪15,000']), author_id: 'u1' },
+    { id: '4', role: 'ai', text: undoMark('תקציב רכב: ₪700 (היה ₪900)'), author_id: 'u1' },
+    { id: '5', role: 'ai', text: '@@עודכן:not json', author_id: 'u1' }
+  ];
+  assert.deepEqual(appliedFrom(rows), [{ text: 'תקציב רכב: ₪700 (היה ₪900)', undone: true }, { text: 'יעד קרן חירום: נחסך ₪15,000', undone: false }]);
+  const msgs = normalizeMessages(rows, [], 'u1');
+  assert.deepEqual(msgs.map((m) => m.id), ['1', '2'], 'the marks are not messages');
+  assert.equal(historyFor(msgs, () => 'יוסי').length, 2);
 });
