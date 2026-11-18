@@ -1,8 +1,8 @@
 # Working on this repo
 
 ## Communication
-- Always answer the owner in simple Hebrew, unless they write in English or ask for English.
-- Code, identifiers, comments, commit messages, PRs and SQL stay in English.
+- Always respond to the user in Hebrew unless they write in English or ask for English. Keep code, identifiers, commit messages, and SQL in English.
+- Use simple Hebrew. Comments and PRs also stay in English.
 - End each update with the open questions, numbered.
 
 ## Before changing things
