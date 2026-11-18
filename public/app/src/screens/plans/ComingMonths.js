@@ -55,7 +55,12 @@ export function ComingMonths({ data, onSheet, onBudget }) {
         </div>`;
       })}
     </div>
+    ${fc.skipped && fc.skipped.length > 0 && html`<details class="fc-skipped">
+      <summary>${fc.skipped.length === 1 ? 'הוצאה גדולה אחת לא נספרה כחלק מחודש רגיל' : fc.skipped.length + ' הוצאות גדולות לא נספרו כחלק מחודש רגיל'}</summary>
+      <span class="faint">הוצאות של ${money(1500)} ומעלה שלא חוזרות (רהיטים, טיסה, הפקדה להשקעות). הן לא צפויות לחזור כל חודש, ולכן לא נכנסו לתחזית.</span>
+      ${fc.skipped.map((x) => html`<div><span>${x.description}</span><b class="num">${money(x.amount)}</b></div>`)}
+    </details>`}
     <${WhatIf} months=${fc.months} scenarios=${scenarios} onChange=${setScenarios} result=${base ? { now: fc, before: base } : null} />
-    <span class="faint" style="font-size:12px;line-height:1.55">התחזית בנויה מ-3 החודשים האחרונים, התשלומים הקבועים, תשלומים שנתיים, תשלומים בפריסה, חגים ומה שתכננתם. היא הערכה ומתעדכנת עם כל תנועה.</span>
+    <span class="faint" style="font-size:12px;line-height:1.55">התחזית בנויה מחודש רגיל מתוך 3 החודשים האחרונים (בלי הוצאות גדולות חד-פעמיות), התשלומים הקבועים, תשלומים שנתיים, תשלומים בפריסה, חגים ומה שתכננתם. היא הערכה ומתעדכנת עם כל תנועה.</span>
   </div>`;
 }

@@ -840,6 +840,11 @@ body.chat-open { overflow: hidden; }
 }
 @page { margin: 16mm 14mm; }
 
+.fc-skipped { font-size: 13px; line-height: 1.5; }
+.fc-skipped summary { cursor: pointer; color: var(--muted); font-weight: 700; }
+.fc-skipped > span { display: block; margin: 6px 0; }
+.fc-skipped > div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+
 /* Owner dashboard tables */
 .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .admin-table th { text-align: start; color: var(--muted); font-weight: 700; padding: 4px 6px; white-space: nowrap; }

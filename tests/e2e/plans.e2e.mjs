@@ -222,3 +222,18 @@ test('goals: add money to a goal, and delete it', async () => {
   assert.equal(db.tables.goals.length, 0);
   await page.close();
 });
+
+test('the coming months: big one-time expenses are left out of the regular month, and the list says which', async () => {
+  const { page, errors } = await open(DEC1, '#/plans/months', 390, (d) => {
+    d.tables.transactions.push({ id: 'one1', household_id: d.hid, type: 'expense', amount: 4200, tx_date: '2026-10-20', description: 'שולחן וספה (בדוי)', nature: 'variable', spread: 'month', category_id: null });
+  });
+  const box = page.locator('.fc-skipped');
+  await box.waitFor();
+  assert.match(await box.locator('summary').textContent(), /הוצאה גדולה אחת לא נספרה כחלק מחודש רגיל/);
+  await box.locator('summary').click();
+  assert.match(await box.textContent(), /שולחן וספה \(בדוי\).*4,200/);
+  await page.locator('.fc-month').nth(1).locator('.row').click();
+  assert.match(await page.locator('.fc-lines').textContent(), /הוצאות משתנות \(חודש רגיל\)/);
+  await page.close();
+  assert.deepEqual(errors, []);
+});

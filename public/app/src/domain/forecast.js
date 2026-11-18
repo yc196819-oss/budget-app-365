@@ -24,21 +24,88 @@ function average(txs, months, pick) {
   return vals.length ? sum(vals) / vals.length : 0;
 }
 
+// The same payee written two ways ("לייבוביץ" / "ליבוביץ"): the first word,
+// without the vowel letters ו and י, is the same, and both are real words
+// (4 letters or more). Then the regular similarity.
+const skeleton = (w) => w.replace(/[וי]/g, '');
+const firstWord = (d) => (String(d || '').replace(/[^\u05D0-\u05EAa-zA-Z ]/g, ' ').trim().split(/\s+/)[0] || '');
+export function samePayee(a, b) {
+  if (similarText(a, b)) return true;
+  const A = firstWord(a), B = firstWord(b);
+  if (A.length < 4 || B.length < 4) return false;
+  const sa = skeleton(A), sb = skeleton(B);
+  return sa.length >= 2 && sa === sb;
+}
+
+const monthOf = (t, months) => { const d = parseDate(t.tx_date); return months.findIndex((mo) => mo.y === d.y && mo.m === d.m); };
+
+// The fixed payments of the last 3 full months, as items: lines with a
+// similar description are one item (rent is rent, even when one month's
+// line says "rent (updated)"). An item is fixed when any of its lines was
+// marked fixed, in any of the months: a line imported later as "variable"
+// does not turn the rent into a variable expense. It counts once, at its
+// latest month's amount, when it was paid last month or in at least two
+// of the three months (a one-time line marked fixed is not a payment).
+export function fixedItems(txs, today) {
+  const months = fullMonthsBefore(today, 3);
+  const items = [];
+  for (const t of txs) {
+    if (!isExpense(t) || t.spread === 'year' || installmentOf(t.description)) continue;
+    const k = monthOf(t, months);
+    if (k < 0) continue;
+    const desc = String(t.description || '').trim();
+    let it = desc ? items.find((x) => samePayee(x.desc, desc)) : null;
+    if (!it) { it = { desc, lines: [], fixed: false }; items.push(it); }
+    it.lines.push({ t, k });
+    if (t.nature === 'fixed') it.fixed = true;
+  }
+  return items.filter((it) => it.fixed && it.desc).map((it) => {
+    const seen = new Set(it.lines.map((l) => l.k));
+    const latest = Math.min(...seen);
+    return { desc: it.desc, lines: it.lines.map((l) => l.t), months: seen.size, latest, amount: sum(it.lines.filter((l) => l.k === latest), (l) => Number(l.t.amount) || 0) };
+  }).filter((it) => it.latest === 0 || it.months >= 2);
+}
+
+// Big one-time expenses of the last 3 full months: a variable line of
+// ONE_OFF or more with nothing like it in the other months (furniture, a
+// flight, a deposit to investments). Left out of the regular month, since
+// they do not come back every month; the forecast says which ones.
+export const ONE_OFF = 1500;
+export function oneOffs(txs, today) {
+  const months = fullMonthsBefore(today, 3);
+  const lines = txs.filter((t) => isExpense(t) && t.spread !== 'year' && t.nature !== 'fixed' && !installmentOf(t.description) && monthOf(t, months) >= 0);
+  return lines.filter((t) => (Number(t.amount) || 0) >= ONE_OFF && String(t.description || '').trim()
+    && !lines.some((o) => o !== t && monthOf(o, months) !== monthOf(t, months) && samePayee(o.description || '', t.description)));
+}
+
+// The typical month of a list of monthly sums: the middle one of three (a
+// month with a trip abroad does not set the regular month).
+function median(vals) {
+  const v = vals.filter((x) => x > 0).sort((a, b) => a - b);
+  if (!v.length) return 0;
+  return v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+}
+
 // The household's regular month, from history.
 // skip: lines kept out of the regular month (deposits to investments, which
 // the forecast counts on their own line when they are regular).
 export function baseline(allTxs, today, skip = null) {
   const txs = skip ? allTxs.filter((t) => !skip(t)) : allTxs;
   const months = fullMonthsBefore(today, 3);
-  const last = months[0];
-  const fixedLines = txs.filter((t) => isExpense(t) && t.nature === 'fixed' && t.spread !== 'year' && (() => { const d = parseDate(t.tx_date); return d.y === last.y && d.m === last.m; })());
+  const items = fixedItems(txs, today);
+  const fixedIds = new Set(items.flatMap((it) => it.lines));
+  // Every line of a fixed item, in any month, is out of the variable average
+  // (as is a line marked fixed that is not a regular payment).
+  const isFixed = (t) => t.nature === 'fixed' || fixedIds.has(t) || items.some((it) => samePayee(it.desc, t.description || ''));
+  const once = new Set(oneOffs(txs, today));
   return {
     income: average(txs, months, (t) => t.type === 'income'),
-    fixed: sum(fixedLines, (t) => Number(t.amount) || 0),
+    fixed: sum(items, (it) => it.amount),
     // Yearly-spread lines are counted where they really fall (see yearly below).
     // Installment payments are counted from the deals instead (installmentsIn),
     // up to the last payment, so they are not in the regular month.
-    variable: average(txs, months, (t) => isExpense(t) && t.nature !== 'fixed' && t.spread !== 'year' && !installmentOf(t.description))
+    // A typical month (the middle of the three), without big one-time lines.
+    variable: median(months.map((mo) => sum(txs.filter((t) => isExpense(t) && t.spread !== 'year' && !installmentOf(t.description) && !isFixed(t) && !once.has(t)), (t) => monthShare(t, mo))))
   };
 }
 
@@ -144,7 +211,7 @@ export function forecast({ txs, goals = [], installments = [], loans = [], categ
       lines = [
         { label: expected > 0 ? 'הכנסה צפויה (כפי שעדכנתם)' : 'הכנסות (ממוצע 3 חודשים)', amount: monthlyIncome, kind: 'income' },
         { label: 'הוצאות קבועות', amount: -base.fixed, kind: 'fixed' },
-        { label: 'הוצאות משתנות (ממוצע 3 חודשים)', amount: -base.variable, kind: 'variable' },
+        { label: 'הוצאות משתנות (חודש רגיל)', amount: -base.variable, kind: 'variable' },
         ...yearly(txs, mo),
         ...(invest.recurring ? [{ label: 'הפקדה קבועה להשקעות (לפי ' + invest.months + ' החודשים האחרונים)', amount: -invest.monthly, kind: 'saving' }] : [])
       ];
@@ -156,7 +223,8 @@ export function forecast({ txs, goals = [], installments = [], loans = [], categ
     balance += net;
     out.push({ index: i, month: mo, name: MONTH_NAMES[mo.m] + ' ' + mo.y, short: MONTH_NAMES[mo.m], lines, net, end: balance });
   }
-  return { months: out, base, expectedIncome: expected, regularNet: monthlyIncome - base.fixed - base.variable - (invest.recurring ? invest.monthly : 0), investMonthly: invest.recurring ? invest.monthly : 0, hasBalance: startBalance !== null && startBalance !== undefined };
+  const skipped = oneOffs(anyInvest ? txs.filter((t) => !(isExpense(t) && invest.isInv(t))) : txs, today).map((t) => ({ description: t.description, amount: Number(t.amount) || 0, date: t.tx_date }));
+  return { months: out, base, skipped, expectedIncome: expected, regularNet: monthlyIncome - base.fixed - base.variable - (invest.recurring ? invest.monthly : 0), investMonthly: invest.recurring ? invest.monthly : 0, hasBalance: startBalance !== null && startBalance !== undefined };
 }
 
 // One sentence on where the half year is heading.
