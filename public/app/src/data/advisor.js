@@ -89,3 +89,14 @@ export async function streamReply(payload, onDelta, signal) {
     }
   }
 }
+
+// A report of one conversation (see server/chatReport.js).
+export async function askChatReport(messages) {
+  const { data } = await sb.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error('not signed in');
+  const res = await fetch(CONFIG.apiBase + '/api/ai/chat-report', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.report) throw new Error(j.error || 'לא הצלחנו להכין דוח כרגע (' + res.status + ')');
+  return j.report;
+}

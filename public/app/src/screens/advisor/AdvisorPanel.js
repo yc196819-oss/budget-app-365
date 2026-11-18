@@ -23,6 +23,8 @@ import { useOwner } from '../../lib/owner.js';
 import { parseList, shopContext, LIST_MARK } from '../../domain/shopList.js';
 import { ShopListCard } from './ShopListCard.js';
 import { FixCard } from './FixCard.js';
+import { ChatReport } from './ChatReport.js';
+import { reportMessages } from '../../domain/chatReport.js';
 import { wantsFix, candidatesFor, categoryNames, parseFix, FIX_MARK } from '../../domain/advisorFix.js';
 import { loadShopping } from '../../data/shopping.js';
 import { loadReceipts } from '../../data/receipts.js';
@@ -64,6 +66,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   // What the advisor updated by itself after the last reply: [{ ...item, undone }].
   const [updated, setUpdated] = useState([]);
   const [updatedOpen, setUpdatedOpen] = useState(false);
+  const [report, setReport] = useState(false);
   // Transactions the person asked to delete, waiting for their yes.
   const [toDelete, setToDelete] = useState(null);
   const memories = useRef(null);
@@ -341,13 +344,14 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     return html`<div class="adv">
       ${talkBar}
       <div class="adv-bar">
-        <button type="button" class="btn-text" onClick=${() => { stopSpeaking(); setConv(null); setSuggestions([]); setLearn(null); setOffer(false); refresh(); }}>‹ כל השיחות</button>
+        <button type="button" class="btn-text" onClick=${() => { stopSpeaking(); setConv(null); setSuggestions([]); setLearn(null); setOffer(false); setReport(false); refresh(); }}>‹ כל השיחות</button>
         <span style="flex:1"></span>
-        ${conv.id && aiOn && !learn && conv.messages.some((m) => m.role === 'user') && html`<button type="button" class="chip learn-btn" disabled=${busy} onClick=${startLearn}><${Icon} name="bulb" size=${16} />מה למדתי</button>`}
+        ${owner && conv.id && aiOn && !learn && !report && conv.messages.some((m) => m.role === 'ai' && !m.pending && !m.local) && html`<button type="button" class="chip" disabled=${busy} onClick=${() => { stopSpeaking(); setReport(true); }}><${Icon} name="edit" size=${16} />דוח</button>`}
+        ${conv.id && aiOn && !learn && !report && conv.messages.some((m) => m.role === 'user') && html`<button type="button" class="chip learn-btn" disabled=${busy} onClick=${startLearn}><${Icon} name="bulb" size=${16} />מה למדתי</button>`}
         ${conv.id && mine && html`<button type="button" class="chip" aria-pressed=${String(conv.is_private)} onClick=${togglePrivate}>${conv.is_private ? html`<${Icon} name="lock" size=${16} />פרטית` : html`<${Icon} name="together" size=${16} />משותפת`}</button>`}
       </div>
       ${!mine && html`<span class="faint" style="font-size:14px">שיחה ש${memberName(conv.user_id)} פתח/ה. אפשר להמשיך אותה.</span>`}
-      ${learn ? html`<${LearnReview} state=${learn} onChange=${(items) => setLearn((l) => ({ ...l, items }))} onApply=${applyLearn} onCancel=${closeLearn} onRetry=${startLearn} />` : html`
+      ${report ? html`<${ChatReport} conv=${conv} messages=${reportMessages(conv.messages, memberName)} updated=${updated} onClose=${() => setReport(false)} />` : learn ? html`<${LearnReview} state=${learn} onChange=${(items) => setLearn((l) => ({ ...l, items }))} onApply=${applyLearn} onCancel=${closeLearn} onRetry=${startLearn} />` : html`
       <div class="adv-log" ref=${logRef} aria-live="polite">
         ${conv.messages.length === 0 && html`<div class="muted" style="font-size:14px;text-align:center;padding:16px 0">שאלו כל דבר על הכסף שלכם</div>`}
         ${conv.messages.map((m, i) => html`<div class=${'adv-msg ' + (m.role === 'user' ? (m.author_id === me ? 'me' : 'partner') : 'ai')} key=${m.id || i}>

@@ -20,6 +20,7 @@ const AI_HEADS_UP = 300;
 const NO_FAKE_FIX ='אתה לא יכול לשנות נתונים באפליקציה: לא תנועות, לא קטגוריות, לא סכומים ולא תאריכים. לעולם אל תכתוב שתיקנת, שינית, עדכנת, העברת או מחקת משהו. כשמבקשים ממך תיקון, כתוב בקצרה את הצעדים המדויקים לפי המדריך (למשל כסף ← תנועות ← לוחצים על התנועה ← ...), ואם יש בנתונים את התנועה, ציין את התאריך, השם והסכום שלה כדי שיהיה קל למצוא. מה שאתה כן יכול: לזכור העדפה או החלטה לשיחות הבאות, ולהציע שינוי לאישור כשכותבים לך את שם בית העסק או את התאריך והסכום (אז מופיע כרטיס עם "כן, לשנות"). אם מבקשים תיקון ולא כתוב איזו תנועה, בקש את שם בית העסק או את התאריך והסכום.';
 const STRICT_LIST ='\n\nחשוב: ענה רק במערך JSON תקין, בלי שום מילה לפניו או אחריו. מספרים בלי פסיקים של אלפים. אם בקטע הזה אין עסקאות (למשל דף סיכום או פרטי לקוח), החזר [] בלבד.';
 const learn = require('./server/learn');
+const chatReport = require('./server/chatReport');
 const decisionsPush = require('./server/decisions');
 const fx = require('./server/fx');
 const account = require('./server/account');
@@ -1695,6 +1696,21 @@ app.post('/api/ai/learn-from-chat', requireAuth, aiLimiter, aiQuota, async (req,
   } catch (err) {
     console.error('learn-from-chat failed:', err.message);
     return res.status(err.statusCode || 502).json({ error: 'לא הצלחנו לקרוא את השיחה כרגע. נסו שוב בעוד דקה.' });
+  }
+});
+
+// ═══ a report of one advisor conversation (see server/chatReport.js) ═══
+app.post('/api/ai/chat-report', requireAuth, aiLimiter, aiQuota, async (req, res) => {
+  try {
+    const convo = chatReport.convoText((req.body || {}).messages);
+    if (!convo) return res.status(400).json({ error: 'אין עדיין שיחה לסכם.' });
+    const ai = await generateWithFallback({ prompt: chatReport.reportPrompt(israelToday()), text: convo, effort: 'low' });
+    const report = chatReport.pickReport(chatReport.parseLoose(ai.output), convo);
+    if (!report) return res.status(502).json({ error: 'לא הצלחנו להכין דוח כרגע. נסו שוב בעוד דקה.' });
+    return res.json({ report });
+  } catch (err) {
+    console.error('chat-report failed:', err.message);
+    return res.status(err.statusCode || 502).json({ error: 'לא הצלחנו להכין דוח כרגע. נסו שוב בעוד דקה.' });
   }
 });
 
