@@ -1,5 +1,6 @@
 import { aisleOf } from './shopping.js';
 import { promoCost } from './promos.js';
+import { deliveryFor } from './chainShops.js';
 
 // Supermarket prices: from what a person typed ("חלב 3%") to one exact
 // product (by barcode), chosen automatically as the cheapest one at the
@@ -512,7 +513,7 @@ export function basket(choices, qtyOf = () => 1, now = new Date(), clubs = null)
       } else { missing++; const b = bestPrice(c.pick); gap += b ? b.price * q : 0; lines.push({ id: c.id, product: null, price: null, swap: false }); }
     }
     // An online shop: its delivery is part of what the list costs there.
-    const delivery = deliveryOf(chain);
+    const delivery = deliveryOf(chain, total);
     if (delivery && lines.some((l) => l.product)) total += delivery.fee;
     return { chain, name, store: stores.get(chain) || null, total: Math.round(total * 100) / 100, missing, swaps, lines,
       ...(delivery ? { delivery } : {}),
@@ -582,14 +583,18 @@ export const CHAIN_NOTES = {
 // A chain's online shop ("rami-levy-online"): a price of its own, by delivery.
 export const isOnlineChain = (chain) => /-online$/.test(String(chain || ''));
 export const baseChain = (chain) => String(chain || '').replace(/-online$/, '');
-// Delivery from a chain's online shop: since 2026 the big chains charge the
-// same ₪35.90 a delivery, with no free-delivery threshold (Rami Levy and
-// Shufersal confirmed; for the others it is the going price, said so).
-export const DELIVERY = { fee: 35.9, sure: ['rami-levy', 'shufersal'] };
-export const deliveryOf = (chain) => (isOnlineChain(chain) ? { fee: DELIVERY.fee, sure: DELIVERY.sure.includes(baseChain(chain)) } : null);
-const ONLINE_NOTE = { icon: 'cart', short: 'אונליין · כולל משלוח', text: 'זה המחיר באתר ההזמנות של הרשת, כולל משלוח של ₪35.90. ייתכן סכום מינימום להזמנה.', alt: 'בחנות' };
-// (A delivery price not confirmed for that chain is said as "about".)
-export const chainNote = (chain) => CHAIN_NOTES[chain] || (isOnlineChain(chain) ? (deliveryOf(chain).sure ? ONLINE_NOTE : { ...ONLINE_NOTE, text: ONLINE_NOTE.text.replace('משלוח של ₪35.90', 'משלוח של בערך ₪35.90 (לא אימתנו את המחיר ברשת הזו)') }) : null);
+// Delivery from a chain's online shop, by the chain's own terms (its fee and
+// its smallest order, in chainShops.js); a fee we could not confirm is said
+// as "about". `subtotal`: the list there before delivery.
+export const deliveryOf = (chain, subtotal = 0) => (isOnlineChain(chain) ? deliveryFor(chain, subtotal) : null);
+const feeText = (d) => (d.sure ? '' : 'בערך ') + '₪' + d.fee.toFixed(2);
+export const chainNote = (chain) => {
+  if (CHAIN_NOTES[chain]) return CHAIN_NOTES[chain];
+  if (!isOnlineChain(chain)) return null;
+  const d = deliveryOf(chain);
+  return { icon: 'cart', short: 'אונליין · כולל משלוח', alt: 'בחנות',
+    text: 'זה המחיר באתר ההזמנות של הרשת, כולל משלוח של ' + feeText(d) + (d.sure ? '' : ' (לא אימתנו את המחיר ברשת הזו)') + '.' + (d.min ? ' מינימום להזמנה: ₪' + d.min + '.' : ' ייתכן סכום מינימום להזמנה.') + (d.note ? ' ' + d.note + '.' : '') };
+};
 // The cheapest chain that is open every day, when the cheapest is not.
 export function bestAlways(rows) {
   if (!rows.length || !chainNote(rows[0].chain)) return null;

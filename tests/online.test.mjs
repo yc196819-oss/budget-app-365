@@ -59,7 +59,7 @@ test('online: the delivery is part of what the list costs there', async () => {
   const rows = basket([{ id: 'a', pick: milk, pool: [milk] }], () => 10);
   const on = rows.find((r) => r.chain === 'rami-levy-online');
   assert.equal(on.total, 85.9, 'ten milks at ₪5 and the delivery');
-  assert.deepEqual(on.delivery, { fee: 35.9, sure: true });
+  assert.deepEqual([on.delivery.fee, on.delivery.sure, on.delivery.under], [35.9, true, false]);
   assert.equal(rows[0].chain, 'rami-levy', 'the shop is cheaper once the delivery is counted');
   assert.equal(deliveryOf('shuk-hair-online').sure, false, 'not confirmed: said as about');
   assert.equal(deliveryOf('rami-levy'), null);

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
+import { logoSrc, orderLink, searchLink, pasteLink, pasteText } from '../../domain/chainShops.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces, getClubs, setClubs, getChainsShown, setChainsShown } from '../../data/prices.js';
@@ -84,6 +85,15 @@ let IMAGES = {};
 function Photo({ p, name }) {
   const url = p && IMAGES[p.barcode];
   return url ? html`<span class="price-img"><img src=${url} alt="" loading="lazy" /></span>` : html`<span class="price-img sign" aria-hidden="true"><${Icon} name=${SIGN[aisleOf((p && p.name) || name)] || 'cart'} size=${18} stroke=${1.7} /></span>`;
+}
+
+// A chain's logo (kept by our server), or its first letter when there is
+// none or it does not load.
+function ChainLogo({ chain, name }) {
+  const [bad, setBad] = useState(false);
+  const src = logoSrc(chain);
+  const letter = String(name || '').trim().charAt(0);
+  return src && !bad ? html`<span class="pp-logo"><img src=${src} alt="" loading="lazy" onError=${() => setBad(true)} /></span>` : html`<span class="pp-logo pp-logo-l" aria-hidden="true">${letter}</span>`;
 }
 
 function Product({ p, children }) {
@@ -315,7 +325,16 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
       <span class="pp-eye">הסל שלכם · ${priced} מוצרים</span>
       <span class="pp-big num">${fmt(shown.total)}</span>
       <span class="pp-at">ב${shown.name}${shown.store ? html` <small>· ${shown.store}</small>` : ''}${shown === best ? html` <em class="pp-best">הכי משתלם</em>` : ''}</span>
-      ${chainNote(shown.chain) && html`<span class="pp-weekly"><${Icon} name=${chainNote(shown.chain).icon || 'calendar'} size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
+      ${(() => { const order = orderLink(shown.chain); const paste = pasteLink(shown.chain); const d = shown.delivery;
+        if (!order && !d) return '';
+        const copyPaste = async () => { try { await navigator.clipboard.writeText(pasteText(open)); showToast('הרשימה הועתקה. מדביקים אותה באתר של ' + shown.name.replace(/ אונליין$/, '')); track('price_paste_copy'); } catch (_e) { showToast('לא הצלחנו להעתיק.'); } };
+        return html`<div class="pp-shop">
+          ${d && html`<span class=${'pp-ship' + (d.under ? ' warn' : '')}><${Icon} name="cart" size=${15} /><span>משלוח ${d.sure ? '' : 'בערך '}<b class="num">${fmt(d.fee)}</b>${d.min ? html` · מינימום להזמנה <b class="num">${fmt(d.min)}</b>` : ''}${d.under ? html`<em>הרשימה מתחת למינימום</em>` : ''}</span></span>`}
+          ${d && (d.note || !d.sure) && html`<small class="pp-ship-note">${[d.sure ? '' : 'לא אימתנו את מחיר המשלוח ברשת הזו', d.note].filter(Boolean).join('. ')}.</small>`}
+          ${order && html`<a class="btn btn-ghost pp-order" href=${order} target="_blank" rel="noopener" onClick=${() => track('price_order_open')}>להזמין באתר של ${shown.name.replace(/ אונליין$/, '')} ‹</a>`}
+          ${paste && html`<a class="btn-text" href=${paste} target="_blank" rel="noopener" onClick=${copyPaste}>להעתיק את הרשימה ולהדביק באתר</a>`}
+        </div>`; })()}
+      ${chainNote(shown.chain) && !isOnlineChain(shown.chain) && html`<span class="pp-weekly"><${Icon} name=${chainNote(shown.chain).icon || 'calendar'} size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
       ${shown === best && bestAlways(chains) && html`<button type="button" class="pp-always" onClick=${() => setChainSel(bestAlways(chains).chain)}>${chainNote(best.chain).alt || 'בחנות שפתוחה כל יום'}: הכי משתלם ב${bestAlways(chains).name}, <b class="num">${fmt(bestAlways(chains).total)}</b></button>`}
       ${shown.missing > 0 && html`<span class="pp-missing">בלי ${shown.missing === 1 ? 'מוצר אחד שאין' : shown.missing + ' מוצרים שאין'} ב${shown.name}: ${shown.lines.filter((l) => !l.product).map((l) => (open.find((i) => i.id === l.id) || {}).name).filter(Boolean).slice(0, 4).join(', ')}${shown.missing > 4 ? ' ועוד' : ''}</span>`}
       ${area && !area.stores.length && html`<span class="pp-missing">אין חנות של אף רשת עד ${area.max_km || 25} ק"מ מ${area.city}, ולכן מוצגות רק רשתות אונליין (במשלוח). <button type="button" class="btn-text pp-inline" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></span>`}
@@ -327,10 +346,10 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
       ${(() => { const text = chainListText(shown, open); const copy = async () => { try { await navigator.clipboard.writeText(text); showToast('הרשימה של ' + shown.name + ' הועתקה'); track('price_list_copy'); } catch (_e) { showToast('לא הצלחנו להעתיק.'); } };
         return html`<div class="pp-send"><span>לשלוח למי שהולך לקנות:</span><a class="btn-text" href=${'https://wa.me/?text=' + encodeURIComponent(text)} target="_blank" rel="noopener" onClick=${() => track('price_list_wa')}>וואטסאפ</a><button type="button" class="btn-text" onClick=${copy}>להעתיק</button></div>`; })()}
       <div class="pp-bars" role="group" aria-label="הסל בכל רשת: לבחור רשת">${top.map((c) => html`<button type="button" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
-        <span class="pp-bar-n">${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span>
+        <span class="pp-bar-n"><${ChainLogo} chain=${c.chain} name=${c.name} /><span>${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span></span>
         <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i>${c.gap > 0 && html`<b class="pp-bar-gap" style=${'width:' + Math.round((c.gap / most) * 100) + '%'}></b>`}</span>
         <span class="pp-bar-v num">${fmt(c.total)}</span>
-        ${(c.missing > 0 || c.swaps > 0 || c.delivery) && html`<small class="pp-bar-x">${[c.delivery ? 'כולל משלוח ' + (c.delivery.sure ? '' : 'בערך ') + fmt(c.delivery.fee) : '', c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
+        ${(c.missing > 0 || c.swaps > 0 || c.delivery) && html`<small class="pp-bar-x">${[c.delivery ? 'כולל משלוח ' + (c.delivery.sure ? '' : 'בערך ') + fmt(c.delivery.fee) : '', c.delivery && c.delivery.under ? 'מתחת למינימום ' + fmt(c.delivery.min) : '', c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
       </button>`)}</div>
     </div>` : area && !area.stores.length ? html`<div class="pp-empty"><b>אין סניף של אף רשת עד ${area.max_km || 25} ק"מ מ${area.city}</b><span class="muted">רשת רחוקה לא נכנסת להשוואה, כי לא באמת קונים בה. אפשר להגדיל את המרחק.</span><button type="button" class="btn btn-ghost" style="justify-self:start" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></div>`
       : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
@@ -354,6 +373,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
         </button>
         ${at && !at.promo && at.other && (at.other.why === 'club' || at.other.why === 'card') && html`<div class="pp-club-ask"><button type="button" class="btn-text" onClick=${() => saveClubs(new Set([...clubs, baseChain(shown.chain) + ':' + at.other.why]), (at.other.why === 'card' ? 'מבצעי כרטיס האשראי של ' : 'מבצעי המועדון של ') + shown.name.replace(/ אונליין$/, '') + ' נכללים עכשיו בסכום')}>${at.other.why === 'card' ? 'יש לי את כרטיס האשראי של ' + shown.name.replace(/ אונליין$/, '') : 'אני במועדון של ' + shown.name.replace(/ אונליין$/, '')}: לכלול את המבצע</button></div>`}
         ${expanded && html`<div class="pp-more">
+          ${(() => { const u = searchLink(shown && shown.chain, (at && at.product && at.product.name) || item.name); return u && html`<a class="btn-text pp-find" href=${u} target="_blank" rel="noopener" onClick=${() => track('price_search_site')}>לחפש באתר של ${shown.name.replace(/ אונליין$/, '')} ‹</a>`; })()}
           ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל לא ידוע שהכשרות שלהם מהרשימה שלכם. בחרו מוצר, או סמנו מה כתוב על האריזה:</span>`}
           <ul class="price-opts">${c.options.map((o) => html`<li key=${o.barcode}><${Product} p=${o}>
             ${c.pick && o.barcode === c.pick.barcode ? html`<span class="pp-chosen">נבחר</span>` : html`<button type="button" class="btn btn-ghost price-pick" onClick=${() => pick(item, o)}>לבחור</button>`}</${Product}>

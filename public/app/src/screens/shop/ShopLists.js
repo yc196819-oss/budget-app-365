@@ -1,19 +1,25 @@
 import { html } from '../../lib/html.js';
 import { useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { listRows, whenText, cleanName } from '../../domain/shopLists.js';
+import { listRows, whenText, cleanName, compareFirst } from '../../domain/shopLists.js';
 import { money } from '../../domain/format.js';
 
 const KIND_ICON = { shabbat: 'spark', holiday: 'spark', guests: 'together', recipe: 'book', pharm: 'drop' };
 
 // "הרשימות שלי": every open list in a row, like chats, the latest first, and
 // the shopping trips that ended below. A tap opens a list.
-export function ShopLists({ lists, items, trips, onOpen, onCreate, onAdvisor, onTrips }) {
+export function ShopLists({ lists, items, trips, onOpen, onCreate, onAdvisor, onTrips, onCompare = null }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const rows = listRows(lists, items);
   const submit = (e) => { e.preventDefault(); const n = cleanName(name); if (!n) return; onCreate(n); setAdding(false); setName(''); };
+  const first = onCompare ? compareFirst(rows) : null;
   return html`<section class="shop-lists stack" aria-labelledby="lists-h">
+    ${first && html`<button type="button" class="card sl-compare" onClick=${() => onCompare(first.id)}>
+      <span class="sl-compare-ic" aria-hidden="true"><${Icon} name="cart" size=${22} /></span>
+      <span class="sl-mid"><small>השוואת מחירים</small><b>כמה "${first.name}" תעלה?</b><small>${first.left === 1 ? 'מוצר אחד' : first.left + ' מוצרים'}: בכל רשת, בחנות ובאונליין עם המשלוח</small></span>
+      <span class="sl-compare-go">להשוות ‹</span>
+    </button>`}
     <h2 id="lists-h" class="section-h">הרשימות שלי</h2>
     ${adding ? html`<form class="sl-new-form" onSubmit=${submit}>
         <input class="input" id="sl-name" value=${name} onInput=${(e) => setName(e.currentTarget.value)} maxLength="60" placeholder="שם הרשימה, למשל: לשבת" aria-label="שם הרשימה החדשה" autoFocus />
