@@ -3,7 +3,7 @@ import { partnerWord, genderOf, realName } from '../../domain/people.js';
 import { track } from '../../lib/telemetry.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { buildSummary, parseReply, starters, newTitle, historyFor } from '../../domain/advisor.js';
+import { buildSummary, parseReply, starters, newTitle, historyFor, STOP_MARK } from '../../domain/advisor.js';
 import { alignNumbers, truthsOf, asOfLabel, fixSums } from '../../domain/numbers.js';
 import { listConversations, openConversation, createConversation, addMessage, setPrivate, loadMemories, streamReply } from '../../data/advisor.js';
 import { setAiEnabled, autoLearn } from '../../lib/settings.js';
@@ -63,6 +63,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   const [offer, setOffer] = useState(false);
   // What the advisor updated by itself after the last reply: [{ ...item, undone }].
   const [updated, setUpdated] = useState([]);
+  const [updatedOpen, setUpdatedOpen] = useState(false);
   // Transactions the person asked to delete, waiting for their yes.
   const [toDelete, setToDelete] = useState(null);
   const memories = useRef(null);
@@ -112,7 +113,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [conv]);
 
   const open = async (id) => {
-    setError(''); setSuggestions([]); setLearn(null); setOffer(false); setUpdated([]);
+    setError(''); setSuggestions([]); setLearn(null); setOffer(false); setUpdated([]); setUpdatedOpen(false);
     try { setConv(await openConversation(id)); } catch (_err) { setError('לא הצלחנו לפתוח את השיחה. נסו שוב.'); }
   };
 
@@ -193,8 +194,20 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       }
       refresh();
     } catch (err) {
-      setConv((cur) => cur && { ...cur, messages: cur.messages.filter((m) => !m.pending) });
-      setError(err.name === 'AbortError' ? '' : (err.message || 'משהו השתבש. נסו שוב.'));
+      const stopped = err.name === 'AbortError';
+      // Stopped by the person: the question stays, marked, and its text is
+      // back in the box to edit and send again.
+      setConv((cur) => {
+        if (!cur) return cur;
+        const msgs = cur.messages.filter((m) => !m.pending);
+        let last = -1;
+        msgs.forEach((m, i) => { if (m.role === 'user') last = i; });
+        return { ...cur, messages: stopped && last >= 0 ? msgs.map((m, i) => (i === last ? { ...m, stopped: true } : m)) : msgs };
+      });
+      if (stopped && !pic) setDraft(msg);
+      // Saved, so the question shows as stopped when the conversation opens again.
+      if (stopped && c && c.id) addMessage({ conversationId: c.id, hid, userId: me, role: 'ai', text: STOP_MARK }).catch(() => {});
+      setError(stopped ? '' : (err.message || 'משהו השתבש. נסו שוב.'));
       // The picture waits in the box again, to try once more without picking it again.
       if (pic) setImage(pic);
     }
@@ -202,6 +215,9 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     setBusy(false);
     return answered;
   };
+
+  // Stops the answer being written (the question stays, to edit).
+  const stop = () => { if (abort.current) { abort.current.abort(); track('advisor_stop'); } };
 
   // ── voice conversation: listen, answer aloud, listen again ──
   const endTalk = (why = '') => {
@@ -341,6 +357,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
             : m.role === 'user' && String(m.text || '').startsWith(PIC_MARK)
               ? html`${m.thumb && html`<img class="adv-thumb" src=${m.thumb} alt="התמונה שצורפה" />`}<span class="adv-pic-line"><${Icon} name="image" size=${15} />${PIC_MARK}${m.thumb ? '' : ' (לא נשמרת)'}</span><span>${String(m.text).slice(PIC_MARK.length + 3)}</span>`
               : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
+          ${m.stopped && html`<small class="adv-stopped">נעצר לפני שענה. השאלה בתיבה למטה, אפשר לערוך ולשלוח שוב.</small>`}
           ${m.fix && hid && html`<${FixCard} fix=${m.fix} hid=${hid} categories=${data.categories} />`}
           ${m.list && hid && html`<${ShopListCard} list=${m.list} hid=${hid} people=${data.people} onList=${(shop && shop.onList) || []} build=${!!m.fresh} />`}
           ${m.howto && html`<div class="adv-howto">
@@ -355,8 +372,11 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
         </div>`)}
       </div>
       ${updated.length > 0 && html`<div class="card learn-auto" role="status">
-        <b style="font-size:14px;display:flex;align-items:center;gap:6px"><${Icon} name="edit" size=${16} />עדכנתי לפי השיחה</b>
-        ${updated.map((it, i) => html`<div class="learn-auto-row" style="display:flex;align-items:center;gap:8px;font-size:14px">
+        <div class="learn-auto-head">
+          <button type="button" class="learn-auto-toggle" aria-expanded=${String(updatedOpen)} onClick=${() => setUpdatedOpen((o) => !o)}><${Icon} name="edit" size=${16} />${updated.length === 1 ? 'עדכנתי דבר אחד לפי השיחה' : 'עדכנתי ' + updated.length + ' דברים לפי השיחה'}<span class="learn-auto-more">${updatedOpen ? 'להסתיר' : 'לראות'}</span></button>
+          <button type="button" class="btn-text" onClick=${() => { setUpdated([]); setUpdatedOpen(false); }}>הבנתי</button>
+        </div>
+        ${updatedOpen && updated.map((it, i) => html`<div class="learn-auto-row" style="display:flex;align-items:center;gap:8px;font-size:14px">
           <span style=${'flex:1;' + (it.undone ? 'text-decoration:line-through;opacity:.55' : '')}>${describeItem(it)}</span>
           ${it.undone ? html`<span class="faint" style="font-size:14px">בוטל</span>` : html`<button type="button" class="btn-text" style="font-size:14px" onClick=${() => undoOne(i)}>ביטול</button>`}
         </div>`)}
@@ -379,7 +399,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
       ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>
         <div class="learn-actions"><button type="button" class="btn" onClick=${startLearn}>לבדוק מה למדתי</button><button type="button" class="btn-text" onClick=${dismissOffer}>לא עכשיו</button></div></div>`}
-      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${{ image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } }} onSend=${(v) => send(v ?? draft)} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
+      ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${{ image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } }} onSend=${(v) => send(v ?? draft)} onStop=${stop} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
     </div>`;
   }
 
@@ -390,7 +410,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
     ${aiOn && html`<div class="stack" style="gap:8px">
       <b style="font-size:14px;color:var(--muted)">אפשר לשאול למשל</b>
       <div class="chips">${starters(screen).map((s) => html`<button type="button" class="chip" disabled=${busy} onClick=${() => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(s); }}>${s}</button>`)}</div>
-      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${{ image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } }} onSend=${(v) => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(v ?? draft); }} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
+      <${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${{ image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } }} onSend=${(v) => { setConv({ id: null, user_id: me, is_private: false, messages: [] }); send(v ?? draft); }} onStop=${stop} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />
     </div>`}
     ${error && html`<div class="adv-err" role="alert">${error}</div>`}
     <div class="stack" style="gap:6px">
@@ -412,7 +432,7 @@ function grow(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight + 2, 168) + 'px';
 }
-function Composer({ draft, setDraft, busy, onSend, onMic, listening, onTalk, pic }) {
+function Composer({ draft, setDraft, busy, onSend, onStop, onMic, listening, onTalk, pic }) {
   const box = useRef(null);
   const fileRef = useRef(null);
   const canSend = !!(draft.trim() || (pic && pic.image));
@@ -446,7 +466,9 @@ function Composer({ draft, setDraft, busy, onSend, onMic, listening, onTalk, pic
     ${pic && html`<button type="button" class="icon-btn adv-attach" aria-label="לצרף תמונה" onClick=${() => fileRef.current && fileRef.current.click()} disabled=${busy}><${Icon} name="image" size=${20} /></button>
       <input type="file" accept="image/*" ref=${fileRef} hidden onChange=${(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; pic.attach(f); }} />`}
     ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}><${Icon} name="mic" size=${20} /></button>`}
-    <button type="submit" class="btn" disabled=${busy || !canSend}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>
+    ${busy && onStop
+      ? html`<button type="button" key="stop" class="btn adv-stop" onClick=${(e) => { e.preventDefault(); onStop(); }}><span class="adv-stop-sq" aria-hidden="true"></span>לעצור</button>`
+      : html`<button type="submit" key="send" class="btn" disabled=${busy || !canSend}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>`}
   </form>
   ${onTalk && html`<button type="button" class="btn-text adv-talk" onClick=${onTalk}><${Icon} name="wave" size=${18} />שיחה קולית: לדבר עם היועץ בלי להקליד</button>`}
   <p class="adv-legal">מידע כללי, לא ייעוץ השקעות, מס או משפט. בינה מלאכותית יכולה לטעות. <a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a></p>`;

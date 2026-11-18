@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseReply, buildSummary, starters, newTitle, normalizeMessages, adviceText, historyFor, parseSse, SUGG_MARK } from '../public/app/src/domain/advisor.js';
+import { parseReply, buildSummary, starters, newTitle, normalizeMessages, adviceText, historyFor, parseSse, SUGG_MARK, STOP_MARK } from '../public/app/src/domain/advisor.js';
 
 test('parseReply splits the answer from the follow-up suggestions', () => {
   assert.deepEqual(parseReply('כדאי לקצץ באוכל בחוץ.\n' + SUGG_MARK + ' כמה בדיוק? | ומה עם הרכב?|'), { text: 'כדאי לקצץ באוכל בחוץ.', suggestions: ['כמה בדיוק?', 'ומה עם הרכב?'] });
@@ -78,4 +78,21 @@ test('a merchant charged twice in 3 months reads as 2 charges of 450, not 900 tw
   const txs = [{ description: 'קופת הדר', amount: 450, tx_date: '2026-09-01', type: 'expense' }, { description: 'קופת הדר', amount: 450, tx_date: '2026-10-01', type: 'expense' }];
   const g = spendingDetail({ txs, categories: [], today }).topMerchants[0];
   assert.deepEqual([g.total3Months, g.charges, g.eachCharge], [900, 2, 450]);
+});
+
+test('a stopped question: shown as stopped when the conversation opens again, and neither it nor the mark goes to the AI', () => {
+  const rows = [
+    { id: '1', role: 'user', text: 'כמה נשאר?', author_id: 'u1' },
+    { id: '2', role: 'ai', text: 'נשארו 1,200.', author_id: 'u1' },
+    { id: '3', role: 'user', text: 'ואם נקנה בסופר הזול?', author_id: 'u1' },
+    { id: '4', role: 'ai', text: STOP_MARK, author_id: 'u1' },
+    { id: '5', role: 'user', text: 'ואם נקנה רק בסופר הזול השבוע?', author_id: 'u1' },
+    { id: '6', role: 'ai', text: 'תחסכו בערך 150.', author_id: 'u1' }
+  ];
+  const msgs = normalizeMessages(rows, [], 'u1');
+  assert.deepEqual(msgs.map((m) => m.id), ['1', '2', '3', '5', '6'], 'the mark itself is not a message');
+  assert.equal(msgs.find((m) => m.id === '3').stopped, true);
+  assert.equal(msgs.filter((m) => m.stopped).length, 1);
+  const h = historyFor(msgs, () => 'יוסי');
+  assert.deepEqual(h.map((x) => x.text), ['כמה נשאר?', 'נשארו 1,200.', 'ואם נקנה רק בסופר הזול השבוע?', 'תחסכו בערך 150.']);
 });
