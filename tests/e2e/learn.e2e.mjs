@@ -235,16 +235,24 @@ test('told that a salary came in, the advisor records it by itself (with undo), 
   await page.click('.ask-fab');
   await page.locator('.adv .row', { hasText: 'תכנון לשנה הבאה' }).click();
   await page.waitForSelector('.adv-msg');
-  // Only the conversation scrolls: the sheet's title and close button stay.
+  // The whole sheet scrolls, so the conversation has the room; the title and
+  // the box to write in stay where they are.
   const head = async () => (await page.locator('.sheet-head').boundingBox()).y;
+  const box = async () => { const b = await page.locator('.adv-compose').boundingBox(); return Math.round(b.y + b.height); };
   const y0 = await head();
+  const b0 = await box();
   await page.locator('.adv-log').hover();
   await page.mouse.wheel(0, -3000);
+  await page.waitForTimeout(300);
+  assert.ok(await page.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollHeight - s.clientHeight > 100; }), 'the sheet scrolls');
+  // (At the very top the sheet's handle shows above the title: a few pixels.)
+  assert.ok(Math.abs((await head()) - y0) <= 24, 'the title stays in view');
+  assert.ok(Math.abs((await box()) - b0) <= 16, 'the box to write in stays at the bottom');
+  assert.ok(await page.evaluate(() => document.querySelector('.adv-log').getBoundingClientRect().height > innerHeight * 0.6), 'the conversation has most of the screen');
   await page.mouse.wheel(0, 3000);
   await page.mouse.wheel(0, 3000);
   await page.waitForTimeout(300);
-  assert.equal(await head(), y0, 'the title did not move');
-  assert.equal(await page.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollHeight - s.clientHeight; }) <= 1, true, 'the sheet itself does not scroll');
+  assert.equal(await head(), y0, 'scrolled down again: the title where it was');
   await page.fill('[aria-label="שאלה ליועץ"]', 'המשכורת של יוסי נכנסה היום, 4,580');
   await page.click('.adv-compose button[type="submit"]');
   const note = page.locator('.learn-auto');
