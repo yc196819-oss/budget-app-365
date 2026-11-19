@@ -5,7 +5,7 @@ import { load } from './household.js';
 
 // Everything of the household that this person can see (RLS decides), plus
 // their own settings. A table that fails is listed, not silently dropped.
-const HOUSEHOLD_TABLES = ['transactions', 'categories', 'category_budgets', 'bank_accounts', 'credit_cards', 'goals', 'installments', 'loans', 'investments', 'trips', 'shared_decisions', 'decision_messages', 'decision_votes', 'advisor_memories', 'memberships'];
+const HOUSEHOLD_TABLES = ['transactions', 'categories', 'category_budgets', 'bank_accounts', 'credit_cards', 'goals', 'installments', 'loans', 'investments', 'trips', 'shared_decisions', 'decision_messages', 'decision_votes', 'advisor_memories', 'card_pending', 'memberships'];
 const PAGE = 1000;
 
 async function all(table, col, value) {

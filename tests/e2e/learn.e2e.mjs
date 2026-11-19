@@ -292,3 +292,30 @@ test('what the advisor changed is saved in the conversation: reopened later, it 
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('a card charge told without its card: saved, counted in the free money, and attached to a card from the home screen', async () => {
+  const { page, db, errors } = await open({ proposals: [{ kind: 'card_charge', card: 'הכרטיס השני', amount: 700 }] });
+  await page.fill('[aria-label="שאלה ליועץ"]', 'בכרטיס השני מצטבר כרגע חיוב של 700');
+  await page.click('.adv-compose button[type="submit"]');
+  const note = page.locator('.learn-auto');
+  await note.waitFor();
+  await note.locator('.learn-auto-toggle').click();
+  assert.match(await note.textContent(), /חיוב שעוד לא ירד: ₪700 \(הכרטיס השני\), לא ידוע לאיזה כרטיס/);
+  for (let i = 0; i < 30 && !(db.tables.card_pending || []).length; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.card_pending.length, 1);
+  assert.equal(db.tables.card_pending[0].card_id, null);
+  // Home: counted already, and asked which card.
+  await page.click('.sheet .x, .sheet [aria-label="סגירה"]').catch(() => {});
+  await page.goto(page.url().replace(/#.*$/, '#/home'));
+  const box = page.locator('.cash-unassigned');
+  await box.waitFor();
+  assert.match(await box.textContent(), /₪700 באשראי שעוד לא ירד \(הכרטיס השני\): לא ידוע לאיזה כרטיס/);
+  // Counted in the free money already: 12,000 in the bank, the card's lines, and the 700.
+  assert.match(await page.locator('.cash').textContent(), /פחות ₪3,009 באשראי שעוד לא ירד/);
+  await box.locator('select').selectOption('c1');
+  await box.locator('button:has-text("לצרף")').click();
+  await page.locator('.cash-unassigned').waitFor({ state: 'detached' });
+  assert.equal(db.tables.card_pending[0].card_id, 'c1');
+  assert.deepEqual(errors, []);
+  await page.close();
+});

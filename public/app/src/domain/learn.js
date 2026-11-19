@@ -50,12 +50,13 @@ export function incomeLineIndex(lines, label) {
 
 // What the AI is told about the household, so it can refer to real goals,
 // categories and accounts. Only names and amounts, never transactions.
-export function learnContext({ goals = [], categories = [], budgets = [], accounts = [], loans = [], income = [], memories = [] }) {
+export function learnContext({ goals = [], categories = [], budgets = [], accounts = [], cards = [], loans = [], income = [], memories = [] }) {
   const budgetOf = new Map(budgets.map((b) => [b.category_id, Number(b.monthly_amount) || 0]));
   return {
     goals: goals.map((g) => ({ id: g.id, name: g.name, target_amount: Number(g.target_amount) || 0, saved_amount: Number(g.saved_amount) || 0, target_date: g.target_date || null })),
     categories: categories.filter((c) => !c.parent_id && c.kind !== 'income').map((c) => ({ name: c.name, budget: budgetOf.get(c.id) || 0 })),
     accounts: accounts.map((a) => ({ id: a.id, name: a.name, balance: a.balance ?? null })),
+    cards: cards.map((c) => ({ id: c.id, name: c.name, last4: c.last4 || null })),
     loans: loans.filter((l) => !l.settled).map((l) => ({ counterparty: l.counterparty, direction: l.direction, amount: Number(l.amount) || 0 })),
     income: (Array.isArray(income) ? income : []).map((l) => ({ label: l.label || '', amount: Number(l.amount) || 0 })),
     // No transactions here: a deletion the person asks for is matched on the
@@ -107,7 +108,7 @@ function goalUpdate(goal, raw) {
 // One raw proposal from the AI → a checked item, or null when it does not
 // fit the data (unknown goal, no amount, nothing would change).
 function normalizeOne(raw, data) {
-  const { goals = [], categories = [], budgets = [], accounts = [], loans = [], income = [], memories = [] } = data;
+  const { goals = [], categories = [], budgets = [], accounts = [], cards = [], loans = [], income = [], memories = [] } = data;
   const today = data.today || new Date().toISOString().slice(0, 10);
   switch (raw && raw.kind) {
     case 'memory': {
@@ -143,6 +144,17 @@ function normalizeOne(raw, data) {
       const before = acc.balance === null || acc.balance === undefined ? null : Number(acc.balance);
       if (before === balance) return null;
       return { kind: 'balance', account_id: acc.id, account: acc.name, balance, before };
+    }
+    case 'card_charge': {
+      // The card they meant: its id, or the one card whose name or last digits
+      // they used. Not sure which (two cards fit, or none): saved without a
+      // card, and the app asks them to attach it.
+      const amount = money(raw.amount);
+      if (amount === null || amount <= 0) return null;
+      const said = norm(raw.card);
+      const hits = cards.filter((c) => said && ((c.last4 && String(said).includes(String(c.last4))) || norm(c.name).includes(said) || said.includes(norm(c.name))));
+      const card = cards.find((c) => c.id === raw.card_id) || (hits.length === 1 ? hits[0] : null);
+      return { kind: 'card_charge', card_id: card ? card.id : null, card: card ? card.name : clean(raw.card, 40), amount };
     }
     case 'loan': {
       const counterparty = clean(raw.counterparty, 60);
@@ -240,6 +252,7 @@ export function isValid(item) {
     case 'income': return item.amount > 0;
     case 'tx_add': return item.amount > 0 && !!clean(item.description);
     case 'tx_delete': return Array.isArray(item.txs) && item.txs.length > 0;
+    case 'card_charge': return item.amount > 0;
     default: return false;
   }
 }
@@ -254,7 +267,8 @@ export const KIND_LABEL = {
   installment: { icon: '💳', label: 'תשלומים' },
   income: { icon: '💼', label: 'הכנסה חודשית' },
   tx_delete: { icon: '🗑', label: 'מחיקת תנועות' },
-  tx_add: { icon: '➕', label: 'תנועה שנרשמה' }
+  tx_add: { icon: '➕', label: 'תנועה שנרשמה' },
+  card_charge: { icon: '💳', label: 'חיוב אשראי שעוד לא ירד' }
 };
 
 // The person said something worth saving since `from` (an index into the
@@ -290,6 +304,7 @@ export function describeItem(item) {
     case 'installment': return 'עסקה בתשלומים: ' + item.description + ' · ' + item.payments_count + ' × ' + ils(item.total_amount / item.payments_count);
     case 'tx_delete': return 'למחוק ' + (item.txs.length === 1 ? 'תנועה אחת' : item.txs.length + ' תנועות') + ': ' + item.txs.map((t) => t.description + ' ' + ils(t.amount) + ' (' + String(t.tx_date).slice(5, 10).split('-').reverse().join('.') + ')').join(', ');
     case 'tx_add': return (item.type === 'income' ? 'נרשמה הכנסה: ' : 'נרשמה הוצאה: ') + item.description + ' ' + ils(item.amount) + ' (' + item.date.slice(5, 10).split('-').reverse().join('.') + ')' + (item.category ? ' · ' + item.category : '');
+    case 'card_charge': return item.card_id ? 'חיוב שעוד לא ירד ב' + item.card + ': ' + ils(item.amount) : 'חיוב שעוד לא ירד: ' + ils(item.amount) + (item.card ? ' (' + item.card + ')' : '') + ', לא ידוע לאיזה כרטיס';
     case 'income': return 'הכנסה צפויה · ' + (item.label || 'משק הבית') + ': ' + ils(item.amount) + (item.before ? ' (היה ' + ils(item.before) + ')' : ' (חדש)');
     default: return '';
   }

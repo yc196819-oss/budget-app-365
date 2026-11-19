@@ -34,6 +34,8 @@ function saveOne(item, { hid, userId, conversationId }) {
       return setBudget(item.category_id, item.amount);
     case 'balance':
       return setBalance(item.account_id, item.balance);
+    case 'card_charge':
+      return saveRow('card_pending', { card_id: item.card_id || null, amount: item.amount, label: item.card || null, said_at: new Date().toISOString() });
     case 'loan':
       return saveRow('loans', { direction: item.direction, counterparty: item.counterparty, amount: item.amount, loan_date: today(), settled: false, note: 'נוסף מתוך שיחה עם היועץ' });
     case 'installment':
@@ -75,6 +77,7 @@ export function undoLearning(item, { hid }) {
     case 'installment': return id ? deleteRow('installments', id) : Promise.resolve();
     case 'income': return item.label ? setIncomeLine(item.label, item.before || 0) : setIncome(item.before || 0);
     case 'tx_add': return id ? deleteNow(id) : Promise.resolve();
+    case 'card_charge': return id ? deleteRow('card_pending', id) : Promise.resolve();
     default: return Promise.resolve();
   }
 }

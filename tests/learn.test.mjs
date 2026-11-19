@@ -190,3 +190,24 @@ test('something that already happened is recorded as a transaction: today or the
   // No amount or no words: nothing.
   assert.deepEqual(normalizeItems([{ kind: 'tx_add', type: 'expense', amount: 0, description: 'x' }], d), []);
 });
+
+test('a card charge from the conversation: to the one card it fits, or without a card when it is not clear which', async () => {
+  const { describeItem } = await import('../public/app/src/domain/learn.js');
+  const cards = [{ id: 'c1', name: 'מקס דנה', last4: '1111' }, { id: 'c2', name: 'מקס יואב', last4: '2222' }, { id: 'c3', name: 'כאל', last4: '3333' }];
+  const data = { cards, accounts: [], goals: [], categories: [], budgets: [] };
+  const [byName, byDigits, unclear, bad] = [
+    { kind: 'card_charge', card: 'כאל', amount: 1200 },
+    { kind: 'card_charge', card: 'הכרטיס שנגמר ב-2222', amount: 800 },
+    { kind: 'card_charge', card: 'מקס', amount: 400 },
+    { kind: 'card_charge', card: 'כאל', amount: 0 }
+  ].map((r) => normalizeItems([r], data)[0] || null);
+  assert.equal(byName.card_id, 'c3');
+  assert.equal(byDigits.card_id, 'c2');
+  assert.equal(unclear.card_id, null, 'two cards fit "מקס": not guessed');
+  assert.equal(unclear.card, 'מקס');
+  assert.equal(bad, null);
+  assert.equal(isValid(byName), true);
+  assert.equal(describeItem(byName), 'חיוב שעוד לא ירד בכאל: ₪1,200');
+  assert.equal(describeItem(unclear), 'חיוב שעוד לא ירד: ₪400 (מקס), לא ידוע לאיזה כרטיס');
+  assert.deepEqual(learnContext({ cards }).cards, cards.map((c) => ({ id: c.id, name: c.name, last4: c.last4 })));
+});

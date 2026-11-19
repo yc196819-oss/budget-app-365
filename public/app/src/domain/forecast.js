@@ -178,7 +178,7 @@ function scenarioLines(scenarios, i) {
 // everywhere. Starts from the free money now (balances minus card charges
 // not taken yet), when balances are known.
 export function householdForecast(data, today = new Date(), scenarios = []) {
-  const cash = cashNow(data.accounts || [], data.cards || [], data.txs || [], today);
+  const cash = cashNow(data.accounts || [], data.cards || [], data.txs || [], today, data.cardPending || []);
   return forecast({ txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], loans: data.loans || [], categories: data.categories || [], budgets: data.budgets || [], income: data.income || [], today, startBalance: cash.known ? cash.free : null, scenarios });
 }
 
