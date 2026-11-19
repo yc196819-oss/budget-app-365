@@ -131,7 +131,17 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
 
   const refresh = () => listConversations(hid).then((l) => { setList(l); setListError(false); }).catch(() => setListError(true));
   useEffect(() => { if (hid) refresh(); return () => { if (abort.current) abort.current.abort(); stopSpeaking(); }; }, [hid]);
-  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [conv]);
+  // The newest message in view: the log scrolls by itself where it has its
+  // own scroll (the side panel on a computer); in the sheet the whole sheet
+  // scrolls, so the newest message is brought into view there.
+  useEffect(() => {
+    const log = logRef.current;
+    if (!log) return;
+    log.scrollTop = log.scrollHeight;
+    const sheet = log.closest('.sheet');
+    const last = log.lastElementChild;
+    if (sheet && last) sheet.scrollTop += last.getBoundingClientRect().bottom - (sheet.querySelector('.adv-compose') || sheet).getBoundingClientRect().top + 12;
+  }, [conv]);
 
   const open = async (id) => {
     setError(''); setSuggestions([]); setLearn(null); setOffer(false); setUpdated([]); setUpdatedOpen(false); setAppliedOpen(false); setPastHidden(false);
