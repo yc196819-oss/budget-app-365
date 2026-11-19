@@ -201,6 +201,7 @@ export function cardCycle(card, txs, today, said = []) {
     next: isoDate(next),
     daysSinceLast: Math.round((t0 - last) / 86400000),
     pending: Math.max(fromTxs, toldAmount),
+    fromTxs,
     told: toldAmount > fromTxs ? { amount: toldAmount, at: told.said_at } : null,
     // What the next charge will be: the purchases of the month before it.
     nextAmount: sum(mine.filter((t) => t.tx_date <= nextCycleEnd), (t) => Number(t.amount) || 0)
@@ -221,9 +222,14 @@ export function cashNow(accounts, cards, txs, today, said = []) {
   const ids = new Set(withBalance.map((a) => a.id));
   // Cards that are not linked to any account are assumed to be paid from these accounts.
   const linked = cards.filter((c) => !c.bank_account_id || ids.has(c.bank_account_id));
-  const pending = sum(linked, (c) => cardCycle(c, txs, today, said).pending) + sum(unassignedCharges(said, today), (p) => Number(p.amount) || 0);
+  const cycles = linked.map((c) => cardCycle(c, txs, today, said));
+  const loose = sum(unassignedCharges(said, today), (p) => Number(p.amount) || 0);
+  const pending = sum(cycles, (c) => c.pending) + loose;
+  // Bought already but not in the lines yet (told to the advisor): the
+  // forecast must not expect this money to be spent again this month.
+  const toldExtra = sum(cycles, (c) => (c.told ? c.told.amount - c.fromTxs : 0)) + loose;
   const updated = withBalance.map((a) => a.balance_updated_at).filter(Boolean).sort()[0] || null;
-  return { known: true, balance, pending, free: balance - pending, updatedAt: updated };
+  return { known: true, balance, pending, toldExtra, free: balance - pending, updatedAt: updated };
 }
 
 // ── upcoming and attention ─────────────────────────────────────────────

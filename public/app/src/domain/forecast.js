@@ -179,14 +179,17 @@ function scenarioLines(scenarios, i) {
 // not taken yet), when balances are known.
 export function householdForecast(data, today = new Date(), scenarios = []) {
   const cash = cashNow(data.accounts || [], data.cards || [], data.txs || [], today, data.cardPending || []);
-  return forecast({ txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], loans: data.loans || [], categories: data.categories || [], budgets: data.budgets || [], income: data.income || [], today, startBalance: cash.known ? cash.free : null, scenarios });
+  return forecast({ txs: data.txs || [], goals: data.goals || [], installments: data.installments || [], loans: data.loans || [], categories: data.categories || [], budgets: data.budgets || [], income: data.income || [], today, startBalance: cash.known ? cash.free : null, scenarios, toldExtra: cash.known ? cash.toldExtra || 0 : 0 });
 }
 
 // income: the household's expected monthly income lines (what they told the
 // app or the advisor, one line per person). When set, it is the income of
 // every coming month; this month, what has not come in yet is still expected
 // (a salary not paid yet is not "no income").
-export function forecast({ txs, goals = [], installments = [], loans = [], categories = [], budgets = [], income = [], today, startBalance = null, scenarios = [], months = 6 }) {
+// toldExtra: card purchases told to the advisor and not in the lines yet.
+// They are in the start balance already (as a card charge to come), so this
+// month's expected spending is that much smaller: counted once, not twice.
+export function forecast({ txs, goals = [], installments = [], loans = [], categories = [], budgets = [], income = [], today, startBalance = null, scenarios = [], months = 6, toldExtra = 0 }) {
   // Deposits to investments: out of the average. Regular ones come back
   // every month on a line of their own; a one-off is not expected again.
   const invest = investPattern(txs, categories, today);
@@ -205,7 +208,7 @@ export function forecast({ txs, goals = [], installments = [], loans = [], categ
       // Only what is still to come this month moves the balance.
       lines = [
         { label: 'הכנסות שעוד יגיעו החודש', amount: Math.max(plan.projectedIncome, monthlyIncome) - plan.incomeSoFar, kind: 'income' },
-        { label: 'הוצאות עד סוף החודש', amount: -(plan.projectedExpense - plan.spent), kind: 'expense' }
+        { label: 'הוצאות עד סוף החודש', amount: -Math.max(0, plan.projectedExpense - plan.spent - toldExtra), kind: 'expense' }
       ];
     } else {
       lines = [
