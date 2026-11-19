@@ -3,7 +3,7 @@ import { Splash } from '../../components/Splash.js';
 import { PictureCard } from '../picture/Picture.js';
 import { useEffect, useState } from 'preact/hooks';
 import { track } from '../../lib/telemetry.js';
-import { monthPlan, cashNow, upcoming, attention, topCategories } from '../../domain/home.js';
+import { monthPlan, cashNow, upcoming, attention, topCategories, unassignedCharges } from '../../domain/home.js';
 import { TxSheet } from '../money/TxSheet.js';
 import { Hero } from './Hero.js';
 import { HeroSheet } from './HeroSheet.js';
@@ -77,7 +77,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
   // (The owner's board first: payments still to come this month are spoken for.)
   const plan = monthPlan({ txs: data.txs, budgets: data.budgets, today, smart: owner });
   const catName = (id) => (data.categories.find((c) => c.id === id) || {}).name || '';
-  const cash = cashNow(data.accounts, data.cards, data.txs, today);
+  const cash = cashNow(data.accounts, data.cards, data.txs, today, data.cardPending || []);
   const soon = upcoming({ txs: data.txs, cards: data.cards, today });
   // "Complete the picture" (its card, or the ✓ at the top) already says which
   // statement is due: the "card was charged, upload it" notes would repeat it.
@@ -170,7 +170,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       <div class="home-side stack">
       <${PlanCards} data=${data} onSheet=${(s) => { setSheet(null); planSheet.open(s); }} />
       <${TripFound} data=${data} trips=${trips} />
-      <${CashCard} cash=${cash} accounts=${data.accounts} />
+      <${CashCard} cash=${cash} accounts=${data.accounts} cards=${data.cards} unassigned=${unassignedCharges(data.cardPending || [], today)} />
       <${InstallCard} />
       <div class="calm-tiles">
         <button type="button" class="card calm-tile" aria-expanded=${String(upOpen)} onClick=${() => setUpOpen((v) => !v)}><small>בשבועיים הקרובים</small><b>${soon.length ? (upSum ? '−' + money(upSum) : soon.length + ' צפויים') : 'אין חיובים צפויים'}</b>${soon.length > 0 && html`<span class="faint" style="font-size:12px">${soon.length === 1 ? 'חיוב אחד' : soon.length + ' חיובים'} · ${upOpen ? 'להסתיר' : 'לראות'}</span>`}</button>
@@ -218,7 +218,7 @@ export function HomeScreen({ data, onAdd, onImport, onPicture, onLearn, onAsk, u
       ${switchLink}
     </div>
     <div class="home-side stack">
-      <${CashCard} cash=${cash} accounts=${data.accounts} />
+      <${CashCard} cash=${cash} accounts=${data.accounts} cards=${data.cards} unassigned=${unassignedCharges(data.cardPending || [], today)} />
       ${onLearn && html`<${LearnCard} userId=${userId} onOpen=${onLearn} />`}
       <${Upcoming} items=${soon} />
       <${TalkToUs} />

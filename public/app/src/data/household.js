@@ -74,7 +74,8 @@ export function snapshot() {
     investments: state.investments,
     income: state.income,
     people: state.people || null,
-    dupeOk: state.dupeOk || []
+    dupeOk: state.dupeOk || [],
+    cardPending: state.cardPending || []
   };
 }
 
@@ -106,7 +107,7 @@ export async function load(hid, userId, { force = false } = {}) {
   try {
     const now = new Date();
     const since = isoDate(new Date(now.getFullYear(), now.getMonth() - MONTHS_BACK, 1));
-    const [txs, cats, budgets, mems, accounts, cards, goals, installments, loans, investments, household, people, dupeOk] = await Promise.all([
+    const [txs, cats, budgets, mems, accounts, cards, goals, installments, loans, investments, household, people, dupeOk, cardPending] = await Promise.all([
       fetchAllTransactions(hid, since),
       sb.from('categories').select('id,name,icon,kind,parent_id').eq('household_id', hid),
       sb.from('category_budgets').select('category_id,monthly_amount').eq('household_id', hid),
@@ -120,7 +121,9 @@ export async function load(hid, userId, { force = false } = {}) {
       sb.from('households').select('income_expectations').eq('id', hid).maybeSingle(),
       // Its own request: until the column exists everywhere, a failure here changes nothing else.
       sb.from('households').select('people').eq('id', hid).maybeSingle(),
-      sb.from('dupe_ok').select('pair').eq('household_id', hid)
+      sb.from('dupe_ok').select('pair').eq('household_id', hid),
+      // Card charges told to the advisor (the last 2 months are enough: older ones count for nothing).
+      sb.from('card_pending').select('id,card_id,amount,label,said_at').eq('household_id', hid).gte('said_at', isoDate(new Date(now.getFullYear(), now.getMonth() - 2, 1))).order('said_at', { ascending: false })
     ]);
     for (const r of [cats, budgets, mems]) if (r.error) throw r.error;
     // Accounts, cards, goals, installments, loans and investments add to home,
@@ -148,6 +151,7 @@ export async function load(hid, userId, { force = false } = {}) {
       income: !household.error && household.data && Array.isArray(household.data.income_expectations) ? household.data.income_expectations : [],
       people: !people.error && people.data && Number(people.data.people) > 0 ? Number(people.data.people) : null,
       dupeOk: dupeOk.error ? [] : (dupeOk.data || []).map((r) => r.pair),
+      cardPending: cardPending.error ? [] : cardPending.data || [],
       hidden: new Set()
     });
   } catch (err) {
@@ -243,7 +247,7 @@ export async function deleteGoal(id) {
 
 // Insert or update a row of a household table (accounts, investments, loans)
 // and keep the store in step.
-const LISTS = { bank_accounts: 'accounts', credit_cards: 'cards', investments: 'investments', loans: 'loans', installments: 'installments' };
+const LISTS = { bank_accounts: 'accounts', credit_cards: 'cards', investments: 'investments', loans: 'loans', installments: 'installments', card_pending: 'cardPending' };
 export async function saveRow(table, row) {
   const key = LISTS[table];
   if (!key) throw new Error('unknown table ' + table);
@@ -253,7 +257,7 @@ export async function saveRow(table, row) {
     : sb.from(table).insert({ ...fields, household_id: state.hid, created_by: state.userId });
   const { data, error } = await q.select().single();
   if (error) throw error;
-  state[key] = id ? state[key].map((r) => (r.id === id ? data : r)) : [...state[key], data];
+  state[key] = id ? (state[key] || []).map((r) => (r.id === id ? data : r)) : [...(state[key] || []), data];
   emit();
   return data;
 }
@@ -416,7 +420,7 @@ export async function deleteRow(table, id) {
   if (!key) throw new Error('unknown table ' + table);
   const { error } = await sb.from(table).delete().eq('id', id).eq('household_id', state.hid);
   if (error) throw error;
-  state[key] = state[key].filter((r) => r.id !== id);
+  state[key] = (state[key] || []).filter((r) => r.id !== id);
   emit();
 }
 

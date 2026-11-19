@@ -845,6 +845,11 @@ body.chat-open { overflow: hidden; }
 .fc-skipped > span { display: block; margin: 6px 0; }
 .fc-skipped > div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
 
+.cash-unassigned { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 10px 12px; border-radius: var(--radius-m); background: var(--warn-tint); font-size: 13.5px; line-height: 1.5; }
+.cash-unassigned-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cash-unassigned-row select { flex: 1; min-width: 0; }
+.cash-unassigned-row .btn { width: auto; }
+
 /* Owner dashboard tables */
 .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .admin-table th { text-align: start; color: var(--muted); font-weight: 700; padding: 4px 6px; white-space: nowrap; }

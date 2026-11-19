@@ -242,3 +242,23 @@ test('attention: "the card was charged, upload its statement" goes once that sta
   assert.ok(kinds([tx({ amount: 80, tx_date: '2026-08-12', card_id: 'c1', source: 'import' })]).includes('bill'), 'an older statement is not this one');
   assert.ok(!kinds([tx({ amount: 80, tx_date: '2026-09-12', card_id: 'c1', source: 'import' })]).includes('bill'), 'September\'s purchases are in');
 });
+
+test('card charges told to the advisor: the bigger of what was told and the card\'s lines, in this billing cycle only; one without a card is counted too, for 35 days', async () => {
+  const { cardCycle, cashNow, unassignedCharges } = await import('../public/app/src/domain/home.js');
+  const today = new Date(2026, 10, 18);
+  const card = { id: 'k1', name: 'כרטיס בדוי', billing_day: 10 };
+  const txs = [{ id: 't1', card_id: 'k1', type: 'expense', amount: 900, tx_date: '2026-11-12' }];
+  // Told after the last billing day (10.11): more than the lines show.
+  assert.equal(cardCycle(card, txs, today, [{ card_id: 'k1', amount: 2400, said_at: '2026-11-17T09:00:00Z' }]).pending, 2400);
+  // Less than the lines show: the lines win.
+  assert.equal(cardCycle(card, txs, today, [{ card_id: 'k1', amount: 500, said_at: '2026-11-17T09:00:00Z' }]).pending, 900);
+  // Told before the billing day: that charge already went out.
+  assert.equal(cardCycle(card, txs, today, [{ card_id: 'k1', amount: 2400, said_at: '2026-11-05T09:00:00Z' }]).pending, 900);
+  // The newest of two counts.
+  assert.equal(cardCycle(card, txs, today, [{ card_id: 'k1', amount: 2400, said_at: '2026-11-15T09:00:00Z' }, { card_id: 'k1', amount: 1800, said_at: '2026-11-17T09:00:00Z' }]).pending, 1800);
+  const said = [{ id: 'p1', card_id: null, amount: 600, said_at: '2026-11-16T09:00:00Z' }, { id: 'p2', card_id: null, amount: 300, said_at: '2026-09-01T09:00:00Z' }];
+  assert.deepEqual(unassignedCharges(said, today).map((p) => p.id), ['p1'], 'an old one without a card is not counted');
+  const cash = cashNow([{ id: 'a1', balance: 5000 }], [{ ...card, bank_account_id: 'a1' }], txs, today, said);
+  assert.equal(cash.pending, 900 + 600);
+  assert.equal(cash.free, 5000 - 1500);
+});

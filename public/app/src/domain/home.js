@@ -177,7 +177,11 @@ function billingDate(y, m, billingDay) {
 // Card purchases are charged on the card's billing day for the cycle
 // before it. What is not charged yet: purchases from the start of the month
 // of the last billing date that already passed (an estimate).
-export function cardCycle(card, txs, today) {
+// said: card charges the household told the advisor (card_pending rows).
+// The latest amount said for this card since its last billing day counts
+// when it is more than the card's transactions show (the statement is not
+// uploaded yet); after the billing day it counts for nothing.
+export function cardCycle(card, txs, today, said = []) {
   const day = Number(card.billing_day) || 10;
   const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   let last = billingDate(today.getFullYear(), today.getMonth(), day);
@@ -187,26 +191,37 @@ export function cardCycle(card, txs, today) {
   const since = isoDate(new Date(last.getFullYear(), last.getMonth(), 1));
   const nextCycleEnd = isoDate(new Date(next.getFullYear(), next.getMonth(), 0));
   const mine = txs.filter((t) => t.card_id === card.id && isExpense(t) && t.tx_date >= since);
+  const fromTxs = sum(mine, (t) => Number(t.amount) || 0);
+  const told = (said || []).filter((p) => p.card_id === card.id && String(p.said_at || '').slice(0, 10) >= isoDate(last)).sort((a, b) => (a.said_at < b.said_at ? 1 : -1))[0] || null;
+  const toldAmount = told ? Number(told.amount) || 0 : 0;
   return {
     id: card.id,
     name: card.name,
     last: isoDate(last),
     next: isoDate(next),
     daysSinceLast: Math.round((t0 - last) / 86400000),
-    pending: sum(mine, (t) => Number(t.amount) || 0),
+    pending: Math.max(fromTxs, toldAmount),
+    told: toldAmount > fromTxs ? { amount: toldAmount, at: told.said_at } : null,
     // What the next charge will be: the purchases of the month before it.
     nextAmount: sum(mine.filter((t) => t.tx_date <= nextCycleEnd), (t) => Number(t.amount) || 0)
   };
 }
 
-export function cashNow(accounts, cards, txs, today) {
+// A charge told without its card: counted too (the money will go), for 35
+// days, until it is attached to a card.
+export function unassignedCharges(said = [], today) {
+  const from = isoDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 35));
+  return (said || []).filter((p) => !p.card_id && String(p.said_at || '').slice(0, 10) >= from);
+}
+
+export function cashNow(accounts, cards, txs, today, said = []) {
   const withBalance = accounts.filter((a) => a.balance !== null && a.balance !== undefined && a.balance !== '');
   if (!withBalance.length) return { known: false };
   const balance = sum(withBalance, (a) => Number(a.balance) || 0);
   const ids = new Set(withBalance.map((a) => a.id));
   // Cards that are not linked to any account are assumed to be paid from these accounts.
   const linked = cards.filter((c) => !c.bank_account_id || ids.has(c.bank_account_id));
-  const pending = sum(linked, (c) => cardCycle(c, txs, today).pending);
+  const pending = sum(linked, (c) => cardCycle(c, txs, today, said).pending) + sum(unassignedCharges(said, today), (p) => Number(p.amount) || 0);
   const updated = withBalance.map((a) => a.balance_updated_at).filter(Boolean).sort()[0] || null;
   return { known: true, balance, pending, free: balance - pending, updatedAt: updated };
 }

@@ -2,12 +2,12 @@ import { html } from '../../lib/html.js';
 import { useState } from 'preact/hooks';
 import { money } from '../../domain/format.js';
 import { Icon } from '../../components/Icon.js';
-import { setBalance } from '../../data/household.js';
+import { setBalance, saveRow, deleteRow } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
 
 // Free money in the bank: the balance (typed in by hand, shared by the
 // household) minus card charges that did not go out yet.
-export function CashCard({ cash, accounts }) {
+export function CashCard({ cash, accounts, cards = [], unassigned = [] }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,5 +48,39 @@ export function CashCard({ cash, accounts }) {
     <span class="muted" style="font-size:13px;line-height:1.5">עו״ש ${money(cash.balance)}${cash.pending > 0 ? ' פחות ' + money(cash.pending) + ' באשראי שעוד לא ירד (הערכה)' : ''}</span>
     <button type="button" class="btn-text" style="align-self:flex-start;padding:0;min-height:28px" onClick=${() => setEditing(true)}>
       ${date ? 'עודכן ב-' + date.getDate() + '.' + (date.getMonth() + 1) + ' · ' : ''}לעדכן יתרה</button>
+    ${unassigned.map((p) => html`<${Unassigned} key=${p.id} charge=${p} cards=${cards} accounts=${accounts} />`)}
+  </div>`;
+}
+
+// A card charge told to the advisor without saying which card: counted in
+// the free money already; here it is attached to a card, to a new card, or
+// removed (it went out, or was a mistake).
+function Unassigned({ charge, cards, accounts }) {
+  const [pick, setPick] = useState(cards.length === 1 ? cards[0].id : '');
+  const [busy, setBusy] = useState(false);
+  const run = async (fn, ok) => {
+    setBusy(true);
+    try { await fn(); showToast(ok); } catch (_err) { showToast('לא נשמר. נסו שוב.'); }
+    setBusy(false);
+  };
+  const attach = () => run(() => saveRow('card_pending', { id: charge.id, card_id: pick }), 'החיוב צורף לכרטיס.');
+  const newCard = () => run(async () => {
+    const card = await saveRow('credit_cards', { name: charge.label || 'כרטיס חדש', bank_account_id: accounts[0].id, billing_day: 10, is_active: true });
+    await saveRow('card_pending', { id: charge.id, card_id: card.id });
+  }, 'נפתח כרטיס חדש והחיוב צורף אליו. אפשר לשנות את פרטיו בנכסים.');
+  const remove = () => run(() => deleteRow('card_pending', charge.id), 'החיוב הוסר.');
+  return html`<div class="cash-unassigned" role="group" aria-label="חיוב שלא ידוע לאיזה כרטיס">
+    <span><b class="num">${money(charge.amount)}</b> באשראי שעוד לא ירד${charge.label ? ' (' + charge.label + ')' : ''}: לא ידוע לאיזה כרטיס. הוא כבר נספר למעלה.</span>
+    <span class="cash-unassigned-row">
+      ${cards.length > 0 && html`<select class="input" aria-label="לאיזה כרטיס" value=${pick} onChange=${(e) => setPick(e.target.value)}>
+        <option value="">לבחור כרטיס…</option>
+        ${cards.map((c) => html`<option value=${c.id}>${c.name}${c.last4 ? ' ' + c.last4 : ''}</option>`)}
+      </select>`}
+      ${cards.length > 0 && html`<button type="button" class="btn" disabled=${busy || !pick} onClick=${attach}>לצרף</button>`}
+    </span>
+    <span class="cash-unassigned-row">
+      <button type="button" class="btn-text" disabled=${busy} onClick=${newCard}>זה כרטיס חדש</button>
+      <button type="button" class="btn-text" disabled=${busy} onClick=${remove}>להסיר</button>
+    </span>
   </div>`;
 }
