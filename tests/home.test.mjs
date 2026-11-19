@@ -98,7 +98,7 @@ test('cashNow: balance minus card charges that did not go out yet', () => {
   const accounts = [{ id: 'a1', balance: 10000, balance_updated_at: '2026-10-14T08:00:00Z' }, { id: 'a2', balance: null }];
   const cards = [{ id: 'c1', bank_account_id: 'a1', billing_day: 10 }, { id: 'c2', bank_account_id: 'a2', billing_day: 2 }];
   const txs = [tx({ card_id: 'c1', amount: 700, tx_date: '2026-10-12' }), tx({ card_id: 'c2', amount: 900, tx_date: '2026-10-12' })];
-  assert.deepEqual(cashNow(accounts, cards, txs, TODAY), { known: true, balance: 10000, pending: 700, free: 9300, updatedAt: '2026-10-14T08:00:00Z' });
+  assert.deepEqual(cashNow(accounts, cards, txs, TODAY), { known: true, balance: 10000, pending: 700, toldExtra: 0, free: 9300, updatedAt: '2026-10-14T08:00:00Z' });
   assert.deepEqual(cashNow([{ id: 'a', balance: null }], [], [], TODAY), { known: false });
 });
 
@@ -261,4 +261,17 @@ test('card charges told to the advisor: the bigger of what was told and the card
   const cash = cashNow([{ id: 'a1', balance: 5000 }], [{ ...card, bank_account_id: 'a1' }], txs, today, said);
   assert.equal(cash.pending, 900 + 600);
   assert.equal(cash.free, 5000 - 1500);
+});
+
+test('a card charge told to the advisor is counted once in this month\'s forecast: in the start balance, and not again as spending to come', async () => {
+  const { householdForecast } = await import('../public/app/src/domain/forecast.js');
+  const today = new Date(2026, 10, 18);
+  const base = { accounts: [{ id: 'a1', balance: 10000 }], cards: [{ id: 'k1', name: 'כרטיס בדוי', bank_account_id: 'a1', billing_day: 10 }], txs: [], income: [{ label: 'משכורת', amount: 12000 }] };
+  for (const m of ['08', '09', '10']) base.txs.push({ id: 'v' + m, type: 'expense', amount: 6000, nature: 'variable', spread: 'month', tx_date: '2026-' + m + '-15', description: 'סופר' });
+  const plain = householdForecast(base, today);
+  const told = householdForecast({ ...base, cardPending: [{ card_id: 'k1', amount: 1500, said_at: '2026-11-17T09:00:00Z' }] }, today);
+  const spend = (fc) => fc.months[0].lines.find((l) => l.label === 'הוצאות עד סוף החודש').amount;
+  // The 1,500 already bought leaves the start balance and is no longer expected as spending.
+  assert.equal(spend(told) - spend(plain), 1500);
+  assert.equal(Math.round(told.months[0].end), Math.round(plain.months[0].end), 'the month ends the same: counted once');
 });
