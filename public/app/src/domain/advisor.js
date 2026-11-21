@@ -2,6 +2,7 @@
 // same shape the current app sends, so the server prompt understands it),
 // parsing the reply, and conversation helpers. No DOM, no network.
 
+import { parseBalance } from './balanceCard.js';
 import { MONTH_NAMES, monthShare, monthsBack, merchantKey } from './money.js';
 import { parseList } from './shopList.js';
 import { monthPlan } from './home.js';
@@ -210,6 +211,8 @@ export function normalizeMessages(rows, legacy, ownerId) {
         : { id: m.id, role: m.role, text: m.role === 'ai' ? parseReply(m.text).text : String(m.text || ''), author_id: m.author_id }),
       // A shopping list the advisor wrote shows again as a list.
       ...(m.role === 'ai' && parseList(m.text) ? { list: parseList(m.text) } : {}),
+      // So does a balance.
+      ...(m.role === 'ai' && parseBalance(m.text) ? { balance: parseBalance(m.text) } : {}),
       ...(m.created_at ? { created_at: m.created_at } : {}),
       ...(m.stopped ? { stopped: true } : {})
     }));

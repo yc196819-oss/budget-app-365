@@ -308,3 +308,31 @@ test('stopping the advisor while it answers: the question stays, marked, and is 
   await page.close();
   assert.deepEqual(errors.filter((e) => !/abort|Failed to fetch|ERR_/i.test(e)), []);
 });
+
+test('a balance from the advisor shows as a card with income, expenses, their totals and what is left; only the conversation scrolls', async () => {
+  const { page, errors } = await open();
+  await page.route('**/api/ai/advice-chat-stream', (r) => {
+    const body = ['בסוף החודש יישארו בערך 7,600 ₪.', '\n@@מאזן: {"title":"המאזן של דצמבר","start":[{"label":"יתרה של דנה","amount":-1200},{"label":"יתרה של יואב","amount":-800}],"income":[{"label":"משכורת דנה","amount":12000},{"label":"משכורת יואב","amount":4000},{"label":"קצבה","amount":100}],"expenses":[{"label":"שכר דירה","amount":4500},{"label":"מעון","amount":2000}]}', '\n@@הצעות: איך לחסוך? | מה עם ינואר?']
+      .map((d) => 'data: ' + JSON.stringify({ delta: d }) + '\n\n').join('') + 'data: {"done":true}\n\n';
+    return r.fulfill({ status: 200, contentType: 'text/event-stream', body });
+  });
+  await page.click('.ask-fab');
+  await page.fill('[aria-label="שאלה ליועץ"]', 'כמה סך הכל הכנסות וכמה הוצאות? תכלול את היתרות');
+  await page.click('.adv-compose button[type="submit"]');
+  const card = page.locator('.adv-msg.ai .bal-card');
+  await card.waitFor();
+  const t = await card.textContent();
+  assert.match(t, /המאזן של דצמבר/);
+  assert.match(t, /סך היתרות−₪2,000/);
+  assert.match(t, /סך ההכנסות₪16,100/);
+  assert.match(t, /סך ההוצאות₪6,500/);
+  assert.match(t, /יישאר בסוף₪7,600/);
+  assert.doesNotMatch(await page.locator('.adv-msg.ai').last().textContent(), /@@/, 'no raw mark shown');
+  // Only the conversation scrolls: the sheet itself does not, the box and the title stay.
+  assert.ok(await page.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollHeight - s.clientHeight <= 1; }), 'the sheet does not scroll');
+  assert.ok(await page.evaluate(() => { const l = document.querySelector('.adv-log'); return getComputedStyle(l).overflowY === 'auto'; }), 'the conversation scrolls');
+  assert.ok(await page.evaluate(() => document.querySelector('.adv-log').contains(document.querySelector('.adv .chips'))), 'the suggested questions scroll with the conversation');
+  assert.ok(await page.locator('.adv-bar').isVisible(), 'the buttons at the top stay in view');
+  await page.close();
+  assert.deepEqual(errors, []);
+});

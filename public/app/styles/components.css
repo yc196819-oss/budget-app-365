@@ -526,6 +526,7 @@ body.chat-open { overflow: hidden; }
 .talk-text b { font-size: 15px; color: var(--text); }
 .talk-end { flex: none; min-height: 40px; }
 .adv-talk { align-self: center; font-size: 14px; }
+.adv-talk-btn { width: 44px; height: 44px; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) { .talk-bar .talk-orb { animation: none !important; } }
 
 /* Morning news in the learning corner. */
@@ -849,6 +850,25 @@ body.chat-open { overflow: hidden; }
 .cash-unassigned-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .cash-unassigned-row select { flex: 1; min-width: 0; }
 .cash-unassigned-row .btn { width: auto; }
+
+/* The advisor's balance, as a card under the answer: the totals are added up on the device. */
+.bal-card { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; padding: 12px 14px; border-radius: var(--radius-m); background: var(--surface-2); white-space: normal; }
+.bal-title { font-size: 15px; }
+.bal-sec { display: flex; flex-direction: column; }
+.bal-head { font-size: 12.5px; font-weight: 800; color: var(--muted); margin-bottom: 2px; }
+.bal-head.in { color: var(--income); }
+.bal-head.out { color: var(--danger); }
+.bal-row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 14px; border-top: 1px solid var(--line); }
+.bal-row:first-of-type { border-top: 0; }
+.bal-row .num { white-space: nowrap; }
+.bal-total { font-weight: 800; border-top: 1.5px solid var(--muted); }
+.bal-total .pos { color: var(--income); }
+.bal-total .neg { color: var(--danger); }
+.bal-result { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 10px 12px; border-radius: var(--radius-s); background: var(--surface); font-weight: 800; }
+.bal-result b { font-size: 20px; }
+.bal-result.pos b { color: var(--income); }
+.bal-result.neg b { color: var(--danger); }
+.bal-note { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 
 /* Owner dashboard tables */
 .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
