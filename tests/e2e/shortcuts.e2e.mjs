@@ -78,7 +78,7 @@ test('"ask the advisor": the advisor opens, with the mic and the voice conversat
   const { page } = await open('ask');
   await page.waitForSelector('.sheet .adv [aria-label="שאלה ליועץ"]');
   assert.equal(await page.locator('.sheet .adv-mic').count(), 1);
-  assert.equal(await page.locator('.sheet .adv-talk').count(), 1);
+  assert.equal(await page.locator('.sheet .adv-talk-btn').count(), 1, 'voice conversation: an icon beside the mic');
   await page.close();
 });
 

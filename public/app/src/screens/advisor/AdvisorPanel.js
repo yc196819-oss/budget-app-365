@@ -24,6 +24,8 @@ import { parseList, shopContext, LIST_MARK } from '../../domain/shopList.js';
 import { ShopListCard } from './ShopListCard.js';
 import { FixCard } from './FixCard.js';
 import { ChatReport } from './ChatReport.js';
+import { BalanceCard } from './BalanceCard.js';
+import { parseBalance, BALANCE_MARK } from '../../domain/balanceCard.js';
 import { reportMessages } from '../../domain/chatReport.js';
 import { wantsFix, candidatesFor, categoryNames, parseFix, FIX_MARK } from '../../domain/advisorFix.js';
 import { loadShopping } from '../../data/shopping.js';
@@ -131,16 +133,11 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
 
   const refresh = () => listConversations(hid).then((l) => { setList(l); setListError(false); }).catch(() => setListError(true));
   useEffect(() => { if (hid) refresh(); return () => { if (abort.current) abort.current.abort(); stopSpeaking(); }; }, [hid]);
-  // The newest message in view: the log scrolls by itself where it has its
-  // own scroll (the side panel on a computer); in the sheet the whole sheet
-  // scrolls, so the newest message is brought into view there.
+  // The newest message in view.
   useEffect(() => {
     const log = logRef.current;
     if (!log) return;
     log.scrollTop = log.scrollHeight;
-    const sheet = log.closest('.sheet');
-    const last = log.lastElementChild;
-    if (sheet && last) sheet.scrollTop += last.getBoundingClientRect().bottom - (sheet.querySelector('.adv-compose') || sheet).getBoundingClientRect().top + 12;
   }, [conv]);
 
   const open = async (id) => {
@@ -205,15 +202,16 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       // And what the person wrote in this conversation ("1,380" stays 1,380).
       for (const m of [...(c.messages || []), { role: 'user', text: msg }]) if (m.role === 'user') for (const x of String(m.text || '').match(/\d[\d,]*(?:\.\d+)?/g) || []) { const v = Math.round(Number(x.replace(/,/g, ''))); if (v >= 1000) truths.add(v); }
       // (Not the list's amounts: they are the list's, not the screen's numbers.)
-      const marks = [raw.indexOf(LIST_MARK), raw.indexOf(FIX_MARK)].filter((i) => i >= 0);
+      const marks = [raw.indexOf(LIST_MARK), raw.indexOf(FIX_MARK), raw.indexOf(BALANCE_MARK)].filter((i) => i >= 0);
       const cut = marks.length ? Math.min(...marks) : -1;
       raw = cut >= 0 ? fixSums(alignNumbers(raw.slice(0, cut), truths)) + raw.slice(cut) : fixSums(alignNumbers(raw, truths));
       const list = parseList(raw);
+      const balance = parseBalance(raw);
       const fix = candidates.length ? parseFix(raw, data.txs, data.categories) : null;
       const reply = parseReply(raw);
       const finalText = reply.text || 'לא התקבלה תשובה. נסו לנסח אחרת.';
       answered = reply.text || null;
-      setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me, ...(list ? { list, fresh: true } : {}), ...(fix ? { fix } : {}) } : m)) });
+      setConv((cur) => cur && { ...cur, messages: cur.messages.map((m) => (m.pending ? { role: 'ai', text: finalText, author_id: me, ...(list ? { list, fresh: true } : {}), ...(fix ? { fix } : {}), ...(balance ? { balance } : {}) } : m)) });
       setSuggestions(reply.suggestions);
       // The full reply is saved, with the follow-ups, as the current app does.
       await addMessage({ conversationId: c.id, hid, userId: me, role: 'ai', text: raw || finalText });
@@ -392,6 +390,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
               ? html`${m.thumb && html`<img class="adv-thumb" src=${m.thumb} alt="התמונה שצורפה" />`}<span class="adv-pic-line"><${Icon} name="image" size=${15} />${PIC_MARK}${m.thumb ? '' : ' (לא נשמרת)'}</span><span>${String(m.text).slice(PIC_MARK.length + 3)}</span>`
               : html`<span class=${m.pending ? 'adv-streaming' : ''}>${m.text}</span>`}
           ${m.stopped && html`<small class="adv-stopped">נעצר לפני שענה. השאלה בתיבה למטה, אפשר לערוך ולשלוח שוב.</small>`}
+          ${m.balance && html`<${BalanceCard} balance=${m.balance} />`}
           ${m.fix && hid && html`<${FixCard} fix=${m.fix} hid=${hid} categories=${data.categories} />`}
           ${m.list && hid && html`<${ShopListCard} list=${m.list} hid=${hid} people=${data.people} onList=${(shop && shop.onList) || []} build=${!!m.fresh} />`}
           ${m.howto && html`<div class="adv-howto">
@@ -404,7 +403,6 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
           ${m.role === 'ai' && !m.local && asOfLabel(m.created_at) && html`<small class="adv-asof">${asOfLabel(m.created_at)}</small>`}
           ${m.role === 'ai' && !m.pending && m.text && canSpeak() && html`<button type="button" class="adv-speak" aria-label=${speaking === i ? 'להפסיק להקריא' : 'להקריא'} onClick=${() => toggleSpeak(i, m.text)}>${speaking === i ? '■' : html`<${Icon} name="speaker" size=${18} />`}</button>`}
         </div>`)}
-      </div>
       ${updated.length > 0 && html`<div class="card learn-auto" role="status">
         <div class="learn-auto-head">
           <button type="button" class="learn-auto-toggle" aria-expanded=${String(updatedOpen)} onClick=${() => setUpdatedOpen((o) => !o)}><${Icon} name="edit" size=${16} />${updated.length === 1 ? 'עדכנתי דבר אחד לפי השיחה' : 'עדכנתי ' + updated.length + ' דברים לפי השיחה'}<span class="learn-auto-more">${updatedOpen ? 'להסתיר' : 'לראות'}</span></button>
@@ -440,6 +438,7 @@ export function AdvisorPanel({ data, session, screen, startTalk = false }) {
       ${error && html`<div class="adv-err" role="alert">${error}</div>`}
       ${offer && !busy && aiOn && html`<div class="card learn-offer" role="status"><span>סיפרתם משהו שכדאי לשמור. לעדכן את היעדים והנתונים לפי השיחה?</span>
         <div class="learn-actions"><button type="button" class="btn" onClick=${startLearn}>לבדוק מה למדתי</button><button type="button" class="btn-text" onClick=${dismissOffer}>לא עכשיו</button></div></div>`}
+      </div>
       ${offCard || html`<${Composer} draft=${draft} setDraft=${setDraft} busy=${busy} pic=${{ image, attach, clear: () => setImage(null), note: picNote, okNote: () => { writeLocal(picNoteKey, '1'); setPicNote(false); } }} onSend=${(v) => send(v ?? draft)} onStop=${stop} onMic=${canListen() ? mic : null} listening=${!!listening} onTalk=${canListen() && canSpeak() && !talk ? startTalking : null} />`}`}
     </div>`;
   }
@@ -507,10 +506,10 @@ function Composer({ draft, setDraft, busy, onSend, onStop, onMic, listening, onT
     ${pic && html`<button type="button" class="icon-btn adv-attach" aria-label="לצרף תמונה" onClick=${() => fileRef.current && fileRef.current.click()} disabled=${busy}><${Icon} name="image" size=${20} /></button>
       <input type="file" accept="image/*" ref=${fileRef} hidden onChange=${(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; pic.attach(f); }} />`}
     ${onMic && html`<button type="button" class=${'icon-btn adv-mic' + (listening ? ' on' : '')} aria-label=${listening ? 'להפסיק הקלטה' : 'להקליט שאלה'} aria-pressed=${String(listening)} onClick=${onMic} disabled=${busy}><${Icon} name="mic" size=${20} /></button>`}
+    ${onTalk && html`<button type="button" class="icon-btn adv-talk-btn" aria-label="שיחה קולית: לדבר עם היועץ בלי להקליד" title="שיחה קולית" onClick=${onTalk} disabled=${busy}><${Icon} name="wave" size=${20} /></button>`}
     ${busy && onStop
       ? html`<button type="button" key="stop" class="btn adv-stop" onClick=${(e) => { e.preventDefault(); onStop(); }}><span class="adv-stop-sq" aria-hidden="true"></span>לעצור</button>`
       : html`<button type="submit" key="send" class="btn" disabled=${busy || !canSend}>${busy ? html`<span class="spinner" aria-label="שולח"></span>` : 'לשאול'}</button>`}
   </form>
-  ${onTalk && html`<button type="button" class="btn-text adv-talk" onClick=${onTalk}><${Icon} name="wave" size=${18} />שיחה קולית: לדבר עם היועץ בלי להקליד</button>`}
-  <p class="adv-legal">מידע כללי, לא ייעוץ השקעות, מס או משפט. בינה מלאכותית יכולה לטעות. <a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a></p>`;
+  <p class="adv-legal">מידע כללי, לא ייעוץ השקעות, מס או משפט. AI יכול לטעות. <a href="/terms" target="_blank" rel="noopener">תנאי שימוש</a></p>`;
 }

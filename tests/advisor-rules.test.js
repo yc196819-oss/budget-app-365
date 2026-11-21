@@ -4,7 +4,9 @@ const { OWN_NUMBERS_RULE, historyText } = require('../server/advisorRules.js');
 
 test('the advisor calculates with the numbers the person gave, and never says it has no data when they gave it', () => {
   assert.match(OWN_NUMBERS_RULE, /חשב עם המספרים שלו/);
-  assert.match(OWN_NUMBERS_RULE, /לפי מה שכתבת:/);
+  assert.match(OWN_NUMBERS_RULE, /ככרטיס מאזן/);
+  assert.match(OWN_NUMBERS_RULE, /@@מאזן:/, 'the balance rule is part of it');
+  assert.match(OWN_NUMBERS_RULE, /בלי סכומים כוללים \(האפליקציה מחברת\)/);
   assert.match(OWN_NUMBERS_RULE, /אסור לכתוב "אין לי את הנתונים" או "הנתון היחיד שיש לי"/);
   assert.match(OWN_NUMBERS_RULE, /לא נשקלל/, 'what they said not to count is left out');
 });
