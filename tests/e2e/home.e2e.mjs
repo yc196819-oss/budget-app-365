@@ -74,6 +74,9 @@ test('attention: an over-budget category and a suspected double charge, each wit
   const t = new Date();
   const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   db.tables.category_budgets.find((b) => b.category_id === 'car').monthly_amount = 100;
+  // Food grows with the day of the month in the made-up data: late in a month it
+  // would also be over budget and take the place of the double charge.
+  db.tables.category_budgets.find((b) => b.category_id === 'food').monthly_amount = 100000;
   const day = iso(t);
   db.tables.transactions.push(
     { id: 'd1', household_id: 'h1', type: 'expense', amount: 333, description: 'פז אילת', tx_date: day, category_id: 'car', nature: 'variable', spread: 'month', created_at: day + 'T09:00:00Z' },
