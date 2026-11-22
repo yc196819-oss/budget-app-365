@@ -1,0 +1,9 @@
+{
+  "note": "Raw colours (hex/rgb/hsl) per CSS file outside tokens.css. May only go down. Update with: npm run design:check -- --update",
+  "files": {
+    "public/app/pages/pages.css": 12,
+    "public/app/styles/components.css": 313,
+    "public/app/styles/layout.css": 5,
+    "public/app/styles/motion.css": 4
+  }
+}
