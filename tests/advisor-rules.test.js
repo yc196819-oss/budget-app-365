@@ -23,3 +23,18 @@ test('the conversation sent to the AI: the person\'s messages in full, even old 
   assert.equal(oldAnswer.length, 'יועץ: '.length + 400, 'an older answer, shortened');
   assert.equal(t[t.length - 2].length, 'יועץ: '.length + Math.min(2000, 'תשובה '.repeat(150).length), 'a newest answer, in full');
 });
+
+test('prompt caching: the rules, then the household\'s data, each cached; the turn and a picture after, never cached', () => {
+  const { cachedContent, inputTokens } = require('../server/advisorRules.js');
+  const c = cachedContent({ rules: 'כללים', data: 'נתונים של בית א', turn: 'השאלה' });
+  assert.deepEqual(c.map((b) => b.type), ['text', 'text', 'text']);
+  assert.deepEqual(c.map((b) => b.text), ['כללים', 'נתונים של בית א', 'השאלה']);
+  assert.deepEqual(c[0].cache_control, { type: 'ephemeral' });
+  assert.deepEqual(c[1].cache_control, { type: 'ephemeral' });
+  assert.equal(c[2].cache_control, undefined, 'the question is not cached');
+  const withPic = cachedContent({ rules: 'כללים', data: 'נתונים', turn: 'מה בתמונה?' }, { media_type: 'image/png', data: 'AAAA' });
+  assert.deepEqual(withPic.map((b) => b.type), ['text', 'text', 'image', 'text'], 'the picture after the cached parts');
+  assert.equal(withPic[2].cache_control, undefined);
+  assert.equal(inputTokens({ input_tokens: 120, cache_creation_input_tokens: 0, cache_read_input_tokens: 6000 }), 6120);
+  assert.equal(inputTokens({ input_tokens: 50 }), 50);
+});
