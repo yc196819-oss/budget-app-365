@@ -9,7 +9,7 @@ const nodemailer = require('nodemailer');
 const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
-const { claudeRequest, isRetryable } = require('./server/claude');
+const { claudeRequest, isRetryable, webFetchTool } = require('./server/claude');
 const advisorImage = require('./server/advisorImage');
 const { loadActive } = require('./server/active');
 const { measure } = require('./server/latency');
@@ -1238,35 +1238,41 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimit
 });
 
 // A recipe (a link, its text, or a photo) read into what to buy. Pictures
-// and pages are read for the answer only, never kept.
+// and pages are read for the answer only, never kept. When the page does not
+// open here, or no ingredients come out of it, Claude reads the link itself
+// (its web fetch, limited to that one site). The answer goes only to the
+// person who asked.
 const recipe = require('./server/recipe');
-app.post('/api/ai/recipe', requireAuth, aiLimiter, advisorImageLimiter, aiQuota, async (req, res) => {
-  try {
-    if (!ANTHROPIC_KEY) return res.status(503).json({ error: 'קריאת מתכונים לא זמינה כרגע.' });
-    const { url, text, image } = req.body || {};
-    let src = { title: '', text: String(text || '').slice(0, 9000) };
-    if (url) {
-      const html = await recipe.fetchPage(url).catch((e) => { throw Object.assign(new Error(e.message), { user: 'לא הצלחנו לפתוח את הקישור. אפשר להדביק את המתכון כטקסט.' }); });
-      src = recipe.recipeText(html);
-    }
-    let img = null;
-    if (image) { img = advisorImage.parseImage(image); if (img.error) return res.status(400).json({ error: img.error }); }
-    if (!src.text && !img) return res.status(400).json({ error: 'צריך קישור, טקסט או תמונה של מתכון.' });
-    const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 2500, effort: 'low', content: advisorImage.chatContent(recipe.RECIPE_PROMPT + (src.title ? '\nשם הדף: ' + src.title : '') + '\n\n' + src.text, img) });
+async function askRecipe({ prompt, image, readUrl }) {
+  const tools = readUrl ? [webFetchTool(ANTHROPIC_MODEL, readUrl.hostname)] : undefined;
+  const messages = [{ role: 'user', content: advisorImage.chatContent(prompt, image) }];
+  for (let turn = 0; turn < 3; turn++) {
+    const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 4000, effort: 'low', messages, tools });
     const r = await fetch(cr.url, cr.init);
     if (!r.ok) throw new Error('Claude ' + r.status);
     const j = await r.json();
     recordAi('claude', ANTHROPIC_MODEL, (j.usage && j.usage.input_tokens) || 0, (j.usage && j.usage.output_tokens) || 0);
-    const out = ((j.content || []).find((c) => c.type === 'text') || {}).text || '';
-    const from = out.indexOf('{');
-    const to = out.lastIndexOf('}');
-    if (from < 0 || to <= from) return res.status(502).json({ error: 'לא הצלחנו לקרוא את המתכון.' });
-    const parsed = JSON.parse(out.slice(from, to + 1));
-    if (!parsed || !Array.isArray(parsed.items) || !parsed.items.length) return res.status(422).json({ error: 'לא מצאנו כאן מתכון עם מצרכים.' });
-    return res.json({ recipe: { title: String(parsed.title || src.title || 'מתכון').slice(0, 60), servings: Number(parsed.servings) || 4, items: parsed.items.slice(0, 40) } });
+    const content = j.content || [];
+    // A long fetch on Claude's side can pause the turn: send it back to go on.
+    if (j.stop_reason === 'pause_turn') { messages.push({ role: 'assistant', content }); continue; }
+    return recipe.answerText(content);
+  }
+  return '';
+}
+app.post('/api/ai/recipe', requireAuth, aiLimiter, advisorImageLimiter, aiQuota, async (req, res) => {
+  try {
+    if (!ANTHROPIC_KEY) return res.status(503).json({ error: 'קריאת מתכונים לא זמינה כרגע.' });
+    const { url, text, image } = req.body || {};
+    let img = null;
+    if (image) { img = advisorImage.parseImage(image); if (img.error) return res.status(400).json({ error: img.error }); }
+    const out = await recipe.readRecipe({ url, text, image: img }, { ask: askRecipe });
+    if (out.error) return res.status(out.status).json({ error: out.error });
+    // Only which way the link was read, never the link or the recipe.
+    if (url) console.log('recipe link read via', out.via);
+    return res.json({ recipe: out.recipe });
   } catch (err) {
     console.error('recipe failed:', err.message);
-    return res.status(502).json({ error: err.user || 'לא הצלחנו לקרוא את המתכון כרגע. נסו שוב.' });
+    return res.status(502).json({ error: 'לא הצלחנו לקרוא את המתכון כרגע. נסו שוב.' });
   }
 });
 

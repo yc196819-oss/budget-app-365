@@ -13,8 +13,9 @@ const API_URL = (process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com') 
 const EFFORTS = ['low', 'medium', 'high'];
 const supportsEffort = (model) => /claude-(sonnet-5|sonnet-4-6|opus-5|opus-4-[5-8]|haiku-5|fable|mythos)/.test(String(model || ''));
 
-function claudeRequest({ key, model, maxTokens, content, stream = false, effort }) {
-  const body = { model, max_tokens: maxTokens, messages: [{ role: 'user', content }] };
+function claudeRequest({ key, model, maxTokens, content, messages, tools, stream = false, effort }) {
+  const body = { model, max_tokens: maxTokens, messages: messages || [{ role: 'user', content }] };
+  if (Array.isArray(tools) && tools.length) body.tools = tools;
   if (stream) body.stream = true;
   if (EFFORTS.includes(effort) && supportsEffort(model)) body.output_config = { effort };
   return {
@@ -27,10 +28,18 @@ function claudeRequest({ key, model, maxTokens, content, stream = false, effort 
   };
 }
 
+// Claude's own web fetch (run on Anthropic's side), limited to one site and a
+// few reads. Newer models take the current version; an older model id from
+// the environment gets the basic one.
+const newWebTools = (model) => /claude-(sonnet-5|sonnet-4-6|opus-5|opus-4-[6-8]|fable|mythos)/.test(String(model || ''));
+function webFetchTool(model, host, maxUses = 2) {
+  return { type: newWebTools(model) ? 'web_fetch_20260209' : 'web_fetch_20250910', name: 'web_fetch', max_uses: maxUses, allowed_domains: [String(host)], max_content_tokens: 30000 };
+}
+
 // A 4xx other than 408/429 means the request itself is wrong (bad model,
 // bad key, bad parameter): retrying the same request only adds waiting.
 function isRetryable(status) {
   return !status || status >= 500 || status === 408 || status === 429;
 }
 
-module.exports = { claudeRequest, isRetryable, supportsEffort };
+module.exports = { claudeRequest, isRetryable, supportsEffort, webFetchTool };
