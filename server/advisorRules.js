@@ -31,4 +31,23 @@ function historyText(history, { keep = 12, fullAnswers = 4, userMax = 2000, answ
   }).join('\n');
 }
 
-module.exports = { OWN_NUMBERS_RULE, BALANCE_RULE, historyText };
+// The advisor's request as content blocks for the prompt cache: the rules
+// (the same for every household, no personal data) and this household's data
+// each end with a cache breakpoint, so a follow-up question within 5 minutes
+// reads both from the cache; the turn (who writes, the conversation, the
+// question) and a picture come after, and are never cached. A household's
+// data is its own cache entry: it is never served to anyone else.
+function cachedContent({ rules, data, turn }, image = null) {
+  const out = [
+    { type: 'text', text: rules, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: data, cache_control: { type: 'ephemeral' } }
+  ];
+  if (image) out.push({ type: 'image', source: { type: 'base64', media_type: image.media_type, data: image.data } });
+  out.push({ type: 'text', text: turn });
+  return out;
+}
+
+// All the input of a request: new tokens and those written to or read from the cache.
+const inputTokens = (u) => (Number(u && u.input_tokens) || 0) + (Number(u && u.cache_creation_input_tokens) || 0) + (Number(u && u.cache_read_input_tokens) || 0);
+
+module.exports = { OWN_NUMBERS_RULE, BALANCE_RULE, historyText, cachedContent, inputTokens };

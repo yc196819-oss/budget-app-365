@@ -1143,24 +1143,31 @@ function devicePart(device) {
   if (device === 'mobile') return '\nהמשתמש כותב מטלפון: המסכים בסרגל בתחתית, והפרופיל וההגדרות בכפתור העגול עם האותיות בפינה העליונה. כשאתה מסביר איך מגיעים למשהו, תאר את זה כך.\n';
   return '';
 }
-function buildChatPrompt(summary, history, message, authorName, fixContext, authorGender) {
-  // The last 12 messages: the person's own in full (the figures they gave),
-  // the advisor's 4 newest in full and older ones shortened (tokens).
+// The advisor's request in three parts, from the one that never changes to
+// the one that changes every time, so the first two are kept in the prompt
+// cache (cheaper and faster): (1) the rules, the same for every household,
+// with no personal data; (2) this household's data, its own cache entry;
+// (3) who is writing, the conversation and the question.
+function buildChatParts({ summary, history, message, authorName, fixContext, authorGender, device, image }) {
+  const rules = legal.withAdviceRule(chatRules());
+  const data = 'הנתונים של משק הבית (JSON):\n' + JSON.stringify(summary || {}).slice(0, 24000) + devicePart(device) + (summary && summary.shopping ? SHOP_LIST_RULE : '');
   const historyText = advisorRules.historyText(history);
+  const turn = `בשיחה יכולים להשתתף שני בני הזוג; ההודעה הנוכחית נכתבה על ידי ${authorName || 'אחד מבני הבית'}.${authorGender === 'f' ? ' פנה אליה בלשון נקבה.' : authorGender === 'm' ? ' פנה אליו בלשון זכר.' : ' אם צריך לפנות אליו או אליה, נסח בלי מגדר (למשל "כדאי", "אפשר").'}
+${fixContext || NO_FAKE_FIX}${image ? advisorImage.IMAGE_NOTE : ''}
+${historyText ? '\nהשיחה עד עכשיו:\n' + historyText + '\n' : ''}
+ההודעה הנוכחית (${authorName || 'משתמש'}): ${message}`;
+  return { rules, data, turn };
+}
+function chatRules() {
   return `אתה יועץ פיננסי חם, ענייני ומקצועי למשק בית בישראל. עונים בעברית פשוטה.
-בשיחה יכולים להשתתף שני בני הזוג; ההודעה הנוכחית נכתבה על ידי ${authorName || 'אחד מבני הבית'}.${authorGender === 'f' ? ' פנה אליה בלשון נקבה.' : authorGender === 'm' ? ' פנה אליו בלשון זכר.' : ' אם צריך לפנות אליו או אליה, נסח בלי מגדר (למשל "כדאי", "אפשר").'}
 הנתונים (JSON) כוללים categorySpendingHistory ברמת משק הבית, personalCategoryBreakdown של המשתמש, תקציבים, יעדים ומשימות. ענה על סמך המספרים בפועל, בלי markdown ובלי כותרות.
 ${ADVISOR_STYLE}${appGuidePart()}
-${fixContext ? '' : NO_FAKE_FIX}
 בהחלטות גדולות (משכנתא, השקעות) תן מידע, חישובים ושאלות לבדיקה, וציין שכדאי להתייעץ עם יועץ מורשה; אל תמליץ על נייר ערך או מוצר ספציפי.
 אם בנתונים יש memories (החלטות והעדפות שבני הזוג קבעו בעבר): התחשב בהן כעובדה, אל תציע משהו שסותר אותן אלא אם שואלים, ואם משהו השתנה — שאל.
 בנתונים יש גם את פירוט ההוצאה: topMerchants (בתי העסק שהכי הרבה כסף הלך אליהם ב-3 החודשים האחרונים), recurring (חיובים שחוזרים כל חודש בסכום דומה: מנויים וחשבונות קבועים), recentTransactions (התנועות האחרונות), וגם accounts, cards, loans, installments. כשהשאלה נוגעת להם, ענה לפי השורות האמיתיות ושמות בתי העסק (למשל איזה מנוי לבטל, לאן הלך הכסף באוכל), ולא בהכללות.
 אם בנתונים יש sharedDecisions (קניות שבני הזוג מחליטים עליהן יחד, עם הסטטוס): כשזה רלוונטי, עזור להחליט לפי המספרים, הצג את השיקולים של שני הצדדים ואל תיקח צד.
 אם בנתונים יש feelings (איך בני הזוג מרגישים השבוע עם הכסף): כשמישהו "stressed" — טון רגוע, צעד אחד קטן בכל פעם, הזכר מה כבר הולך טוב; כשכולם "calm" — אפשר להציע יעד גדול יותר. אל תכתוב "ראיתי שאתה לחוץ" אלא אם שאלו.
-בסוף התשובה, בשורה נפרדת, כתוב בדיוק: ${SUGG_MARK} ואחריו 2-3 שאלות המשך קצרות (עד 5 מילים כל אחת) מופרדות ב-|.
-${fixContext || ''}
-${historyText ? '\nהשיחה עד עכשיו:\n' + historyText + '\n' : ''}
-ההודעה הנוכחית (${authorName || 'משתמש'}): ${message}`;
+בסוף התשובה, בשורה נפרדת, כתוב בדיוק: ${SUGG_MARK} ואחריו 2-3 שאלות המשך קצרות (עד 5 מילים כל אחת) מופרדות ב-|.`;
 }
 
 app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimiter, aiQuota, async (req, res) => {
@@ -1180,12 +1187,13 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimit
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders && res.flushHeaders();
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const prompt = legal.withAdviceRule(buildChatPrompt(summary, history, message, String(authorName || '').slice(0, 40), buildFixContext(candidates, categories), authorGender) + devicePart(device) + (image ? advisorImage.IMAGE_NOTE : '') + (summary && summary.shopping ? SHOP_LIST_RULE : ''));
-  // The household's numbers and lines (about 6-8k tokens at most).
-  const text = JSON.stringify(summary || {}).slice(0, 24000);
+  // The household's numbers and lines (about 6-8k tokens at most) are part 2.
+  const parts = buildChatParts({ summary, history, message, authorName: String(authorName || '').slice(0, 40), fixContext: buildFixContext(candidates, categories), authorGender, device, image });
+  const prompt = parts.rules + '\n\n' + parts.turn;
+  const text = parts.data;
   try {
     if (ANTHROPIC_KEY) {
-      const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 3000, stream: true, content: advisorImage.chatContent(`${prompt}\n\n${text}`, image), effort: 'medium' });
+      const cr = claudeRequest({ key: ANTHROPIC_KEY, model: ANTHROPIC_MODEL, maxTokens: 3000, stream: true, content: advisorRules.cachedContent(parts, image), effort: 'medium' });
       const r = await fetch(cr.url, cr.init);
       if (!r.ok) console.error('Claude stream failed:', r.status, (await r.text().catch(() => '')).slice(0, 300));
       if (r.ok && r.body) {
@@ -1202,7 +1210,8 @@ app.post('/api/ai/advice-chat-stream', requireAuth, aiLimiter, advisorImageLimit
             try {
               const d = JSON.parse(line.slice(6));
               if (d.type === 'content_block_delta' && d.delta && d.delta.type === 'text_delta') send({ delta: d.delta.text });
-              else if (d.type === 'message_start' && d.message && d.message.usage) tokensIn = d.message.usage.input_tokens || 0;
+              // All the input: new tokens, and those written to or read from the cache.
+              else if (d.type === 'message_start' && d.message && d.message.usage) tokensIn = advisorRules.inputTokens(d.message.usage);
               else if (d.type === 'message_delta' && d.usage) tokensOut = d.usage.output_tokens || 0;
             } catch (_e) { /* ignore keep-alives */ }
           }
