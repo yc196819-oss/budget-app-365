@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-const { place, placeByName, suggest, storePlace, km, nearestStores } = createRequire(import.meta.url)('../server/area.js');
+const { place, placeByName, suggest, storePlace, km, reachKm, nearestStores } = createRequire(import.meta.url)('../server/area.js');
 
 // Made-up branches, at real settlement numbers.
 const S = (chain, store_id, name, address, city) => ({ chain, chain_name: chain, store_id, name, address, city });
@@ -31,7 +31,7 @@ test('for each chain, the branch for this home: in the neighborhood, in the sett
     S('z', '3', 'ירושלים', 'יפו 1', '3000'),
     S('far', '9', 'אילת', 'התמרים 1', '2600')
   ];
-  const r = nearestStores(stores, { code: '2610', hood: 'רמת בית שמש' });
+  const r = nearestStores(stores, { code: '2610', hood: 'רמת בית שמש' }, { maxKm: 25 });
   const by = Object.fromEntries(r.map((x) => [x.chain, x]));
   assert.equal(by.x.store_id, '2', 'the branch in the neighborhood');
   assert.equal(by.x.kind, 'hood');
@@ -42,4 +42,16 @@ test('for each chain, the branch for this home: in the neighborhood, in the sett
   assert.equal(by.far, undefined, 'too far: left out');
   assert.equal(nearestStores(stores, { code: '2610' }).find((x) => x.chain === 'x').store_id, '1', 'no neighborhood: the first in the settlement');
   assert.deepEqual(nearestStores(stores, { code: '999999' }), []);
+  assert.equal(nearestStores(stores, { code: '2610' }).find((x) => x.chain === 'z'), undefined, '5 km unless said: Jerusalem is out');
+  assert.deepEqual(nearestStores(stores, { code: '2610' }, { maxKm: 0 }).map((x) => x.kind), ['city', 'city'], '0 km: the settlement only');
+});
+
+test('how far the family goes: 0 to 10 km, 5 unless said, older saves of up to 50 km as 10', () => {
+  assert.equal(reachKm(undefined), 5);
+  assert.equal(reachKm(null), 5);
+  assert.equal(reachKm(0), 0);
+  assert.equal(reachKm('7'), 7);
+  assert.equal(reachKm(25), 10);
+  assert.equal(reachKm(-3), 0);
+  assert.equal(reachKm('abc'), 5);
 });

@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi, areaReach, storeWhy, reachKm } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { logoSrc, logoDark, orderLink, searchLink, pasteLink, pasteText } from '../../domain/chainShops.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
@@ -106,6 +106,13 @@ function Product({ p, children }) {
   </div>`;
 }
 
+// The branch compared at each chain, and why it was chosen.
+function AreaStores({ area }) {
+  return html`<details class="pp-stores"><summary>באילו סניפים משווים</summary>
+    <ul>${area.stores.map((s) => html`<li key=${s.chain}><b>${s.chain_name || s.chain}</b><span>${s.name}</span><small class="muted">${storeWhy(s)}</small></li>`)}</ul>
+    <small class="faint">המרחק נמדד ממרכז היישוב שלכם למרכז היישוב של הסניף. סניף ביישוב שלכם תמיד נכלל.</small></details>`;
+}
+
 // Where the family lives: a settlement (chosen from the list as they type)
 // and a neighborhood if they want. No chain, no branch: we find the branch
 // near them at every chain.
@@ -113,7 +120,7 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel, step }) {
   const [q, setQ] = useState(initial ? initial.city : '');
   const [place, setPlace] = useState(initial ? { code: initial.city_code, name: initial.city } : null);
   const [hood, setHood] = useState((initial && initial.hood) || '');
-  const [maxKm, setMaxKm] = useState((initial && initial.max_km) || 25);
+  const [maxKm, setMaxKm] = useState(reachKm(initial && initial.max_km));
   const [list, setList] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -135,9 +142,10 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel, step }) {
     <label class="price-area-field"><span>יישוב</span><input class="input" value=${q} placeholder="למשל: בית שמש" autocomplete="off" aria-label="יישוב" onInput=${(e) => { setQ(e.currentTarget.value); setPlace(null); }} /></label>
     ${list.length > 0 && html`<ul class="price-area-list" role="listbox" aria-label="יישובים">${list.map((p) => html`<li key=${p.code}><button type="button" role="option" onClick=${() => { setPlace(p); setQ(p.name); setList([]); }}>${p.name}</button></li>`)}</ul>`}
     ${place && html`<label class="price-area-field"><span>שכונה <small class="muted">(לא חובה, עוזר לדייק)</small></span><input class="input" value=${hood} maxLength="60" placeholder="למשל: רמת בית שמש א׳" aria-label="שכונה" onInput=${(e) => setHood(e.currentTarget.value)} /></label>`}
-    ${place && html`<label class="price-area-field"><span>עד כמה רחוק אתם מוכנים לנסוע לקנות? <b class="num">${maxKm} ק"מ</b></span>
-      <input type="range" class="price-km" min="5" max="50" step="5" value=${maxKm} aria-label="מרחק מהבית בקילומטרים" aria-valuetext=${maxKm + ' קילומטר'} onInput=${(e) => setMaxKm(Number(e.currentTarget.value))} />
-      <span class="price-km-scale" aria-hidden="true"><small>5</small><small>25</small><small>50 ק"מ</small></span></label>`}
+    ${place && html`<label class="price-area-field"><span>עד כמה רחוק אתם מוכנים לנסוע לקנות? <b class="num">${maxKm ? maxKm + ' ק"מ' : 'רק ביישוב'}</b></span>
+      <input type="range" class="price-km" min="0" max="10" step="1" value=${maxKm} aria-label="מרחק מהבית בקילומטרים" aria-valuetext=${maxKm ? maxKm + ' קילומטר' : 'רק ביישוב'} onInput=${(e) => setMaxKm(Number(e.currentTarget.value))} />
+      <span class="price-km-scale" aria-hidden="true"><small>0</small><small>5</small><small>10 ק"מ</small></span></label>`}
+    ${place && html`<small class="muted price-km-note">נמדד ממרכז ${place.name}. סניף בתוך ${place.name} תמיד נכלל.</small>`}
     ${err && html`<span role="alert" class="price-warn">${err}</span>`}
     <div class="price-cert-actions"><button type="button" class="btn btn-primary" style="width:auto" disabled=${!place || busy} onClick=${save}>${busy ? 'מחפשים סניפים…' : 'למצוא סניפים קרובים'}</button>
       ${onSkip && html`<button type="button" class="btn-text" onClick=${onSkip}>לא עכשיו</button>`}
@@ -283,7 +291,8 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
   const areaDone = (a) => { setAreaState(a); setEditArea(false); track('price_area'); showToast(a.stores.length ? 'מצאנו סניף קרוב ב-' + a.stores.length + ' רשתות' : 'לא מצאנו סניפים קרובים. נשווה במחירים הכלליים.'); };
   const areaRow = guest ? html`<div class="price-pref price-area"><span class="muted">מחירים כלליים של הרשתות (לא לפי אזור).</span></div>`
     : editArea ? html`<${AreaPicker} hid=${hid} initial=${area} onDone=${areaDone} onCancel=${() => setEditArea(false)} />`
-    : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לשנות</button><small class="muted pp-area-note">${!area.stores.length ? 'אין סניף של אף רשת עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length === 1 ? 'סניף אחד עד ' + (area.max_km || 25) + ' ק"מ' : area.stores.length + ' סניפים עד ' + (area.max_km || 25) + ' ק"מ'}</small></div>`
+    : area ? html`<div class="price-pref price-area"><span class="muted pp-pin"><${Icon} name="pin" size=${15} /></span><b>${[area.hood, area.city].filter(Boolean).join(', ')}</b><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לשנות</button><small class="muted pp-area-note">${areaReach(area)}</small>
+      ${area.stores.length > 0 && html`<${AreaStores} area=${area} />`}</div>`
       : html`<div class="price-pref price-area"><span class="muted">מחירים כלליים, לא לפי האזור שלכם.</span><button type="button" class="btn-text pp-area-edit" onClick=${() => setEditArea(true)}>לבחור אזור</button></div>`;
 
   if (pref === undefined || area === undefined) return html`<section class="card stack price-panel">${head}<span class="muted">רגע…</span></section>`;
@@ -337,7 +346,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
       ${chainNote(shown.chain) && !isOnlineChain(shown.chain) && html`<span class="pp-weekly"><${Icon} name=${chainNote(shown.chain).icon || 'calendar'} size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
       ${shown === best && bestAlways(chains) && html`<button type="button" class="pp-always" onClick=${() => setChainSel(bestAlways(chains).chain)}>${chainNote(best.chain).alt || 'בחנות שפתוחה כל יום'}: הכי משתלם ב${bestAlways(chains).name}, <b class="num">${fmt(bestAlways(chains).total)}</b></button>`}
       ${shown.missing > 0 && html`<span class="pp-missing">בלי ${shown.missing === 1 ? 'מוצר אחד שאין' : shown.missing + ' מוצרים שאין'} ב${shown.name}: ${shown.lines.filter((l) => !l.product).map((l) => (open.find((i) => i.id === l.id) || {}).name).filter(Boolean).slice(0, 4).join(', ')}${shown.missing > 4 ? ' ועוד' : ''}</span>`}
-      ${area && !area.stores.length && html`<span class="pp-missing">אין חנות של אף רשת עד ${area.max_km || 25} ק"מ מ${area.city}, ולכן מוצגות רק רשתות אונליין (במשלוח). <button type="button" class="btn-text pp-inline" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></span>`}
+      ${area && !area.stores.length && html`<span class="pp-missing">אין חנות של אף רשת ${reachKm(area.max_km) ? 'עד ' + reachKm(area.max_km) + ' ק"מ מ' : 'ב'}${area.city}, ולכן מוצגות רק רשתות אונליין (במשלוח). <button type="button" class="btn-text pp-inline" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></span>`}
       ${shown.saved > 0 && html`<span class="pp-deals"><${Icon} name="tag" size=${15} />כולל <b class="num">${fmt(shown.saved)}</b> הנחה במבצעים שכל אחד מקבל</span>`}
       ${shown === best && (() => { const t = twoChains(chains); if (!t) return ''; const names = (ids) => ids.map((id) => (open.find((i) => i.id === id) || {}).name).filter(Boolean);
         return html`<details class="pp-two"><summary>בשתי רשתות: <b class="num">${fmt(t.total)}</b>, עוד <b class="num">${fmt(t.saved)}</b> פחות</summary>
@@ -351,7 +360,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
         <span class="pp-bar-v num">${fmt(c.total)}</span>
         ${(c.missing > 0 || c.swaps > 0 || c.delivery) && html`<small class="pp-bar-x">${[c.delivery ? 'כולל משלוח ' + (c.delivery.sure ? '' : 'בערך ') + fmt(c.delivery.fee) : '', c.delivery && c.delivery.under ? 'מתחת למינימום ' + fmt(c.delivery.min) : '', c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
       </button>`)}</div>
-    </div>` : area && !area.stores.length ? html`<div class="pp-empty"><b>אין סניף של אף רשת עד ${area.max_km || 25} ק"מ מ${area.city}</b><span class="muted">רשת רחוקה לא נכנסת להשוואה, כי לא באמת קונים בה. אפשר להגדיל את המרחק.</span><button type="button" class="btn btn-ghost" style="justify-self:start" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></div>`
+    </div>` : area && !area.stores.length ? html`<div class="pp-empty"><b>אין סניף של אף רשת ${reachKm(area.max_km) ? 'עד ' + reachKm(area.max_km) + ' ק"מ מ' : 'ב'}${area.city}</b><span class="muted">רשת רחוקה לא נכנסת להשוואה, כי לא באמת קונים בה. אפשר להגדיל את המרחק.</span><button type="button" class="btn btn-ghost" style="justify-self:start" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></div>`
       : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
     <details class="pp-set" open=${setOpen || editPref || editArea || editClubs} onToggle=${(e) => setSetOpen(e.currentTarget.open)}>
       <summary class="pp-set-sum"><${Icon} name="sliders" size=${15} /><span><b>הגדרות ההשוואה</b><small class="muted">${[Array.isArray(pref) ? (pref.length > 1 ? pref[0] + ' ועוד ' + (pref.length - 1) : pref[0]) : 'בלי העדפת כשרות', area ? area.city : 'מחירים כלליים', clubs.size ? (clubs.size === 1 ? 'מועדון אחד' : clubs.size + ' מועדונים') : '', strict ? 'רק כשרות שאומתה' : ''].filter(Boolean).join(' · ')}</small></span></summary>

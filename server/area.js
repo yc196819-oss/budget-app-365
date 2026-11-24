@@ -78,7 +78,15 @@ function km(a, b) {
 // nearest within `maxKm`. Chains with nothing near are left out.
 //   stores: [{ chain, chain_name, store_id, name, address, city }]
 //   home: { code, hood }
-function nearestStores(stores, home, { maxKm = 25 } = {}) {
+// How far the family goes to shop: 0 to 10 km in whole km, 5 when not said.
+// 0 is their settlement only. (Older saves of up to 50 km count as 10.)
+function reachKm(v) {
+  const n = Number(v);
+  if (v == null || v === '' || !Number.isFinite(n)) return 5;
+  return Math.min(10, Math.max(0, Math.round(n)));
+}
+
+function nearestStores(stores, home, { maxKm = 5 } = {}) {
   const at = place(home.code);
   if (!at) return [];
   const hoodWords = norm(home.hood).split(' ').filter((w) => w.length >= 2);
@@ -124,4 +132,4 @@ function uniqueStores(list) {
   return [...best.values()];
 }
 
-module.exports = { place, placeByName, suggest, storePlace, km, nearestStores, uniqueStores };
+module.exports = { place, placeByName, suggest, storePlace, km, reachKm, nearestStores, uniqueStores };
