@@ -329,8 +329,9 @@ test('prices: the family says only where it lives; the nearest branch at every c
   await pick.locator('input[aria-label="יישוב"]').fill('בית ש');
   await pick.locator('.price-area-list button:has-text("בית שמש")').click();
   await pick.locator('input[aria-label="שכונה"]').fill('רמת בית שמש א');
-  // How far they go: 25 km unless they say, in steps of 5.
-  assert.match(await pick.textContent(), /25 ק"מ/);
+  // How far they go: 5 km unless they say, from 0 (their settlement only) to 10.
+  assert.equal((await pick.locator('.price-area-field b.num').textContent()).trim(), '5 ק"מ');
+  assert.equal(await pick.locator('input.price-km').getAttribute('max'), '10');
   await pick.locator('input.price-km').fill('10');
   assert.match(await pick.textContent(), /10 ק"מ/);
   assert.match(await pick.locator('.price-km-note').textContent(), /נמדד ממרכז בית שמש/);

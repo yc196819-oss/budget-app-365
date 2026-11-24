@@ -444,8 +444,16 @@ export function withoutChains(catalog, hidden) {
 
 // Where the search starts and how far it goes, said plainly: the center of
 // the settlement (we know no street), and the distance the family chose.
+// How far the family goes: 0 to 10 km, 5 when not said (older saves of up
+// to 50 km count as 10, as on the server).
+export function reachKm(v) {
+  const n = Number(v);
+  if (v == null || v === '' || !Number.isFinite(n)) return 5;
+  return Math.min(10, Math.max(0, Math.round(n)));
+}
 export function areaReach(area) {
-  const reach = 'מחפשים ממרכז ' + area.city + ', עד ' + (area.max_km || 25) + ' ק"מ';
+  const k = reachKm(area.max_km);
+  const reach = k ? 'מחפשים ממרכז ' + area.city + ', עד ' + k + ' ק"מ' : 'מחפשים רק בתוך ' + area.city;
   const n = area.stores.length;
   return reach + ' · ' + (!n ? 'אין סניף של אף רשת' : n === 1 ? 'סניף אחד' : n + ' סניפים');
 }

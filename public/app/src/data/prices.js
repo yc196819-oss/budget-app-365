@@ -144,7 +144,7 @@ export async function getArea(hid) {
   ]);
   return a ? { ...a, stores: s || [] } : null;
 }
-export const setArea = (hid, city_code, hood, max_km = 25) => api('/api/prices/area', { method: 'POST', body: { hid, city_code, hood, max_km } });
+export const setArea = (hid, city_code, hood, max_km = 5) => api('/api/prices/area', { method: 'POST', body: { hid, city_code, hood, max_km } });
 export const findPlaces = (q) => api('/api/prices/places?q=' + encodeURIComponent(q));
 // The product picked for a line on the list.
 export async function pickProduct(itemId, barcode) {
