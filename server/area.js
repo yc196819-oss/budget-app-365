@@ -73,11 +73,6 @@ function km(a, b) {
   return 6371 * 2 * Math.asin(Math.sqrt(h));
 }
 
-// For each chain, its branch for this home: in the same settlement (one
-// whose name or address holds the neighborhood first), otherwise the
-// nearest within `maxKm`. Chains with nothing near are left out.
-//   stores: [{ chain, chain_name, store_id, name, address, city }]
-//   home: { code, hood }
 // How far the family goes to shop: 0 to 10 km in whole km, 5 when not said.
 // 0 is their settlement only. (Older saves of up to 50 km count as 10.)
 function reachKm(v) {
@@ -86,10 +81,27 @@ function reachKm(v) {
   return Math.min(10, Math.max(0, Math.round(n)));
 }
 
+const hasPoint = (x) => x && x.lat != null && x.lon != null && Number.isFinite(Number(x.lat)) && Number.isFinite(Number(x.lon));
+const pointOf = (x) => ({ lat: Number(x.lat), lon: Number(x.lon) });
+
+// For each chain, its branch for this home. A branch in the family's
+// settlement is always taken; one in another settlement only within `maxKm`.
+//  - With the family's location (rounded, from the phone): the nearest such
+//    branch, by the real distance to it (its own point on the map when we
+//    have one, otherwise its settlement's center).
+//  - Without it: in the settlement, the branch whose name or address holds
+//    the neighborhood, else the lowest-numbered; otherwise the nearest
+//    settlement, from the center of theirs.
+// Chains with nothing near are left out.
+//   stores: [{ chain, chain_name, store_id, name, address, city, lat?, lon? }]
+//   home: { code, hood, lat?, lon? }
 function nearestStores(stores, home, { maxKm = 5 } = {}) {
   const at = place(home.code);
   if (!at) return [];
+  const exact = hasPoint(home);
+  const from = exact ? pointOf(home) : at;
   const hoodWords = norm(home.hood).split(' ').filter((w) => w.length >= 2);
+  const inHood = (s) => hoodWords.length > 0 && (() => { const t = norm(s.name + ' ' + s.address); return hoodWords.every((w) => t.includes(w)); })();
   const byChain = new Map();
   for (const s of stores) {
     // An online warehouse is not a shop near the family (it is compared as
@@ -97,23 +109,30 @@ function nearestStores(stores, home, { maxKm = 5 } = {}) {
     if (isOnline(s.name)) continue;
     const p = storePlace(s);
     if (!p) continue;
+    const spot = hasPoint(s) ? pointOf(s) : p;
+    const same = p.code === at.code;
+    const d = exact ? km(from, spot) : same ? 0 : km(at, spot);
     const list = byChain.get(s.chain) || [];
-    list.push({ ...s, place: p, km: p.code === at.code ? 0 : km(at, p) });
+    list.push({ ...s, place: p, spot, same, km: d });
     byChain.set(s.chain, list);
   }
   const out = [];
   for (const [chain, list] of byChain) {
-    const here = list.filter((s) => s.place.code === at.code);
-    let pick = null, kind = '';
-    if (here.length) {
-      const inHood = hoodWords.length ? here.find((s) => { const t = norm(s.name + ' ' + s.address); return hoodWords.every((w) => t.includes(w)); }) : null;
-      pick = inHood || here.slice().sort((a, b) => Number(a.store_id) - Number(b.store_id))[0];
-      kind = inHood ? 'hood' : 'city';
+    const here = list.filter((s) => s.same);
+    let pick = null;
+    if (exact) {
+      pick = list.filter((s) => s.same || s.km <= maxKm).sort((a, b) => a.km - b.km)[0] || null;
+    } else if (here.length) {
+      pick = here.find(inHood) || here.slice().sort((a, b) => Number(a.store_id) - Number(b.store_id))[0];
     } else {
       const near = list.slice().sort((a, b) => a.km - b.km)[0];
-      if (near && near.km <= maxKm) { pick = near; kind = 'near'; }
+      if (near && near.km <= maxKm) pick = near;
     }
-    if (pick) out.push({ chain, chain_name: pick.chain_name || chain, store_id: pick.store_id, name: pick.name, address: pick.address, city: pick.place.name, km: Math.round(pick.km * 10) / 10, kind });
+    if (!pick) continue;
+    const kind = pick.same ? (inHood(pick) ? 'hood' : 'city') : 'near';
+    const row = { chain, chain_name: pick.chain_name || chain, store_id: pick.store_id, name: pick.name, address: pick.address, city: pick.place.name, km: Math.round(pick.km * 10) / 10, kind };
+    if (hasPoint(pick)) Object.assign(row, pointOf(pick));
+    out.push(row);
   }
   return out.sort((a, b) => a.km - b.km || String(a.chain_name).localeCompare(String(b.chain_name), 'he'));
 }
@@ -123,7 +142,8 @@ function nearestStores(stores, home, { maxKm = 5 } = {}) {
 // picker, so the family sees what a few more km bring.
 function reachCounts(stores, home) {
   const near = nearestStores(stores, home, { maxKm: 10 });
-  return Array.from({ length: 11 }, (_, k) => near.filter((s) => s.km <= k).length);
+  // In the settlement it counts at every distance (it is always taken).
+  return Array.from({ length: 11 }, (_, k) => near.filter((s) => s.kind !== 'near' || s.km <= k).length);
 }
 
 // A chain's branch list with each branch number once: when a number is
@@ -140,4 +160,4 @@ function uniqueStores(list) {
   return [...best.values()];
 }
 
-module.exports = { place, placeByName, suggest, storePlace, km, reachKm, nearestStores, reachCounts, uniqueStores };
+module.exports = { hasPoint, place, placeByName, suggest, storePlace, km, reachKm, nearestStores, reachCounts, uniqueStores };

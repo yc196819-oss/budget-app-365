@@ -451,9 +451,18 @@ export function reachKm(v) {
   if (v == null || v === '' || !Number.isFinite(n)) return 5;
   return Math.min(10, Math.max(0, Math.round(n)));
 }
+// The family's location, rounded to 0.005 degrees (about 500 m), on the
+// phone, before it is sent anywhere. Outside Israel: none.
+export function roundHome(lat, lon) {
+  const r = (x) => Math.round(Number(x) * 200) / 200;
+  const a = r(lat), b = r(lon);
+  return Number.isFinite(a) && Number.isFinite(b) && a >= 29 && a <= 34 && b >= 34 && b <= 36 ? { lat: a, lon: b } : null;
+}
+const hasPoint = (x) => !!x && x.lat != null && x.lon != null;
 export function areaReach(area) {
   const k = reachKm(area.max_km);
-  const reach = k ? 'מחפשים ממרכז ' + area.city + ', עד ' + k + ' ק"מ' : 'מחפשים רק בתוך ' + area.city;
+  const from = hasPoint(area) ? 'מהמיקום שלכם' : 'ממרכז ' + area.city;
+  const reach = k ? 'מחפשים ' + from + ', עד ' + k + ' ק"מ' : 'מחפשים רק בתוך ' + area.city;
   const n = area.stores.length;
   return reach + ' · ' + (!n ? 'אין סניף של אף רשת' : n === 1 ? 'סניף אחד' : n + ' סניפים');
 }
@@ -463,6 +472,7 @@ export function areaReach(area) {
 // itself): by its street address and settlement, or its name when the chain
 // gave no address.
 export function wazeLink(s) {
+  if (hasPoint(s)) return 'https://waze.com/ul?ll=' + Number(s.lat) + ',' + Number(s.lon) + '&navigate=yes';
   const street = s.address && !/^(unknown|לא ידוע|0)?$/i.test(String(s.address).trim()) ? s.address : s.name;
   return 'https://waze.com/ul?q=' + encodeURIComponent([street, s.city].filter(Boolean).join(', ')) + '&navigate=yes';
 }
@@ -475,9 +485,11 @@ export function reachText(counts, k) {
   return at + (counts[10] > counts[k] ? ' (עד 10 ק"מ: ' + n(counts[10]) + ')' : '') + '.';
 }
 export function storeWhy(s) {
-  if (s.kind === 'hood') return 'בשכונה שלכם';
-  if (s.kind === 'city') return 'ביישוב שלכם';
-  return s.city + ', ' + String(s.km).replace(/\.0$/, '') + ' ק"מ';
+  const dist = String(s.km).replace(/\.0$/, '') + ' ק"מ';
+  // From the family's location, a branch in their settlement has a distance too.
+  if (s.kind === 'hood') return 'בשכונה שלכם' + (Number(s.km) > 0 ? ', ' + dist : '');
+  if (s.kind === 'city') return 'ביישוב שלכם' + (Number(s.km) > 0 ? ', ' + dist : '');
+  return s.city + ', ' + dist;
 }
 // With the family's area set: only the chains with a branch near it, at
 // that branch's price (the server already put it in). A product no branch
