@@ -1,12 +1,12 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi, areaReach, storeWhy, reachKm } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi, areaReach, storeWhy, reachKm, wazeLink, reachText } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { logoSrc, logoDark, orderLink, searchLink, pasteLink, pasteText } from '../../domain/chainShops.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
-import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces, getClubs, setClubs, getChainsShown, setChainsShown } from '../../data/prices.js';
+import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces, findReach, getClubs, setClubs, getChainsShown, setChainsShown } from '../../data/prices.js';
 import { aisleOf } from '../../domain/shopping.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
@@ -109,7 +109,7 @@ function Product({ p, children }) {
 // The branch compared at each chain, and why it was chosen.
 function AreaStores({ area }) {
   return html`<details class="pp-stores"><summary>באילו סניפים משווים</summary>
-    <ul>${area.stores.map((s) => html`<li key=${s.chain}><b>${s.chain_name || s.chain}</b><span>${s.name}</span><small class="muted">${storeWhy(s)}</small></li>`)}</ul>
+    <ul>${area.stores.map((s) => html`<li key=${s.chain}><b>${s.chain_name || s.chain}</b><span>${s.name}</span><small class="muted">${storeWhy(s)}</small><a class="pp-waze" href=${wazeLink(s)} target="_blank" rel="noopener" aria-label=${'לנווט ב-Waze אל ' + (s.chain_name || s.chain) + ', ' + s.name}>Waze</a></li>`)}</ul>
     <small class="faint">המרחק נמדד ממרכז היישוב שלכם למרכז היישוב של הסניף. סניף ביישוב שלכם תמיד נכלל.</small></details>`;
 }
 
@@ -124,6 +124,14 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel, step }) {
   const [list, setList] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [counts, setCounts] = useState(null);
+  useEffect(() => {
+    setCounts(null);
+    if (!place) return undefined;
+    let live = true;
+    findReach(place.code).then((r) => { if (live) setCounts(r.counts || null); }).catch(() => {});
+    return () => { live = false; };
+  }, [place && place.code]);
   useEffect(() => {
     if (place && place.name === q) { setList([]); return undefined; }
     if (q.trim().length < 2) { setList([]); return undefined; }
@@ -145,7 +153,7 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel, step }) {
     ${place && html`<label class="price-area-field"><span>עד כמה רחוק אתם מוכנים לנסוע לקנות? <b class="num">${maxKm ? maxKm + ' ק"מ' : 'רק ביישוב'}</b></span>
       <input type="range" class="price-km" min="0" max="10" step="1" value=${maxKm} aria-label="מרחק מהבית בקילומטרים" aria-valuetext=${maxKm ? maxKm + ' קילומטר' : 'רק ביישוב'} onInput=${(e) => setMaxKm(Number(e.currentTarget.value))} />
       <span class="price-km-scale" aria-hidden="true"><small>0</small><small>5</small><small>10 ק"מ</small></span></label>`}
-    ${place && html`<small class="muted price-km-note">נמדד ממרכז ${place.name}. סניף בתוך ${place.name} תמיד נכלל.</small>`}
+    ${place && html`<small class="muted price-km-note">${counts && html`<b class="pp-reach">${reachText(counts, maxKm)}</b> `}נמדד ממרכז ${place.name}. סניף בתוך ${place.name} תמיד נכלל.</small>`}
     ${err && html`<span role="alert" class="price-warn">${err}</span>`}
     <div class="price-cert-actions"><button type="button" class="btn btn-primary" style="width:auto" disabled=${!place || busy} onClick=${save}>${busy ? 'מחפשים סניפים…' : 'למצוא סניפים קרובים'}</button>
       ${onSkip && html`<button type="button" class="btn-text" onClick=${onSkip}>לא עכשיו</button>`}

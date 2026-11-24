@@ -145,6 +145,8 @@ export async function getArea(hid) {
   return a ? { ...a, stores: s || [] } : null;
 }
 export const setArea = (hid, city_code, hood, max_km = 5) => api('/api/prices/area', { method: 'POST', body: { hid, city_code, hood, max_km } });
+// How many chains are near a settlement at each distance, 0 to 10 km.
+export const findReach = (code) => api('/api/prices/reach?city_code=' + encodeURIComponent(code));
 export const findPlaces = (q) => api('/api/prices/places?q=' + encodeURIComponent(q));
 // The product picked for a line on the list.
 export async function pickProduct(itemId, barcode) {
