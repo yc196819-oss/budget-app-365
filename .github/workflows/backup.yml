@@ -31,7 +31,9 @@ jobs:
       - if: steps.ready.outputs.ok == 'yes'
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # A fixed version: "latest" asks GitHub's API which one is newest,
+          # and that call was rate limited on some nights, so the backup failed.
+          version: 3.2.0
       - name: Dump and encrypt
         if: steps.ready.outputs.ok == 'yes'
         env:
