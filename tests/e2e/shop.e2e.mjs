@@ -333,10 +333,16 @@ test('prices: the family says only where it lives; the nearest branch at every c
   assert.match(await pick.textContent(), /25 ק"מ/);
   await pick.locator('input.price-km').fill('10');
   assert.match(await pick.textContent(), /10 ק"מ/);
+  assert.match(await pick.locator('.price-km-note').textContent(), /נמדד ממרכז בית שמש/);
   await pick.locator('button:has-text("למצוא סניפים קרובים")').click();
   await page.waitForSelector('.price-area:has-text("רמת בית שמש א, בית שמש")', { state: 'attached' });
-  assert.match(await page.locator('.pp-set summary').textContent(), /בית שמש/, 'the folded settings line names the place');
-  assert.match(await page.locator('.price-area').textContent(), /סניף אחד עד 10 ק"מ/);
+  assert.match(await page.locator('.pp-set > summary').textContent(), /בית שמש/, 'the folded settings line names the place');
+  // Where the search starts and how far it goes, said plainly; and the branch at each chain, with why.
+  assert.match(await page.locator('.price-area .pp-area-note').textContent(), /מחפשים ממרכז בית שמש, עד 10 ק"מ · סניף אחד/);
+  if (!(await page.locator('.pp-set[open]').count())) await page.locator('.pp-set > summary').click();
+  await page.locator('.pp-stores summary').click();
+  assert.match(await page.locator('.pp-stores li').first().textContent(), /רשת א.*סניף נחל דולב.*בשכונה שלכם/);
+  assert.match(await page.locator('.pp-stores').textContent(), /ממרכז היישוב שלכם למרכז היישוב של הסניף/);
   assert.deepEqual(asked, [{ hid: db.hid, city_code: '2610', hood: 'רמת בית שמש א', max_km: 10 }]);
   // Only the chain with a branch near them, at that branch's price, with its name.
   await page.waitForSelector('.pp-hero:has-text("₪6.00")');
@@ -871,7 +877,7 @@ test('deals: one anyone gets is in the total, a club deal is only shown, and the
   assert.match(await page.locator('.price-pref', { hasText: 'מועדונים' }).textContent(), /רשת א/);
   assert.equal(await page.locator('.pp-club-ask').count(), 0);
   // And from the list of chains: off again.
-  await page.locator('.pp-set summary').click();
+  await page.locator('.pp-set > summary').click();
   await page.locator('.price-pref', { hasText: 'מועדונים' }).locator('button', { hasText: 'לשנות' }).click();
   await page.locator('.pp-club-list li', { hasText: 'רשת א' }).locator('.chip', { hasText: 'מועדון' }).click();
   await page.locator('.pp-clubs .btn-primary').click();
@@ -897,8 +903,8 @@ test('a Haredi kashrut: a chain open on Shabbat is not in the comparison until t
   await hero.waitFor();
   assert.match(await hero.textContent(), /₪6\.20ברשת א/);
   assert.equal(await page.locator('.pp-bar', { hasText: 'טיב טעם' }).count(), 0);
-  assert.match(await page.locator('.pp-set summary').textContent(), /הגדרות ההשוואה.*הרב לנדא/, 'the settings folded into one line');
-  await page.locator('.pp-set summary').click();
+  assert.match(await page.locator('.pp-set > summary').textContent(), /הגדרות ההשוואה.*הרב לנדא/, 'the settings folded into one line');
+  await page.locator('.pp-set > summary').click();
   await page.locator('.pp-shabbat-row .chip', { hasText: 'טיב טעם' }).click();
   await page.waitForSelector('.pp-hero:has-text("₪5.10")');
   assert.deepEqual(db.tables.price_prefs[0].chains_shown, ['tiv-taam']);
@@ -975,7 +981,7 @@ for (const scheme of ['light', 'dark']) {
     await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
     await page.click('.shop-prices-cta button');
     await page.locator('.pp-hero').waitFor();
-    await page.locator('.pp-set summary').click();
+    await page.locator('.pp-set > summary').click();
     await page.locator('.price-item', { hasText: 'קרקרים' }).first().locator('.pp-row-h').click();
     // (Run through the test tool: the site's security policy rightly refuses
     // an injected script tag.)
@@ -1105,7 +1111,7 @@ test('a chain with a shop and an online shop is one chain in the clubs list, and
   await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
   await page.click('.shop-prices-cta button');
   await page.locator('.pp-hero').waitFor();
-  await page.locator('.pp-set summary').click();
+  await page.locator('.pp-set > summary').click();
   await page.locator('.pp-clubs-row button').click();
   const names = await page.locator('.pp-club-list li > span').allTextContents();
   assert.deepEqual(names.filter((n) => n.startsWith('רשת א')), ['רשת א'], 'one chain, not its shop and online shop apart');

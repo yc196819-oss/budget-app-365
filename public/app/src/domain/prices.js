@@ -442,6 +442,20 @@ export function withoutChains(catalog, hidden) {
   return Object.fromEntries(Object.entries(catalog || {}).map(([n, list]) => [n, (list || []).map((p) => ({ ...p, offers: (p.offers || []).filter((o) => !out.has(baseChain(o.chain))) }))]));
 }
 
+// Where the search starts and how far it goes, said plainly: the center of
+// the settlement (we know no street), and the distance the family chose.
+export function areaReach(area) {
+  const reach = 'מחפשים ממרכז ' + area.city + ', עד ' + (area.max_km || 25) + ' ק"מ';
+  const n = area.stores.length;
+  return reach + ' · ' + (!n ? 'אין סניף של אף רשת' : n === 1 ? 'סניף אחד' : n + ' סניפים');
+}
+// Why this branch: in the neighborhood they wrote, in their settlement, or
+// in a settlement near it (how far, center to center).
+export function storeWhy(s) {
+  if (s.kind === 'hood') return 'בשכונה שלכם';
+  if (s.kind === 'city') return 'ביישוב שלכם';
+  return s.city + ', ' + String(s.km).replace(/\.0$/, '') + ' ק"מ';
+}
 // With the family's area set: only the chains with a branch near it, at
 // that branch's price (the server already put it in). A product no branch
 // nearby sells keeps no price.
