@@ -12,7 +12,7 @@
 const TABLE = [
   // vegetables
   ['עגבניות שרי|עגבניה שרי|עגבנית שרי', 15, 45], ['עגבניה|עגבנית|עגבניות', 150, 30],
-  ['מלפפון בייבי', 500, 25, false, 'מלפפון'], ['מלפפון', 120, 25], ['בצל ירוק', 100, 80], ['בצל שאלוט', 30, 60], ['בצל פנינה|בצלי פנינה', 15, 60], ['בצל', 150, 25],
+  ['מלפפון בייבי', 500, 25, false, 'מלפפון'], ['מלפפון', 120, 25], ['בצל ירוק', 100, 80, 'bunch'], ['בצל שאלוט', 30, 60], ['בצל פנינה|בצלי פנינה', 15, 60], ['בצל', 150, 25],
   ['שיני שום|שן שום', 5, 80, false, 'שום'], ['שום', 50, 80],
   ['פלפל חריף יבש|צ\'ילי יבש', 3, 400, true], ['פלפל חריף|צ\'ילי|פלפל צילי', 20, 80], ['פלפל', 200, 40],
   ['גזר', 100, 20], ['תפוחי אדמה|תפוח אדמה|תפו"א|תפוא', 200, 20],
@@ -83,8 +83,9 @@ export const maxPerKg = (name) => { const r = produceOf(name); return r ? r.max 
 export function freshTerm(term) {
   const ws = String(term || '').split(' ').filter(Boolean);
   let keep = ws.filter((w) => !FILLER.test(w));
-  // "פילה דג מושט": the chains write "פילה מושט", "דג מושט" or just "מושט".
-  if (keep.length > 1) keep = keep.filter((w) => w !== 'דג' && w !== 'דגי');
+  // "פילה דג מושט": the chains write "פילה מושט" (but "דג פילה" stays: "פילה"
+  // alone is any fillet).
+  if (keep.length > 2) keep = keep.filter((w) => w !== 'דג' && w !== 'דגי');
   if (!keep.length) keep = ws;
   return keep.map(base).join(' ');
 }

@@ -74,6 +74,8 @@ test('the recipe from the report: tomatoes, garlic, a red pepper, coriander, dri
   // One head of garlic: a few shekels, not ₪25.
   assert.ok(at(2).cost <= 6, 'garlic ₪' + at(2).cost);
   assert.ok(at(0).cost <= 4, 'one pepper ₪' + at(0).cost);
+  // Dried chilies: one pack, whatever the recipe counts.
+  assert.equal(at(4).cost, at(4).price);
 });
 
 test('pieces become a weight for what is sold by the kilo', () => {

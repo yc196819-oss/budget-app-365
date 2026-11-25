@@ -405,7 +405,7 @@ export function choose(query, products, pref = 'any', { keep, strict = false, na
   // sell (a small chain's own milk is still milk there).
   const okPool = near.filter((x) => allowed(x.p, pref)).map((x) => x.p);
   if (kept) return { query, status: 'chosen', pick: kept.p, options, pool: ok.includes(kept) ? okPool : near.map((x) => x.p) };
-  if (ok.length) return { query, status: 'auto', pick: ok[0].p, options, pool: okPool, ...(byWeight ? { byWeight, fresh: kind ? { max: kind.max, g: kind.g, bunch: kind.bunch } : null } : {}) };
+  if (ok.length) return { query, status: 'auto', pick: ok[0].p, options, pool: okPool, ...(byWeight ? { byWeight, fresh: kind ? { max: kind.max, g: kind.g, bunch: kind.bunch, pack: kind.pack } : null } : {}) };
   const maybe = strict ? [] : close.filter((x) => unknownKashrut(x.p)).map((x) => ({ ...x, h: hintFits(x.p, pref) ? 0 : 1 })).sort((a, b) => a.h - b.h || byPrice(a, b));
   if (maybe.length) return { query, status: 'unverified', pick: maybe[0].p, options, pool: near.filter((x) => unknownKashrut(x.p)).map((x) => x.p), hint: maybe[0].h === 0 };
   return { query, status: 'unsure', pick: null, options, pool: [] };
@@ -596,7 +596,7 @@ const PACKED = /ארוז|מארז|שרוול|רשת|שקית|סלסל|מגש|ק�
 function perKiloAfterAll(c, p, o) {
   const f = c.fresh;
   const z = sizeOfProduct(p);
-  if (!f || f.bunch || (z && (z.unit !== 'unit' || z.qty > 1)) || PACKED.test(p.name || '') || words(p.name).length > words(c.query || c.pick.name).length + 3) return null;
+  if (!f || f.bunch || f.pack || (z && (z.unit !== 'unit' || z.qty > 1)) || PACKED.test(p.name || '') || words(p.name).length > words(c.query || c.pick.name).length + 3) return null;
   const kg = [c.pick, ...(c.pool || [])].map((x) => ({ x, z: sizeOfProduct(x) })).filter((y) => y.z && y.z.unit === 'kg').flatMap((y) => validOffers(y.x).map((v) => v.price / y.z.qty)).sort((a, b) => a - b);
   // (No kilo price of it anywhere: about what a kilo of it usually costs.)
   const K = kg.length ? kg[Math.floor(kg.length / 2)] : f.max / 2.5;
