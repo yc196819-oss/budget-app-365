@@ -39,9 +39,12 @@ for (const f of FAMILIES) {
       assert.ok(!madeFrom(c.pick.name, c.query) || !isFresh(c.query), c.query + ' → ' + c.pick.name);
       if (isFresh(c.query)) assert.ok(!madeFrom(c.pick.name, c.query), c.query + ' is fresh, not ' + c.pick.name);
     }
-    // Chains: those with fewer missing first, cheaper first among equals.
+    // Chains: cheapest for the whole list first (missing products at their
+    // usual price); a chain missing more than a third of the list goes last.
     assert.ok(rows.length >= 3, 'compared at several chains');
-    for (let i = 1; i < rows.length; i++) assert.ok(rows[i - 1].missing < rows[i].missing || (rows[i - 1].missing === rows[i].missing && rows[i - 1].total <= rows[i].total));
+    const far = (r) => r.missing * 3 > priced.length;
+    for (let i = 1; i < rows.length; i++) assert.ok(far(rows[i - 1]) < far(rows[i]) || (far(rows[i - 1]) === far(rows[i]) && rows[i - 1].fair * (1 + 0.03 * rows[i - 1].missing) <= rows[i].fair * (1 + 0.03 * rows[i].missing)));
+    for (const r of rows) assert.equal(r.fair, Math.round((r.total + r.gap) * 100) / 100);
     assert.ok(rows[0].total > 0);
     assert.ok(saving(rows) >= 0);
     // A swap is always an equivalent size of the picked product.
