@@ -1,7 +1,7 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi, areaReach, storeWhy, reachKm, wazeLink, reachText, roundHome } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, freshProduce, kashrutFree, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi, areaReach, storeWhy, reachKm, wazeLink, reachText, roundHome } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { logoSrc, logoDark, orderLink, searchLink, pasteLink, pasteText } from '../../domain/chainShops.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
@@ -23,6 +23,7 @@ const CERT_NAMES = [...CERTS.map((c) => c.name), NOT_KOSHER];
 let MINE = [];
 function Kosher({ p }) {
   if (nonFood(p)) return html`<span class="kosher kosher-free">לא צריך כשרות</span>`;
+  if (freshProduce(p)) return html`<span class="kosher kosher-free">כשרות לפי החנות</span>`;
   const c = certOf(p);
   if (c) {
     const who = c.by === 'owner' ? 'אושר על ידינו' : c.by === 'open' ? 'מהמאגר הפתוח' : 'סימנו ' + c.n + (c.n === 1 ? ' משפחה' : ' משפחות');
@@ -402,7 +403,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
           <${Photo} p=${p} name=${item.name} />
           <span class="pp-row-t"><b>${item.name}${item.qty ? html` <small class="shop-qty">${item.qty}</small>` : ''}</b>
             <small class="muted">${p ? p.name + (sizeText(sizeOfProduct(p)) ? ' · ' + sizeText(sizeOfProduct(p)) : '') : c.status === 'fresh' ? 'פירות, ירקות ובשר נמכרים במשקל, במחיר של הסניף' : looking ? 'מחפשים…' : queued ? 'עוד לא בקטלוג: נוסיף בקרוב' : c.status === 'unsure' ? 'יש מוצרים, אבל לא בכשרות שבחרתם' : 'לא נמצא מחיר'}</small>
-            <span class="pp-tags">${p && !nonFood(p) && certOf(p) && html`<span class=${'pp-tag t-cert' + (MINE.includes(certOf(p).cert) ? ' fits' : '')}>${certOf(p).cert}</span>`}${c.status !== 'auto' && !(c.status === 'unverified' && quietK) ? html`<span class=${'pp-tag t-' + c.status}>${STATE[c.status] || 'אין מחיר'}</span>` : ''}${at && at.swap && html`<span class="pp-tag t-swap">מוצר דומה ב${shown.name}</span>`}${at && !at.product && c.pick && html`<span class="pp-tag t-miss">אין ב${shown.name}</span>`}${at && at.promo && html`<span class="pp-tag t-deal">מבצע: ${promoText(at.promo, at.price)}</span>`}${at && !at.promo && at.other && html`<span class="pp-tag t-deal-off">${offText(at.other)}</span>`}${paid && html`<span class="pp-tag t-paid">שילמתם ${fmt(paid.price)}${paid.store ? ' ב' + paid.store : ''}</span>`}</span></span>
+            <span class="pp-tags">${p && !kashrutFree(p) && certOf(p) && html`<span class=${'pp-tag t-cert' + (MINE.includes(certOf(p).cert) ? ' fits' : '')}>${certOf(p).cert}</span>`}${c.status !== 'auto' && !(c.status === 'unverified' && quietK) ? html`<span class=${'pp-tag t-' + c.status}>${STATE[c.status] || 'אין מחיר'}</span>` : ''}${at && at.swap && html`<span class="pp-tag t-swap">מוצר דומה ב${shown.name}</span>`}${at && !at.product && c.pick && html`<span class="pp-tag t-miss">אין ב${shown.name}</span>`}${at && at.promo && html`<span class="pp-tag t-deal">מבצע: ${promoText(at.promo, at.price)}</span>`}${at && !at.promo && at.other && html`<span class="pp-tag t-deal-off">${offText(at.other)}</span>`}${paid && html`<span class="pp-tag t-paid">שילמתם ${fmt(paid.price)}${paid.store ? ' ב' + paid.store : ''}</span>`}</span></span>
           <span class="pp-row-p">${(() => { const n = qtyOf(c); const one = at && at.price ? at.price : c.pick && bestPrice(c.pick) ? bestPrice(c.pick).price : null; const where = !(at && at.price) && c.pick && bestPrice(c.pick) ? bestPrice(c.pick).chainName : '';
             // With a deal counted: what the line costs in it, the regular price struck out.
             const line = at && at.cost != null ? at.cost : one * n;
@@ -414,8 +415,8 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
           ${c.status === 'unsure' && html`<span class="price-warn">מצאנו מוצרים, אבל לא ידוע שהכשרות שלהם מהרשימה שלכם. בחרו מוצר, או סמנו מה כתוב על האריזה:</span>`}
           <ul class="price-opts">${c.options.map((o) => html`<li key=${o.barcode}><${Product} p=${o}>
             ${c.pick && o.barcode === c.pick.barcode ? html`<span class="pp-chosen">נבחר</span>` : html`<button type="button" class="btn btn-ghost price-pick" onClick=${() => pick(item, o)}>לבחור</button>`}</${Product}>
-            ${!certOf(o) && !nonFood(o) && html`<${Mark} p=${o} onVote=${vote} />`}</li>`)}</ul>
-          ${c.pick && certOf(c.pick) && !nonFood(c.pick) && (voteId === c.id ? html`<${Mark} p=${c.pick} onVote=${vote} open />` : html`<button type="button" class="btn-text price-vote-open" onClick=${() => setVoteId(c.id)}>הכשרות לא נכונה?</button>`)}
+            ${!certOf(o) && !kashrutFree(o) && html`<${Mark} p=${o} onVote=${vote} />`}</li>`)}</ul>
+          ${c.pick && certOf(c.pick) && !kashrutFree(c.pick) && (voteId === c.id ? html`<${Mark} p=${c.pick} onVote=${vote} open />` : html`<button type="button" class="btn-text price-vote-open" onClick=${() => setVoteId(c.id)}>הכשרות לא נכונה?</button>`)}
         </div>`}
       </li>`; })}
     </ul>

@@ -65,3 +65,25 @@ test('with the family\'s area: only the chains with a branch near it, and the br
   const b = basket([choose('חלב 3%', near['חלב 3%'], 'any')]);
   assert.deepEqual(b.map(({ lines, ...r }) => r), [{ chain: 'x', name: 'רשת א', store: 'סניף בדוי', total: 6.4, missing: 0, swaps: 0, gap: 0, saved: 0 }]);
 });
+
+test('kashrut is not checked for non-food or fresh fruit and vegetables, but is for what is made from them', async () => {
+  const { nonFood, freshProduce, kashrutFree, allowed, choose, CERTS } = await import('../public/app/src/domain/prices.js');
+  const mine = [CERTS[0].name];
+  // Paper, plastic and disposables, cleaning, hygiene: no kashrut.
+  for (const n of ['צלחות חד פעמי 50 יח', 'כוסות 200 מ"ל', 'נייר אלומיניום 30 מטר', 'שקיות הקפאה', 'סוללות AA', 'מגבונים לחים', 'אבקת כביסה 3 ק"ג', 'ספוג לכלים']) assert.ok(nonFood({ name: n }), n);
+  // Food that only looks like it: still checked.
+  for (const n of ['עוגת ספוג', 'בשר טחון חלק', 'חלב בשקית', 'לימון']) assert.ok(!nonFood({ name: n }), n);
+  // Fresh fruit and vegetables: kashrut by the store, not the product.
+  for (const n of ['עגבניות', 'כרוב אדום ביתי', 'בצל אדום מארז 1 קג', 'תפוחים', 'חסה משי', 'ענבים שחורים 500 גרם']) assert.ok(freshProduce({ name: n }), n);
+  // Made from them, or not plainly the fruit or vegetable: checked.
+  for (const n of ['ריבת תות', 'מיץ תפוזים 1 ל', 'שימורי תירס', 'פלפל שחור גרוס', 'שום כתוש 250 גרם', 'גזר בסגנון קוריאני', 'מלפפון מוחמץ', 'כרוב סגול במיונז', 'פלפלונים', 'קבב עם חציל קלוי', 'טבק אבטיח', 'תפוזינה 1.5 ליטר']) assert.ok(!freshProduce({ name: n }), n);
+  // Allowed at any kashrut preference, the old levels too.
+  const tomato = { barcode: '9', name: 'עגבניות', kosher: {}, offers: [{ chain: 'x', price: 6.9 }] };
+  assert.ok(kashrutFree(tomato));
+  assert.ok(allowed(tomato, mine));
+  assert.ok(allowed(tomato, 'mehadrin'));
+  assert.ok(allowed({ name: 'צלחות חד פעמי', kosher: {} }, 'regular'));
+  assert.ok(!allowed({ name: 'ריבת תות', kosher: {} }, mine), 'jam is checked');
+  // Picked automatically, not "unverified".
+  assert.equal(choose('עגבניות', [{ ...tomato, qty: 1, unit: 'ק"ג' }], mine).status, 'auto');
+});
