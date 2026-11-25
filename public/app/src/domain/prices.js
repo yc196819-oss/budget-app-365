@@ -459,6 +459,21 @@ export function areaReach(area) {
 }
 // Why this branch: in the neighborhood they wrote, in their settlement, or
 // in a settlement near it (how far, center to center).
+// A link that opens Waze with the way to a branch (on a phone, the app
+// itself): by its street address and settlement, or its name when the chain
+// gave no address.
+export function wazeLink(s) {
+  const street = s.address && !/^(unknown|לא ידוע|0)?$/i.test(String(s.address).trim()) ? s.address : s.name;
+  return 'https://waze.com/ul?q=' + encodeURIComponent([street, s.city].filter(Boolean).join(', ')) + '&navigate=yes';
+}
+// What the distance picker says: how many chains at the chosen distance,
+// and how many at the most (10 km) when that is more.
+export function reachText(counts, k) {
+  if (!counts) return '';
+  const n = (x) => (x === 1 ? 'רשת אחת' : x + ' רשתות');
+  const at = k ? 'עד ' + k + ' ק"מ: ' + n(counts[k]) : 'ביישוב עצמו: ' + n(counts[0]);
+  return at + (counts[10] > counts[k] ? ' (עד 10 ק"מ: ' + n(counts[10]) + ')' : '') + '.';
+}
 export function storeWhy(s) {
   if (s.kind === 'hood') return 'בשכונה שלכם';
   if (s.kind === 'city') return 'ביישוב שלכם';
