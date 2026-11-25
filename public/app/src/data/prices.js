@@ -139,14 +139,17 @@ export async function voteKosher(hid, barcode, cert) {
 export async function getArea(hid) {
   if (GUEST) return null;
   const [{ data: a }, { data: s }] = await Promise.all([
-    sb.from('household_area').select('city_code,city,hood,max_km').eq('household_id', hid).maybeSingle(),
-    sb.from('household_stores').select('chain,chain_name,store_id,name,address,city,km,kind').eq('household_id', hid)
+    sb.from('household_area').select('city_code,city,hood,max_km,lat,lon').eq('household_id', hid).maybeSingle(),
+    sb.from('household_stores').select('chain,chain_name,store_id,name,address,city,km,kind,lat,lon').eq('household_id', hid)
   ]);
   return a ? { ...a, stores: s || [] } : null;
 }
-export const setArea = (hid, city_code, hood, max_km = 5) => api('/api/prices/area', { method: 'POST', body: { hid, city_code, hood, max_km } });
+// `point`: the family's location, already rounded on the phone (or none).
+export const setArea = (hid, city_code, hood, max_km = 5, point = null) => api('/api/prices/area', { method: 'POST', body: { hid, city_code, hood, max_km, ...(point ? { lat: point.lat, lon: point.lon } : {}) } });
 // How many chains are near a settlement at each distance, 0 to 10 km.
-export const findReach = (code) => api('/api/prices/reach?city_code=' + encodeURIComponent(code));
+export const findReach = (code, point = null) => api('/api/prices/reach?city_code=' + encodeURIComponent(code) + (point ? '&lat=' + point.lat + '&lon=' + point.lon : ''));
+// The settlement at a (rounded) location, for "use my location".
+export const placeAt = (point) => api('/api/prices/place-at?lat=' + point.lat + '&lon=' + point.lon);
 export const findPlaces = (q) => api('/api/prices/places?q=' + encodeURIComponent(q));
 // The product picked for a line on the list.
 export async function pickProduct(itemId, barcode) {

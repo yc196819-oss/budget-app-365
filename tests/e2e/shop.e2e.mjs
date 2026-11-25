@@ -365,6 +365,50 @@ test('prices: the family says only where it lives; the nearest branch at every c
   assert.deepEqual(errors, []);
 });
 
+test('prices: "use my location" finds the settlement, sends only a rounded location, and measures from it', async () => {
+  const { page, db, errors } = await open(390, (d) => {
+    d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+    d.tables.household_area = [];
+  }, OWNER);
+  await priceRoutes(page);
+  // A made-up spot in Beit Shemesh, exact to a few meters.
+  await page.context().grantPermissions(['geolocation']);
+  await page.context().setGeolocation({ latitude: 31.74631, longitude: 34.98872 });
+  const sent = { at: [], reach: [], area: [] };
+  await page.route('**/api/prices/place-at**', (r) => { sent.at.push(r.request().url()); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ place: { code: '2610', name: 'בית שמש' }, lat: 31.745, lon: 34.99 }) }); });
+  await page.route('**/api/prices/reach**', (r) => { sent.reach.push(r.request().url()); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ counts: [1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2] }) }); });
+  await page.route('**/api/prices/area', (r) => {
+    const b = JSON.parse(r.request().postData());
+    sent.area.push(b);
+    db.tables.household_area = [{ household_id: b.hid, city_code: '2610', city: 'בית שמש', hood: null, max_km: b.max_km, lat: b.lat, lon: b.lon }];
+    db.tables.household_stores = [{ household_id: b.hid, chain: 'x', chain_name: 'רשת א', store_id: '7', name: 'סניף בדוי', address: 'הרצל 1', city: 'בית שמש', km: 0.4, kind: 'city', lat: 31.747, lon: 34.992 }];
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ area: db.tables.household_area[0], stores: db.tables.household_stores }) });
+  });
+  await page.click('.shop-prices-cta button');
+  const pick = page.locator('.price-area-pick');
+  await pick.locator('.pp-locate').click();
+  await pick.locator('.pp-located').waitFor();
+  assert.equal(await pick.locator('input[aria-label="יישוב"]').inputValue(), 'בית שמש');
+  assert.match(await pick.locator('.price-km-note').textContent(), /נמדד מהמיקום שלכם/);
+  // Only the rounded location leaves the phone, never the exact one.
+  for (const u of [...sent.at, ...sent.reach.filter((x) => x.includes('lat='))]) {
+    assert.match(u, /lat=31\.745&lon=34\.99(&|$)/);
+    assert.doesNotMatch(u, /31\.746|34\.988/);
+  }
+  await pick.locator('button:has-text("למצוא סניפים קרובים")').click();
+  await page.waitForSelector('.price-area .pp-area-note', { state: 'attached' });
+  assert.deepEqual(sent.area.map((b) => [b.lat, b.lon]), [[31.745, 34.99]]);
+  assert.match(await page.locator('.price-area .pp-area-note').textContent(), /מחפשים מהמיקום שלכם, עד 5 ק"מ/);
+  if (!(await page.locator('.pp-set[open]').count())) await page.locator('.pp-set > summary').click();
+  await page.locator('.pp-stores summary').click();
+  assert.match(await page.locator('.pp-stores li').first().textContent(), /ביישוב שלכם, 0\.4 ק"מ/);
+  assert.equal(await page.locator('.pp-stores li .pp-waze').first().getAttribute('href'), 'https://waze.com/ul?ll=31.747,34.992&navigate=yes');
+  assert.match(await page.locator('.pp-stores').textContent(), /© OpenStreetMap/);
+  await page.close();
+  assert.deepEqual(errors, []);
+});
+
 test('prices: "not now" leaves the general prices, and the area can be chosen later', async () => {
   const { page, errors } = await open(390, (d) => {
     d.tables.shopping_items = [{ id: 's1', household_id: d.hid, name: 'חלב 3%', qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:00:00Z', cleared_at: null }];
