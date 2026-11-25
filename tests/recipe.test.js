@@ -43,7 +43,7 @@ test('the structured recipe is used when the page has one; otherwise the text', 
 // recipe. Its text is what is sent, from the ingredients heading on.
 const fs = require('node:fs');
 const path = require('node:path');
-const { readRecipe, parseAnswer, answerText } = require('../server/recipe');
+const { readRecipe, parseAnswer, answerText, buyAmounts } = require('../server/recipe');
 const { webFetchTool, claudeRequest } = require('../server/claude');
 const blog = fs.readFileSync(path.join(__dirname, 'fixtures/recipe-blog-page.html'), 'utf8');
 const LINK = 'https://recipes.example.com/meatballs';
@@ -122,6 +122,44 @@ test('when neither way finds ingredients, a clear message; a bad link is refused
   assert.equal(asked, false);
   const text = await readRecipe({ text: '2 ביצים, חצי קילו בשר טחון' }, { ask: async (a) => { assert.equal(a.readUrl, undefined); return answer(meat); } });
   assert.equal(text.recipe.items.length, 1);
+});
+
+test('amounts are what people buy: cups and spoons become grams or millilitres, small amounts one pack', () => {
+  const got = buyAmounts([
+    { name: 'פירורי לחם', qty: 0.25, unit: 'כוסות' },
+    { name: 'קמח', qty: 2, unit: 'כוסות' },
+    { name: 'שמן זית', qty: 3, unit: 'כפות' },
+    { name: 'חלב', qty: 1.5, unit: 'כוס' },
+    { name: 'כמון', qty: 0.25, unit: 'כפיות' },
+    { name: 'פפריקה מתוקה', qty: 1, unit: 'כף' },
+    { name: 'מלח', qty: null, unit: 'קורט' },
+    { name: 'ראס אל חנות', qty: 5, unit: 'גרם' },
+    { name: 'מים רותחים', qty: 2, unit: 'כוסות' },
+    { name: 'בשר טחון', qty: 0.5, unit: 'ק"ג' },
+    { name: 'ביצים', qty: 1, unit: 'יחידות' },
+    'not an item'
+  ]);
+  assert.deepEqual(got.map((i) => [i.name, i.qty, i.unit]), [
+    ['פירורי לחם', 30, 'גרם'],
+    ['קמח', 250, 'גרם'],
+    ['שמן זית', 50, 'מ"ל'],
+    ['חלב', 350, 'מ"ל'],
+    ['כמון', 1, 'חבילות'],
+    ['פפריקה מתוקה', 1, 'חבילות'],
+    ['מלח', 1, 'חבילות'],
+    ['ראס אל חנות', 1, 'חבילות'],
+    ['בשר טחון', 0.5, 'ק"ג'],
+    ['ביצים', 1, 'יחידות']
+  ]);
+  assert.equal(got.find((i) => i.name === 'כמון').scale, false, 'one pack stays one pack for more people');
+  assert.match(RECIPE_PROMPT, /אסור כוסות, כפות, כפיות/);
+});
+
+test('a recipe read through the flow comes back in amounts to buy', async () => {
+  const out = await readRecipe({ text: '¼ כוס פירורי לחם, 2 כוסות מים' }, { ask: async () => answer([{ name: 'פירורי לחם', qty: 0.25, unit: 'כוסות' }, { name: 'מים', qty: 2, unit: 'כוסות' }]) });
+  assert.deepEqual(out.recipe.items.map((i) => [i.name, i.qty, i.unit]), [['פירורי לחם', 30, 'גרם']]);
+  const water = await readRecipe({ text: 'רק מים מים מים' }, { ask: async () => answer([{ name: 'מים', qty: 1, unit: 'ליטר' }]) });
+  assert.equal(water.status, 422);
 });
 
 test('Claude\'s answer is the JSON after its last tool result; the fetch tool is limited to one site', () => {

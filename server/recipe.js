@@ -117,8 +117,11 @@ const RECIPE_PROMPT = `קיבלת מתכון (טקסט מאתר, טקסט שהו
 החזר JSON בלבד: {"title":"שם המנה","servings":4,"items":[{"name":"ביצים","qty":6,"unit":"יח'","aisle":"dairy","pantry":false}]}
 - servings: לכמה מנות המתכון (אם לא כתוב, 4).
 - name: שם המוצר כמו שכותבים ברשימת קניות, בלי הוראות הכנה ("בצל", לא "בצל קצוץ דק").
-- qty מספר ו-unit (ק"ג, גרם, ליטר, מ"ל, יח', כפות, כפיות, כוסות, קופסאות, חבילות, או ריק). המר כשאפשר לכמות שקונים (למשל "2 כוסות קמח" -> 0.3 ק"ג).
-- pantry:true למה שרוב הבתים כבר מחזיקים: מלח, פלפל שחור, סוכר, שמן, קמח, אורז, תבלינים, אבקת אפייה, סודה לשתייה, חומץ, מים.
+- qty מספר ו-unit: כמה קונים בחנות, לא כמה שמים בסיר. unit רק אחד מ: גרם, ק"ג, מ"ל, ליטר, יחידות, חבילות, קופסאות, צרור.
+  אסור כוסות, כפות, כפיות, קורט או "מעט": המר לגרמים (מוצקים) או למ"ל (נוזלים). למשל "¼ כוס פירורי לחם" -> 30 גרם, "2 כוסות קמח" -> 260 גרם, "3 כפות שמן זית" -> 45 מ"ל.
+  מה שקונים רק באריזה (רסק, שמנת, אבקת אפייה, תבלין, שמרים) -> qty 1 ו-unit "חבילות" או "קופסאות". ירקות ופירות שקונים ביחידות (בצל, לימון, שום) -> יחידות או ראש/צרור.
+- אל תכלול מים מהברז.
+- pantry:true למה שרוב הבתים כבר מחזיקים: מלח, פלפל שחור, סוכר, שמן, קמח, אורז, תבלינים, אבקת אפייה, סודה לשתייה, חומץ.
 - aisle אחד מ: produce, bakery, dairy, meat, dry, frozen, drinks, clean, care, baby, other.
 - אם זה לא מתכון, החזר {"title":"","servings":0,"items":[]}.`;
 
@@ -141,6 +144,41 @@ function answerText(content) {
   return list.slice(lastTool + 1).filter((c) => c && c.type === 'text').map((c) => c.text).join('\n');
 }
 const hasItems = (p) => !!(p && Array.isArray(p.items) && p.items.length);
+
+// Amounts in what people buy, not what goes in the pot: a cup, spoon or pinch
+// that still comes back is turned into grams (millilitres for liquids), and a
+// small amount of something sold in packs is one pack. The weights are rough,
+// which is enough for a shopping list.
+const CUP = /^(כוס|כוסות)$/;
+const TBSP = /^(כף|כפות)$/;
+const TSP = /^(כפית|כפיות)$/;
+const PINCH = /^(קורט|קמצוץ|מעט|לפי הטעם|ק"ט)$/;
+const LIQUID = /(^|\s)(מים|שמן|חלב|מיץ|יין|ציר|רוטב סויה|סויה|חומץ|סילאן|דבש|שמנת מתוקה|שמנת לבישול|רוטב)(\s|$)/;
+const TAP_WATER = /^(מים|מים רותחים|מים חמים|מים קרים|מים פושרים)$/;
+const GRAMS_PER_CUP = [[/קמח/, 130], [/סוכר/, 200], [/אורז|עדשים|גריסים|קינואה|בורגול|קוסקוס|פתיתים/, 190], [/פירורי לחם|פנקו/, 120], [/שיבולת|קוואקר/, 90], [/אגוז|שקדים|בוטנים/, 120], [/גבינ|ריקוטה|קוטג/, 230], [/שוקולד צ'יפס|צימוקים/, 160], [/קקאו/, 90]];
+const SMALL = 30; // below this many grams or millilitres, buy one pack
+function buyAmount(item) {
+  const it = { ...item };
+  const name = String(it.name || '').trim();
+  const unit = String(it.unit || '').trim();
+  const qty = Number(it.qty);
+  if (TAP_WATER.test(name)) return null;
+  const pack = () => ({ ...it, qty: 1, unit: 'חבילות', scale: false });
+  if (PINCH.test(unit)) return pack();
+  if (/^(גרם|גר'?|מ"ל|מל)$/.test(unit) && Number.isFinite(qty) && qty > 0 && qty < SMALL) return pack();
+  const perCup = CUP.test(unit) ? 1 : TBSP.test(unit) ? 1 / 16 : TSP.test(unit) ? 1 / 48 : 0;
+  if (!perCup) return it;
+  if (!Number.isFinite(qty) || qty <= 0) return pack();
+  const liquid = LIQUID.test(name);
+  const cupSize = liquid ? 240 : ((GRAMS_PER_CUP.find(([re]) => re.test(name)) || [])[1] || 150);
+  const amount = qty * perCup * cupSize;
+  if (amount < SMALL) return pack();
+  const round = amount >= 200 ? 50 : 10;
+  return { ...it, qty: Math.round(amount / round) * round, unit: liquid ? 'מ"ל' : 'גרם' };
+}
+function buyAmounts(items) {
+  return (Array.isArray(items) ? items : []).map((x) => (x && typeof x === 'object' ? buyAmount(x) : null)).filter(Boolean);
+}
 
 // A recipe read from a link, text or a picture. `ask({ prompt, image,
 // readUrl })` calls Claude and returns its text; with readUrl Claude may read
@@ -166,6 +204,7 @@ async function readRecipe({ url, text, image }, { ask, fetch: getPage = fetchPag
     via = 'claude';
     parsed = parseAnswer(await ask({ prompt: RECIPE_PROMPT + LINK_NOTE(link.href), readUrl: link }).catch(() => ''));
   }
+  if (parsed && Array.isArray(parsed.items)) parsed.items = buyAmounts(parsed.items);
   if (!hasItems(parsed)) {
     return link && pageFailed && parsed === null
       ? { status: 502, error: 'לא הצלחנו לפתוח את הקישור. אפשר להדביק את המתכון כטקסט.' }
@@ -174,4 +213,4 @@ async function readRecipe({ url, text, image }, { ask, fetch: getPage = fetchPag
   return { via, recipe: { title: String(parsed.title || src.title || 'מתכון').slice(0, 60), servings: Number(parsed.servings) || 4, items: parsed.items.slice(0, 40) } };
 }
 
-module.exports = { privateIp, checkUrl, fetchPage, recipeText, readRecipe, parseAnswer, answerText, RECIPE_PROMPT };
+module.exports = { privateIp, checkUrl, fetchPage, recipeText, readRecipe, parseAnswer, answerText, buyAmounts, RECIPE_PROMPT };
