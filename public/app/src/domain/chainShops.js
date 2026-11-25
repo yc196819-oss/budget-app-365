@@ -65,11 +65,11 @@ export function pasteText(items) {
 }
 
 // The chains whose logo is kept in the app (public/app/assets/chains/<key>.png),
-// downloaded once from each chain's own site, trimmed and resized. A chain not
-// here keeps its letter (some chains' sites refuse a download).
-export const LOGOS = ['bareket', 'carrefour', 'city-market', 'fresh-market', 'good-pharm', 'hazi-hinam', 'keshet', 'maayan-2000',
-  'machsanei-hashuk', 'mishnat-yosef', 'politzer', 'salach-dabach', 'shuk-hair', 'stop-market', 'super-sapir', 'super-yuda',
-  'tiv-taam', 'victory', 'yellow'];
+// downloaded once from each chain's own site (or sent by the owner), trimmed
+// and resized. A chain not here keeps its letter.
+export const LOGOS = ['bareket', 'carrefour', 'city-market', 'dor-alon', 'fresh-market', 'good-pharm', 'hazi-hinam', 'keshet', 'king-store', 'maayan-2000',
+  'machsanei-hashuk', 'mishnat-yosef', 'osher-ad', 'politzer', 'salach-dabach', 'shefa-birkat-hashem', 'shufersal', 'shuk-hair', 'stop-market', 'super-pharm',
+  'super-sapir', 'super-yuda', 'tiv-taam', 'victory', 'yellow', 'yochananof', 'zol-vebegadol'];
 // A white logo, shown on a dark tile.
 export const DARK_LOGOS = ['city-market'];
 // The logo's file in the app, or null (the chain keeps its letter).
