@@ -37,3 +37,33 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
+  schema:
+    # The baseline and every migration, in order, into an empty Postgres 17
+    # (the version production runs), so a migration that does not run fails
+    # the PR. A small stub stands in for Supabase's auth schema and roles.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load the baseline and the migrations
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -q -f supabase/test/supabase-stub.sql
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "$f"
+            psql -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+          psql -At -c "select count(*) || ' tables' from pg_tables where schemaname = 'public'"
