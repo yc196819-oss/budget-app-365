@@ -265,7 +265,10 @@ test('prices: the household picks the certifiers it relies on once, then every i
   assert.match(await page.locator('.price-item', { hasText: 'קפה' }).textContent(), /אין ברשת ב/);
   // The total of a chain that has not got everything says so, and what.
   assert.match(await page.locator('.pp-hero .pp-missing').textContent(), /בלי מוצר אחד שאין ברשת ב: קפה/);
-  assert.match(await page.locator('.pp-bar', { hasText: 'רשת ב' }).textContent(), /בלי מוצר אחד/);
+  // Its row compares the whole list: what it has, plus about the usual price
+  // of what it has not got.
+  assert.match(await page.locator('.pp-bar', { hasText: 'רשת ב' }).textContent(), /בערך ₪48\.10.*₪27\.10 \+ בערך ₪21\.00 למוצר אחד שאין שם/);
+  assert.match(await page.locator('.pp-hero .pp-missing').textContent(), /כל הרשימה בערך ₪48\.10/);
   assert.equal(await page.locator('.pp-bar', { hasText: 'רשת ב' }).locator('.pp-bar-gap').count(), 1, 'what the missing coffee would add, striped');
   await page.close();
   assert.deepEqual(errors, []);
@@ -1086,6 +1089,8 @@ test('online and in the shop are two prices: the chain online is compared on its
   assert.match(await hero.textContent(), /₪103\.90ברשת א אונליין.*משלוח בערך ₪35\.90.*לא אימתנו את מחיר המשלוח.*בחנות: הכי משתלם ברשת ב, ₪118\.00/, 'a made-up chain: its delivery price is said as about');
   assert.match(await page.locator('.pp-bar', { hasText: 'רשת א אונליין' }).textContent(), /אונליין · כולל משלוח.*כולל משלוח בערך ₪35\.90/);
   assert.equal(await page.locator('.pp-bar').count(), 3, 'the shop and the online shop: two bars, and the other chain');
+  // Branches near the family and online shops: each in its own group.
+  assert.deepEqual(await page.locator('.pp-group').allTextContents(), ['בחנויות קרובות', 'אונליין, כולל משלוח']);
   await page.close();
   assert.deepEqual(errors, []);
 });

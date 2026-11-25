@@ -216,6 +216,14 @@ export function bestPrice(product) {
   const s = sizeOfProduct(product);
   return { price: o.price, chain: o.chain, chainName: o.chain_name || o.chain, perUnit: s && s.unit !== 'unit' ? o.price / s.qty : o.price / ((s && s.qty) || 1) };
 }
+// What a product usually costs: the average of the chains' prices (0 when
+// no chain sells it). Used for a product missing at a chain, so the chain's
+// list is not made to look cheaper than it is.
+export function typicalPrice(product) {
+  const offers = validOffers(product);
+  if (!offers.length) return 0;
+  return Math.round((offers.reduce((t, o) => t + o.price, 0) / offers.length) * 100) / 100;
+}
 // The confirmed level: the owner's word if given, otherwise what most
 // families said (at least one). Nothing confirmed: null.
 export function levelOf(product) {
@@ -559,7 +567,7 @@ export function basket(choices, qtyOf = () => 1, now = new Date(), clubs = null)
       if (best) {
         total += best.price * q; swaps++; saved += best.d.saved;
         lines.push({ id: c.id, product: best.product, price: best.paid, cost: best.d.cost, promo: best.d.promo, other: best.d.other, swap: true });
-      } else { missing++; const b = bestPrice(c.pick); gap += b ? b.price * q : 0; lines.push({ id: c.id, product: null, price: null, swap: false }); }
+      } else { missing++; gap += typicalPrice(c.pick) * q; lines.push({ id: c.id, product: null, price: null, swap: false }); }
     }
     // An online shop: its delivery is part of what the list costs there.
     const delivery = deliveryOf(chain, total);
@@ -567,10 +575,19 @@ export function basket(choices, qtyOf = () => 1, now = new Date(), clubs = null)
     return { chain, name, store: stores.get(chain) || null, total: Math.round(total * 100) / 100, missing, swaps, lines,
       ...(delivery ? { delivery } : {}),
       saved: Math.round(saved * 100) / 100,
-      // About what the missing products add, at their cheapest elsewhere.
-      gap: Math.round(gap * 100) / 100 };
+      // About what the missing products add, at their usual price elsewhere.
+      gap: Math.round(gap * 100) / 100,
+      // The whole list there, the missing products at about their usual price:
+      // the number chains are compared by.
+      fair: Math.round((total + gap) * 100) / 100 };
   });
-  return rows.sort((a, b) => a.missing - b.missing || a.total - b.total);
+  // Cheapest for the whole list first. A missing product is a guess and a
+  // second trip, so each one makes the chain count 3% dearer: a chain with
+  // everything wins over one about as cheap that lacks something. A chain
+  // missing more than a third of the list goes after the others.
+  const far = (r) => r.missing * 3 > picks.length;
+  const rank = (r) => r.fair * (1 + 0.03 * r.missing);
+  return rows.sort((a, b) => far(a) - far(b) || rank(a) - rank(b) || a.missing - b.missing);
 }
 
 // Out of the box: the list split between two chains. Many families pass two
