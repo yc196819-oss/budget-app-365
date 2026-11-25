@@ -9,7 +9,7 @@
 - Before any step that changes code, the database or data: explain exactly what will be done and wait for approval.
 - Before a design change: show a preview (a screenshot or a prototype) first.
 - Every stage in its own PR, with tests, and a before/after measurement.
-- Database changes only as a migration, after a trial in a transaction that is rolled back.
+- Database changes only as a migration, after a trial in a transaction that is rolled back. Migrations live in `supabase/migrations` (see its README); `supabase/legacy` is history only and is never run again.
 - Ask before merging. Never change a user's data without consent.
 
 ## Privacy (public repo)

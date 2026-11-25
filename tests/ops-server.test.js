@@ -648,11 +648,13 @@ test('the board offers every email but the retired "first" (its sends stay in th
 
 test('every one-time email is allowed by the database (the mail_sent check lists them all)', () => {
   const ops = require('../server/ops');
-  const sql = require('fs').readFileSync(require('path').join(__dirname, '..', 'supabase_ops.sql'), 'utf8');
-  const checks = [...sql.matchAll(/mail_sent_campaign_check check \(\s*campaign = any \(array\[([^\]]*)\]\)/g)];
+  const fs = require('fs'), path = require('path');
+  const dir = path.join(__dirname, '..', 'supabase', 'migrations');
+  const sql = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort().map((f) => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+  const checks = [...sql.matchAll(/mail_sent_campaign_check check \(+\s*campaign = any \(array\[([^\]]*)\]\)/gi)];
   const last = checks[checks.length - 1];
-  assert.ok(last, 'the check is in supabase_ops.sql');
-  const allowed = last[1].split(',').map((x) => x.trim().replace(/'/g, ''));
+  assert.ok(last, 'the check is in the migrations');
+  const allowed = last[1].split(',').map((x) => x.trim().replace(/::text/g, '').replace(/'/g, ''));
   for (const c of ops.CAMPAIGNS) assert.ok(allowed.includes(c), c + ' is allowed');
 });
 

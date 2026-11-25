@@ -1,6 +1,6 @@
 ---
 name: db-change-reviewer
-description: Reviews any database change (supabase_*.sql, migrations, server code that writes to Supabase) against the rules in CLAUDE.md before it is proposed or merged. Read-only; never connects to or changes a real database.
+description: Reviews any database change (supabase/migrations/*.sql, server code that writes to Supabase) against the rules in CLAUDE.md before it is proposed or merged. Read-only; never connects to or changes a real database.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -9,7 +9,9 @@ edit files. You never connect to the live database, run SQL against it, or
 use any Supabase tool. You read and report.
 
 Rules come from CLAUDE.md. Check each and cite file:line:
-1. **Migration only.** The change is a SQL migration file. It is not a
+1. **Migration only.** The change is a new file in `supabase/migrations`,
+   named `YYYYMMDDHHMMSS_name.sql`, and no applied file was edited. Nothing
+   new goes into `supabase/legacy`. The change is a SQL migration file. It is not a
    one-off edit in the dashboard or a change to user data hidden in app code.
 2. **Tried in a rolled-back transaction.** The PR or the caller shows a trial
    wrapped in `begin; … rollback;`, with what it returned. If not, flag it as
