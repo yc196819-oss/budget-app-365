@@ -47,11 +47,14 @@ for (const f of FAMILIES) {
     for (const r of rows) assert.equal(r.fair, Math.round((r.total + r.gap) * 100) / 100);
     assert.ok(rows[0].total > 0);
     assert.ok(saving(rows) >= 0);
-    // A swap is always an equivalent size of the picked product.
+    // A swap is a size close to the picked product's; from half to twice the
+    // size only when that chain has nothing closer in the pool.
     for (const r of rows) for (const l of r.lines) {
       if (!l.swap) continue;
       const c = choices.find((x) => x.id === l.id);
-      assert.ok(equivalent(c.pick, l.product) > 0, c.pick.name + ' ↔ ' + l.product.name);
+      const at = (p) => p.barcode !== c.pick.barcode && (p.offers || []).some((o) => o.chain === r.chain);
+      const close = (c.pool || []).some((p) => at(p) && equivalent(c.pick, p) > 0);
+      assert.ok(close ? equivalent(c.pick, l.product) > 0 : equivalent(c.pick, l.product, true) > 0, c.pick.name + ' ↔ ' + l.product.name);
     }
     // Strict: only confirmed kashrut, so nothing unverified.
     assert.ok(run(f, { strict: true }).choices.every((c) => c.status !== 'unverified'));

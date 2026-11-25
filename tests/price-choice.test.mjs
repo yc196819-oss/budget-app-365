@@ -116,3 +116,22 @@ test('a chain about as cheap that lacks something does not beat one that has eve
   // Now full is 59 for everything and part about 58 without one: full wins.
   assert.equal(close[0].chain, 'full');
 });
+
+test('a chain without a close size gets one from half to twice the size, counted for the picked size', () => {
+  const rice = (barcode, qty, offers) => ({ barcode, name: 'אורז פרסי', qty, unit: 'גרם', offers: offers.map(([chain, price]) => ({ chain, chain_name: chain, price })), kosher: { votes: { regular: 2 } } });
+  const kilo = rice('5001', 1000, [['a', 10], ['b', 11]]);
+  const half = rice('5002', 500, [['c', 6]]);
+  const tiny = rice('5003', 200, [['d', 2]]);
+  const c = choose('אורז', [kilo, half, tiny], 'any');
+  assert.equal(c.pick.barcode, '5001');
+  // The small chain's own rice is in the pool, though only one chain sells it.
+  assert.ok(c.pool.some((p) => p.barcode === '5002'));
+  const rows = basket([{ id: 'i1', ...c }]);
+  const at = (chain) => rows.find((r) => r.chain === chain);
+  // 500 g at ₪6 stands for 1 kg: ₪12.
+  assert.equal(at('c').missing, 0);
+  assert.equal(at('c').total, 12);
+  assert.equal(at('c').lines[0].swap, true);
+  // 200 g is a fifth of the size: not a stand-in.
+  assert.equal(at('d') && at('d').missing, 1);
+});
