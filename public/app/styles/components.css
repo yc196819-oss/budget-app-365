@@ -1410,6 +1410,8 @@ body.chat-open { overflow: hidden; }
 .price-seed-chains li { display: flex; justify-content: space-between; gap: 8px; background: var(--surface-2); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
 .price-seed-chains li.ok span { color: var(--income); }
 .price-seed-chains li.bad span { color: var(--danger); }
+.price-seed-chains li:has(.price-seed-drop) { flex-wrap: wrap; }
+.price-seed-drop { flex-basis: 100%; color: var(--warn); font-weight: 700; }
 
 .price-prod { align-items: center; }
 .price-img { width: 46px; height: 46px; border-radius: 12px; background: #fff; flex: none; display: grid; place-items: center; overflow: hidden; }

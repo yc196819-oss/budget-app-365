@@ -2335,6 +2335,10 @@ async function runFreeLoad() {
     // moved): not shown as today's.
     await supabaseAdmin.from('price_promos').delete().lt('ends_at', new Date().toISOString()).then(() => {}, () => {});
     await supabaseAdmin.from('price_promos').delete().lt('seen_at', new Date(Date.now() - 3 * 86400000).toISOString()).then(() => {}, () => {});
+    // How many of the 500 most common products each chain sells, next to
+    // the night before: a file that loaded but lost many products shows on
+    // the owner's card. A few seconds, read-only; skipped if it fails.
+    await checkCoverage().catch((e) => console.error('coverage check failed:', e.message));
   } catch (err) {
     seedJob.error = String(err.message || err).slice(0, 200);
     console.error('free price load failed:', seedJob.error);
@@ -2344,6 +2348,14 @@ async function runFreeLoad() {
   seedJob.endedAt = new Date().toISOString();
   // Kept, so how each chain did can be read the next morning (no table: skipped).
   await supabaseAdmin.from('price_load_runs').insert({ started_at: seedJob.startedAt, ended_at: seedJob.endedAt, added: seedJob.added, error: seedJob.error, chains: seedJob.chainsDone }).then(() => {}, () => {});
+}
+async function checkCoverage() {
+  const { data: cover, error } = await supabaseAdmin.rpc('price_coverage', { p_top: 500 });
+  if (error) throw new Error(error.message);
+  const { data: last } = await supabaseAdmin.from('price_load_runs').select('chains').order('started_at', { ascending: false }).limit(1).maybeSingle();
+  seedJob.chainsDone = prices.withCoverage(seedJob.chainsDone, cover, last && Array.isArray(last.chains) ? last.chains : null, 500);
+  const dropped = seedJob.chainsDone.filter((c) => c && c.coverDrop);
+  if (dropped.length) console.error('prices: fewer common products at ' + dropped.map((c) => c.key + ' ' + c.coverDrop + ' -> ' + c.cover).join(', '));
 }
 // In the morning (pg_cron job "prices-morning"): the chains last night's load
 // could not read get one more try. Osher Ad had no files yet at 5:15 in the
