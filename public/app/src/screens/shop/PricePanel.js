@@ -330,7 +330,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
   if (!open.length) return html`<section class="card stack price-panel">${head}${prefRow}${areaRow}<span class="muted">אין מה להשוות: הרשימה ריקה או שהכול כבר נקנה.</span></section>`;
   if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${areaRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
 
-  const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty, c.pick);
+  const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty, c.pick, c.query);
   const memoKey = [catalog, area, pref, strict, shownChains, clubs, open.map((i) => i.id + '|' + i.name + '|' + (i.barcode || '') + '|' + (i.qty || '')).join('§')];
   if (!memo.current.key || memoKey.some((k, n) => k !== memo.current.key[n])) {
     const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), withoutChains(nearby(catalog, !!area, area ? area.stores : null), hiddenChains(pref, shownChains)), pref, { strict });
