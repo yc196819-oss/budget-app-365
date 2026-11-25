@@ -161,7 +161,9 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=()');
+  // Location: only the app itself, and only when the family asks ("use my
+  // location" in the shopping area picker; rounded to ~500 m on the phone).
+  res.setHeader('Permissions-Policy', 'geolocation=(self), payment=(), usb=()');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   }
@@ -2323,6 +2325,7 @@ async function runFreeLoad() {
     // Every chain's branches, then the branches families live near (their
     // chain's prices read back from the catalog).
     await saveStores().catch((e) => console.error('stores failed:', e.message));
+    await locateStores().catch((e) => console.error('branch points failed:', e.message));
     await refreshAreas().catch((e) => console.error('areas refresh failed:', e.message));
     await loadLocal(null).catch((e) => console.error('local prices failed:', e.message));
     // Prices of a chain that left (or a product it stopped selling) older
@@ -2384,6 +2387,28 @@ async function runMorningRetry() {
 }
 // ── prices by the family's area ──
 const area = require('./server/area');
+const geo = require('./server/geo');
+// A branch as read for finding the one near a family (with its point on the
+// map, once found), and as kept for a family.
+const STORE_COLS = 'chain,chain_name,store_id,name,address,city,lat,lon,geo_q,geo_at';
+const storeRow = (hid, x) => ({ household_id: hid, chain: x.chain, store_id: x.store_id, chain_name: x.chain_name, name: x.name, address: x.address, city: x.city, km: x.km, kind: x.kind, lat: x.lat == null ? null : x.lat, lon: x.lon == null ? null : x.lon });
+// Each branch's point on the map, from its street address (OpenStreetMap,
+// one a second; up to 800 a night, the rest the next night). Only branch
+// addresses are sent.
+async function locateStores() {
+  const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select(STORE_COLS).order('chain').order('store_id'));
+  const r = await geo.locateStores((stores || []).filter((s) => !online.isOnline(s.name)), {
+    fetchFn: priceFetch,
+    townOf: (s) => area.storePlace(s),
+    save: async (s, p, q) => {
+      const { error } = await supabaseAdmin.from('price_stores').update({ lat: p ? p.lat : null, lon: p ? p.lon : null, geo_q: q, geo_at: new Date().toISOString() }).eq('chain', s.chain).eq('store_id', s.store_id);
+      if (error) throw new Error(error.message);
+    }
+  });
+  storesCache = { at: 0, rows: null };
+  console.log('branch points:', JSON.stringify(r));
+  return r;
+}
 // Every chain's list of branches, kept for finding the branch near a family.
 async function saveStores() {
   for (const c of pricefiles.CHAINS) {
@@ -2404,17 +2429,17 @@ async function saveStores() {
 // chain that opened a branch near them (or a chain added to the app) shows
 // without them saving their area again.
 async function refreshAreas() {
-  const { data: areas } = await supabaseAdmin.from('household_area').select('household_id,city_code,hood,max_km').limit(5000);
+  const { data: areas } = await supabaseAdmin.from('household_area').select('household_id,city_code,hood,max_km,lat,lon').limit(5000);
   if (!areas || !areas.length) return 0;
-  const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
+  const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select(STORE_COLS).order('chain').order('store_id'));
   let n = 0;
   for (const a of areas) {
-    const near = area.nearestStores(stores || [], { code: a.city_code, hood: a.hood }, { maxKm: area.reachKm(a.max_km) });
+    const near = area.nearestStores(stores || [], { code: a.city_code, hood: a.hood, lat: a.lat, lon: a.lon }, { maxKm: area.reachKm(a.max_km) });
     // No branch near any more (a chain closed one): the old ones go too, so
     // a far branch is never compared as if it were near.
     await supabaseAdmin.from('household_stores').delete().eq('household_id', a.household_id);
     if (!near.length) { n++; continue; }
-    await supabaseAdmin.from('household_stores').insert(near.map((x) => ({ household_id: a.household_id, chain: x.chain, store_id: x.store_id, chain_name: x.chain_name, name: x.name, address: x.address, city: x.city, km: x.km, kind: x.kind })));
+    await supabaseAdmin.from('household_stores').insert(near.map((x) => storeRow(a.household_id, x)));
     n++;
   }
   return n;
@@ -2472,7 +2497,7 @@ app.get('/api/prices/places', requireAuth, (req, res) => res.json({ places: area
 let storesCache = { at: 0, rows: null };
 async function cachedStores() {
   if (storesCache.rows && Date.now() - storesCache.at < 10 * 60 * 1000) return storesCache.rows;
-  const { data } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
+  const { data } = await allRows(() => supabaseAdmin.from('price_stores').select(STORE_COLS).order('chain').order('store_id'));
   storesCache = { at: Date.now(), rows: data || [] };
   return storesCache.rows;
 }
@@ -2482,11 +2507,20 @@ app.get('/api/prices/reach', requireAuth, async (req, res) => {
     if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
     const at = area.place(String(req.query.city_code || ''));
     if (!at) return res.status(400).json({ error: 'לא מצאנו את היישוב.' });
-    return res.json({ counts: area.reachCounts(await cachedStores(), { code: at.code }) });
+    // From the family's location when they gave it (rounded again here).
+    const point = req.query.lat != null ? geo.roundHome(req.query.lat, req.query.lon) : null;
+    return res.json({ counts: area.reachCounts(await cachedStores(), { code: at.code, ...(point || {}) }) });
   } catch (err) {
     console.error('price reach failed:', err.message);
     return res.status(500).json({ error: 'לא הצלחנו לספור. נסו שוב.' });
   }
+});
+// The settlement at the family's location ("use my location"): the location
+// comes rounded to about 500 m, and is not kept here.
+app.get('/api/prices/place-at', requireAuth, (req, res) => {
+  const point = geo.roundHome(req.query.lat, req.query.lon);
+  if (!point) return res.status(400).json({ error: 'המיקום מחוץ לישראל. בחרו יישוב מהרשימה.' });
+  return res.json({ place: geo.placeAt(point.lat, point.lon, require('./server/data/places.json').places), ...point });
 });
 // Where the family lives: a settlement, and a neighborhood if it wants. The
 // branch nearest to it at every chain is found here; their prices come in
@@ -2502,16 +2536,19 @@ app.post('/api/prices/area', requireAuth, async (req, res) => {
     const hood = String((req.body && req.body.hood) || '').replace(/\s+/g, ' ').trim().slice(0, 60) || null;
     // How far the family goes to shop: 0 to 10 km (0: their settlement only).
     const maxKm = area.reachKm(req.body && req.body.max_km);
-    const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
-    const near = area.nearestStores(stores || [], { code: at.code, hood }, { maxKm });
+    // The family's location, if they gave it: rounded to about 500 m (again,
+    // after the phone), and only that is kept.
+    const point = req.body && req.body.lat != null ? geo.roundHome(req.body.lat, req.body.lon) : null;
+    const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select(STORE_COLS).order('chain').order('store_id'));
+    const near = area.nearestStores(stores || [], { code: at.code, hood, ...(point || {}) }, { maxKm });
     // Each write checked: "saved" is said only when it was.
-    const w1 = await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: at.code, city: at.name, hood, max_km: maxKm, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
+    const w1 = await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: at.code, city: at.name, hood, max_km: maxKm, lat: point ? point.lat : null, lon: point ? point.lon : null, updated_at: new Date().toISOString() }, { onConflict: 'household_id' });
     if (w1.error) throw new Error(w1.error.message);
     const w2 = await supabaseAdmin.from('household_stores').delete().eq('household_id', hid);
     if (w2.error) throw new Error(w2.error.message);
-    if (near.length) { const w3 = await supabaseAdmin.from('household_stores').insert(near.map((n) => ({ household_id: hid, chain: n.chain, store_id: n.store_id, chain_name: n.chain_name, name: n.name, address: n.address, city: n.city, km: n.km, kind: n.kind }))); if (w3.error) throw new Error(w3.error.message); }
+    if (near.length) { const w3 = await supabaseAdmin.from('household_stores').insert(near.map((n) => storeRow(hid, n))); if (w3.error) throw new Error(w3.error.message); }
     loadLocal(null, near).catch((e) => console.error('local prices failed:', e.message));
-    return res.json({ area: { city_code: at.code, city: at.name, hood, max_km: maxKm }, stores: near });
+    return res.json({ area: { city_code: at.code, city: at.name, hood, max_km: maxKm, lat: point ? point.lat : null, lon: point ? point.lon : null }, stores: near });
   } catch (err) {
     console.error('price area failed:', err.message);
     return res.status(500).json({ error: 'לא נשמר. נסו שוב.' });
@@ -2953,10 +2990,10 @@ app.post('/api/admin/demo/refresh', requireAuth, async (req, res) => {
     const home = area.place('2610');
     if (home) {
       await supabaseAdmin.from('household_area').upsert({ household_id: hid, city_code: home.code, city: home.name, hood: 'רמת בית שמש א', max_km: 10, updated_at: today.toISOString() }, { onConflict: 'household_id' });
-      const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
+      const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select(STORE_COLS).order('chain').order('store_id'));
       const near = area.nearestStores(stores || [], { code: home.code, hood: 'רמת בית שמש א' }, { maxKm: 10 });
       await supabaseAdmin.from('household_stores').delete().eq('household_id', hid);
-      if (near.length) await supabaseAdmin.from('household_stores').insert(near.map((n) => ({ household_id: hid, chain: n.chain, store_id: n.store_id, chain_name: n.chain_name, name: n.name, address: n.address, city: n.city, km: n.km, kind: n.kind })));
+      if (near.length) await supabaseAdmin.from('household_stores').insert(near.map((n) => storeRow(hid, n)));
     }
     await supabaseAdmin.from('shop_receipts').delete().eq('household_id', hid);
     await supabaseAdmin.from('shop_receipts').insert({ household_id: hid, created_by: acc.user.id, ...demo.buildReceipt({ today }) });

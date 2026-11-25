@@ -1,12 +1,12 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi, areaReach, storeWhy, reachKm, wazeLink, reachText } from '../../domain/prices.js';
+import { CERTS, NOT_KOSHER, chooseAll, basket, saving, chainNote, bestAlways, bestPrice, certOf, certFromText, nonFood, nearby, size, sizeOfProduct, sizeText, count, twoChains, chainListText, baseChain, isOnlineChain, SHABBAT_CHAINS, hiddenChains, withoutChains, haredi, areaReach, storeWhy, reachKm, wazeLink, reachText, roundHome } from '../../domain/prices.js';
 import { lastPaid } from '../../domain/receipts.js';
 import { logoSrc, logoDark, orderLink, searchLink, pasteLink, pasteText } from '../../domain/chainShops.js';
 import { PROMO_POLICY, promoText, offText } from '../../domain/promos.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
-import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces, findReach, getClubs, setClubs, getChainsShown, setChainsShown } from '../../data/prices.js';
+import { searchPrices, fetchPrices, fetchStatus, getKosherPref, setKosherPref, voteKosher, pickProduct, productImages, getArea, setArea, findPlaces, findReach, placeAt, getClubs, setClubs, getChainsShown, setChainsShown } from '../../data/prices.js';
 import { aisleOf } from '../../domain/shopping.js';
 import { showToast } from '../../lib/toast.js';
 import { track } from '../../lib/telemetry.js';
@@ -110,7 +110,7 @@ function Product({ p, children }) {
 function AreaStores({ area }) {
   return html`<details class="pp-stores"><summary>באילו סניפים משווים</summary>
     <ul>${area.stores.map((s) => html`<li key=${s.chain}><b>${s.chain_name || s.chain}</b><span>${s.name}</span><small class="muted">${storeWhy(s)}</small><a class="pp-waze" href=${wazeLink(s)} target="_blank" rel="noopener" aria-label=${'לנווט ב-Waze אל ' + (s.chain_name || s.chain) + ', ' + s.name}>Waze</a></li>`)}</ul>
-    <small class="faint">המרחק נמדד ממרכז היישוב שלכם למרכז היישוב של הסניף. סניף ביישוב שלכם תמיד נכלל.</small></details>`;
+    <small class="faint">${area.lat != null ? 'המרחק נמדד מהמיקום שלכם (בקירוב של 500 מטר) לכתובת הסניף. סניף ביישוב שלכם תמיד נכלל.' : 'המרחק נמדד ממרכז היישוב שלכם למרכז היישוב של הסניף. סניף ביישוב שלכם תמיד נכלל.'}${area.stores.some((s) => s.lat != null) ? ' מיקום הסניפים: © OpenStreetMap.' : ''}</small></details>`;
 }
 
 // Where the family lives: a settlement (chosen from the list as they type)
@@ -125,13 +125,31 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel, step }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [counts, setCounts] = useState(null);
+  // The family's location from the phone, rounded to about 500 m on the
+  // phone itself; only that is sent and kept.
+  const [point, setPoint] = useState(initial && initial.lat != null ? { lat: Number(initial.lat), lon: Number(initial.lon) } : null);
+  const [locating, setLocating] = useState(false);
+  const canLocate = typeof navigator !== 'undefined' && !!navigator.geolocation;
+  const locate = () => {
+    setErr(''); setLocating(true);
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const p = roundHome(pos.coords.latitude, pos.coords.longitude);
+      if (!p) { setLocating(false); setErr('המיקום שלכם מחוץ לישראל. בחרו יישוב מהרשימה.'); return; }
+      try {
+        const r = await placeAt(p);
+        if (!r.place) throw new Error('לא מצאנו יישוב קרוב. בחרו יישוב מהרשימה.');
+        setPoint(p); setPlace(r.place); setQ(r.place.name); setList([]);
+      } catch (e) { setErr(e.message || 'לא הצלחנו. נסו שוב.'); }
+      setLocating(false);
+    }, () => { setLocating(false); setErr('לא קיבלנו את המיקום. אפשר לאשר מיקום לאפליקציה בהגדרות הטלפון, או לבחור יישוב מהרשימה.'); }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
+  };
   useEffect(() => {
     setCounts(null);
     if (!place) return undefined;
     let live = true;
-    findReach(place.code).then((r) => { if (live) setCounts(r.counts || null); }).catch(() => {});
+    findReach(place.code, point).then((r) => { if (live) setCounts(r.counts || null); }).catch(() => {});
     return () => { live = false; };
-  }, [place && place.code]);
+  }, [place && place.code, point && point.lat, point && point.lon]);
   useEffect(() => {
     if (place && place.name === q) { setList([]); return undefined; }
     if (q.trim().length < 2) { setList([]); return undefined; }
@@ -141,24 +159,26 @@ function AreaPicker({ hid, initial, onDone, onSkip, onCancel, step }) {
   const save = async () => {
     if (!place) return;
     setBusy(true); setErr('');
-    try { const r = await setArea(hid, place.code, hood.trim(), maxKm); onDone({ ...r.area, stores: r.stores || [] }); } catch (e) { setErr(e.message || 'לא נשמר. נסו שוב.'); }
+    try { const r = await setArea(hid, place.code, hood.trim(), maxKm, point); onDone({ ...r.area, stores: r.stores || [] }); } catch (e) { setErr(e.message || 'לא נשמר. נסו שוב.'); }
     setBusy(false);
   };
   return html`<div class="stack price-area-pick">
     ${step && html`<small class="pp-step">${step}</small>`}<b>איפה אתם גרים?</b>
     <span class="muted" style="line-height:1.55">רק יישוב, ושכונה אם רוצים. לא צריך לבחור רשת או סניף: נמצא לבד את הסניף הקרוב אליכם בכל רשת, ונשווה במחירים שלו.</span>
-    <label class="price-area-field"><span>יישוב</span><input class="input" value=${q} placeholder="למשל: בית שמש" autocomplete="off" aria-label="יישוב" onInput=${(e) => { setQ(e.currentTarget.value); setPlace(null); }} /></label>
-    ${list.length > 0 && html`<ul class="price-area-list" role="listbox" aria-label="יישובים">${list.map((p) => html`<li key=${p.code}><button type="button" role="option" onClick=${() => { setPlace(p); setQ(p.name); setList([]); }}>${p.name}</button></li>`)}</ul>`}
+    <label class="price-area-field"><span>יישוב</span><input class="input" value=${q} placeholder="למשל: בית שמש" autocomplete="off" aria-label="יישוב" onInput=${(e) => { setQ(e.currentTarget.value); setPlace(null); setPoint(null); }} /></label>
+    ${canLocate && !point && html`<button type="button" class="btn btn-ghost pp-locate" disabled=${locating} onClick=${locate}><${Icon} name="pin" size=${16} />${locating ? 'מחפשים את המיקום…' : 'להשתמש במיקום שלי'}</button>`}
+    ${point && html`<small class="muted pp-located"><${Icon} name="pin" size=${14} />לפי המיקום שלכם, בקירוב של 500 מטר. <button type="button" class="btn-text pp-inline" onClick=${() => setPoint(null)}>בלי מיקום</button></small>`}
+    ${list.length > 0 && html`<ul class="price-area-list" role="listbox" aria-label="יישובים">${list.map((p) => html`<li key=${p.code}><button type="button" role="option" onClick=${() => { setPlace(p); setQ(p.name); setList([]); setPoint(null); }}>${p.name}</button></li>`)}</ul>`}
     ${place && html`<label class="price-area-field"><span>שכונה <small class="muted">(לא חובה, עוזר לדייק)</small></span><input class="input" value=${hood} maxLength="60" placeholder="למשל: רמת בית שמש א׳" aria-label="שכונה" onInput=${(e) => setHood(e.currentTarget.value)} /></label>`}
     ${place && html`<label class="price-area-field"><span>עד כמה רחוק אתם מוכנים לנסוע לקנות? <b class="num">${maxKm ? maxKm + ' ק"מ' : 'רק ביישוב'}</b></span>
       <input type="range" class="price-km" min="0" max="10" step="1" value=${maxKm} aria-label="מרחק מהבית בקילומטרים" aria-valuetext=${maxKm ? maxKm + ' קילומטר' : 'רק ביישוב'} onInput=${(e) => setMaxKm(Number(e.currentTarget.value))} />
       <span class="price-km-scale" aria-hidden="true"><small>0</small><small>5</small><small>10 ק"מ</small></span></label>`}
-    ${place && html`<small class="muted price-km-note">${counts && html`<b class="pp-reach">${reachText(counts, maxKm)}</b> `}נמדד ממרכז ${place.name}. סניף בתוך ${place.name} תמיד נכלל.</small>`}
+    ${place && html`<small class="muted price-km-note">${counts && html`<b class="pp-reach">${reachText(counts, maxKm)}</b> `}${point ? 'נמדד מהמיקום שלכם לכתובת של כל סניף.' : 'נמדד ממרכז ' + place.name + '.'} סניף בתוך ${place.name} תמיד נכלל.</small>`}
     ${err && html`<span role="alert" class="price-warn">${err}</span>`}
     <div class="price-cert-actions"><button type="button" class="btn btn-primary" style="width:auto" disabled=${!place || busy} onClick=${save}>${busy ? 'מחפשים סניפים…' : 'למצוא סניפים קרובים'}</button>
       ${onSkip && html`<button type="button" class="btn-text" onClick=${onSkip}>לא עכשיו</button>`}
       ${onCancel && html`<button type="button" class="btn-text" onClick=${onCancel}>ביטול</button>`}</div>
-    <small class="faint">לא שואלים כתובת מדויקת ולא משתמשים במיקום של הטלפון.</small>
+    <small class="faint">לא שואלים כתובת מדויקת. המיקום של הטלפון רק אם תבקשו, והוא נשמר מעוגל לכ-500 מטר, לא המקום המדויק.</small>
   </div>`;
 }
 
