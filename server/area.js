@@ -118,6 +118,14 @@ function nearestStores(stores, home, { maxKm = 5 } = {}) {
   return out.sort((a, b) => a.km - b.km || String(a.chain_name).localeCompare(String(b.chain_name), 'he'));
 }
 
+// How many chains have a branch for this home at each distance, 0 to 10 km
+// (counts[k]: within k km; 0 is the settlement itself). For the distance
+// picker, so the family sees what a few more km bring.
+function reachCounts(stores, home) {
+  const near = nearestStores(stores, home, { maxKm: 10 });
+  return Array.from({ length: 11 }, (_, k) => near.filter((s) => s.km <= k).length);
+}
+
 // A chain's branch list with each branch number once: when a number is
 // listed twice, the entry we can place on the map (a real settlement, a real
 // address) is kept; an online warehouse or the head office last.
@@ -132,4 +140,4 @@ function uniqueStores(list) {
   return [...best.values()];
 }
 
-module.exports = { place, placeByName, suggest, storePlace, km, reachKm, nearestStores, uniqueStores };
+module.exports = { place, placeByName, suggest, storePlace, km, reachKm, nearestStores, reachCounts, uniqueStores };

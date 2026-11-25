@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-const { place, placeByName, suggest, storePlace, km, reachKm, nearestStores } = createRequire(import.meta.url)('../server/area.js');
+const { place, placeByName, suggest, storePlace, km, reachKm, nearestStores, reachCounts } = createRequire(import.meta.url)('../server/area.js');
 
 // Made-up branches, at real settlement numbers.
 const S = (chain, store_id, name, address, city) => ({ chain, chain_name: chain, store_id, name, address, city });
@@ -54,4 +54,15 @@ test('how far the family goes: 0 to 10 km, 5 unless said, older saves of up to 5
   assert.equal(reachKm(25), 10);
   assert.equal(reachKm(-3), 0);
   assert.equal(reachKm('abc'), 5);
+});
+
+test('how many chains at each distance, 0 to 10 km', () => {
+  const stores = [
+    S('x', '1', 'סניף', 'הרצל 1', '2610'),
+    S('y', '2', 'צרעה', 'הרצל 3', '567'),
+    S('z', '3', 'כפר אוריה', 'הגפן 1', '364'),
+    S('w', '4', 'ירושלים', 'יפו 1', '3000')
+  ];
+  // Beit Shemesh itself; Tzora about 2.6 km; Kfar Uria about 6.5 km; Jerusalem about 23 km, never.
+  assert.deepEqual(reachCounts(stores, { code: '2610' }), [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]);
 });

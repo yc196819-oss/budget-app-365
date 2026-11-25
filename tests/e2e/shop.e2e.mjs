@@ -187,6 +187,8 @@ const CATALOG = {
 async function priceRoutes(page, { found = {}, db } = {}) {
   const calls = { search: [], fetch: [] };
   const cat = JSON.parse(JSON.stringify(CATALOG));
+  // How many chains at each distance, for the distance picker (made-up).
+  await page.route('**/api/prices/reach**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ counts: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] }) }));
   await page.route('**/rest/v1/rpc/price_search', (r) => {
     const qs = JSON.parse(r.request().postData()).p_queries;
     calls.search.push(qs);
@@ -315,11 +317,12 @@ test('prices: the family says only where it lives; the nearest branch at every c
   });
   await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
   await page.route('**/api/prices/places**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ places: [{ code: '2610', name: 'בית שמש' }, { code: '9200', name: 'בית שאן' }] }) }));
+  await page.route('**/api/prices/reach**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ counts: [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3] }) }));
   await page.route('**/api/prices/area', (r) => {
     const b = JSON.parse(r.request().postData());
     asked.push(b);
     db.tables.household_area = [{ household_id: b.hid, city_code: b.city_code, city: 'בית שמש', hood: b.hood, max_km: b.max_km }];
-    db.tables.household_stores = [{ household_id: b.hid, chain: 'x', chain_name: 'רשת א', store_id: '7', name: 'סניף נחל דולב', city: 'בית שמש', km: 0, kind: 'hood' }];
+    db.tables.household_stores = [{ household_id: b.hid, chain: 'x', chain_name: 'רשת א', store_id: '7', name: 'סניף נחל דולב', address: 'נחל דולב 4', city: 'בית שמש', km: 0, kind: 'hood' }];
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ area: { city_code: b.city_code, city: 'בית שמש', hood: b.hood, max_km: b.max_km }, stores: db.tables.household_stores }) });
   });
   await page.click('.shop-prices-cta button');
@@ -335,6 +338,11 @@ test('prices: the family says only where it lives; the nearest branch at every c
   await pick.locator('input.price-km').fill('10');
   assert.match(await pick.textContent(), /10 ק"מ/);
   assert.match(await pick.locator('.price-km-note').textContent(), /נמדד ממרכז בית שמש/);
+  // How many chains each distance brings (made-up counts).
+  assert.match(await pick.locator('.pp-reach').textContent(), /עד 10 ק"מ: 3 רשתות\./);
+  await pick.locator('input.price-km').fill('5');
+  assert.match(await pick.locator('.pp-reach').textContent(), /עד 5 ק"מ: 2 רשתות \(עד 10 ק"מ: 3 רשתות\)/);
+  await pick.locator('input.price-km').fill('10');
   await pick.locator('button:has-text("למצוא סניפים קרובים")').click();
   await page.waitForSelector('.price-area:has-text("רמת בית שמש א, בית שמש")', { state: 'attached' });
   assert.match(await page.locator('.pp-set > summary').textContent(), /בית שמש/, 'the folded settings line names the place');
@@ -344,6 +352,10 @@ test('prices: the family says only where it lives; the nearest branch at every c
   await page.locator('.pp-stores summary').click();
   assert.match(await page.locator('.pp-stores li').first().textContent(), /רשת א.*סניף נחל דולב.*בשכונה שלכם/);
   assert.match(await page.locator('.pp-stores').textContent(), /ממרכז היישוב שלכם למרכז היישוב של הסניף/);
+  // On a phone: a way to the branch in Waze, by its address.
+  const waze = page.locator('.pp-stores li .pp-waze').first();
+  assert.equal(await waze.getAttribute('href'), 'https://waze.com/ul?q=' + encodeURIComponent('נחל דולב 4, בית שמש') + '&navigate=yes');
+  assert.ok(await waze.isVisible());
   assert.deepEqual(asked, [{ hid: db.hid, city_code: '2610', hood: 'רמת בית שמש א', max_km: 10 }]);
   // Only the chain with a branch near them, at that branch's price, with its name.
   await page.waitForSelector('.pp-hero:has-text("₪6.00")');

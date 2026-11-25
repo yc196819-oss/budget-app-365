@@ -20,3 +20,20 @@ test('why each branch was chosen', () => {
   assert.equal(storeWhy(S('near', 22.8, 'ירושלים')), 'ירושלים, 22.8 ק"מ');
   assert.equal(storeWhy(S('near', 12, 'ירושלים')), 'ירושלים, 12 ק"מ');
 });
+
+test('the Waze link: by the street address and settlement, or the branch name when there is no address', async () => {
+  const { wazeLink } = await import('../public/app/src/domain/prices.js');
+  assert.equal(wazeLink({ name: 'סניף מרכז', address: 'הרצל 10', city: 'בית שמש' }), 'https://waze.com/ul?q=' + encodeURIComponent('הרצל 10, בית שמש') + '&navigate=yes');
+  assert.equal(wazeLink({ name: 'סניף מרכז', address: 'unknown', city: 'בית שמש' }), 'https://waze.com/ul?q=' + encodeURIComponent('סניף מרכז, בית שמש') + '&navigate=yes');
+  assert.equal(wazeLink({ name: 'סניף מרכז', address: null, city: '' }), 'https://waze.com/ul?q=' + encodeURIComponent('סניף מרכז') + '&navigate=yes');
+});
+
+test('the distance picker says how many chains at the chosen distance, and at 10 km when more', async () => {
+  const { reachText } = await import('../public/app/src/domain/prices.js');
+  const counts = [8, 8, 8, 14, 14, 18, 18, 18, 18, 19, 19];
+  assert.equal(reachText(counts, 5), 'עד 5 ק"מ: 18 רשתות (עד 10 ק"מ: 19 רשתות).');
+  assert.equal(reachText(counts, 10), 'עד 10 ק"מ: 19 רשתות.');
+  assert.equal(reachText(counts, 0), 'ביישוב עצמו: 8 רשתות (עד 10 ק"מ: 19 רשתות).');
+  assert.equal(reachText([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], 3), 'עד 3 ק"מ: רשת אחת.');
+  assert.equal(reachText(null, 5), '');
+});

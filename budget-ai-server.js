@@ -2467,6 +2467,27 @@ async function loadLocal(rows = null, only = null) {
 }
 // Settlements as the family types ("בית ש" → בית שמש, בית שאן…).
 app.get('/api/prices/places', requireAuth, (req, res) => res.json({ places: area.suggest(String(req.query.q || '').slice(0, 40)) }));
+// The chains' branch list, kept for 10 minutes (it changes once a day): the
+// distance picker asks for it as the family moves the slider.
+let storesCache = { at: 0, rows: null };
+async function cachedStores() {
+  if (storesCache.rows && Date.now() - storesCache.at < 10 * 60 * 1000) return storesCache.rows;
+  const { data } = await allRows(() => supabaseAdmin.from('price_stores').select('chain,chain_name,store_id,name,address,city').order('chain').order('store_id'));
+  storesCache = { at: Date.now(), rows: data || [] };
+  return storesCache.rows;
+}
+// How many chains are near a settlement at each distance, 0 to 10 km.
+app.get('/api/prices/reach', requireAuth, async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const at = area.place(String(req.query.city_code || ''));
+    if (!at) return res.status(400).json({ error: 'לא מצאנו את היישוב.' });
+    return res.json({ counts: area.reachCounts(await cachedStores(), { code: at.code }) });
+  } catch (err) {
+    console.error('price reach failed:', err.message);
+    return res.status(500).json({ error: 'לא הצלחנו לספור. נסו שוב.' });
+  }
+});
 // Where the family lives: a settlement, and a neighborhood if it wants. The
 // branch nearest to it at every chain is found here; their prices come in
 // the background (the family sees the general price until then).
