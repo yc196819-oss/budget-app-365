@@ -365,10 +365,14 @@ export function choose(query, products, pref = 'any', { keep, strict = false } =
   const options = [...ok, ...rest.filter((x) => allowed(x.p, pref)).sort(byPrice), ...rest.filter((x) => !allowed(x.p, pref)).sort(byPrice)].slice(0, 8).map((x) => x.p);
   // A choice the person made before stays, if it is still a match.
   const kept = keep && near.find((x) => x.p.barcode === keep);
-  if (kept) return { query, status: 'chosen', pick: kept.p, options, pool: (ok.includes(kept) ? ok : near).map((x) => x.p) };
-  if (ok.length) return { query, status: 'auto', pick: ok[0].p, options, pool: ok.map((x) => x.p) };
+  // What may stand for the pick at a chain that does not sell it: every close
+  // name match with the same kashrut standing, also one only a few chains
+  // sell (a small chain's own milk is still milk there).
+  const okPool = near.filter((x) => allowed(x.p, pref)).map((x) => x.p);
+  if (kept) return { query, status: 'chosen', pick: kept.p, options, pool: ok.includes(kept) ? okPool : near.map((x) => x.p) };
+  if (ok.length) return { query, status: 'auto', pick: ok[0].p, options, pool: okPool };
   const maybe = strict ? [] : close.filter((x) => unknownKashrut(x.p)).map((x) => ({ ...x, h: hintFits(x.p, pref) ? 0 : 1 })).sort((a, b) => a.h - b.h || byPrice(a, b));
-  if (maybe.length) return { query, status: 'unverified', pick: maybe[0].p, options, pool: maybe.map((x) => x.p), hint: maybe[0].h === 0 };
+  if (maybe.length) return { query, status: 'unverified', pick: maybe[0].p, options, pool: near.filter((x) => unknownKashrut(x.p)).map((x) => x.p), hint: maybe[0].h === 0 };
   return { query, status: 'unsure', pick: null, options, pool: [] };
 }
 // Nobody said what kashrut it has (not "another kashrut", not "not kosher").
@@ -516,12 +520,14 @@ export function nearby(catalog, on, stores = null) {
 // kind of size, from 80% to 125% of it (a 1 liter milk for a 1 liter milk,
 // not a 200 ml one). Products with no size stand only for each other. The
 // price is counted for the picked size, so a bigger package is not "dearer".
-export function equivalent(pick, other) {
+// `loose`: from half to twice the size, when a chain has nothing closer (a
+// 500 gram rice for a 1 kilo one is still rice there, counted per kilo).
+export function equivalent(pick, other, loose = false) {
   const a = sizeOfProduct(pick), b = sizeOfProduct(other);
   if (!a && !b) return 1;
   if (!a || !b || a.unit !== b.unit) return 0;
   const r = a.qty / b.qty;
-  return r >= 0.8 && r <= 1.25 ? r : 0;
+  return loose ? (r >= 0.5 && r <= 2 ? r : 0) : r >= 0.8 && r <= 1.25 ? r : 0;
 }
 const offerAt = (p, chain) => validOffers(p).find((o) => o.chain === chain);
 
@@ -554,15 +560,18 @@ export function basket(choices, qtyOf = () => 1, now = new Date(), clubs = null)
         continue;
       }
       let best = null;
-      for (const p of c.pool || []) {
-        if (p.barcode === c.pick.barcode) continue;
-        const r = equivalent(c.pick, p);
-        const po = r && offerAt(p, chain);
-        if (!po) continue;
-        // Counted for the picked size (a bigger package is not "dearer").
-        const d = promoCost(po, q, now, clubs);
-        const each = Math.round((d.cost / q) * r * 100) / 100;
-        if (!best || each < best.price) best = { product: p, price: each, paid: po.price, d };
+      for (const loose of [false, true]) {
+        for (const p of c.pool || []) {
+          if (p.barcode === c.pick.barcode) continue;
+          const r = equivalent(c.pick, p, loose);
+          const po = r && offerAt(p, chain);
+          if (!po) continue;
+          // Counted for the picked size (a bigger package is not "dearer").
+          const d = promoCost(po, q, now, clubs);
+          const each = Math.round((d.cost / q) * r * 100) / 100;
+          if (!best || each < best.price) best = { product: p, price: each, paid: po.price, d };
+        }
+        if (best) break;
       }
       if (best) {
         total += best.price * q; swaps++; saved += best.d.saved;
