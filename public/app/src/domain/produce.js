@@ -80,6 +80,9 @@ export const pieceGrams = (name) => { const r = produceOf(name); return r ? r.g 
 // The most a kilo of it may cost, or null.
 export const maxPerKg = (name) => { const r = produceOf(name); return r ? r.max : null; };
 
+// One food, two names: the name most chains write. ("מושט" and "אמנון" are
+// the same fish; "פילה מושט" is sold at 6 chains, "פילה אמנון" at 23.)
+const SAME_FOOD = { 'מושט': 'אמנון' };
 export function freshTerm(term) {
   const ws = String(term || '').split(' ').filter(Boolean);
   let keep = ws.filter((w) => !FILLER.test(w));
@@ -87,5 +90,5 @@ export function freshTerm(term) {
   // alone is any fillet).
   if (keep.length > 2) keep = keep.filter((w) => w !== 'דג' && w !== 'דגי');
   if (!keep.length) keep = ws;
-  return keep.map(base).join(' ');
+  return keep.map((w) => SAME_FOOD[w] || base(w)).join(' ');
 }

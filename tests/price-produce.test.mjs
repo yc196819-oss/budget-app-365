@@ -66,7 +66,8 @@ test('the recipe from the report: tomatoes, garlic, a red pepper, coriander, dri
   assert.doesNotMatch(coriander.pick.name, /\//);
   // Found though the chains write them otherwise.
   assert.match(chili.pick.name, /חריף/);
-  assert.match(fish.pick.name, /פילה מושט/);
+  // "מושט" is "אמנון", as most chains write it.
+  assert.match(fish.pick.name, /פילה אמנון/);
   const rami = rows.find((r) => r.chain === 'rami-levy');
   const at = (i) => rami.lines.find((l) => l.id === 'l' + i);
   // Four tomatoes are about 600 grams: ₪5 to ₪12, not ₪40.
@@ -145,7 +146,8 @@ test('fresh food is not another food that starts the same', () => {
 test('the search finds fresh food as the chains write it', () => {
   assert.equal(searchTerm('עגבניות'), 'עגבני', 'finds "עגבניה מגי" too');
   assert.equal(searchTerm('פלפל אדום מתוק'), 'פלפל אדום');
-  assert.equal(searchTerm('פילה דג מושט'), 'פילה מושט');
+  assert.equal(searchTerm('פילה דג מושט'), 'פילה אמנון', 'the same fish, sold at most chains');
+  assert.equal(searchTerm('מושט'), 'אמנון');
   assert.equal(searchTerm('שיני שום'), 'שום');
   assert.equal(searchTerm('פלפלים אדומים יבשים חריפים'), 'פלפל אדום יבש חריף');
   assert.equal(looser('פלפל אדום יבש חריף'), 'פלפל יבש חריף', 'the colour goes first');
