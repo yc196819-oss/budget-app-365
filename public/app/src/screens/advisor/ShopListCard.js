@@ -65,7 +65,7 @@ export function ShopListCard({ list, hid, people: homePeople, onList = [], build
     if (!prices || typeof prices !== 'object' || !items.length) return [];
     const lines = items.map((it, n) => ({ id: 'l' + n, name: it.name, qty: it.qty }));
     const cat = withoutChains(nearby(prices.catalog, !!prices.area, prices.area ? prices.area.stores : null), hiddenChains(prices.pref));
-    const rows = basket(chooseAll(lines, cat, prices.pref || 'any'), (c) => count((lines.find((l) => l.id === c.id) || {}).qty, c.pick));
+    const rows = basket(chooseAll(lines, cat, prices.pref || 'any'), (c) => count((lines.find((l) => l.id === c.id) || {}).qty, c.pick, c.query));
     // Cheapest first, the ones open every day before the rest; three at most.
     return [...rows.filter((r) => !chainNote(r.chain)), ...rows.filter((r) => chainNote(r.chain))].slice(0, 3)
       .map((r) => ({ ...r, found: items.length - r.missing, byName: Object.fromEntries((r.lines || []).map((l) => [items[Number(String(l.id).slice(1))].name, l])) }));
