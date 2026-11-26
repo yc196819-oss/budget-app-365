@@ -42,7 +42,11 @@ test('logos: kept in the app; every chain on the list has its file, and a chain 
   assert.equal(logoDark('city-market'), true, 'a white logo, on a dark tile');
   assert.equal(logoDark('victory'), false);
   assert.equal(logoKey('shuk-hayir'), 'shuk-hair', 'an old name of the same chain');
-  assert.equal(logoSrc('dor-alon'), null, 'the group\'s logo is not the shop\'s: the letter stays');
+  // Dor Alon's price files are its Alonit shops: the shops' own logo.
+  assert.equal(logoSrc('dor-alon'), '/app/assets/chains/dor-alon.png');
+  // The online shop's logo stands for the chain, as with the others.
+  assert.equal(logoSrc('shufersal-online'), '/app/assets/chains/shufersal.png');
+  assert.equal(logoSrc('shufersal'), '/app/assets/chains/shufersal.png');
   for (const k of LOGOS) assert.ok(existsSync(new URL('../public/app/assets/chains/' + k + '.png', import.meta.url)), k);
   for (const k of DARK_LOGOS) assert.ok(LOGOS.includes(k), k);
   for (const [k, s] of Object.entries(SHOPS)) {
