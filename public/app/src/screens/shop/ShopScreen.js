@@ -20,6 +20,8 @@ import { FinishSheet, TripsCard, TripsSheet } from './Trips.js';
 import { loadTrips } from '../../data/shopTrips.js';
 import { takeRecipe } from '../../lib/advisorInbox.js';
 import { Receipts } from './Receipts.js';
+import { shopShortcut, isTyping } from '../../domain/shortcuts.js';
+import { useMedia } from '../../lib/useMedia.js';
 import { loadReceipts } from '../../data/receipts.js';
 
 // The food budget of this month, from the goals tab: the category named
@@ -56,6 +58,34 @@ function Intro({ onClose }) {
   </section>`;
 }
 
+// "לשתף את הרשימה": one button, and the ways to share in a small menu
+// (email first, WhatsApp last). Closes on a choice, Escape or a click outside.
+function ShareMenu({ mailHref, waHref, onCopy, disabled }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  // Listening from the start (not only once open): an Escape or a click right
+  // after opening must not slip by before the menu is ready for it.
+  const isOpen = useRef(false);
+  isOpen.current = open;
+  useEffect(() => {
+    const out = (e) => { if (isOpen.current && box.current && !box.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (isOpen.current && e.key === 'Escape') { setOpen(false); box.current?.querySelector('button')?.focus(); } };
+    document.addEventListener('pointerdown', out);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', out); document.removeEventListener('keydown', esc); };
+  }, []);
+  const done = () => setOpen(false);
+  return html`<span class="shop-share" ref=${box}>
+    <button type="button" class="btn btn-ghost" aria-expanded=${open} aria-controls="shop-share-menu" disabled=${disabled} onClick=${() => setOpen(!open)}><${Icon} name="share" size=${17} />לשתף את הרשימה</button>
+    ${open && html`<span class="shop-share-menu" id="shop-share-menu">
+      <a class="btn-text" href=${mailHref} onClick=${done}><${Icon} name="mail" size=${17} />לשלוח במייל</a>
+      <button type="button" class="btn-text" onClick=${() => { done(); onCopy(); }}><${Icon} name="file" size=${17} />להעתיק</button>
+      <button type="button" class="btn-text" onClick=${() => { done(); window.print(); }}><${Icon} name="receipt" size=${17} />להדפיס</button>
+      <a class="btn-text" href=${waHref} target="_blank" rel="noopener" onClick=${done}><${Icon} name="chat" size=${17} />וואטסאפ</a>
+    </span>`}
+  </span>`;
+}
+
 // "Shopping": one list for the whole household, live, sorted by department,
 // remembered from one shopping to the next. Built for a computer first (type
 // several items and press Enter; email, copy or print it; WhatsApp last), and works on a phone.
@@ -75,6 +105,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   const [trips, setTrips] = useState([]);
   const [finishing, setFinishing] = useState(false);
   const [history, setHistory] = useState(null); // null: closed; '' the list; an id: that trip
+  const desktop = useMedia('(min-width: 1024px)');
   useEffect(() => { if (owner && data.hid) loadTrips(data.hid).then(setTrips).catch(() => setTrips([])); }, [data.hid, owner]);
   // A recipe shared from the phone: "the advisor fills a cart" opens on it.
   const [sharedRecipe, setSharedRecipe] = useState(null);
@@ -101,6 +132,32 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   const closeIntro = () => { writeLocal(INTRO_KEY, '1'); setIntro(false); };
   useEffect(() => { if (owner && data.hid) loadReceipts(data.hid).then(setReceipts).catch(() => setReceipts([])); }, [data.hid, owner]);
   useEffect(() => { if (data.hid) getArea(data.hid).then((a) => setAreaText(a)).catch(() => setAreaText('')); }, [data.hid]);
+
+  // A computer's keyboard in an open list: A to the add box, arrows between items.
+  const inList = shop.status === 'ready' && !(owner && Array.isArray(lists) && lists.length > 0 && !openList);
+  const quiet = store || advisor || finishing || history !== null;
+  useEffect(() => {
+    if (!desktop || !inList || quiet) return undefined;
+    const onKey = (e) => {
+      if (document.querySelector('.sheet, .store, [aria-modal="true"]')) return;
+      const t = e.target;
+      const onItem = !!(t && t.closest && t.closest('.shop-item'));
+      const act = shopShortcut({ code: e.code, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, typing: isTyping(t), onItem });
+      if (!act) return;
+      if (act === 'add') { e.preventDefault(); input.current?.focus(); return; }
+      const boxes = [...document.querySelectorAll('.shop-item input[type=checkbox]')];
+      if (!boxes.length) return;
+      const at = boxes.indexOf(t);
+      // Arrows mean the list only from an item, or when nothing else has the focus.
+      if (at < 0 && t && t !== document.body) return;
+      e.preventDefault();
+      const next = at < 0 ? (act === 'next' ? 0 : boxes.length - 1) : Math.max(0, Math.min(boxes.length - 1, at + (act === 'next' ? 1 : -1)));
+      boxes[next].focus();
+      boxes[next].scrollIntoView({ block: 'nearest' });
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [desktop, inList, quiet]);
 
   if (shop.status === 'loading' || data.status !== 'ready') return html`<${Loading} label="טוען את הרשימה…" />`;
   if (shop.status === 'error') return html`<div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו לטעון את הרשימה</b><button type="button" class="btn btn-ghost" onClick=${shop.reload}>לנסות שוב</button></div>`;
@@ -192,10 +249,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         <span class="muted" style="font-size:14px">עוזרים לכם לחסוך בסופר: רשימה אחת לכל הבית, וכמה נשאר לסופר החודש. ${!intro && html`<button type="button" class="btn-text shop-what" onClick=${() => setIntro(true)}>מה זה?</button>`}</span>
         <span class="shop-tools">
           ${owner && html`<button type="button" class="btn store-go" onClick=${() => { setStore(true); track('shop_store'); }} disabled=${!open.some((i) => !i.done)}><${Icon} name="cart" size=${17} />מצב בחנות</button>`}
-          <a class="btn btn-ghost" href=${mailHref} aria-disabled=${String(!open.some((i) => !i.done))}><${Icon} name="mail" size=${17} />לשלוח במייל</a>
-          <button type="button" class="btn btn-ghost" onClick=${copy} disabled=${!open.some((i) => !i.done)}>להעתיק</button>
-          <button type="button" class="btn btn-ghost" onClick=${() => window.print()} disabled=${!open.some((i) => !i.done)}>להדפיס</button>
-          <a class="btn btn-ghost" href=${waHref} target="_blank" rel="noopener" aria-disabled=${String(!open.some((i) => !i.done))}>וואטסאפ</a>
+          <${ShareMenu} mailHref=${mailHref} waHref=${waHref} onCopy=${copy} disabled=${!open.some((i) => !i.done)} />
         </span>
       </div>
       <p class="shop-trial" role="note"><b>בהרצה:</b> הטאב חדש ועוד משתפר, וייתכנו תקלות. ראיתם משהו לא תקין? <button type="button" class="btn-text shop-trial-talk" onClick=${() => go('profile/feedback')}>כתבו לנו</button>.</p>
@@ -206,6 +260,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         ${canListen() && html`<button type="button" class=${'icon-btn shop-mic' + (listening ? ' on' : '')} aria-label="להוסיף בקול" onClick=${voice}><${Icon} name="mic" size=${19} /></button>`}
         <button type="submit" class="btn" disabled=${busy || !text.trim()}>להוסיף</button>
       </form>
+      ${desktop && open.length > 0 && html`<p class="shop-keys">במקלדת: <kbd>A</kbd> מוסיפים מוצר · <kbd>↑</kbd><kbd>↓</kbd> עוברים בין המוצרים · <kbd>רווח</kbd> מסמנים שנקנה</p>`}
       ${owner && html`<button type="button" class="card adv-cta" onClick=${() => { setAdvisor(true); track('shop_advisor_open'); }}><span class="adv-spark" aria-hidden="true"><${Icon} name="spark" size=${18} /></span><span><b>היועץ מכין עגלה</b><small class="muted">לשבוע, לשבת, לחג או לאורחים: לפי מספר האנשים ומה שאתם קונים בדרך כלל.</small></span><span aria-hidden="true">‹</span></button>`}
       ${owner && store && html`<${StoreMode} items=${items} onToggle=${toggle} onFinish=${() => setFinishing(true)} onClose=${() => setStore(false)} />`}
       ${owner && finishing && html`<${FinishSheet} data=${data} items=${items} onClose=${() => setFinishing(false)}
