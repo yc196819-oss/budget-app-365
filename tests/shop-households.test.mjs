@@ -104,3 +104,9 @@ test('round 16: the list sent to whoever goes shopping keeps what has no price (
   assert.match(t, /☐ חלב 3% ×2: חלב 3% 1 ליטר · ₪12\.40/);
   assert.match(t, /בלי מחיר בהשוואה[^\n]*\n☐ עגבניות 1 ק"ג\n☐ זעתר/);
 });
+
+test('round 17: a thing saved without a department before the word was known gets its department when the list is shown', async () => {
+  const { grouped } = await import('../public/app/src/domain/shopping.js');
+  const g = grouped([{ id: '1', name: 'פרגיות', aisle: 'other', done: false, created_at: '1' }, { id: '2', name: 'משהו לא מוכר', aisle: 'other', done: false, created_at: '2' }, { id: '3', name: 'חלב', aisle: 'dairy', done: false, created_at: '3' }]);
+  assert.deepEqual(g.map((x) => [x.aisle, x.items.map((i) => i.name)]), [['dairy', ['חלב']], ['meat', ['פרגיות']], ['other', ['משהו לא מוכר']]]);
+});

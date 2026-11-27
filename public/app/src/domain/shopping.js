@@ -147,7 +147,8 @@ export function grouped(items) {
   const open = items.filter((i) => !i.cleared_at);
   const groups = new Map();
   for (const i of open) {
-    const a = AISLE_ORDER.includes(i.aisle) ? i.aisle : 'other';
+    // A thing saved without a department (before we knew the word) gets one now.
+    const a = AISLE_ORDER.includes(i.aisle) && i.aisle !== 'other' ? i.aisle : aisleOf(i.name);
     if (!groups.has(a)) groups.set(a, []);
     groups.get(a).push(i);
   }
