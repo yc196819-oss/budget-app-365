@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { aisleOf, parseItems } from '../public/app/src/domain/shopping.js';
+import { pastedList as pasted20, listText } from '../public/app/src/domain/shopping.js';
 
 // What 15 made-up households across the country typed into the list, and
 // where each thing belongs in the store. Found in the Shabbat testing rounds.
@@ -109,4 +110,12 @@ test('round 17: a thing saved without a department before the word was known get
   const { grouped } = await import('../public/app/src/domain/shopping.js');
   const g = grouped([{ id: '1', name: 'פרגיות', aisle: 'other', done: false, created_at: '1' }, { id: '2', name: 'משהו לא מוכר', aisle: 'other', done: false, created_at: '2' }, { id: '3', name: 'חלב', aisle: 'dairy', done: false, created_at: '3' }]);
   assert.deepEqual(g.map((x) => [x.aisle, x.items.map((i) => i.name)]), [['dairy', ['חלב']], ['meat', ['פרגיות']], ['other', ['משהו לא מוכר']]]);
+});
+
+test('round 20: our own copied list pasted back in keeps each amount (before 1 of 6, after 6 of 6); other words in brackets stay in the name', () => {
+  const items = [['חלב 3%', '×2', 'dairy'], ['עגבניות', '1 ק"ג', 'produce'], ['נייר טואלט', null, 'clean'], ['בשר טחון', '0.5 ק"ג', 'meat'], ['פיתות', '2 שקיות', 'bread'], ['טיטולים מידה 4', '×3', 'baby']]
+    .map(([name, qty, aisle], i) => ({ id: 'c' + i, name, qty, aisle, done: false, created_at: '2026-11-27T08:00:00Z' }));
+  const back = parseItems(pasted20(listText(items)));
+  assert.deepEqual(back.map((i) => [i.name, i.qty]).sort(), items.map((i) => [i.name, i.qty]).sort());
+  assert.deepEqual(parseItems('בשר טחון (מהקצב), חלב (2), קפה (עלית)').map((i) => [i.name, i.qty]), [['בשר טחון (מהקצב)', null], ['חלב', '×2'], ['קפה (עלית)', null]]);
 });
