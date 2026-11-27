@@ -10,8 +10,14 @@ import { grouped } from '../../domain/shopping.js';
 export function StoreMode({ items, onToggle, onFinish, onClose }) {
   const [hide, setHide] = useState(false);
   const lock = useRef(null);
+  const box = useRef(null);
   useEffect(() => {
     let live = true;
+    // Keyboard and screen readers: into the store screen, kept inside it
+    // (Tab does not wander to the list hidden behind), and back to where
+    // it was opened from.
+    const prev = document.activeElement;
+    if (box.current) box.current.focus();
     const ask = async () => {
       try { if (live && navigator.wakeLock && document.visibilityState === 'visible') lock.current = await navigator.wakeLock.request('screen'); } catch (_e) { /* not allowed: the screen dims as usual */ }
     };
@@ -19,7 +25,17 @@ export function StoreMode({ items, onToggle, onFinish, onClose }) {
     // A lock lets go when the app is hidden; asked again on coming back.
     const back = () => { if (document.visibilityState === 'visible') ask(); };
     document.addEventListener('visibilitychange', back);
-    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    const esc = (e) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key !== 'Tab' || !box.current) return;
+      const all = [...box.current.querySelectorAll('button:not([disabled])')];
+      if (!all.length) return;
+      const first = all[0];
+      const last = all[all.length - 1];
+      const inside = box.current.contains(document.activeElement);
+      if (e.shiftKey && (!inside || document.activeElement === first || document.activeElement === box.current)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', esc);
     document.body.classList.add('store-on');
     return () => {
@@ -28,13 +44,14 @@ export function StoreMode({ items, onToggle, onFinish, onClose }) {
       document.removeEventListener('keydown', esc);
       document.body.classList.remove('store-on');
       try { if (lock.current) lock.current.release(); } catch (_e) { /* already let go */ }
+      if (prev && prev.focus && document.contains(prev)) prev.focus();
     };
   }, []);
   const groups = grouped(items);
   const open = items.filter((i) => !i.cleared_at);
   const done = open.filter((i) => i.done).length;
   const pct = open.length ? Math.round((done / open.length) * 100) : 0;
-  return html`<div class="store" role="dialog" aria-modal="true" aria-label="מצב בחנות">
+  return html`<div class="store" role="dialog" aria-modal="true" aria-label="מצב בחנות" tabIndex="-1" ref=${box}>
     <header class="store-top">
       <div class="store-title"><b>בחנות</b><span class="num">נקנו ${done} מתוך ${open.length}</span></div>
       <button type="button" class=${'store-hide' + (hide ? ' on' : '')} aria-pressed=${String(hide)} onClick=${() => setHide((h) => !h)}>${hide ? 'להראות הכל' : 'להסתיר מה שנקנה'}</button>

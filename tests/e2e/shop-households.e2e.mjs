@@ -231,3 +231,24 @@ test('round 11: a list of only fresh vegetables: the comparison says why they ar
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('round 12: the store screen by keyboard: focus goes in, Tab stays inside (not on the list hidden behind), and Escape returns to "מצב בחנות"', async () => {
+  const { page, errors } = await openHousehold(HOUSEHOLDS[0]);
+  await page.locator('.shop-add .input').fill('חלב, לחם');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.shop-item');
+  await page.focus('.store-go');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.store');
+  const inside = () => page.evaluate(() => !!document.activeElement.closest('.store'));
+  // (Focus moves in right after the screen is drawn.)
+  await page.waitForFunction(() => !!document.activeElement.closest('.store'), null, { timeout: 3000 }).catch(() => {});
+  assert.equal(await inside(), true, 'focus is in the store screen');
+  for (let i = 0; i < 6; i++) { await page.keyboard.press('Tab'); assert.equal(await inside(), true, 'Tab ' + (i + 1)); }
+  for (let i = 0; i < 3; i++) { await page.keyboard.press('Shift+Tab'); assert.equal(await inside(), true, 'Shift+Tab ' + (i + 1)); }
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.store'));
+  assert.equal(await page.evaluate(() => document.activeElement.classList.contains('store-go')), true, 'back where it was opened');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
