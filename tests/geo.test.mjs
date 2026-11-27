@@ -33,8 +33,10 @@ test('a branch is looked up again only for a new address, or 30 days after it wa
   assert.equal(geo.needsPoint({}, q, now), true, 'never asked');
   assert.equal(geo.needsPoint({ geo_q: q, lat: 31.7, lon: 35 }, q, now), false, 'found');
   assert.equal(geo.needsPoint({ geo_q: 'הרצל 8, בית שמש, ישראל', lat: 31.7, lon: 35 }, q, now), true, 'the address changed');
-  assert.equal(geo.needsPoint({ geo_q: q, lat: null, geo_at: '2026-11-10T00:00:00Z' }, q, now), false, 'not found two weeks ago');
-  assert.equal(geo.needsPoint({ geo_q: q, lat: null, geo_at: '2026-10-01T00:00:00Z' }, q, now), true, 'not found over 30 days ago');
+  const later = Date.parse('2026-12-10T00:00:00Z');
+  assert.equal(geo.needsPoint({ geo_q: q, lat: null, geo_at: '2026-12-01T00:00:00Z' }, q, later), false, 'not found nine days ago');
+  assert.equal(geo.needsPoint({ geo_q: q, lat: null, geo_at: '2026-10-01T00:00:00Z' }, q, later), true, 'not found over 30 days ago');
+  assert.equal(geo.needsPoint({ geo_q: q, lat: null, geo_at: '2026-11-25T11:00:00Z' }, q, now), true, 'missed before the fix: asked again');
   assert.equal(geo.needsPoint({}, null, now), false, 'no address to ask about');
 });
 
@@ -45,7 +47,8 @@ test('a map answer is believed only in Israel and near the branch settlement', a
   assert.deepEqual(await geo.lookUp(answer([{ lat: '31.751', lon: '34.991' }]), 'q', bs), { lat: 31.751, lon: 34.991 });
   assert.equal(await geo.lookUp(answer([{ lat: '32.08', lon: '34.78' }]), 'q', bs), null, 'the same street in Tel Aviv');
   assert.equal(await geo.lookUp(answer([]), 'q', bs), null);
-  await assert.rejects(geo.lookUp(answer([], 429), 'q', bs), /refused/);
+  await assert.rejects(geo.lookUp(answer([], 429), 'q', bs), /answered 429/);
+  await assert.rejects(geo.lookUp(answer([], 503), 'q', bs), /answered 503/, 'busy: stop, not "not found"');
 });
 
 test('branches are looked up one at a time, with a pause, up to the night limit; a refusal stops at once', async () => {
@@ -53,14 +56,14 @@ test('branches are looked up one at a time, with a pause, up to the night limit;
   const asked = [], saved = [], waits = [];
   const fetchFn = async (url) => { asked.push(url); return { status: 200, ok: true, json: async () => [{ lat: '31.75', lon: '34.99' }] }; };
   const r = await geo.locateStores(stores, { fetchFn, townOf: () => place('2610'), save: async (s, p, q) => saved.push([s.store_id, p, q]), max: 2, sleep: async (ms) => waits.push(ms) });
-  assert.deepEqual(r, { asked: 2, found: 2, left: 1, error: null });
+  assert.deepEqual(r, { asked: 2, found: 2, missed: 0, left: 1, error: null });
   assert.equal(asked.length, 2);
-  assert.match(decodeURIComponent(asked[0]), /countrycodes=il.*q=הרצל 1, בית שמש, ישראל/);
+  assert.match(decodeURIComponent(asked[0]).replace(/\+/g, ' '), /countrycodes=il.*street=הרצל 1&city=בית שמש&country=ישראל/, 'street and city apart first');
   assert.deepEqual(waits, [1100], 'a pause between two requests');
   assert.deepEqual(saved.map((x) => x[0]), ['1', '2']);
   const refused = await geo.locateStores(stores, { fetchFn: answer([], 429), townOf: () => place('2610'), save: async () => {}, sleep: async () => {} });
   assert.equal(refused.asked, 1);
-  assert.match(refused.error, /refused/);
+  assert.match(refused.error, /answered 429/);
   assert.equal(refused.left, 3);
 });
 
@@ -101,4 +104,49 @@ test('on the screen: from your location, the distance in your settlement, and Wa
   assert.equal(storeWhy({ kind: 'city', km: 1.2, city: 'בית שמש' }), 'ביישוב שלכם, 1.2 ק"מ');
   assert.equal(storeWhy({ kind: 'city', km: 0, city: 'בית שמש' }), 'ביישוב שלכם');
   assert.equal(wazeLink({ name: 'סניף', address: 'הרצל 1', city: 'בית שמש', lat: 31.746, lon: 34.991 }), 'https://waze.com/ul?ll=31.746,34.991&navigate=yes');
+});
+
+test('a street as the chains write it, in the words the map knows', () => {
+  assert.equal(geo.cleanStreet('שד.הרצל 20'), 'שדרות הרצל 20');
+  assert.equal(geo.cleanStreet('ד.הים 14'), 'דרך הים 14');
+  assert.equal(geo.cleanStreet("רח' הגפן 5"), 'הגפן 5');
+  assert.equal(geo.cleanStreet('7 מול הדקל'), '7 הדקל');
+  assert.equal(geo.cleanStreet('  הזית  3 ,  '), 'הזית 3');
+  assert.equal(geo.cleanStreet('הדקל 12&#x0D;'), 'הדקל 12');
+  assert.equal(geo.cleanStreet('הפסגה 39 39'), 'הפסגה 39');
+  assert.equal(geo.cleanStreet('דרך האלון 0'), 'דרך האלון');
+  assert.equal(geo.cleanStreet('דרך הערבה 4 ת.ד. 9113'), 'דרך הערבה 4');
+});
+
+test('when the street and city apart find nothing, the one-line address is tried, after a pause', async () => {
+  const calls = [];
+  let n = 0;
+  const fetchFn = async (url) => { calls.push(url); n++; return { status: 200, ok: true, json: async () => (n === 1 ? [] : [{ lat: '31.75', lon: '34.99' }]) }; };
+  const waits = [];
+  const p = await geo.lookUp(fetchFn, 'הרצל 1, בית שמש, ישראל', place('2610'), S('x', '1', 'סניף', 'הרצל 1', '2610'), async () => waits.push(1));
+  assert.deepEqual(p, { lat: 31.75, lon: 34.99 });
+  assert.equal(calls.length, 2);
+  assert.match(decodeURIComponent(calls[1]).replace(/\+/g, ' '), /&q=הרצל 1, בית שמש, ישראל$/);
+  assert.deepEqual(waits, [1]);
+});
+
+test('a long run of misses is the service slowing us down: stop, and keep none of them', async () => {
+  const stores = Array.from({ length: 30 }, (_, i) => S('x', String(i), 'סניף', 'הרצל ' + (i + 1), '2610'));
+  const saved = [];
+  const r = await geo.locateStores(stores, { fetchFn: answer([]), townOf: () => place('2610'), save: async (s, p) => saved.push([s.store_id, p]), streak: 5, sleep: async () => {} });
+  assert.equal(r.asked, 5);
+  assert.match(r.error, /5 misses in a row/);
+  assert.deepEqual(saved, [], 'not marked "not found"');
+  assert.equal(r.left, 30);
+});
+
+test('a few misses between finds are kept as not found', async () => {
+  const stores = [1, 2, 3].map((i) => S('x', String(i), 'סניף', 'הרצל ' + i, '2610'));
+  let n = 0;
+  // Branch 2: nothing, both ways. Branches 1 and 3: found at once.
+  const fetchFn = async () => { n++; return { status: 200, ok: true, json: async () => (n === 2 || n === 3 ? [] : [{ lat: '31.75', lon: '34.99' }]) }; };
+  const saved = [];
+  const r = await geo.locateStores(stores, { fetchFn, townOf: () => place('2610'), save: async (s, p) => saved.push([s.store_id, p ? 'found' : 'missed']), sleep: async () => {} });
+  assert.deepEqual(saved, [['1', 'found'], ['2', 'missed'], ['3', 'found']]);
+  assert.deepEqual(r, { asked: 3, found: 2, missed: 1, left: 0, error: null });
 });
