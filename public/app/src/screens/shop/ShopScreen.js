@@ -63,14 +63,17 @@ function Intro({ onClose }) {
 function ShareMenu({ mailHref, waHref, onCopy, disabled }) {
   const [open, setOpen] = useState(false);
   const box = useRef(null);
+  // Listening from the start (not only once open): an Escape or a click right
+  // after opening must not slip by before the menu is ready for it.
+  const isOpen = useRef(false);
+  isOpen.current = open;
   useEffect(() => {
-    if (!open) return undefined;
-    const out = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
-    const esc = (e) => { if (e.key === 'Escape') { setOpen(false); box.current?.querySelector('button')?.focus(); } };
+    const out = (e) => { if (isOpen.current && box.current && !box.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (isOpen.current && e.key === 'Escape') { setOpen(false); box.current?.querySelector('button')?.focus(); } };
     document.addEventListener('pointerdown', out);
     document.addEventListener('keydown', esc);
     return () => { document.removeEventListener('pointerdown', out); document.removeEventListener('keydown', esc); };
-  }, [open]);
+  }, []);
   const done = () => setOpen(false);
   return html`<span class="shop-share" ref=${box}>
     <button type="button" class="btn btn-ghost" aria-expanded=${open} aria-controls="shop-share-menu" disabled=${disabled} onClick=${() => setOpen(!open)}><${Icon} name="share" size=${17} />לשתף את הרשימה</button>
