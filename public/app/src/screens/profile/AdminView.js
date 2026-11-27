@@ -10,7 +10,7 @@ import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
 import { greeting, ago, areas, record } from '../../domain/admin.js';
-import { loadStart, loadState, kosherList, kosherConfirm } from '../../data/prices.js';
+import { loadStart, loadState, kosherList, kosherConfirm, kosherOpenState, kosherOpenStart } from '../../data/prices.js';
 import { CERTS, NOT_KOSHER, certFromText, size, sizeOfProduct, sizeText } from '../../domain/prices.js';
 
 const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', shop: 'קניות', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
@@ -153,6 +153,30 @@ function SeedCard() {
 // first, or a search for a whole product line ("טרה מהדרין") marked at once.
 // The owner's word counts as confirmed.
 const CERT_OPTIONS = [...CERTS.map((c) => c.name), NOT_KOSHER];
+// The one-time lookup in Open Food Facts: the most common products whose
+// kashrut is unknown, once each; what it finds stays on the product.
+function OpenLookup() {
+  const [s, setS] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { kosherOpenState().then(setS).catch(() => setS(null)); }, []);
+  // While it runs, the report is read again every few seconds.
+  useEffect(() => {
+    if (!s || !s.running) return undefined;
+    const t = setTimeout(() => kosherOpenState().then(setS).catch(() => {}), 4000);
+    return () => clearTimeout(t);
+  }, [s]);
+  const start = async () => {
+    setBusy(true);
+    try { setS(await kosherOpenStart(200)); } catch (err) { showToast(err.message || 'לא התחיל.'); }
+    setBusy(false);
+  };
+  const certs = s ? Object.entries(s.certs || {}).sort((a, b) => b[1] - a[1]) : [];
+  const withCert = certs.reduce((n, [, k]) => n + k, 0);
+  return html`<div class="stack" style="gap:6px">
+    <button type="button" class="btn btn-ghost" style="width:auto" disabled=${busy || (s && s.running)} onClick=${start}>${s && s.running ? 'בודק במאגר הפתוח…' : 'לבדוק כשרות במאגר הפתוח (200 מוצרים נפוצים)'}</button>
+    ${s && (s.running || s.done_at) && html`<span class="muted" style="font-size:13px;line-height:1.55">${s.running ? 'נבדקו עד עכשיו ' : 'נבדקו '}${s.asked} מוצרים: ${s.found} נמצאו במאגר, ${withCert} עם כשרות מוגדרת${s.kosherNoCert ? ', ' + s.kosherNoCert + ' כתוב רק "כשר"' : ''}, ${s.missing} לא נמצאו${s.failed ? ', ' + s.failed + ' לא הצלחנו לבדוק' : ''}.${certs.length ? ' ' + certs.map(([c, k]) => c + ': ' + k).join(' · ') : ''}${s.error ? ' תקלה: ' + s.error : ''}</span>`}
+  </div>`;
+}
 function KosherCard() {
   const [d, setD] = useState(false);
   const [q, setQ] = useState('');
@@ -164,13 +188,14 @@ function KosherCard() {
     try { await kosherConfirm(codes, c); showToast('נשמר: ' + codes.length + ' מוצרים, ' + c); load(); } catch (err) { showToast(err.message || 'לא נשמר.'); }
   };
   // Opened on request, so the dashboard does not ask for it every time.
-  if (d === false) return html`<div class="card stack kosher-admin"><b>איזו כשרות</b><span class="muted" style="font-size:13px">מוצרים שמשפחות קונות ועוד לא ידוע מה הכשרות שלהם, או קו מוצרים שלם בלחיצה.</span><button type="button" class="btn btn-ghost" style="width:auto" onClick=${() => { setD(undefined); load(''); }}>להציג מוצרים שמחכים</button></div>`;
+  if (d === false) return html`<div class="card stack kosher-admin"><b>איזו כשרות</b><span class="muted" style="font-size:13px">מוצרים שמשפחות קונות ועוד לא ידוע מה הכשרות שלהם, או קו מוצרים שלם בלחיצה.</span><button type="button" class="btn btn-ghost" style="width:auto" onClick=${() => { setD(undefined); load(''); }}>להציג מוצרים שמחכים</button><${OpenLookup} /></div>`;
   if (d === undefined) return html`<div class="card"><span class="muted">טוען…</span></div>`;
   if (d === null) return html`<div class="card"><span class="muted">רשימת הכשרות לא זמינה כרגע.</span></div>`;
   const toggle = (c) => setSel((x) => { const n = new Set(x); n.has(c) ? n.delete(c) : n.add(c); return n; });
   const all = d.waiting.length > 0 && sel.size === d.waiting.length;
   return html`<div class="card stack kosher-admin"><b>איזו כשרות</b>
     <span class="muted" style="font-size:13px;line-height:1.55">${d.products.toLocaleString('he-IL')} מוצרים בקטלוג · ${d.confirmed.toLocaleString('he-IL')} סימנתם. משפחה שבחרה כשרויות מקבלת לבד רק מוצר שהכשרות שלו ידועה ומתאימה לה. מה שתסמנו נחשב מאושר.</span>
+    <${OpenLookup} />
     <form style="display:flex;gap:8px" onSubmit=${(e) => { e.preventDefault(); load(q); }}><input class="input" value=${q} placeholder="קו מוצרים: למשל טרה מהדרין" aria-label="חיפוש מוצר" onInput=${(e) => setQ(e.currentTarget.value)} style="flex:1;min-width:0" /><button class="btn btn-ghost" style="width:auto">לחפש</button></form>
     ${d.waiting.length === 0 ? html`<span class="muted">אין מוצרים שמחכים.</span>` : html`
       <label class="kosher-all"><input type="checkbox" checked=${all} onChange=${() => setSel(all ? new Set() : new Set(d.waiting.map((p) => p.barcode)))} /> לסמן את כל ${d.waiting.length} המוצרים ברשימה</label>

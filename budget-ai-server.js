@@ -2066,6 +2066,7 @@ app.get('/api/admin/today', requireAuth, async (req, res) => {
 // Which supermarket price sites answer this server (some block visitors
 // from abroad). Owner only; a few public pages, nothing is stored.
 const prices = require('./server/prices');
+const kosherOpen = require('./server/kosherOpen');
 app.get('/api/admin/prices/reach', requireAuth, async (req, res) => {
   try {
     if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
@@ -3105,6 +3106,33 @@ app.post('/api/admin/kosher', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('kosher confirm failed:', err.message);
     return res.status(500).json({ error: 'לא נשמר.' });
+  }
+});
+// Kashrut from Open Food Facts for the most common products, once each and
+// kept for good: started by the owner, a batch at a time, with a report.
+const kosherOpenJob = kosherOpen.empty();
+app.get('/api/admin/kosher/open', requireAuth, async (req, res) => {
+  if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+  return res.json(kosherOpenJob);
+});
+app.post('/api/admin/kosher/open', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!supabaseAdmin || !priceDomain) return res.status(503).json({ error: 'לא זמין כרגע.' });
+    const limit = Math.max(1, Math.min(500, Number(req.body && req.body.limit) || 200));
+    if (!kosherOpenJob.running) {
+      kosherOpen.runBatch({
+        db: {
+          todo: async (n) => { const { data, error } = await supabaseAdmin.rpc('price_kashrut_todo', { p_limit: n }); if (error) throw error; return data || []; },
+          save: async (barcode, row) => { await supabaseAdmin.from('price_products').update(row).eq('barcode', barcode); }
+        },
+        fetchFn: fetch, certFromText: priceDomain.certFromText, isFree: priceDomain.kashrutFree, limit, state: kosherOpenJob
+      }).catch((err) => console.error('kosher open lookup failed:', err.message));
+    }
+    return res.json(kosherOpenJob);
+  } catch (err) {
+    console.error('kosher open start failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
   }
 });
 // The owner's evening summary email (pg_cron job "owner-daily-digest").
