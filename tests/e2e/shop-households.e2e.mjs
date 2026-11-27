@@ -241,6 +241,8 @@ test('round 12: the store screen by keyboard: focus goes in, Tab stays inside (n
   await page.keyboard.press('Enter');
   await page.waitForSelector('.store');
   const inside = () => page.evaluate(() => !!document.activeElement.closest('.store'));
+  // (Focus moves in right after the screen is drawn.)
+  await page.waitForFunction(() => !!document.activeElement.closest('.store'), null, { timeout: 3000 }).catch(() => {});
   assert.equal(await inside(), true, 'focus is in the store screen');
   for (let i = 0; i < 6; i++) { await page.keyboard.press('Tab'); assert.equal(await inside(), true, 'Tab ' + (i + 1)); }
   for (let i = 0; i < 3; i++) { await page.keyboard.press('Shift+Tab'); assert.equal(await inside(), true, 'Shift+Tab ' + (i + 1)); }
