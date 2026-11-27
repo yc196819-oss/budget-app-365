@@ -169,9 +169,11 @@ test('round 8: a very long name (one long word too) stays inside its tile in the
   await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 2);
   assert.deepEqual(await outside(), [], 'the list');
   await page.click('.store-go');
+  await page.waitForSelector('.store-tile .store-n');
   assert.deepEqual(await outside(), [], 'the store');
   assert.equal(await noSideways(page), true);
   await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.store'));
   await page.click('.shop-listhead .back-btn');
   await page.click('.sl-new');
   await page.fill('#sl-name', 'רשימהארוכהמאודלחגהפסחשלכלהמשפחההמורחבתעםכלהדודים');
