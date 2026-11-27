@@ -277,3 +277,31 @@ test('round 13: "the previous list" is this list\'s last shopping: the Shabbat s
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('round 14: a new list by a name already open opens that list (no second "לשבת"), the new-list box is ready to type in, and Escape closes it', async () => {
+  const { page, db, errors } = await openHousehold(HOUSEHOLDS[11]);
+  await page.click('.shop-listhead .back-btn');
+  await page.click('.sl-new');
+  await page.fill('#sl-name', 'לשבת');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.shop-listhead h2:has-text("לשבת")');
+  await page.locator('.shop-add .input').fill('חלות');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.shop-item');
+  await page.click('.shop-listhead .back-btn');
+  await page.click('.sl-new');
+  await page.fill('#sl-name', '  לשבת ');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.shop-listhead h2:has-text("לשבת")');
+  assert.deepEqual(await page.locator('.shop-item .shop-name').allTextContents(), ['חלות'], 'the same list, with what is on it');
+  assert.equal(db.tables.shopping_lists.filter((l) => l.name === 'לשבת').length, 1);
+  await page.click('.shop-listhead .back-btn');
+  await page.click('.sl-new');
+  // The name box is ready to type in at once.
+  await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'sl-name', null, { timeout: 2000 });
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.sl-new-form').count(), 0);
+  assert.equal(await page.locator('.sl-new').first().isVisible(), true);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
