@@ -718,7 +718,30 @@ test('owner: which kashrut exactly: what families buy first, a whole product lin
   assert.deepEqual(started, [{ limit: 200 }]);
   await page.waitForFunction(() => /נבדקו 200 מוצרים: 120 נמצאו במאגר, 80 עם כשרות מוגדרת, 25 כתוב רק "כשר", 80 לא נמצאו/.test(document.querySelector('.kosher-admin')?.textContent || ''), null, { timeout: 15000 });
   assert.match(await k.textContent(), /רבנות: 50 · בד"ץ בית יוסף: 30/);
-  assert.equal(await go.isDisabled(), false, 'can run another batch');  assert.deepEqual(errors.filter((e) => !/503/.test(e)), []);
+  assert.equal(await go.isDisabled(), false, 'can run another batch');
+  // The list as a file: downloaded to fill, and the filled file read back,
+  // checked by the owner, and only what is checked saved.
+  const asked = [];
+  await page.route('**/api/admin/kosher/todo**', (r) => { asked.push(new URL(r.request().url()).searchParams.get('limit')); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ products: [{ barcode: '7290000000011', name: 'פתיתים 500 גרם', maker: 'יצרן א', chains: 28 }, { barcode: '16000423534', name: 'מארז', maker: 'יצרן ב', chains: 28 }] }) }); });
+  // A list already handed out (the first one, with Hebrew headers) is left out.
+  await k.locator('label:has-text("לדלג על רשימה שכבר נשלחה") input').setInputFiles({ name: 'sent.csv', mimeType: 'text/csv', buffer: Buffer.from('#,ברקוד,מוצר\n1,"16000423534","מארז"') });
+  await k.locator('text=הרשימה הבאה תהיה בלי 1 המוצרים שכבר נשלחו').waitFor();
+  const [dl] = await Promise.all([page.waitForEvent('download'), k.locator('button:has-text("להוריד רשימה למילוי")').click()]);
+  assert.equal(dl.suggestedFilename(), 'products-to-find-kashrut.csv');
+  const got = await readFile(await dl.path(), 'utf8');
+  assert.match(got, /7290000000011/);
+  assert.doesNotMatch(got, /16000423534/, 'what was sent before is not in the new list');
+  assert.deepEqual(asked, ['2001']);
+  const filled = ['barcode,kashrut,source_url,confidence,notes', '7290000000011,בד"ץ בית יוסף,https://example.com/a,high,על האריזה', '7290000000028,רבנות,https://example.com/b,low,רק לפי השם', '7290000000035,לא ידוע,,low,'].join('\n');
+  await k.locator('label:has-text("לטעון קובץ כשרות שמולא") input').setInputFiles({ name: 'filled.csv', mimeType: 'text/csv', buffer: Buffer.from(filled) });
+  await k.locator('.kashrut-file .kosher-list li').nth(1).waitFor();
+  assert.match(await k.locator('.kashrut-file').textContent(), /2 מוצרים עם כשרות, 1 "לא ידוע"/);
+  assert.equal(await k.locator('.kashrut-file .kosher-list li').nth(0).locator('input').isChecked(), true);
+  assert.equal(await k.locator('.kashrut-file .kosher-list li').nth(1).locator('input').isChecked(), false, 'low confidence is not checked from the start');
+  const before = confirmed.length;
+  await k.locator('.kashrut-file button:has-text("לשמור 1")').click();
+  await page.waitForFunction(() => !document.querySelector('.kashrut-file .kosher-list'));
+  assert.deepEqual(confirmed.slice(before), [{ barcodes: ['7290000000011'], cert: 'בד"ץ בית יוסף' }]);  assert.deepEqual(errors.filter((e) => !/503/.test(e)), []);
   await page.close();
 });
 
