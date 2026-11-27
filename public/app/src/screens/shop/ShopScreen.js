@@ -86,9 +86,11 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
     return () => window.removeEventListener('recipe-shared', take);
   }, [owner]);
   const [receipts, setReceipts] = useState([]);
-  // Several lists (the owner first): null before they load or without the
-  // table (one list, as before). openList: the list on screen, null for "הרשימות שלי".
-  const [lists, setLists] = useState(null);
+  // Several lists (the owner first): undefined while they load (so the owner
+  // does not see the one-list screen for a moment and type into it), null
+  // without the table (one list, as before). openList: the list on screen,
+  // null for "הרשימות שלי".
+  const [lists, setLists] = useState(owner ? undefined : null);
   const [openList, setOpenList] = useState(null);
   useEffect(() => {
     if (!owner || !data.hid) return;
@@ -102,7 +104,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   useEffect(() => { if (owner && data.hid) loadReceipts(data.hid).then(setReceipts).catch(() => setReceipts([])); }, [data.hid, owner]);
   useEffect(() => { if (data.hid) getArea(data.hid).then((a) => setAreaText(a)).catch(() => setAreaText('')); }, [data.hid]);
 
-  if (shop.status === 'loading' || data.status !== 'ready') return html`<${Loading} label="טוען את הרשימה…" />`;
+  if (shop.status === 'loading' || data.status !== 'ready' || (lists === undefined && data.hid)) return html`<${Loading} label="טוען את הרשימה…" />`;
   if (shop.status === 'error') return html`<div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו לטעון את הרשימה</b><button type="button" class="btn btn-ghost" onClick=${shop.reload}>לנסות שוב</button></div>`;
 
   const all = shop.items;
