@@ -170,6 +170,8 @@ test('round 8: a very long name (one long word too) stays inside its tile in the
   assert.deepEqual(await outside(), [], 'the list');
   await page.click('.store-go');
   await page.waitForSelector('.store-tile .store-n');
+  // (Escape is listened for once the screen has settled: body.store-on.)
+  await page.waitForSelector('body.store-on');
   assert.deepEqual(await outside(), [], 'the store');
   assert.equal(await noSideways(page), true);
   await page.keyboard.press('Escape');
