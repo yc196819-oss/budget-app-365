@@ -43,6 +43,7 @@ const news = require('./server/news');
 const limits = require('./server/limits');
 const ops = require('./server/ops');
 const insights = require('./server/insights');
+const capture = require('./server/capture');
 const { AsyncLocalStorage } = require('node:async_hooks');
 
 const app = express();
@@ -3979,6 +3980,99 @@ app.post('/api/import/commit', requireAuth, aiLimiter, async (req, res) => {
     return res.json({ ok: true, inserted: data?.length || 0, rows: data || [] });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Unexpected error' });
+  }
+});
+
+// ═══ payment notifications from the household's own phone ═══
+// An automation app on the phone (MacroDroid) forwards each Google Wallet
+// notification here with a personal key. The key can only add notifications
+// to its own household; for now they are only kept, word for word, with what
+// was read from them (no transaction is made yet). See server/capture.js.
+const captureLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const k = capture.keyFrom(req.headers.authorization);
+    return k ? 'k:' + capture.hashKey(k).slice(0, 16) : 'ip:' + req.ip;
+  },
+  message: { error: 'too many notifications this hour' }
+});
+const captureReadLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.authUserId || req.ip });
+
+app.post('/api/capture/wallet', captureLimiter, express.urlencoded({ extended: false, limit: '8kb' }), express.text({ type: 'text/*', limit: '8kb' }), async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const key = capture.keyFrom(req.headers.authorization);
+    if (!key) return res.status(401).json({ error: 'missing key' });
+    const { data: k } = await supabaseAdmin.from('capture_keys').select('id,household_id').eq('key_hash', capture.hashKey(key)).is('revoked_at', null).maybeSingle();
+    if (!k) return res.status(401).json({ error: 'unknown key' });
+    const note = capture.readBody(req.body);
+    if (!note) return res.status(400).json({ error: 'title or text is required' });
+    const now = new Date();
+    const row = {
+      household_id: k.household_id,
+      key_id: k.id,
+      received_at: now.toISOString(),
+      app: note.app || null,
+      title: note.title || null,
+      body: note.text || null,
+      fingerprint: capture.fingerprint(k.household_id, note, now),
+      parsed: capture.parseWallet(note),
+      status: 'logged'
+    };
+    const { data, error } = await supabaseAdmin.from('captured_notifications').upsert(row, { onConflict: 'household_id,fingerprint', ignoreDuplicates: true }).select('id');
+    if (error) throw error;
+    supabaseAdmin.from('capture_keys').update({ last_used_at: now.toISOString() }).eq('id', k.id).then(() => {}, () => {});
+    return res.json({ ok: true, duplicate: !(data && data.length) });
+  } catch (err) {
+    console.error('capture failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
+
+// The person's own key in this household: is there one, when it was last
+// used, and the latest notifications that arrived for the household.
+app.get('/api/capture/status', requireAuth, captureReadLimiter, async (req, res) => {
+  try {
+    const hid = String(req.query.householdId || '');
+    if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
+    const [{ data: keys }, { data: recent }] = await Promise.all([
+      supabaseAdmin.from('capture_keys').select('created_at,last_used_at').eq('household_id', hid).eq('user_id', req.authUserId).is('revoked_at', null).order('created_at', { ascending: false }).limit(1),
+      supabaseAdmin.from('captured_notifications').select('id,received_at,title,body,parsed,status').eq('household_id', hid).order('received_at', { ascending: false }).limit(20)
+    ]);
+    return res.json({ key: (keys && keys[0]) || null, recent: recent || [] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'failed' });
+  }
+});
+
+// A new key: any older key of this person in this household stops working.
+// The key is returned once and never stored.
+app.post('/api/capture/key', requireAuth, captureReadLimiter, async (req, res) => {
+  try {
+    const hid = String(req.body?.householdId || '');
+    if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
+    const now = new Date().toISOString();
+    await supabaseAdmin.from('capture_keys').update({ revoked_at: now }).eq('household_id', hid).eq('user_id', req.authUserId).is('revoked_at', null);
+    const key = capture.newKey();
+    const { error } = await supabaseAdmin.from('capture_keys').insert({ household_id: hid, user_id: req.authUserId, key_hash: capture.hashKey(key) });
+    if (error) throw error;
+    return res.json({ key });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'failed' });
+  }
+});
+
+app.delete('/api/capture/key', requireAuth, captureReadLimiter, async (req, res) => {
+  try {
+    const hid = String(req.body?.householdId || req.query.householdId || '');
+    if (!(await isHouseholdMember(req.authUserId, hid))) return res.status(403).json({ error: 'not allowed' });
+    await supabaseAdmin.from('capture_keys').update({ revoked_at: new Date().toISOString() }).eq('household_id', hid).eq('user_id', req.authUserId).is('revoked_at', null);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'failed' });
   }
 });
 
