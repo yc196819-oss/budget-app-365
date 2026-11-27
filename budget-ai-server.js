@@ -3118,7 +3118,7 @@ app.get('/api/admin/kosher/todo', requireAuth, async (req, res) => {
   try {
     if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
     if (!supabaseAdmin || !priceDomain) return res.status(503).json({ error: 'לא זמין כרגע.' });
-    const limit = Math.max(1, Math.min(2000, Number(req.query.limit) || 1000));
+    const limit = Math.max(1, Math.min(3000, Number(req.query.limit) || 2000));
     const { data: top, error } = await supabaseAdmin.rpc('price_kashrut_todo', { p_limit: 2000 });
     if (error) throw error;
     const { data: asked } = await supabaseAdmin.from('price_products').select('barcode,name').not('image_checked_at', 'is', null).is('kosher_cert', null).limit(2000);

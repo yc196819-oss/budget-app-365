@@ -11,7 +11,7 @@ import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
 import { greeting, ago, areas, record } from '../../domain/admin.js';
 import { loadStart, loadState, kosherList, kosherConfirm, kosherOpenState, kosherOpenStart, kosherTodo } from '../../data/prices.js';
-import { toCsv as kashrutCsv, readFilled, preselected, batches as kashrutBatches } from '../../domain/kashrutFile.js';
+import { toCsv as kashrutCsv, sentBarcodes, readFilled, preselected, batches as kashrutBatches } from '../../domain/kashrutFile.js';
 import { CERTS, NOT_KOSHER, certFromText, size, sizeOfProduct, sizeText } from '../../domain/prices.js';
 
 const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', shop: 'קניות', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
@@ -186,14 +186,24 @@ function KashrutFile() {
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState(null);
   const [sel, setSel] = useState(() => new Set());
+  // Lists already handed out: their products are left out of the next one.
+  const [skip, setSkip] = useState(() => new Set());
   const get = async () => {
     setBusy(true);
     try {
-      const { products } = await kosherTodo(1000);
+      const all = (await kosherTodo(Math.min(3000, 2000 + skip.size))).products;
+      const products = all.filter((p) => !skip.has(p.barcode)).slice(0, 2000);
       download('products-to-find-kashrut.csv', kashrutCsv(products), 'text/csv;charset=utf-8');
       showToast('הורדו ' + products.length + ' מוצרים');
     } catch (err) { showToast(err.message || 'לא הצלחנו להוריד.'); }
     setBusy(false);
+  };
+  const skipFrom = async (e) => {
+    const fs = [...(e.currentTarget.files || [])];
+    e.currentTarget.value = '';
+    const n = new Set(skip);
+    for (const f of fs) for (const c of sentBarcodes(await f.text())) n.add(c);
+    setSkip(n);
   };
   const open = async (e) => {
     const f = e.currentTarget.files && e.currentTarget.files[0];
@@ -216,9 +226,11 @@ function KashrutFile() {
   const toggle = (c) => setSel((x) => { const n = new Set(x); n.has(c) ? n.delete(c) : n.add(c); return n; });
   return html`<div class="stack kashrut-file" style="gap:6px">
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button type="button" class="btn btn-ghost" style="width:auto" disabled=${busy} onClick=${get}>להוריד רשימה למילוי (1,000 מוצרים)</button>
+      <button type="button" class="btn btn-ghost" style="width:auto" disabled=${busy} onClick=${get}>להוריד רשימה למילוי (2,000 מוצרים)</button>
+      <label class="btn btn-ghost" style="width:auto">לדלג על רשימה שכבר נשלחה<input type="file" accept=".csv,text/csv" multiple onChange=${skipFrom} style="display:none" /></label>
       <label class="btn btn-ghost" style="width:auto">לטעון קובץ כשרות שמולא<input type="file" accept=".csv,text/csv" onChange=${open} style="display:none" /></label>
     </div>
+    ${skip.size > 0 && html`<span class="muted" style="font-size:13px">הרשימה הבאה תהיה בלי ${skip.size.toLocaleString('he-IL')} המוצרים שכבר נשלחו.</span>`}
     ${file && html`<div class="stack" style="gap:6px">
       <span class="muted" style="font-size:13px;line-height:1.55">בקובץ: ${file.rows.length} מוצרים עם כשרות${file.unknown ? ', ' + file.unknown + ' "לא ידוע"' : ''}${file.bad.length ? ', ' + file.bad.length + ' שורות שלא הצלחנו לקרוא' : ''}. מסומן מראש רק מה שיש לו מקור ולא בביטחון נמוך. בדקו לפני שמירה: מה שתשמרו נחשב מאושר.</span>
       ${file.bad.length > 0 && html`<span class="muted" style="font-size:12px">${file.bad.slice(0, 5).map((b) => 'שורה ' + b.line + ': ' + b.why).join(' · ')}${file.bad.length > 5 ? ' · ועוד' : ''}</span>`}

@@ -170,4 +170,4 @@ export const kosherConfirm = (barcodes, cert) => api('/api/admin/kosher', { meth
 export const kosherOpenState = () => api('/api/admin/kosher/open');
 export const kosherOpenStart = (limit = 200) => api('/api/admin/kosher/open', { method: 'POST', body: { limit } });
 // The list of common food products whose kashrut is unknown, to fill in.
-export const kosherTodo = (limit = 1000) => api('/api/admin/kosher/todo?limit=' + limit);
+export const kosherTodo = (limit = 2000) => api('/api/admin/kosher/todo?limit=' + limit);

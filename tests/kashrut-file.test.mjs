@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toCsv, csvRows, readFilled, preselected, batches } from '../public/app/src/domain/kashrutFile.js';
+import { toCsv, csvRows, sentBarcodes, readFilled, preselected, batches } from '../public/app/src/domain/kashrutFile.js';
 
 test('the list to fill: a header, one row a product, quotes where needed, Excel reads the Hebrew', () => {
   const csv = toCsv([{ barcode: '7290000000011', name: 'שוקולד "חלב", 100 גרם', maker: 'יצרן א', chains: 28 }, { barcode: '7290000000028', name: 'פתיתים', maker: '', chains: null }]);
@@ -44,4 +44,10 @@ test('a file without the needed columns, an unsafe link, and saving by certifier
   const many = Array.from({ length: 250 }, (_, i) => ({ barcode: String(7290000100000 + i), cert: 'רבנות' }));
   const b = batches([...many, { barcode: '1234', cert: 'הרב לנדא' }]);
   assert.deepEqual(b.map((x) => [x.cert, x.barcodes.length]), [['רבנות', 200], ['רבנות', 50], ['הרב לנדא', 1]]);
+});
+
+test('a list already handed out: its barcodes, by the English or the Hebrew header', () => {
+  assert.deepEqual(sentBarcodes(toCsv([{ barcode: '7290000000011', name: 'א' }, { barcode: '7290000000028', name: 'ב' }])), ['7290000000011', '7290000000028']);
+  assert.deepEqual(sentBarcodes('\uFEFF#,ברקוד,מוצר,יצרן,בכמה רשתות\n1,"16000423534","מארז",יצרן,28\n2,"16000548404","מארז",יצרן,28'), ['16000423534', '16000548404']);
+  assert.deepEqual(sentBarcodes('7290000000011\n123\n'), ['7290000000011'], 'no header: the long numbers');
 });

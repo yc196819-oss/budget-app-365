@@ -47,6 +47,15 @@ export function csvRows(text) {
   return rows;
 }
 
+// The barcodes of a list already handed out (filled or not): its barcode
+// column, or every long number when the file has no header we know.
+export function sentBarcodes(text) {
+  const rows = csvRows(text);
+  const ib = rows.length ? rows[0].map((h) => h.trim().toLowerCase()).findIndex((h) => h === 'barcode' || h === 'ברקוד') : -1;
+  const cells = ib >= 0 ? rows.slice(1).map((r) => r[ib]) : rows.flat();
+  return [...new Set(cells.map((c) => String(c || '').replace(/\D/g, '')).filter((c) => /^[0-9]{8,20}$/.test(c)))];
+}
+
 // The filled file back: rows with a certifier we know (or "לא כשר"), ready
 // for the owner to check. Unknown answers and anything that does not read
 // are counted, never guessed. The source and confidence come along to show.
