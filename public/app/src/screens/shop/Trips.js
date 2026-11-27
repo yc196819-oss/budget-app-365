@@ -181,10 +181,10 @@ function TripView({ data, trip, onBack, onChanged }) {
 }
 
 // "הקניות שלי": what is left to buy, the trips, and one trip with its receipt.
-export function TripsSheet({ data, trips, items, start = null, onClose, onChanged, onRemoved }) {
+export function TripsSheet({ data, trips, items, lists = null, start = null, onClose, onChanged, onRemoved }) {
   const [open, setOpen] = useState(start);
   const left = items.filter((i) => !i.cleared_at && !i.done);
-  const stale = staleItems(items, trips);
+  const stale = staleItems(items, trips, 3, Array.isArray(lists) && lists.length ? lists : null);
   const list = tripsWithItems(trips, items);
   const drop = async () => {
     try { await removeItems(data.hid, stale.map((i) => i.id)); onRemoved(stale.map((i) => i.id)); showToast('הורדו מהרשימה: ' + stale.map((i) => i.name).join(', ')); } catch (_e) { showToast('לא נמחק. נסו שוב.'); }
