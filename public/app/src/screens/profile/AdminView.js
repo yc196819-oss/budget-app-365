@@ -4,13 +4,14 @@ import { listGuestLinks, makeGuestLink, cancelGuestLink, guestUrl } from '../../
 import { Icon } from '../../components/Icon.js';
 import { api } from '../../lib/api.js';
 import { useEffect, useState } from 'preact/hooks';
-import { adminStats, adminLive, adminAsk, adminReengage, testMonthlyMail, sendMonthlyMail, priceReach, demoSession, demoRefresh } from '../../data/account.js';
+import { adminStats, adminLive, adminAsk, adminReengage, testMonthlyMail, sendMonthlyMail, priceReach, demoSession, demoRefresh, download } from '../../data/account.js';
 import { MailBoard } from './MailBoard.js';
 import { InboxView } from './InboxView.js';
 import { TodayCard, PeopleCard } from './PeopleView.js';
 import { showToast } from '../../lib/toast.js';
 import { greeting, ago, areas, record } from '../../domain/admin.js';
-import { loadStart, loadState, kosherList, kosherConfirm, kosherOpenState, kosherOpenStart } from '../../data/prices.js';
+import { loadStart, loadState, kosherList, kosherConfirm, kosherOpenState, kosherOpenStart, kosherTodo } from '../../data/prices.js';
+import { toCsv as kashrutCsv, sentBarcodes, readFilled, preselected, batches as kashrutBatches } from '../../domain/kashrutFile.js';
 import { CERTS, NOT_KOSHER, certFromText, size, sizeOfProduct, sizeText } from '../../domain/prices.js';
 
 const SCREEN_NAMES = { home: 'בית', money: 'כסף', together: 'ביחד', shop: 'קניות', plans: 'יעדים', assets: 'נכסים', login: 'כניסה', onboarding: 'הרשמה', other: 'אחר' };
@@ -177,6 +178,69 @@ function OpenLookup() {
     ${s && (s.running || s.done_at) && html`<span class="muted" style="font-size:13px;line-height:1.55">${s.running ? 'נבדקו עד עכשיו ' : 'נבדקו '}${s.asked} מוצרים: ${s.found} נמצאו במאגר, ${withCert} עם כשרות מוגדרת${s.kosherNoCert ? ', ' + s.kosherNoCert + ' כתוב רק "כשר"' : ''}, ${s.missing} לא נמצאו${s.failed ? ', ' + s.failed + ' לא הצלחנו לבדוק' : ''}.${certs.length ? ' ' + certs.map(([c, k]) => c + ': ' + k).join(' · ') : ''}${s.error ? ' תקלה: ' + s.error : ''}</span>`}
   </div>`;
 }
+// The kashrut list as a file: download the common products still unknown,
+// fill them in (by hand or with an AI), and bring the file back. Nothing is
+// saved until the owner checks the rows; what they approve counts as theirs.
+const CONF_NAMES = { high: 'ביטחון גבוה', medium: 'ביטחון בינוני', low: 'ביטחון נמוך' };
+function KashrutFile() {
+  const [busy, setBusy] = useState(false);
+  const [file, setFile] = useState(null);
+  const [sel, setSel] = useState(() => new Set());
+  // Lists already handed out: their products are left out of the next one.
+  const [skip, setSkip] = useState(() => new Set());
+  const get = async () => {
+    setBusy(true);
+    try {
+      const all = (await kosherTodo(Math.min(3000, 2000 + skip.size))).products;
+      const products = all.filter((p) => !skip.has(p.barcode)).slice(0, 2000);
+      download('products-to-find-kashrut.csv', kashrutCsv(products), 'text/csv;charset=utf-8');
+      showToast('הורדו ' + products.length + ' מוצרים');
+    } catch (err) { showToast(err.message || 'לא הצלחנו להוריד.'); }
+    setBusy(false);
+  };
+  const skipFrom = async (e) => {
+    const fs = [...(e.currentTarget.files || [])];
+    e.currentTarget.value = '';
+    const n = new Set(skip);
+    for (const f of fs) for (const c of sentBarcodes(await f.text())) n.add(c);
+    setSkip(n);
+  };
+  const open = async (e) => {
+    const f = e.currentTarget.files && e.currentTarget.files[0];
+    e.currentTarget.value = '';
+    if (!f) return;
+    const d = readFilled(await f.text());
+    setFile(d);
+    setSel(new Set(d.rows.filter(preselected).map((r) => r.barcode)));
+  };
+  const save = async () => {
+    const chosen = file.rows.filter((r) => sel.has(r.barcode));
+    setBusy(true);
+    try {
+      for (const b of kashrutBatches(chosen)) await kosherConfirm(b.barcodes, b.cert);
+      showToast('נשמרה כשרות ל-' + chosen.length + ' מוצרים');
+      setFile(null);
+    } catch (err) { showToast(err.message || 'לא נשמר.'); }
+    setBusy(false);
+  };
+  const toggle = (c) => setSel((x) => { const n = new Set(x); n.has(c) ? n.delete(c) : n.add(c); return n; });
+  return html`<div class="stack kashrut-file" style="gap:6px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn btn-ghost" style="width:auto" disabled=${busy} onClick=${get}>להוריד רשימה למילוי (2,000 מוצרים)</button>
+      <label class="btn btn-ghost" style="width:auto">לדלג על רשימה שכבר נשלחה<input type="file" accept=".csv,text/csv" multiple onChange=${skipFrom} style="display:none" /></label>
+      <label class="btn btn-ghost" style="width:auto">לטעון קובץ כשרות שמולא<input type="file" accept=".csv,text/csv" onChange=${open} style="display:none" /></label>
+    </div>
+    ${skip.size > 0 && html`<span class="muted" style="font-size:13px">הרשימה הבאה תהיה בלי ${skip.size.toLocaleString('he-IL')} המוצרים שכבר נשלחו.</span>`}
+    ${file && html`<div class="stack" style="gap:6px">
+      <span class="muted" style="font-size:13px;line-height:1.55">בקובץ: ${file.rows.length} מוצרים עם כשרות${file.unknown ? ', ' + file.unknown + ' "לא ידוע"' : ''}${file.bad.length ? ', ' + file.bad.length + ' שורות שלא הצלחנו לקרוא' : ''}. מסומן מראש רק מה שיש לו מקור ולא בביטחון נמוך. בדקו לפני שמירה: מה שתשמרו נחשב מאושר.</span>
+      ${file.bad.length > 0 && html`<span class="muted" style="font-size:12px">${file.bad.slice(0, 5).map((b) => 'שורה ' + b.line + ': ' + b.why).join(' · ')}${file.bad.length > 5 ? ' · ועוד' : ''}</span>`}
+      ${file.rows.length > 0 && html`<ul class="kosher-list">${file.rows.map((r) => html`<li key=${r.barcode}>
+        <label><input type="checkbox" checked=${sel.has(r.barcode)} onChange=${() => toggle(r.barcode)} /><span><b>${r.cert}</b><small class="muted">${[r.name, r.barcode, CONF_NAMES[r.confidence], r.notes].filter(Boolean).join(' · ')}</small></span></label>
+        ${r.source ? html`<a class="btn-text" href=${r.source} target="_blank" rel="noopener noreferrer">מקור</a>` : html`<span class="kosher kosher-unknown">בלי מקור</span>`}</li>`)}</ul>`}
+      <div class="kosher-bar"><button type="button" class="btn btn-primary" style="width:auto" disabled=${busy || sel.size === 0} onClick=${save}>לשמור ${sel.size}</button><button type="button" class="btn btn-ghost" style="width:auto" onClick=${() => setFile(null)}>ביטול</button></div>
+    </div>`}
+  </div>`;
+}
 function KosherCard() {
   const [d, setD] = useState(false);
   const [q, setQ] = useState('');
@@ -188,14 +252,14 @@ function KosherCard() {
     try { await kosherConfirm(codes, c); showToast('נשמר: ' + codes.length + ' מוצרים, ' + c); load(); } catch (err) { showToast(err.message || 'לא נשמר.'); }
   };
   // Opened on request, so the dashboard does not ask for it every time.
-  if (d === false) return html`<div class="card stack kosher-admin"><b>איזו כשרות</b><span class="muted" style="font-size:13px">מוצרים שמשפחות קונות ועוד לא ידוע מה הכשרות שלהם, או קו מוצרים שלם בלחיצה.</span><button type="button" class="btn btn-ghost" style="width:auto" onClick=${() => { setD(undefined); load(''); }}>להציג מוצרים שמחכים</button><${OpenLookup} /></div>`;
+  if (d === false) return html`<div class="card stack kosher-admin"><b>איזו כשרות</b><span class="muted" style="font-size:13px">מוצרים שמשפחות קונות ועוד לא ידוע מה הכשרות שלהם, או קו מוצרים שלם בלחיצה.</span><button type="button" class="btn btn-ghost" style="width:auto" onClick=${() => { setD(undefined); load(''); }}>להציג מוצרים שמחכים</button><${OpenLookup} /><${KashrutFile} /></div>`;
   if (d === undefined) return html`<div class="card"><span class="muted">טוען…</span></div>`;
   if (d === null) return html`<div class="card"><span class="muted">רשימת הכשרות לא זמינה כרגע.</span></div>`;
   const toggle = (c) => setSel((x) => { const n = new Set(x); n.has(c) ? n.delete(c) : n.add(c); return n; });
   const all = d.waiting.length > 0 && sel.size === d.waiting.length;
   return html`<div class="card stack kosher-admin"><b>איזו כשרות</b>
     <span class="muted" style="font-size:13px;line-height:1.55">${d.products.toLocaleString('he-IL')} מוצרים בקטלוג · ${d.confirmed.toLocaleString('he-IL')} סימנתם. משפחה שבחרה כשרויות מקבלת לבד רק מוצר שהכשרות שלו ידועה ומתאימה לה. מה שתסמנו נחשב מאושר.</span>
-    <${OpenLookup} />
+    <${OpenLookup} /><${KashrutFile} />
     <form style="display:flex;gap:8px" onSubmit=${(e) => { e.preventDefault(); load(q); }}><input class="input" value=${q} placeholder="קו מוצרים: למשל טרה מהדרין" aria-label="חיפוש מוצר" onInput=${(e) => setQ(e.currentTarget.value)} style="flex:1;min-width:0" /><button class="btn btn-ghost" style="width:auto">לחפש</button></form>
     ${d.waiting.length === 0 ? html`<span class="muted">אין מוצרים שמחכים.</span>` : html`
       <label class="kosher-all"><input type="checkbox" checked=${all} onChange=${() => setSel(all ? new Set() : new Set(d.waiting.map((p) => p.barcode)))} /> לסמן את כל ${d.waiting.length} המוצרים ברשימה</label>
