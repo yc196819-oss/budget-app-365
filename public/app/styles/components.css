@@ -2146,6 +2146,7 @@ body.chat-open { overflow: hidden; }
 /* in the store: the list on the whole screen, big tiles to tap */
 body.store-on { overflow: hidden; }
 .store { position: fixed; inset: 0; z-index: 900; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+.store:focus { outline: none; }
 .store-top { position: relative; display: flex; align-items: center; gap: 10px; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 14px; background: var(--surface); }
 .store-title { flex: 1; display: flex; flex-direction: column; }
 .store-title b { font-size: 22px; font-weight: 900; }
