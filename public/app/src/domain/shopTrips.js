@@ -14,6 +14,20 @@ export const SHOP_SOURCE = 'shop';
 const key = (s) => String(s || '').trim().replace(/["'׳״]/g, '').replace(/\s+/g, ' ');
 
 // The open list split for the "finish" sheet.
+// What was typed as "how much you paid": "352.90", "₪1,234.50", and also
+// "352,90" (a comma for the agorot), which used to be read as 35,290.
+// Not a sum (two dots, letters only): 0.
+export function typedAmount(text) {
+  const t = String(text || '').replace(/[₪\s]|ש"ח|שח|ש״ח/g, '');
+  if (!t) return 0;
+  let n;
+  if (/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(t)) n = Number(t.replace(/,/g, ''));
+  else if (/^\d+,\d{1,2}$/.test(t)) n = Number(t.replace(',', '.'));
+  else if (/^\d*\.?\d+$/.test(t)) n = Number(t);
+  else return 0;
+  return n > 0 ? Math.round(n * 100) / 100 : 0;
+}
+
 export function finishSplit(items) {
   const open = (items || []).filter((i) => !i.cleared_at);
   return { bought: open.filter((i) => i.done), left: open.filter((i) => !i.done) };

@@ -2,7 +2,7 @@ import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { Sheet } from '../../components/Sheet.js';
-import { finishSplit, tripsWithItems, staleItems, compareReceipt, compareSummary, shopCategory } from '../../domain/shopTrips.js';
+import { finishSplit, typedAmount, tripsWithItems, staleItems, compareReceipt, compareSummary, shopCategory } from '../../domain/shopTrips.js';
 import { shortName } from '../../domain/receipts.js';
 import { chainHe } from '../../domain/prices.js';
 import { finishTrip, setTripExpense, attachReceipt, loadReceipt, loadTripItems, removeItems } from '../../data/shopTrips.js';
@@ -53,13 +53,15 @@ export function FinishSheet({ data, items, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
   useEffect(() => { getArea(data.hid).then((a) => setStores(((a && a.stores) || []).filter((s, i, all) => all.findIndex((x) => x.chain === s.chain) === i))).catch(() => setStores([])); }, [data.hid]);
   const picked = stores.find((s) => s.chain === chain) || null;
+  // Something typed that is not a sum is not saved silently as no sum.
+  const bad = String(typed).trim() !== '' && !typedAmount(typed);
   const chainName = picked ? label(picked) : null;
   const save = async (withReceipt) => {
     if (busy) return null;
     setBusy(true);
     try {
       let trip = await finishTrip(data.hid, { bought, left, chain: chain || null, chainName });
-      const amount = Number(String(typed).replace(/[^\d.]/g, ''));
+      const amount = typedAmount(typed);
       if (amount > 0) trip = await setTripExpense(data.hid, trip, { amount, store: chainName, cat: shopCategory(data.txs, data.categories, chainName || '') });
       track('shop_trip_done', { left: left.length, total: amount > 0, receipt: withReceipt });
       showToast('הקנייה נשמרה. ' + (left.length ? left.length + ' מוצרים נשארו ברשימה.' : 'הרשימה ריקה.'));
@@ -79,10 +81,11 @@ export function FinishSheet({ data, items, onClose, onDone }) {
           ${stores.map((s) => html`<option key=${s.chain} value=${s.chain}>${label(s)}${s.name ? ' · ' + s.name : ''}</option>`)}
         </select></label>`}
       <label class="trip-field">כמה שילמתם? <small class="muted">לא חובה. בלי קבלה זו הערכה</small>
-        <input class="input num" type="text" inputmode="decimal" placeholder="₪" value=${typed} onInput=${(e) => setTyped(e.currentTarget.value)} aria-label="כמה שילמתם" /></label>
+        <input class="input num" type="text" inputmode="decimal" placeholder="₪" value=${typed} onInput=${(e) => setTyped(e.currentTarget.value)} aria-label="כמה שילמתם" aria-invalid=${String(bad)} aria-describedby=${bad ? 'trip-sum-bad' : undefined} /></label>
+      ${bad && html`<small id="trip-sum-bad" class="trip-bad" role="alert">זה לא נראה כמו סכום. כתבו למשל 352.90</small>`}
       <p class="trip-why"><${Icon} name="receipt" size=${16} /> ${WHY}</p>
-      <button type="button" class="btn" disabled=${busy} onClick=${() => save(true)}><${Icon} name="camera" size=${17} /> לשמור ולצרף קבלה</button>
-      <button type="button" class="btn btn-ghost" disabled=${busy} onClick=${() => save(false)}>לשמור בלי קבלה</button>
+      <button type="button" class="btn" disabled=${busy || bad} onClick=${() => save(true)}><${Icon} name="camera" size=${17} /> לשמור ולצרף קבלה</button>
+      <button type="button" class="btn btn-ghost" disabled=${busy || bad} onClick=${() => save(false)}>לשמור בלי קבלה</button>
       <small class="muted trip-later">אפשר לצרף קבלה גם אחר כך, מ"הקניות שלי".</small>
     </div>
   <//>`;

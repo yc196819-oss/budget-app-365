@@ -2189,6 +2189,7 @@ body.store-on { overflow: hidden; }
 .trip-why { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--accent-tint); font-size: 14px; line-height: 1.5; }
 .trip-why svg { flex: none; margin-top: 3px; color: var(--accent); }
 .trip-later { text-align: center; font-size: 13px; }
+.trip-bad { color: var(--danger); font-size: 13px; margin-top: -6px; }
 .trips-card { display: flex; align-items: center; gap: 12px; text-align: start; font: inherit; color: var(--text); cursor: pointer; }
 .trips-card > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .trips-card small { font-size: 13px; }
