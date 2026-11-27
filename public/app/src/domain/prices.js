@@ -89,11 +89,11 @@ export const nonFood = (product) => { const n = String((product && product.name)
 // canned, frozen, dried, crushed or cooked product), which is food like any
 // other and is checked. When unsure, it is checked.
 const NOT_FRESH = /ריב|קונפיטור|מרמלד|לפתן|אבקת|גרוס|טחון|כתוש|יבש|צימוק|תבלין|קופס|פחית|צנצנ|סירופ|ג['׳]?לי|סוכרי|שמן|(^|\s)תה(\s|$)|חליט|מחית|קטשופ|יין|בירה|ליקר|רכז|תרכיז|מוגז|שייק|פסטה|פיצה|עוג|מאפ|בורקס|לחם|במבה|ביסלי|גבינ|יוגורט|מעדן|קפה|בסגנון|קלוי|אפוי|מבושל|צלוי|ממותק|זרעי|גרעין|נמס|טבליות|גבישי|פתית|מוחמצ|מוחמץ|מטחנה|מיונז|גומי|פלפלונים|תפוזינה|ט\.|(^|\s)עם(\s|$)|\d\s*ל['׳]?(\s|$)|פלפל (שחור|לבן|אנגלי|ורוד)|(^|\s)ב(לימון|שמן|חומץ|רוטב|מלח|טעם)|מ["״]?ל(\s|$)|ליטר/;
-const FRESH_WORDS = AISLES.find((a) => a.key === 'produce').words.filter((w) => !['ירקות', 'פירות'].includes(w));
+const PRODUCE_WORDS = AISLES.find((a) => a.key === 'produce').words.filter((w) => !['ירקות', 'פירות'].includes(w));
 export const freshProduce = (product) => {
   const n = String((product && product.name) || '').trim();
   const first = n.split(/\s+/)[0].replace(/["'׳״]/g, '');
-  if (!FRESH_WORDS.some((w) => first.startsWith(w.replace(/["'׳״]/g, '')))) return false;
+  if (!PRODUCE_WORDS.some((w) => first.startsWith(w.replace(/["'׳״]/g, '')))) return false;
   return !MADE.test(n) && !NOT_FRESH.test(n) && (sizeOfProduct(product) || {}).unit !== 'l';
 };
 // No kashrut to check for this product: not food, or fresh fruit and vegetables.
