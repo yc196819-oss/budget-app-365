@@ -74,3 +74,18 @@ test('round 7: a list pasted from WhatsApp, one line each, becomes one item per 
   assert.equal(pastedList('חלב, לחם'), null, 'one line goes in as it is');
   assert.deepEqual(parseItems(pastedList('חלב\nלחם')).map((i) => i.name), ['חלב', 'לחם']);
 });
+
+test('round 9: "not bought three shoppings in a row" counts only shoppings of the item\'s own list', async () => {
+  const { staleItems } = await import('../public/app/src/domain/shopTrips.js');
+  const lists = [{ id: 'week', created_at: '2026-01-01' }, { id: 'pharm', created_at: '2026-02-01' }];
+  const trip = (n) => ({ id: 't' + n, finished_at: '2026-11-2' + n + 'T10:00:00Z' });
+  const trips = [trip(1), trip(2), trip(3)];
+  const items = [
+    { id: 'shampoo', name: 'שמפו', list_id: 'pharm', done: false, created_at: '2026-11-20T08:00:00Z' },
+    { id: 'rice', name: 'אורז', list_id: null, done: false, created_at: '2026-11-20T08:00:00Z' },
+    // Three shoppings of the weekly list (an item with no list is on the first one).
+    ...trips.map((t, n) => ({ id: 'b' + n, name: 'חלב', list_id: n ? 'week' : null, done: true, trip_id: t.id, cleared_at: t.finished_at }))
+  ];
+  assert.deepEqual(staleItems(items, trips, 3, lists).map((i) => i.id), ['rice'], 'the shampoo waits for a pharmacy shopping');
+  assert.deepEqual(staleItems(items, trips).map((i) => i.id).sort(), ['rice', 'shampoo'], 'without lists: every shopping counts, as before');
+});

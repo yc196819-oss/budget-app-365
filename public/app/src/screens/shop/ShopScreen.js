@@ -126,7 +126,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
       ${advisor && html`<${CartBuilder} hid=${data.hid} items=${all} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }}
         toList=${async (list) => (await newList(String((list && list.title) || 'רשימה מהיועץ').slice(0, 60), 'advisor')).id}
         onAdded=${(id) => { shop.reload(); setAdvisor(false); if (id) setOpenList(id); track('shop_advisor_add'); }} />`}
-      ${history !== null && html`<${TripsSheet} data=${data} trips=${trips} items=${all} start=${history || null} onClose=${() => setHistory(null)}
+      ${history !== null && html`<${TripsSheet} data=${data} trips=${trips} lists=${lists} items=${all} start=${history || null} onClose=${() => setHistory(null)}
         onChanged=${(t) => setTrips((x) => x.map((y) => (y.id === t.id ? { ...y, ...t } : y)))}
         onRemoved=${(ids) => shop.patch((x) => x.filter((y) => !ids.includes(y.id)))} />`}
     </div></div>`;
@@ -215,7 +215,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
       ${owner && store && html`<${StoreMode} items=${items} onToggle=${toggle} onFinish=${() => setFinishing(true)} onClose=${() => setStore(false)} />`}
       ${owner && finishing && html`<${FinishSheet} data=${data} items=${items} onClose=${() => setFinishing(false)}
         onDone=${(trip, withReceipt) => { setFinishing(false); setTrips((t) => [trip, ...t]); shop.reload(); if (withReceipt) setHistory(trip.id); }} />`}
-      ${owner && history !== null && html`<${TripsSheet} data=${data} trips=${trips} items=${items} start=${history || null} onClose=${() => setHistory(null)}
+      ${owner && history !== null && html`<${TripsSheet} data=${data} trips=${trips} lists=${lists} items=${items} start=${history || null} onClose=${() => setHistory(null)}
         onChanged=${(t) => setTrips((all) => all.map((x) => (x.id === t.id ? { ...x, ...t } : x)))}
         onRemoved=${(ids) => shop.patch((all) => all.filter((x) => !ids.includes(x.id)))} />`}
       ${owner && advisor && html`<${CartBuilder} hid=${data.hid} items=${items} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }} toList=${withLists ? async () => openList : null} onAdded=${() => { shop.reload && shop.reload(); track('shop_advisor_add'); }} />`}

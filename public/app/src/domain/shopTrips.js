@@ -6,6 +6,7 @@
 import { similarText } from './statement.js';
 import { score, sizeOfProduct, validOffers } from './prices.js';
 import { shortName } from './receipts.js';
+import { listOf } from './shopLists.js';
 
 // The source of an expense made from a shopping trip, until the card's
 // statement brings the real charge.
@@ -43,12 +44,22 @@ export function tripsWithItems(trips, items) {
 
 // Items still on the list that were not bought in the last `n` trips in a
 // row (each trip after the item was added): offered to take off the list.
-export function staleItems(items, trips, n = 3) {
+export function staleItems(items, trips, n = 3, lists = null) {
   const sorted = [...(trips || [])].sort((a, b) => String(b.finished_at).localeCompare(String(a.finished_at)));
+  // Several lists: only a shopping of the item's own list counts ("שמפו" on
+  // the pharmacy list was not "skipped" by three shoppings for Shabbat).
+  const listKey = (i) => (lists ? listOf(i, lists) : null);
   const boughtIn = new Map();
-  for (const i of items || []) if (i.trip_id) { if (!boughtIn.has(i.trip_id)) boughtIn.set(i.trip_id, new Set()); boughtIn.get(i.trip_id).add(key(i.name)); }
+  const listsIn = new Map();
+  for (const i of items || []) {
+    if (!i.trip_id) continue;
+    if (!boughtIn.has(i.trip_id)) { boughtIn.set(i.trip_id, new Set()); listsIn.set(i.trip_id, new Set()); }
+    boughtIn.get(i.trip_id).add(key(i.name));
+    listsIn.get(i.trip_id).add(listKey(i));
+  }
   return (items || []).filter((i) => !i.cleared_at && !i.done).filter((i) => {
-    const after = sorted.filter((t) => String(t.finished_at) > String(i.created_at));
+    const mine = listKey(i);
+    const after = sorted.filter((t) => String(t.finished_at) > String(i.created_at) && (!listsIn.has(t.id) || listsIn.get(t.id).has(mine)));
     if (after.length < n) return false;
     return after.slice(0, n).every((t) => !(boughtIn.get(t.id) || new Set()).has(key(i.name)));
   });
