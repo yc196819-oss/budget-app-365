@@ -252,3 +252,28 @@ test('round 12: the store screen by keyboard: focus goes in, Tab stays inside (n
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('round 13: "the previous list" is this list\'s last shopping: the Shabbat shopping is offered back on the Shabbat list, not on the weekly one', async () => {
+  const { page, errors } = await openHousehold(HOUSEHOLDS[5]);
+  await page.click('.shop-listhead .back-btn');
+  await page.click('.sl-new');
+  await page.fill('#sl-name', 'לשבת');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.shop-listhead h2:has-text("לשבת")');
+  await page.locator('.shop-add .input').fill('יין לקידוש, חלות');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 2);
+  for (const box of await page.locator('.shop-item input[type=checkbox]').all()) await box.check();
+  await page.click('.shop-finish');
+  await page.click('.trip-finish .btn-ghost');
+  await page.waitForFunction(() => !document.querySelector('.trip-finish'));
+  const prev = page.locator('.shop-side .card', { hasText: 'הרשימה מהפעם הקודמת' });
+  await prev.waitFor();
+  assert.match(await prev.textContent(), /יין לקידוש/);
+  await page.click('.shop-listhead .back-btn');
+  await page.locator('.sl-main .sl-chat', { hasText: 'הרשימה שלי' }).click();
+  await page.waitForSelector('.shop-listhead h2:has-text("הרשימה שלי")');
+  assert.equal(await prev.count(), 0, 'not offered on another list');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
