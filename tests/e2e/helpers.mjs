@@ -148,7 +148,9 @@ export async function mockSupabase(page, db, calls = []) {
         // upsert: merge into the row with the same conflict columns
         const hit = conflict && table.find((x) => conflict.split(',').every((k) => String(x[k]) === String(r[k])));
         if (hit) { Object.assign(hit, r); out.push(hit); continue; }
-        const row = { id: 'new' + (table.length + 1), created_at: new Date().toISOString(), ...r };
+        // (A new id each time: after a delete, the table's length would give an id still in use.)
+        db.seq = (db.seq || 0) + 1;
+        const row = { id: 'new' + db.seq, created_at: new Date().toISOString(), ...r };
         table.push(row);
         out.push(row);
       }

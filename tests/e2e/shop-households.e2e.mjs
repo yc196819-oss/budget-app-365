@@ -305,3 +305,24 @@ test('round 14: a new list by a name already open opens that list (no second "ל
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('round 18: an item removed by mistake comes back with "ביטול", on its list and still marked bought', async () => {
+  const { page, db, errors } = await openHousehold(HOUSEHOLDS[12]);
+  await page.locator('.shop-add .input').fill('לחם, חלב, ביצים');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 3);
+  await page.locator('.shop-item', { hasText: 'חלב' }).locator('input[type=checkbox]').check();
+  await page.waitForSelector('.shop-item.done');
+  await page.locator('.shop-item', { hasText: 'חלב' }).locator('.shop-del').click();
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 2);
+  const toast = page.locator('.toast', { hasText: 'הורד מהרשימה: חלב' });
+  await toast.waitFor();
+  await toast.locator('button').click();
+  await page.waitForSelector('.shop-item.done:has-text("חלב")');
+  assert.equal(await page.locator('.shop-item').count(), 3);
+  const milk = db.tables.shopping_items.find((i) => i.name === 'חלב');
+  assert.equal(milk.done, true);
+  assert.equal(milk.list_id, db.tables.shopping_lists[0].id, 'back on the same list');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
