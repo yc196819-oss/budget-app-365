@@ -700,7 +700,25 @@ test('owner: which kashrut exactly: what families buy first, a whole product lin
   await k.locator('.kosher-bar button:has-text("לסמן 2")').click();
   await page.waitForFunction(() => /אין מוצרים שמחכים/.test(document.querySelector('.kosher-admin')?.textContent || ''));
   assert.deepEqual(confirmed[1], { barcodes: ['1002', '1003'], cert: 'רבנות' });
-  assert.deepEqual(errors.filter((e) => !/503/.test(e)), []);
+  // The one-time lookup in the open product database: started once, its
+  // report read while it runs and when it is done.
+  let lookup = { running: false, asked: 0, found: 0, certs: {}, kosherNoCert: 0, missing: 0, failed: 0, done_at: null };
+  const started = [];
+  await page.route('**/api/admin/kosher/open', (r) => {
+    if (r.request().method() === 'POST') {
+      started.push(JSON.parse(r.request().postData()));
+      lookup = { ...lookup, running: true, asked: 5 };
+      setTimeout(() => { lookup = { running: false, asked: 200, found: 120, certs: { 'בד"ץ בית יוסף': 30, 'רבנות': 50 }, kosherNoCert: 25, missing: 80, failed: 0, done_at: '2026-01-01T10:00:00Z' }; }, 500);
+    }
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lookup) });
+  });
+  const go = k.locator('button:has-text("לבדוק כשרות במאגר הפתוח")');
+  await go.click();
+  await k.locator('button:has-text("בודק במאגר הפתוח")').waitFor();
+  assert.deepEqual(started, [{ limit: 200 }]);
+  await page.waitForFunction(() => /נבדקו 200 מוצרים: 120 נמצאו במאגר, 80 עם כשרות מוגדרת, 25 כתוב רק "כשר", 80 לא נמצאו/.test(document.querySelector('.kosher-admin')?.textContent || ''), null, { timeout: 15000 });
+  assert.match(await k.textContent(), /רבנות: 50 · בד"ץ בית יוסף: 30/);
+  assert.equal(await go.isDisabled(), false, 'can run another batch');  assert.deepEqual(errors.filter((e) => !/503/.test(e)), []);
   await page.close();
 });
 

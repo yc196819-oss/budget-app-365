@@ -70,9 +70,9 @@ test('kashrut is not checked for non-food or fresh fruit and vegetables, but is 
   const { nonFood, freshProduce, kashrutFree, allowed, choose, CERTS } = await import('../public/app/src/domain/prices.js');
   const mine = [CERTS[0].name];
   // Paper, plastic and disposables, cleaning, hygiene: no kashrut.
-  for (const n of ['צלחות חד פעמי 50 יח', 'כוסות 200 מ"ל', 'נייר אלומיניום 30 מטר', 'שקיות הקפאה', 'סוללות AA', 'מגבונים לחים', 'אבקת כביסה 3 ק"ג', 'ספוג לכלים']) assert.ok(nonFood({ name: n }), n);
+  for (const n of ['צלחות חד פעמי 50 יח', 'כוסות 200 מ"ל', 'נייר אלומיניום 30 מטר', 'שקיות הקפאה', 'סוללות AA', 'מגבונים לחים', 'אבקת כביסה 3 ק"ג', 'ספוג לכלים', 'תרסיס אנטי קאלק', 'גל אוקסיגן 3 ליטר', 'מרכך מקסימה', 'תחליב פינוק לבנדר', 'פותח סתימות', 'ספריי להסרת כתמים']) assert.ok(nonFood({ name: n }), n);
   // Food that only looks like it: still checked.
-  for (const n of ['עוגת ספוג', 'בשר טחון חלק', 'חלב בשקית', 'לימון']) assert.ok(!nonFood({ name: n }), n);
+  for (const n of ['עוגת ספוג', 'בשר טחון חלק', 'חלב בשקית', 'לימון', 'שמנת להקצפה 38%']) assert.ok(!nonFood({ name: n }), n);
   // Fresh fruit and vegetables: kashrut by the store, not the product.
   for (const n of ['עגבניות', 'כרוב אדום ביתי', 'בצל אדום מארז 1 קג', 'תפוחים', 'חסה משי', 'ענבים שחורים 500 גרם']) assert.ok(freshProduce({ name: n }), n);
   // Made from them, or not plainly the fruit or vegetable: checked.
