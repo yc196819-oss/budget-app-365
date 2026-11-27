@@ -209,3 +209,25 @@ test('round 10: the advisor\'s cart for 0, 45 or no people says so instead of qu
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('round 11: a list of only fresh vegetables: the comparison says why they are not compared, not "write simpler names"', async () => {
+  const catalog = JSON.parse(readFileSync(new URL('../fixtures/prices-sample.json', import.meta.url), 'utf8'));
+  const { page, errors } = await openHousehold(HOUSEHOLDS[7], (d) => {
+    d.tables.shopping_items = ['מלפפון', 'בצל'].map((name, i) => ({ id: 'v' + i, household_id: d.hid, name, qty: null, aisle: 'produce', done: false, created_at: '2026-11-26T08:00:00Z', cleared_at: null }));
+    d.tables.price_prefs = [{ household_id: d.hid, kosher: 'any' }];
+    const chains = [...new Set(Object.values(catalog).flat().flatMap((p) => p.offers.map((o) => o.chain)))];
+    d.tables.household_stores = chains.map((chain, i) => ({ household_id: d.hid, chain, chain_name: chain, store_id: String(i), name: 'סניף בדוי', city: 'כפר בלום', km: 2, kind: 'city' }));
+  });
+  await page.route('**/api/prices/reach**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"counts":[1,1,1,1,1,1,1,1,1,1,1]}' }));
+  await page.route('**/rest/v1/rpc/price_search', (r) => {
+    const qs = JSON.parse(r.request().postData()).p_queries;
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(qs.flatMap((q, i) => (catalog[q] || []).map((p) => ({ q: i + 1, ...p })))) });
+  });
+  await page.route('**/api/prices/images', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"images":{}}' }));
+  await page.click('.shop-prices-cta button');
+  await page.waitForSelector('.pp-empty');
+  assert.match(await page.locator('.pp-empty').textContent(), /רק מוצרים טריים.*נמכרים במשקל/);
+  assert.doesNotMatch(await page.locator('.pp-empty').textContent(), /שמות פשוטים/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
