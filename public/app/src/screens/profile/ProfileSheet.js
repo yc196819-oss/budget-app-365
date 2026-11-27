@@ -18,6 +18,7 @@ import { DataView } from './DataView.js';
 import { AdminView } from './AdminView.js';
 import { FeedbackView } from './FeedbackView.js';
 import { SecurityView } from './SecurityView.js';
+import { PhoneView } from './PhoneView.js';
 import { telemetryOn, setTelemetry } from '../../lib/telemetry.js';
 import { useOwner } from '../../lib/owner.js';
 
@@ -52,6 +53,9 @@ export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTh
   }
   if (view === 'security') {
     return html`<${Sheet} title="האבטחה שלך" onClose=${onClose}><${SecurityView} onBack=${() => setView('main')} onOpenData=${hid ? () => setView('data') : null} /><//>`;
+  }
+  if (view === 'phone') {
+    return html`<${Sheet} title="תשלומים מהטלפון" onClose=${onClose}><${PhoneView} hid=${hid} onBack=${() => setView('main')} /><//>`;
   }
   if (view === 'admin') {
     return html`<${Sheet} title="לוח בעלים" onClose=${onClose}><${AdminView} onBack=${() => setView('main')} onClose=${onClose} hid=${hid} /><//>`;
@@ -93,6 +97,7 @@ export function ProfileSheet({ answers = 0, start = 'main', profile, theme, onTh
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('memories')}><${Icon} name="book" />מה היועץ יודע עלינו</button>`}
       ${hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('data')}><${Icon} name="box" />המידע שלנו: קבצים, ייצוא ושחזור</button>`}
       ${hid && html`<${InviteButton} hid=${hid} userId=${userId} />`}
+      ${isAdmin && hid && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('phone')}><${Icon} name="phone" />תשלומים מהטלפון (Google Wallet)</button>`}
       ${isAdmin && html`<button type="button" class="btn btn-ghost" onClick=${() => setView('admin')}><${Icon} name="chart" />לוח בעלים</button>`}
       <${TextSize} />
       <button type="button" class="btn btn-ghost" onClick=${onTheme}><${Icon} name="sun" />${theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button>
