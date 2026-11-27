@@ -6,6 +6,7 @@ import { toCsv, txRows, TX_COLUMNS, exportName, binLine, daysLeft } from '../../
 import { exportAll, binItems, restore, download } from '../../data/account.js';
 import { listImports, removeImport, renameImport } from '../../data/household.js';
 import { showToast } from '../../lib/toast.js';
+import { StartOver } from './StartOver.js';
 
 // "Our data": take all of it with you, and bring back what was deleted in
 // the last 30 days (by either of you).
@@ -115,5 +116,6 @@ export function DataView({ hid, userId, onBack }) {
         </div>`;
       })}
     </div>
+    <${StartOver} onExport=${take} onDone=${() => { refresh(); refreshFiles(); }} />
   </div>`;
 }
