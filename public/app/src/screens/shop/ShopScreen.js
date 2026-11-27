@@ -216,7 +216,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
       <p class="shop-trial" role="note"><b>בהרצה:</b> הטאב חדש ועוד משתפר, וייתכנו תקלות. ראיתם משהו לא תקין? <button type="button" class="btn-text shop-trial-talk" onClick=${() => go('profile/feedback')}>כתבו לנו</button>.</p>
       ${intro && html`<${Intro} onClose=${closeIntro} />`}
       <form class="shop-add" onSubmit=${submit}>
-        <input ref=${input} class="input" value=${text} onInput=${(e) => setText(e.target.value)} onPaste=${(e) => pasteList(e, setText)} maxLength="300"
+        <input ref=${input} class="input" value=${text} onInput=${(e) => setText(e.target.value)} onPaste=${(e) => pasteList(e, setText)} maxLength="2000"
           aria-label="מה להוסיף לרשימה" placeholder="מה להוסיף? אפשר כמה ביחד: חלב, 2 ביצים, לחם" />
         ${canListen() && html`<button type="button" class=${'icon-btn shop-mic' + (listening ? ' on' : '')} aria-label="להוסיף בקול" onClick=${voice}><${Icon} name="mic" size=${19} /></button>`}
         <button type="submit" class="btn" disabled=${busy || !text.trim()}>להוסיף</button>

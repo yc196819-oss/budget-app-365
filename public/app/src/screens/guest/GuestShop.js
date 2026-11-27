@@ -98,7 +98,7 @@ export function GuestShop({ token }) {
     <header class="guest-head"><h1>רשימת קניות</h1><span class="muted">${label ? 'קישור אישי: ' + label + ' · ' : ''}${home ? 'רשימה משותפת של הבית: מה שמוסיפים כאן מופיע גם אצל השני' : 'הרשימה נשמרת רק בדפדפן הזה'}</span></header>
     ${err && html`<span class="muted" role="status">${err}</span>`}
     <form class="shop-add" onSubmit=${submit}>
-      <input ref=${input} class="input" value=${text} onInput=${(e) => setText(e.target.value)} onPaste=${(e) => pasteList(e, setText)} maxLength="300" aria-label="מה להוסיף לרשימה" placeholder="מה להוסיף? אפשר כמה ביחד: חלב, 2 ביצים, לחם" />
+      <input ref=${input} class="input" value=${text} onInput=${(e) => setText(e.target.value)} onPaste=${(e) => pasteList(e, setText)} maxLength="2000" aria-label="מה להוסיף לרשימה" placeholder="מה להוסיף? אפשר כמה ביחד: חלב, 2 ביצים, לחם" />
       <button type="submit" class="btn" disabled=${!text.trim()}>להוסיף</button>
     </form>
     <button type="button" class="card adv-cta" onClick=${() => setAdvisor(true)}><span class="adv-spark" aria-hidden="true"><${Icon} name="spark" size=${18} /></span><span><b>היועץ ממליץ: רשימה לשבוע</b><small class="muted">לפי מספר הנפשות בבית. עורכים ומוסיפים בלחיצה.</small></span><span aria-hidden="true">‹</span></button>
