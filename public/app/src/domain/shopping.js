@@ -97,6 +97,16 @@ export function parseItem(text) {
   return t ? { name: t.slice(0, 80), qty: qty ? qty.slice(0, 20) : null } : null;
 }
 
+// A list pasted into the one-line box (from WhatsApp or a note): the box
+// would join its lines into one long item, so each line becomes one item,
+// with commas between them. A heading line ("רשימה לשבת:") is left out.
+// Null when there is only one line (the paste goes in as it is).
+export function pastedList(text) {
+  const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return null;
+  return lines.filter((l) => !/:\s*$/.test(l)).map(cleanLine).filter(Boolean).join(', ');
+}
+
 // "לחם ועגבניות" is two things, but "תה ויסוצקי" is one: a part after "ו"
 // stands alone only when it is a thing we know.
 function splitAnd(chunk) {

@@ -67,3 +67,10 @@ test('round 4: a recipe shared as a title and a link is read by its link; a whol
   assert.equal(recipeLink('2 כוסות קמח, 3 ביצים, כוס סוכר, חצי כוס שמן, שקית אבקת אפייה, כפית וניל, מערבבים הכול ואופים בתנור שחומם מראש ל-180 מעלות כ-40 דקות. מקור: https://x.example/cake'), '', 'a whole recipe stays text');
   assert.equal(recipeLink('בלי קישור'), '');
 });
+
+test('round 7: a list pasted from WhatsApp, one line each, becomes one item per line', async () => {
+  const { pastedList } = await import('../public/app/src/domain/shopping.js');
+  assert.equal(pastedList('רשימה לשבת:\n1. חלב 3%\n2. ביצים x2\n• לחם 🍞\n\n- עגבניות\r\nקולה'), 'חלב 3%, ביצים x2, לחם, עגבניות, קולה');
+  assert.equal(pastedList('חלב, לחם'), null, 'one line goes in as it is');
+  assert.deepEqual(parseItems(pastedList('חלב\nלחם')).map((i) => i.name), ['חלב', 'לחם']);
+});
