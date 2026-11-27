@@ -41,7 +41,7 @@ export function ShopLists({ lists, items, trips, onOpen, onCreate, onAdvisor, on
     ${trips && trips.length > 0 && html`<div class="sl-trips stack"><h2 class="section-h">קניות שהסתיימו</h2>
       <div class="card sl-chats">${trips.slice(0, 4).map((t) => html`<button type="button" class="sl-chat" key=${t.id} onClick=${() => onTrips(t.id)}>
         <span class="sl-av sl-done" aria-hidden="true"><${Icon} name="check" size=${20} /></span>
-        <span class="sl-mid"><b>${t.chain_name || 'קנייה'} · ${whenText(t.finished_at)}</b><small class="num">${t.bought} מוצרים${t.total ? ' · ' + money(t.total) : ''}</small></span>
+        <span class="sl-mid"><b>${t.chain_name || 'קנייה'} · ${whenText(t.finished_at)}</b><small class="num">${t.bought === 1 ? 'מוצר אחד' : t.bought + ' מוצרים'}${t.total ? ' · ' + money(t.total) : ''}</small></span>
         <span class="sl-end"><span class=${'tag ' + (t.receipt_id ? 'tg' : 'tn')}>${t.receipt_id ? 'עם קבלה' : 'בלי קבלה'}</span></span>
       </button>`)}
       ${trips.length > 4 && html`<button type="button" class="sl-chat sl-more" onClick=${() => onTrips('')}>לכל ${trips.length} הקניות ‹</button>`}</div></div>`}

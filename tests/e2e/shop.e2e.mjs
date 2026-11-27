@@ -644,7 +644,7 @@ test('finishing a shopping saves a trip: the bought leave, the rest stay, a type
   await page.click('.trips-card');
   await page.waitForSelector('.trip-row');
   assert.match(await page.locator('.trip-left').textContent(), /נשאר להשלים · 1/);
-  assert.match(await page.locator('.trip-row').textContent(), /2 מוצרים · 1 נשארו/);
+  assert.match(await page.locator('.trip-row').textContent(), /2 מוצרים · אחד נשאר/);
   assert.match(await page.locator('.trip-row').textContent(), /בלי קבלה/);
   await page.click('.trip-row');
   await page.waitForSelector('.trip-nudge');

@@ -94,12 +94,14 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   const [openList, setOpenList] = useState(null);
   useEffect(() => {
     if (!owner || !data.hid) return;
-    loadLists(data.hid).then(async (ls) => {
-      // The first time, a list for what is already on it.
-      if (ls && !ls.length) { try { ls = [await createList(data.hid, 'הרשימה שלי')]; } catch (_e) { ls = null; } }
-      setLists(ls);
-    }).catch(() => setLists(null));
+    loadLists(data.hid).then(setLists).catch(() => setLists(null));
   }, [data.hid, owner]);
+  // No list open (the first time, or the last one was closed): a list for
+  // what is on it, so the screen stays "הרשימות שלי".
+  useEffect(() => {
+    if (!owner || !data.hid || !Array.isArray(lists) || lists.length) return;
+    createList(data.hid, 'הרשימה שלי').then((l) => setLists((ls) => (ls && ls.length ? ls : [l]))).catch(() => setLists(null));
+  }, [lists, data.hid, owner]);
   const closeIntro = () => { writeLocal(INTRO_KEY, '1'); setIntro(false); };
   useEffect(() => { if (owner && data.hid) loadReceipts(data.hid).then(setReceipts).catch(() => setReceipts([])); }, [data.hid, owner]);
   useEffect(() => { if (data.hid) getArea(data.hid).then((a) => setAreaText(a)).catch(() => setAreaText('')); }, [data.hid]);
@@ -108,7 +110,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   if (shop.status === 'error') return html`<div class="card empty" role="alert"><b style="color:var(--text)">לא הצלחנו לטעון את הרשימה</b><button type="button" class="btn btn-ghost" onClick=${shop.reload}>לנסות שוב</button></div>`;
 
   const all = shop.items;
-  const withLists = owner && Array.isArray(lists) && lists.length > 0;
+  const withLists = owner && Array.isArray(lists);
   // "הרשימות שלי": the lists, before any one of them.
   if (withLists && !openList) {
     const newList = async (name, kind = null) => { const l = await createList(data.hid, name, kind); setLists((ls) => [...ls, l]); return l; };
