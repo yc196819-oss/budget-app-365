@@ -202,7 +202,7 @@ export function TripsSheet({ data, trips, items, start = null, onClose, onChange
       ${list.length === 0 ? html`<div class="card empty"><span>עוד אין קניות שמורות. כשתלחצו "סיימתי לקנות", הקנייה תישמר כאן.</span></div>`
         : html`<div class="card trip-list">${list.map((t) => { const { d, m } = day(t.finished_at); return html`<button type="button" class="trip-row" key=${t.id} onClick=${() => setOpen(t.id)}>
           <span class="trip-date"><b class="num">${d}</b><small>${m}</small></span>
-          <span class="trip-what"><b>${t.chain_name || 'קנייה'}</b><small class="muted">${t.bought} מוצרים${t.left_over ? ' · ' + t.left_over + ' נשארו' : ''}${t.total ? ' · ' + money(t.total) : ''}</small></span>
+          <span class="trip-what"><b>${t.chain_name || 'קנייה'}</b><small class="muted">${t.bought === 1 ? 'מוצר אחד' : t.bought + ' מוצרים'}${t.left_over ? ' · ' + (t.left_over === 1 ? 'אחד נשאר' : t.left_over + ' נשארו') : ''}${t.total ? ' · ' + money(t.total) : ''}</small></span>
           <span class=${'tag ' + (t.receipt_id ? 'tg' : 'tn')}>${t.receipt_id ? 'עם קבלה' : 'בלי קבלה'}</span>
         </button>`; })}</div>`}
     </div>`}

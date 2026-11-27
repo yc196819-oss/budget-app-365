@@ -64,3 +64,42 @@ test('round 2: in the store, each household marks, hides, undoes and finishes; "
     await page.close();
   }
 });
+
+test('round 3: lists: a list for Shabbat, finished on its own; closing the last list leaves "הרשימות שלי" with a fresh one, not the old one-list screen', async () => {
+  const { page, db, errors } = await openHousehold(HOUSEHOLDS[5]);
+  await page.locator('.shop-add .input').fill('חלב, לחם');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 2);
+  await page.click('.shop-listhead .back-btn');
+  await page.click('.sl-new');
+  await page.fill('#sl-name', 'לשבת');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.shop-listhead h2:has-text("לשבת")');
+  await page.locator('.shop-add .input').fill('יין לקידוש, חלות');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 2);
+  await page.locator('.shop-item', { hasText: 'חלות' }).locator('input[type=checkbox]').check();
+  await page.click('.shop-finish');
+  await page.click('.trip-finish .btn-ghost');
+  await page.waitForFunction(() => !document.querySelector('.trip-finish'));
+  await page.click('.shop-listhead .back-btn');
+  // One thing bought: said so, not "1 מוצרים".
+  assert.match(await page.locator('.sl-trips .sl-chat').first().textContent(), /מוצר אחד/);
+  // The other list was not touched.
+  assert.match(await page.locator('.sl-main .sl-chat', { hasText: 'הרשימה שלי' }).textContent(), /0 מתוך 2/);
+  // Close both lists, one after the other.
+  for (const name of ['לשבת', 'הרשימה שלי']) {
+    await page.locator('.sl-main .sl-chat', { hasText: name }).click();
+    await page.waitForSelector('.shop-add');
+    while (await page.locator('.shop-del').count()) { const n = await page.locator('.shop-del').count(); await page.locator('.shop-del').first().click(); await page.waitForFunction((k) => document.querySelectorAll('.shop-del').length < k, n); }
+    await page.click('.shop-archive');
+    await page.waitForSelector('.sl-main');
+  }
+  // Still "הרשימות שלי", with a new empty list to start from.
+  await page.waitForSelector('.sl-main .sl-chat');
+  assert.deepEqual((await page.locator('.sl-main .sl-chat b').allTextContents()), ['הרשימה שלי']);
+  assert.equal(db.tables.shopping_lists.filter((l) => !l.archived_at).length, 1);
+  assert.equal(await page.locator('.shop-head').count(), 0, 'not the old one-list screen');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
