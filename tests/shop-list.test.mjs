@@ -72,7 +72,7 @@ test('what is already on the list is not added again; the rest is added sized', 
   const checked = new Set(['עגבניות', 'חלות', 'נרות שבת']);
   assert.deepEqual(toItems(l, 3, checked, ['חלות לשבת']), [
     { name: 'עגבניות', qty: '750 גרם', aisle: 'produce' },
-    { name: 'נרות שבת', qty: '1 חבילה', aisle: 'other' }
+    { name: 'נרות שבת', qty: '1 חבילה', aisle: 'clean' }
   ]);
 });
 
