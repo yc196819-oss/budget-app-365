@@ -36,7 +36,7 @@ function Review({ receipt, onSave, onClose, busy }) {
       <p class="muted rcpt-why">מה שתשמרו ייכנס ל"מה שאתם קונים בדרך כלל", ובהשוואת המחירים תראו כמה שילמתם בפעם האחרונה. התמונה עצמה לא נשמרת.</p>
       <label class="rcpt-also"><input type="checkbox" checked=${alsoList} onChange=${(e) => setAlsoList(e.currentTarget.checked)} /> להוסיף את המוצרים גם לרשימה של הקנייה הבאה</label>
       <div class="rcpt-acts">
-        <button type="button" class="btn" disabled=${busy || !picked.length} onClick=${() => onSave({ ...receipt, items: picked }, alsoList)}>${busy ? 'שומרים…' : 'לשמור ' + picked.length + ' מוצרים'}</button>
+        <button type="button" class="btn" disabled=${busy || !picked.length} onClick=${() => onSave({ ...receipt, items: picked }, alsoList)}>${busy ? 'שומרים…' : picked.length === 1 ? 'לשמור מוצר אחד' : 'לשמור ' + picked.length + ' מוצרים'}</button>
         <button type="button" class="btn-text" onClick=${onClose}>ביטול</button>
       </div>
     </div>
@@ -68,7 +68,7 @@ export function Receipts({ hid, receipts, onSaved, onAddToList }) {
       onSaved(out, r);
       if (alsoList) await onAddToList(history.map((h) => ({ name: h.name, qty: null, aisle: h.aisle })));
       track('receipt_save');
-      showToast('נשמרו ' + history.length + ' מוצרים מהקבלה' + (out.saved ? '' : '. המחירים יישמרו מהקבלה הבאה'));
+      showToast((history.length === 1 ? 'נשמר מוצר אחד' : 'נשמרו ' + history.length + ' מוצרים') + ' מהקבלה' + (out.saved ? '' : '. המחירים יישמרו מהקבלה הבאה'));
       setReceipt(null); setState('idle');
     } catch (_e) { showToast('לא נשמר. נסו שוב.'); setState('review'); }
   };

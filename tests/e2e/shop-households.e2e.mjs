@@ -1,10 +1,13 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { startServer, launchBrowser } from './helpers.mjs';
 import { HOUSEHOLDS, openHousehold as openIn } from './households.mjs';
 
 // The Shabbat testing rounds: 15 made-up households (households.mjs) going
 // through the shopping tab, one test per round.
+const AXE = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 let server;
 let browser;
 before(async () => { server = await startServer(); browser = await launchBrowser(); });
@@ -102,4 +105,40 @@ test('round 3: lists: a list for Shabbat, finished on its own; closing the last 
   assert.equal(await page.locator('.shop-head').count(), 0, 'not the old one-list screen');
   assert.deepEqual(errors, []);
   await page.close();
+});
+
+test('round 6: readable for everyone, light and dark: the list, the store, "save the shopping", the advisor\'s cart and the lists pass the accessibility check', async () => {
+  const axe = async (page, where) => {
+    await page.evaluate(AXE);
+    const bad = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((v) => v.id + ': ' + v.nodes.map((n) => n.target.join(' ')).join(', ')));
+    assert.deepEqual(bad, [], where);
+  };
+  for (const [idx, scheme] of [[8, 'light'], [4, 'dark']]) {
+    const h = HOUSEHOLDS[idx];
+    const { page, errors } = await openHousehold(h);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.locator('.shop-add .input').fill(h.line);
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.shop-item');
+    await page.locator('.shop-item input[type=checkbox]').first().check();
+    await axe(page, h.name + ' list, ' + scheme);
+    await page.click('.store-go');
+    await axe(page, h.name + ' store, ' + scheme);
+    await page.keyboard.press('Escape');
+    await page.click('.shop-finish');
+    await page.waitForSelector('.trip-finish');
+    await axe(page, h.name + ' save the shopping, ' + scheme);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.trip-finish'));
+    await page.click('.adv-cta');
+    await page.waitForSelector('.cart-builder');
+    await axe(page, h.name + ' cart, ' + scheme);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.cart-builder'));
+    await page.click('.shop-listhead .back-btn');
+    await page.waitForSelector('.sl-chat');
+    await axe(page, h.name + ' lists, ' + scheme);
+    assert.deepEqual(errors, [], h.name);
+    await page.close();
+  }
 });
