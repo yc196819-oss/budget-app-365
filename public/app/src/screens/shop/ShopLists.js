@@ -1,9 +1,12 @@
 import { html } from '../../lib/html.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { listRows, whenText, cleanName, compareFirst } from '../../domain/shopLists.js';
 import { money } from '../../domain/format.js';
 
+// Two names for the same list: the same letters, whatever the spaces,
+// quotes or case.
+const sameName = (a, b) => String(a || '').replace(/[\s"'׳״]+/g, '').toLowerCase() === String(b || '').replace(/[\s"'׳״]+/g, '').toLowerCase();
 const KIND_ICON = { shabbat: 'spark', holiday: 'spark', guests: 'together', recipe: 'book', pharm: 'drop' };
 
 // "הרשימות שלי": every open list in a row, like chats, the latest first, and
@@ -11,8 +14,19 @@ const KIND_ICON = { shabbat: 'spark', holiday: 'spark', guests: 'together', reci
 export function ShopLists({ lists, items, trips, onOpen, onCreate, onAdvisor, onTrips, onCompare = null }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  // The name box is ready to type in as soon as it opens.
+  const nameBox = useRef(null);
+  useEffect(() => { if (adding && nameBox.current) nameBox.current.focus(); }, [adding]);
   const rows = listRows(lists, items);
-  const submit = (e) => { e.preventDefault(); const n = cleanName(name); if (!n) return; onCreate(n); setAdding(false); setName(''); };
+  const submit = (e) => {
+    e.preventDefault();
+    const n = cleanName(name);
+    if (!n) return;
+    // A list by that name is already open: it opens (not a second "לשבת").
+    const same = rows.find((l) => sameName(l.name, n));
+    if (same) onOpen(same.id); else onCreate(n);
+    setAdding(false); setName('');
+  };
   const first = onCompare ? compareFirst(rows) : null;
   // On a computer: the lists on the right, comparing and past trips beside them.
   return html`<section class="shop-lists" aria-labelledby="lists-h">
@@ -23,8 +37,8 @@ export function ShopLists({ lists, items, trips, onOpen, onCreate, onAdvisor, on
     </button>`}
     <div class="sl-main stack">
     <h2 id="lists-h" class="section-h">הרשימות שלי</h2>
-    ${adding ? html`<form class="sl-new-form" onSubmit=${submit}>
-        <input class="input" id="sl-name" value=${name} onInput=${(e) => setName(e.currentTarget.value)} maxLength="60" placeholder="שם הרשימה, למשל: לשבת" aria-label="שם הרשימה החדשה" autoFocus />
+    ${adding ? html`<form class="sl-new-form" onSubmit=${submit} onKeyDown=${(e) => { if (e.key === 'Escape') { e.stopPropagation(); setAdding(false); setName(''); } }}>
+        <input class="input" id="sl-name" value=${name} onInput=${(e) => setName(e.currentTarget.value)} maxLength="60" placeholder="שם הרשימה, למשל: לשבת" aria-label="שם הרשימה החדשה" ref=${nameBox} />
         <button type="submit" class="btn" disabled=${!cleanName(name)}>ליצור</button>
         <button type="button" class="btn btn-ghost" onClick=${() => setAdding(false)}>ביטול</button></form>`
       : html`<div class="sl-new-row">
