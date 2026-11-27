@@ -7,8 +7,11 @@ const P = (barcode, name, qty, unit, prices) => ({ barcode, name, qty, unit, off
 
 test('round 3: the list says it in the singular, the chains in the plural', () => {
   assert.equal(searchTerm('ביצה'), 'ביצים');
-  assert.equal(searchTerm(' עגבנייה '), 'עגבניות');
-  assert.equal(searchTerm('עגבניה'), 'עגבניות');
+  // Fresh food by its base, which finds both: "עגבניות" (packs) and
+  // "עגבניה מגי" (loose, by the kilo).
+  assert.equal(searchTerm(' עגבנייה '), 'עגבני');
+  assert.equal(searchTerm('עגבניה'), 'עגבני');
+  assert.equal(searchTerm('עגבניות'), 'עגבני');
   assert.equal(searchTerm('לחמניה'), 'לחמניות');
   assert.equal(searchTerm('קוטג'), "קוטג'");
   assert.equal(searchTerm('חלב 3%'), 'חלב 3%', 'anything else as typed');

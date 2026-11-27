@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { size, sizeText, words, score, bestPrice, levelOf, allowed, choose, chooseAll, basket, count, kosherHint } from '../public/app/src/domain/prices.js';
+import { size, sizeText, words, score, bestPrice, levelOf, allowed, choose, chooseAll, basket, count, kosherHint, typicalPrice } from '../public/app/src/domain/prices.js';
 
 // Made-up products and prices.
 const milkA = { barcode: '1001', name: 'חלב 3% בשקית', maker: 'מחלבה א', qty: 1, unit: 'ליטר', offers: [{ chain: 'x', chain_name: 'רשת א', price: 6.2 }, { chain: 'y', chain_name: 'רשת ב', price: 6.9 }], kosher: { votes: { mehadrin: 3 } } };
@@ -85,8 +85,53 @@ test('the list at each chain: cheapest first, and what each chain is missing', (
   const choices = [choose('חלב 3%', [milkA], 'any'), choose('חלב 3%', [milkB], 'any')];
   const b = basket(choices, () => 2);
   const plain = ({ lines, ...r }) => r;
-  assert.deepEqual(plain(b[0]), { chain: 'x', name: 'רשת א', store: null, total: 24.2, missing: 0, swaps: 0, gap: 0, saved: 0 });
-  assert.deepEqual(plain(b[1]), { chain: 'y', name: 'רשת ב', store: null, total: 13.8, missing: 1, swaps: 0, gap: 11.8, saved: 0 });
+  assert.deepEqual(plain(b[0]), { chain: 'x', name: 'רשת א', store: null, total: 24.2, missing: 0, swaps: 0, gap: 0, fair: 24.2, saved: 0 });
+  assert.deepEqual(plain(b[1]), { chain: 'y', name: 'רשת ב', store: null, total: 13.8, missing: 1, swaps: 0, gap: 11.8, fair: 25.6, saved: 0 });
   assert.equal(count('×3'), 3);
   assert.equal(count('2 ק"ג'), 1);
+});
+
+test('chains are compared by the whole list: a missing product counts at about its usual price', () => {
+  const p = (barcode, name, offers) => ({ barcode, name, qty: 1, unit: 'ליטר', offers: offers.map(([chain, price]) => ({ chain, chain_name: chain, price })), kosher: { votes: { regular: 2 } } });
+  const juice = p('3001', 'מיץ תפוזים', [['a', 10], ['b', 9], ['c', 11]]);
+  const oil = p('3002', 'שמן קנולה', [['a', 12], ['c', 14]]);
+  const soap = p('3003', 'סבון ידיים', [['a', 8], ['c', 8]]);
+  const rows = basket([juice, oil, soap].map((x, i) => ({ id: 'i' + i, query: x.name, status: 'auto', pick: x, options: [x], pool: [x] })));
+  // b lacks two of three: it goes last, whatever its price.
+  assert.deepEqual(rows.map((r) => r.chain), ['a', 'c', 'b']);
+  assert.equal(typicalPrice(oil), 13);
+  const b = rows.find((r) => r.chain === 'b');
+  assert.equal(b.gap, 21);
+  assert.equal(b.fair, 30);
+});
+
+test('a chain about as cheap that lacks something does not beat one that has everything', () => {
+  const p = (barcode, offers) => ({ barcode, name: 'מוצר ' + barcode, qty: 1, unit: 'ליטר', offers: offers.map(([chain, price]) => ({ chain, chain_name: chain, price })), kosher: { votes: { regular: 2 } } });
+  const items = [p('4001', [['full', 20], ['part', 19]]), p('4002', [['full', 20], ['part', 19]]), p('4003', [['full', 10], ['part', 10]]), p('4004', [['full', 10.5], ['other', 9.5]])];
+  const rows = basket(items.map((x, i) => ({ id: 'i' + i, query: x.name, status: 'auto', pick: x, options: [x], pool: [x] })));
+  // part: 48 + about 10 = 58, a guess; full: 60.50 for everything.
+  assert.equal(rows.find((r) => r.chain === 'part').fair, 58);
+  assert.equal(rows[0].chain, 'part', 'clearly cheaper even with the guess (58 × 1.03 < 60.50)');
+  const close = basket(items.map((x, i) => ({ id: 'i' + i, query: x.name, status: 'auto', pick: x, options: [x], pool: [x] })).map((c) => c.pick.barcode === '4004' ? { ...c, pick: { ...c.pick, offers: [{ chain: 'full', chain_name: 'full', price: 9 }, { chain: 'other', chain_name: 'other', price: 11 }] }, pool: [] } : c));
+  // Now full is 59 for everything and part about 58 without one: full wins.
+  assert.equal(close[0].chain, 'full');
+});
+
+test('a chain without a close size gets one from half to twice the size, counted for the picked size', () => {
+  const rice = (barcode, qty, offers) => ({ barcode, name: 'אורז פרסי', qty, unit: 'גרם', offers: offers.map(([chain, price]) => ({ chain, chain_name: chain, price })), kosher: { votes: { regular: 2 } } });
+  const kilo = rice('5001', 1000, [['a', 10], ['b', 11]]);
+  const half = rice('5002', 500, [['c', 6]]);
+  const tiny = rice('5003', 200, [['d', 2]]);
+  const c = choose('אורז', [kilo, half, tiny], 'any');
+  assert.equal(c.pick.barcode, '5001');
+  // The small chain's own rice is in the pool, though only one chain sells it.
+  assert.ok(c.pool.some((p) => p.barcode === '5002'));
+  const rows = basket([{ id: 'i1', ...c }]);
+  const at = (chain) => rows.find((r) => r.chain === chain);
+  // 500 g at ₪6 stands for 1 kg: ₪12.
+  assert.equal(at('c').missing, 0);
+  assert.equal(at('c').total, 12);
+  assert.equal(at('c').lines[0].swap, true);
+  // 200 g is a fifth of the size: not a stand-in.
+  assert.equal(at('d') && at('d').missing, 1);
 });

@@ -64,7 +64,7 @@ export async function searchPrices(names) {
         const part = ps[i + k];
         for (const r of rows) {
           const term = into(part[r.q - 1]);
-          if (term) found.get(term).push({ ...r, names: String(r.names || '').split(' | ').filter(Boolean), offers: (r.offers || []).map((o) => (o && o.chain_name ? { ...o, chain_name: chainHe(o.chain_name) } : o)) });
+          if (term) found.get(term).push({ ...r, by: part[r.q - 1], names: String(r.names || '').split(' | ').filter(Boolean), offers: (r.offers || []).map((o) => (o && o.chain_name ? { ...o, chain_name: chainHe(o.chain_name) } : o)) });
         }
       });
     }

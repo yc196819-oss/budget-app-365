@@ -39,16 +39,22 @@ for (const f of FAMILIES) {
       assert.ok(!madeFrom(c.pick.name, c.query) || !isFresh(c.query), c.query + ' → ' + c.pick.name);
       if (isFresh(c.query)) assert.ok(!madeFrom(c.pick.name, c.query), c.query + ' is fresh, not ' + c.pick.name);
     }
-    // Chains: those with fewer missing first, cheaper first among equals.
+    // Chains: cheapest for the whole list first (missing products at their
+    // usual price); a chain missing more than a third of the list goes last.
     assert.ok(rows.length >= 3, 'compared at several chains');
-    for (let i = 1; i < rows.length; i++) assert.ok(rows[i - 1].missing < rows[i].missing || (rows[i - 1].missing === rows[i].missing && rows[i - 1].total <= rows[i].total));
+    const far = (r) => r.missing * 3 > priced.length;
+    for (let i = 1; i < rows.length; i++) assert.ok(far(rows[i - 1]) < far(rows[i]) || (far(rows[i - 1]) === far(rows[i]) && rows[i - 1].fair * (1 + 0.03 * rows[i - 1].missing) <= rows[i].fair * (1 + 0.03 * rows[i].missing)));
+    for (const r of rows) assert.equal(r.fair, Math.round((r.total + r.gap) * 100) / 100);
     assert.ok(rows[0].total > 0);
     assert.ok(saving(rows) >= 0);
-    // A swap is always an equivalent size of the picked product.
+    // A swap is a size close to the picked product's; from half to twice the
+    // size only when that chain has nothing closer in the pool.
     for (const r of rows) for (const l of r.lines) {
       if (!l.swap) continue;
       const c = choices.find((x) => x.id === l.id);
-      assert.ok(equivalent(c.pick, l.product) > 0, c.pick.name + ' ↔ ' + l.product.name);
+      const at = (p) => p.barcode !== c.pick.barcode && (p.offers || []).some((o) => o.chain === r.chain);
+      const close = (c.pool || []).some((p) => at(p) && equivalent(c.pick, p) > 0);
+      assert.ok(close ? equivalent(c.pick, l.product) > 0 : equivalent(c.pick, l.product, true) > 0, c.pick.name + ' ↔ ' + l.product.name);
     }
     // Strict: only confirmed kashrut, so nothing unverified.
     assert.ok(run(f, { strict: true }).choices.every((c) => c.status !== 'unverified'));

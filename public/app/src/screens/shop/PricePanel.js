@@ -331,7 +331,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
   if (!open.length) return html`<section class="card stack price-panel">${head}${prefRow}${areaRow}<span class="muted">אין מה להשוות: הרשימה ריקה או שהכול כבר נקנה.</span></section>`;
   if (!catalog) return html`<section class="card stack price-panel" aria-busy="true">${head}${prefRow}${areaRow}${err ? html`<span role="alert">${err} <button type="button" class="btn-text" onClick=${search}>לנסות שוב</button></span>` : html`<span class="muted">מחפשים מחירים ל-${open.length} מוצרים…</span>`}</section>`;
 
-  const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty, c.pick);
+  const qtyOf = (c) => count((open.find((i) => i.id === c.id) || {}).qty, c.pick, c.query);
   const memoKey = [catalog, area, pref, strict, shownChains, clubs, open.map((i) => i.id + '|' + i.name + '|' + (i.barcode || '') + '|' + (i.qty || '')).join('§')];
   if (!memo.current.key || memoKey.some((k, n) => k !== memo.current.key[n])) {
     const choices = chooseAll(open.map((i) => ({ id: i.id, name: i.name, barcode: i.barcode })), withoutChains(nearby(catalog, !!area, area ? area.stores : null), hiddenChains(pref, shownChains)), pref, { strict });
@@ -350,8 +350,16 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
   const best = chains[0];
   const shown = chains.find((c) => c.chain === chainSel) || best;
   const save = saving(chains);
-  const top = chains.slice(0, 5);
-  const most = top.length ? Math.max(...top.map((c) => c.total + (c.gap || 0))) : 0;
+  // Branches near the family and online shops are different choices: each
+  // gets its own group, cheapest for the whole list first.
+  // A chain missing more than a third of the list is not a real choice: it is
+  // named under the groups, not compared.
+  const partial = (c) => c !== best && c !== shown && c.missing * 3 > priced;
+  const compared = chains.filter((c) => !partial(c));
+  const left = chains.filter(partial);
+  const groups = [['בחנויות קרובות', compared.filter((c) => !isOnlineChain(c.chain)).slice(0, 5)], ['אונליין, כולל משלוח', compared.filter((c) => isOnlineChain(c.chain)).slice(0, 3)]].filter(([, list]) => list.length);
+  const top = groups.flatMap(([, list]) => list);
+  const most = top.length ? Math.max(...top.map((c) => c.fair)) : 0;
   const lineAt = (c) => shown && shown.lines.find((l) => l.id === c.id);
   // When most of the list is not verified yet, the note above says it once
   // instead of a tag on every line.
@@ -374,7 +382,7 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
         </div>`; })()}
       ${chainNote(shown.chain) && !isOnlineChain(shown.chain) && html`<span class="pp-weekly"><${Icon} name=${chainNote(shown.chain).icon || 'calendar'} size=${15} /><span>${chainNote(shown.chain).text}${chainNote(shown.chain).url ? html` <a href=${chainNote(shown.chain).url} target="_blank" rel="noopener">לאתר שלהם</a>` : ''}</span></span>`}
       ${shown === best && bestAlways(chains) && html`<button type="button" class="pp-always" onClick=${() => setChainSel(bestAlways(chains).chain)}>${chainNote(best.chain).alt || 'בחנות שפתוחה כל יום'}: הכי משתלם ב${bestAlways(chains).name}, <b class="num">${fmt(bestAlways(chains).total)}</b></button>`}
-      ${shown.missing > 0 && html`<span class="pp-missing">בלי ${shown.missing === 1 ? 'מוצר אחד שאין' : shown.missing + ' מוצרים שאין'} ב${shown.name}: ${shown.lines.filter((l) => !l.product).map((l) => (open.find((i) => i.id === l.id) || {}).name).filter(Boolean).slice(0, 4).join(', ')}${shown.missing > 4 ? ' ועוד' : ''}</span>`}
+      ${shown.missing > 0 && html`<span class="pp-missing">בלי ${shown.missing === 1 ? 'מוצר אחד שאין' : shown.missing + ' מוצרים שאין'} ב${shown.name}: ${shown.lines.filter((l) => !l.product).map((l) => (open.find((i) => i.id === l.id) || {}).name).filter(Boolean).slice(0, 4).join(', ')}${shown.missing > 4 ? ' ועוד' : ''}. עם ${shown.missing === 1 ? 'המוצר הזה' : 'המוצרים האלה'}, כל הרשימה בערך <b class="num">${fmt(shown.fair)}</b>.</span>`}
       ${area && !area.stores.length && html`<span class="pp-missing">אין חנות של אף רשת ${reachKm(area.max_km) ? 'עד ' + reachKm(area.max_km) + ' ק"מ מ' : 'ב'}${area.city}, ולכן מוצגות רק רשתות אונליין (במשלוח). <button type="button" class="btn-text pp-inline" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></span>`}
       ${shown.saved > 0 && html`<span class="pp-deals"><${Icon} name="tag" size=${15} />כולל <b class="num">${fmt(shown.saved)}</b> הנחה במבצעים שכל אחד מקבל</span>`}
       ${shown === best && (() => { const t = twoChains(chains); if (!t) return ''; const names = (ids) => ids.map((id) => (open.find((i) => i.id === id) || {}).name).filter(Boolean);
@@ -383,12 +391,15 @@ export function PricePanel({ hid, items, receipts = [], onClose, onPicked, guest
       ${save > 0 && shown === best && html`<span class="pp-save">חוסכים <b class="num">${fmt(save)}</b> לעומת המחיר האמצעי ברשתות</span>`}
       ${(() => { const text = chainListText(shown, open); const copy = async () => { try { await navigator.clipboard.writeText(text); showToast('הרשימה של ' + shown.name + ' הועתקה'); track('price_list_copy'); } catch (_e) { showToast('לא הצלחנו להעתיק.'); } };
         return html`<div class="pp-send"><span>לשלוח למי שהולך לקנות:</span><a class="btn-text" href=${'https://wa.me/?text=' + encodeURIComponent(text)} target="_blank" rel="noopener" onClick=${() => track('price_list_wa')}>וואטסאפ</a><button type="button" class="btn-text" onClick=${copy}>להעתיק</button></div>`; })()}
-      <div class="pp-bars" role="group" aria-label="הסל בכל רשת: לבחור רשת">${top.map((c) => html`<button type="button" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
+      <div class="pp-bars" role="group" aria-label="כל הרשימה בכל רשת: לבחור רשת">${groups.map(([title, list]) => html`
+        ${groups.length > 1 && html`<span class="pp-group" key=${title}>${title}</span>`}
+        ${list.map((c) => html`<button type="button" key=${c.chain} class=${'pp-bar' + (c === shown ? ' on' : '') + (c === best ? ' best' : '')} aria-pressed=${c === shown} onClick=${() => setChainSel(c.chain)}>
         <span class="pp-bar-n"><${ChainLogo} chain=${c.chain} name=${c.name} /><span>${c.name}${chainNote(c.chain) && html`<small class="pp-bar-w">${chainNote(c.chain).short}</small>`}</span></span>
         <span class="pp-bar-t" aria-hidden="true"><i style=${'width:' + Math.max(8, Math.round((c.total / most) * 100)) + '%'}></i>${c.gap > 0 && html`<b class="pp-bar-gap" style=${'width:' + Math.round((c.gap / most) * 100) + '%'}></b>`}</span>
-        <span class="pp-bar-v num">${fmt(c.total)}</span>
-        ${(c.missing > 0 || c.swaps > 0 || c.delivery) && html`<small class="pp-bar-x">${[c.delivery ? 'כולל משלוח ' + (c.delivery.sure ? '' : 'בערך ') + fmt(c.delivery.fee) : '', c.delivery && c.delivery.under ? 'מתחת למינימום ' + fmt(c.delivery.min) : '', c.missing ? 'בלי ' + (c.missing === 1 ? 'מוצר אחד' : c.missing + ' מוצרים') : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
-      </button>`)}</div>
+        <span class="pp-bar-v num">${c.missing ? 'בערך ' : ''}${fmt(c.fair)}</span>
+        ${(c.missing > 0 || c.swaps > 0 || c.delivery) && html`<small class="pp-bar-x">${[c.missing ? fmt(c.total) + ' + בערך ' + fmt(c.gap) + ' ל' + (c.missing === 1 ? 'מוצר אחד שאין שם' : '-' + c.missing + ' מוצרים שאין שם') : '', c.delivery ? 'כולל משלוח ' + (c.delivery.sure ? '' : 'בערך ') + fmt(c.delivery.fee) : '', c.delivery && c.delivery.under ? 'מתחת למינימום ' + fmt(c.delivery.min) : '', c.swaps ? (c.swaps === 1 ? 'מוצר דומה אחד' : c.swaps + ' מוצרים דומים') : ''].filter(Boolean).join(' · ')}</small>`}
+      </button>`)}`)}
+        ${left.length > 0 && html`<small class="pp-left">לא בהשוואה, כי חסרים בהן הרבה מהמוצרים: ${left.map((c) => c.name).join(', ')}</small>`}</div>
     </div>` : area && !area.stores.length ? html`<div class="pp-empty"><b>אין סניף של אף רשת ${reachKm(area.max_km) ? 'עד ' + reachKm(area.max_km) + ' ק"מ מ' : 'ב'}${area.city}</b><span class="muted">רשת רחוקה לא נכנסת להשוואה, כי לא באמת קונים בה. אפשר להגדיל את המרחק.</span><button type="button" class="btn btn-ghost" style="justify-self:start" onClick=${() => setEditArea(true)}>להגדיל את המרחק</button></div>`
       : html`<div class="pp-empty"><b>עוד אין מחירים לרשימה הזו</b><span class="muted">${looking ? 'מחפשים עכשיו…' : 'נסו לכתוב את המוצרים בשמות פשוטים: חלב 3%, קמח, אורז.'}</span></div>`}
     <details class="pp-set" open=${setOpen || editPref || editArea || editClubs} onToggle=${(e) => setSetOpen(e.currentTarget.open)}>

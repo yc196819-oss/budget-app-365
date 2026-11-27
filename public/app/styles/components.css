@@ -1410,6 +1410,8 @@ body.chat-open { overflow: hidden; }
 .price-seed-chains li { display: flex; justify-content: space-between; gap: 8px; background: var(--surface-2); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
 .price-seed-chains li.ok span { color: var(--income); }
 .price-seed-chains li.bad span { color: var(--danger); }
+.price-seed-chains li:has(.price-seed-drop) { flex-wrap: wrap; }
+.price-seed-drop { flex-basis: 100%; color: var(--warn); font-weight: 700; }
 
 .price-prod { align-items: center; }
 .price-img { width: 46px; height: 46px; border-radius: 12px; background: #fff; flex: none; display: grid; place-items: center; overflow: hidden; }
@@ -1728,12 +1730,15 @@ body.chat-open { overflow: hidden; }
 .pp-shop .btn-text { color: #F3C88F; }
 .pp-find { display: inline-block; margin-bottom: 6px; }
 .pp-bar-t { display: flex; height: 6px; border-radius: 6px; background: #ffffff14; overflow: hidden; }
-/* What the missing products would add: striped, not counted in the price. */
+/* What the missing products add at their usual price: striped, it is a guess. */
 .pp-bar-gap { display: block; height: 100%; background: repeating-linear-gradient(-45deg, #ffffff40 0 3px, transparent 3px 6px); }
 .pp-bar-t i { display: block; height: 100%; border-radius: 6px; background: #ffffff55; transform-origin: right; animation: pp-grow .7s var(--out, ease) both; }
-.pp-bar.on .pp-bar-t i, .pp-bar:first-child .pp-bar-t i { background: var(--fx-gold); }
+.pp-bar.on .pp-bar-t i, .pp-bar.best .pp-bar-t i { background: var(--fx-gold); }
 .pp-bar-v { font-size: 14px; font-weight: 800; }
 .pp-bar-x { grid-column: 1 / -1; font-size: 11.5px; opacity: .65; margin-top: -2px; }
+.pp-group { margin: 8px 8px 0; font-size: 12px; font-weight: 800; opacity: .7; }
+.pp-group:first-child { margin-top: 0; }
+.pp-left { margin: 6px 8px 0; font-size: 12px; opacity: .65; }
 @keyframes pp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .pp-empty { display: grid; gap: 4px; padding: 14px; border-radius: var(--radius-m); background: var(--surface-2); }
 .pp-set { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-m); background: var(--surface-2); }

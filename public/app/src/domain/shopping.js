@@ -1,12 +1,14 @@
 // The shopping list: what to buy, sorted by where it is in the store,
 // remembered from one shopping to the next. Pure.
 
+import { plainLetters } from './produce.js';
+
 // The store's departments, in the order most stores are walked.
 export const AISLES = [
   { key: 'produce', label: 'ירקות ופירות', words: ['עגבני', 'מלפפון', 'בצל', 'שום', 'תפוח', 'תפוז', 'בננ', 'גזר', 'פלפל', 'חסה', 'כרוב', 'קישוא', 'חציל', 'לימון', 'אבוקדו', 'ענב', 'אגס', 'אפרסק', 'תות', 'פטרוזיליה', 'כוסברה', 'שמיר', 'נענע', 'פטריות', 'בטטה', 'דלעת', 'סלק', 'צנון', 'קלמנטינ', 'אבטיח', 'מלון', 'ירקות', 'פירות', 'תפוא', 'תפו"א', 'תפוחי אדמה'] },
   { key: 'bakery', label: 'מאפים', words: ['לחם', 'לחמני', 'פית', 'חלה', 'חלות', 'בגט', 'עוגה', 'עוגיות', 'קרואסון', 'מאפ', 'טורטי'] },
   { key: 'dairy', label: 'מוצרי חלב', words: ['חלב', 'גבינ', 'קוטג', 'יוגורט', 'שמנת', 'חמאה', 'לבן', 'לבנה', 'מעדן', 'ביצ', 'אשל', 'גיל', 'שוקו', 'פודינג'] },
-  { key: 'meat', label: 'בשר, עוף ודגים', words: ['עוף', 'בשר', 'שניצל', 'כרעיים', 'חזה', 'טחון', 'דג', 'סלמון', 'טונה', 'נקניק', 'פרגית', 'הודו', 'כבד', 'קציצ'] },
+  { key: 'meat', label: 'בשר, עוף ודגים', words: ['עוף', 'בשר', 'שניצל', 'כרעיים', 'חזה', 'טחון', 'דג', 'סלמון', 'טונה', 'נקניק', 'פרגית', 'הודו', 'כבד', 'קציצ', 'פילה', 'מושט', 'אמנון', 'דניס', 'לברק', 'בורי', 'מוסר ים', 'שוקיים'] },
   { key: 'dry', label: 'יבשים ומזווה', words: ['אורז', 'פסטה', 'ספגטי', 'קמח', 'סוכר', 'מלח', 'שמן', 'קטני', 'עדשים', 'חומוס', 'שעועית', 'קוסקוס', 'פתיתים', 'קורנפלקס', 'דגני', 'שיבולת', 'תבלין', 'פפריקה', 'כמון', 'רסק', 'קפה', 'תה', 'דבש', 'ריבה', 'ממרח', 'טחינה', 'שוקולד', 'במבה', 'ביסלי', 'חטיף', 'אגוז', 'שקדים', 'צימוק', 'שימורים', 'תירס', 'זיתים', 'מלפפון חמוץ', 'קטשופ', 'מיונז', 'חרדל', 'רוטב', 'אבקת מרק'] },
   { key: 'frozen', label: 'קפואים', words: ['קפוא', 'גלידה', 'בורקס', 'אפונה', 'ירקות קפואים', 'פיצה'] },
   { key: 'drinks', label: 'משקאות', words: ['מים', 'סודה', 'מיץ', 'קולה', 'תפוזים', 'בירה', 'יין', 'משקה', 'פטל'] },
@@ -22,12 +24,13 @@ const key = (s) => norm(s).toLowerCase().replace(/["'׳״]/g, '');
 
 // Which department an item belongs to. A longer match wins ("סבון כלים" is
 // cleaning, "סבון" is hygiene).
+// (Letters at a word's end written plainly: "מלפפונים" is cucumbers too.)
 export function aisleOf(name) {
-  const n = key(name);
+  const n = plainLetters(key(name));
   let best = { key: 'other', len: 0 };
   for (const a of AISLES) {
     for (const w of a.words) {
-      const k = key(w);
+      const k = plainLetters(key(w));
       if (k.length > best.len && n.includes(k)) best = { key: a.key, len: k.length };
     }
   }
