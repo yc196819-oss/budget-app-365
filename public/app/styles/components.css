@@ -776,9 +776,27 @@ body.chat-open { overflow: hidden; }
 .shop-trial .btn-text { min-height: 0; padding: 0 4px; font-size: 14px; color: var(--accent); text-decoration: underline; }
 .shop-week { font-size: 14px; background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }
 @media (min-width: 1024px) { .shop-benefits { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 1024px) {
-  .shop { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 20px; }
+/* The shopping tab lays out by the room it really has (the advisor beside it
+   takes a third of a laptop screen), not by the window. */
+.shop-host { container: shop / inline-size; }
+.shop-groups { display: grid; gap: 14px; }
+.shop-main { container: shopmain / inline-size; }
+@container shopmain (min-width: 560px) {
+  .shop-groups { display: block; columns: 2; column-gap: 16px; }
+  .shop-groups .shop-group { break-inside: avoid; margin-bottom: 14px; }
+}
+@container shop (min-width: 600px) and (max-width: 879px) {
+  .shop-side { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); align-items: start; }
+}
+@container shop (min-width: 880px) {
+  .shop { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; gap: 20px; }
+  .shop > .shop-listhead, .shop > .price-panel, .shop > .shop-asuser { grid-column: 1 / -1; }
   .shop-side { position: sticky; top: 16px; }
+  /* Prices: the products on the right, the sum and the chains stay in view beside them. */
+  .price-panel { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto auto auto auto 1fr; column-gap: 24px; align-items: start; }
+  .price-panel > * { grid-column: 1; }
+  .price-panel > .price-head { grid-column: 1 / -1; }
+  .price-panel > .pp-hero { grid-column: 2; grid-row: 2 / -1; position: sticky; top: 16px; }
 }
 @media print {
   body:has(.shop-print) * { visibility: hidden; }
@@ -2265,8 +2283,15 @@ body.store-on { overflow: hidden; }
 .adv-msg .fix-card .fix-note, .fix-card small.fix-note { font-weight: 400; font-size: 12px; color: var(--muted); }
 
 /* "הרשימות שלי": the lists like chats */
-.shop-home { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
-.shop-lists { gap: 12px; }
+.shop-home { display: flex; flex-direction: column; gap: 14px; }
+.shop-lists { display: flex; flex-direction: column; gap: 14px; }
+@container shop (min-width: 720px) {
+  .shop-lists { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); grid-template-rows: auto 1fr; grid-template-areas: "main cmp" "main trips"; gap: 14px 24px; align-items: start; }
+  .shop-lists > .sl-compare { grid-area: cmp; }
+  .shop-lists > .sl-main { grid-area: main; }
+  .shop-lists > .sl-trips { grid-area: trips; }
+  .shop-lists:not(:has(> .sl-compare, > .sl-trips)) { grid-template-columns: minmax(0, 1fr); }
+}
 .sl-new-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .sl-new { flex: 1; min-width: 160px; border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 18px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; color: var(--accent); font: inherit; font-weight: 800; background: none; cursor: pointer; text-align: start; }
 .sl-new i { width: 32px; height: 32px; border-radius: 11px; background: var(--accent-tint); display: grid; place-items: center; font-style: normal; font-size: 20px; flex: none; }

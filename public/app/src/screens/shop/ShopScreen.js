@@ -110,7 +110,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   // "הרשימות שלי": the lists, before any one of them.
   if (withLists && !openList) {
     const newList = async (name, kind = null) => { const l = await createList(data.hid, name, kind); setLists((ls) => [...ls, l]); return l; };
-    return html`<div class="shop shop-home">
+    return html`<div class="shop-host"><div class="shop-home">
       <p class="shop-trial" role="note"><b>בהרצה:</b> הטאב חדש ועוד משתפר. ראיתם משהו לא תקין? <button type="button" class="btn-text shop-trial-talk" onClick=${() => go('profile/feedback')}>כתבו לנו</button>.</p>
       <${ShopLists} lists=${lists} items=${all} trips=${trips}
         onOpen=${(id) => { setOpenList(id); track('shop_list_open'); window.scrollTo(0, 0); }}
@@ -124,7 +124,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
       ${history !== null && html`<${TripsSheet} data=${data} trips=${trips} items=${all} start=${history || null} onClose=${() => setHistory(null)}
         onChanged=${(t) => setTrips((x) => x.map((y) => (y.id === t.id ? { ...y, ...t } : y)))}
         onRemoved=${(ids) => shop.patch((x) => x.filter((y) => !ids.includes(y.id)))} />`}
-    </div>`;
+    </div></div>`;
   }
   const current = withLists ? lists.find((l) => l.id === openList) : null;
   // On screen: this list's items (with the history, for "usual" and "last time").
@@ -181,13 +181,13 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   const waHref = 'https://wa.me/?text=' + encodeURIComponent('רשימת קניות\n\n' + listText(items));
   const copy = async () => { try { await navigator.clipboard.writeText(listText(items)); showToast('הרשימה הועתקה. אפשר להדביק בכל מקום.'); } catch (_e) { showToast('לא הצלחנו להעתיק.'); } };
 
-  return html`<div class="shop">
+  return html`<div class="shop-host"><div class="shop">
     ${asUser && html`<div class="card shop-asuser" role="status"><span><b>תצוגת משתמש רגיל</b><small class="muted">כך משפחה רגילה רואה את הקניות, בלי הניסויים של לוח הבעלים.</small></span>
       ${onOwnerView && html`<button type="button" class="btn btn-ghost" onClick=${onOwnerView}>לחזור לתצוגת הבעלים</button>`}</div>`}
+    ${current && html`<div class="shop-listhead"><button type="button" class="back-btn" aria-label="לכל הרשימות" onClick=${() => { setOpenList(null); setPrices(false); }}>→</button><h2>${current.name}</h2>
+      <button type="button" class="btn-text shop-archive" onClick=${async () => { if (open.length) { showToast('ברשימה עוד יש מוצרים. "סיימתי לקנות" או הורידו אותם, ואז אפשר לסגור.'); return; } try { await archiveList(current.id); setLists((ls) => ls.filter((l) => l.id !== current.id)); setOpenList(null); showToast('הרשימה נסגרה'); } catch (_e) { showToast('לא נסגרה. נסו שוב.'); } }}>לסגור את הרשימה</button></div>`}
+    ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} receipts=${receipts} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
     <section class="shop-main stack">
-      ${current && html`<div class="shop-listhead"><button type="button" class="back-btn" aria-label="לכל הרשימות" onClick=${() => { setOpenList(null); setPrices(false); }}>→</button><h2>${current.name}</h2>
-        <button type="button" class="btn-text shop-archive" onClick=${async () => { if (open.length) { showToast('ברשימה עוד יש מוצרים. "סיימתי לקנות" או הורידו אותם, ואז אפשר לסגור.'); return; } try { await archiveList(current.id); setLists((ls) => ls.filter((l) => l.id !== current.id)); setOpenList(null); showToast('הרשימה נסגרה'); } catch (_e) { showToast('לא נסגרה. נסו שוב.'); } }}>לסגור את הרשימה</button></div>`}
-      ${owner && prices && html`<${PricePanel} hid=${data.hid} items=${items} receipts=${receipts} onClose=${() => setPrices(false)} onPicked=${(id, barcode) => shop.patch((all) => all.map((x) => (x.id === id ? { ...x, barcode } : x)))} />`}
       <div class="shop-head">
         <span class="muted" style="font-size:14px">עוזרים לכם לחסוך בסופר: רשימה אחת לכל הבית, וכמה נשאר לסופר החודש. ${!intro && html`<button type="button" class="btn-text shop-what" onClick=${() => setIntro(true)}>מה זה?</button>`}</span>
         <span class="shop-tools">
@@ -215,7 +215,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         onRemoved=${(ids) => shop.patch((all) => all.filter((x) => !ids.includes(x.id)))} />`}
       ${owner && advisor && html`<${CartBuilder} hid=${data.hid} items=${items} receipts=${receipts} people=${data.people} shared=${sharedRecipe} onClose=${() => { setAdvisor(false); setSharedRecipe(null); }} toList=${withLists ? async () => openList : null} onAdded=${() => { shop.reload && shop.reload(); track('shop_advisor_add'); }} />`}
       ${open.length === 0 && html`<div class="card empty shop-empty"><b style="color:var(--text)">הרשימה ריקה</b><span>כותבים למעלה מה צריך, או לוחצים על משהו מ"מה שאתם קונים בדרך כלל".</span></div>`}
-      ${groups.map((g) => html`<div class="shop-group" key=${g.aisle}>
+      <div class="shop-groups">${groups.map((g) => html`<div class="shop-group" key=${g.aisle}>
         <h2 class="shop-aisle"><${Icon} name=${AISLE_ICON[g.aisle] || 'cart'} size=${15} stroke=${1.8} />${g.label}<span class="shop-aisle-n">${g.items.filter((i) => !i.done).length || ''}</span></h2>
         <div class="card shop-items">
           ${g.items.map((i) => html`<div class=${'shop-item' + (i.done ? ' done' : '')} key=${i.id}>
@@ -225,7 +225,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
             <button type="button" class="icon-btn shop-del" aria-label=${'להוריד את ' + i.name + ' מהרשימה'} onClick=${() => remove(i)}><${Icon} name="x" size=${15} /></button>
           </div>`)}
         </div>
-      </div>`)}
+      </div>`)}</div>
       ${bought > 0 && html`<button type="button" class="btn shop-finish" onClick=${owner ? () => setFinishing(true) : finish}>סיימתי לקנות (${bought} נקנו)</button>`}
       <div class="shop-print" aria-hidden="true">
         <h1>רשימת קניות</h1>
@@ -266,5 +266,5 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
         <button type="submit" class="btn btn-ghost" style="width:auto">לשמור</button></span>
       </form>`}
     </aside>
-  </div>`;
+  </div></div>`;
 }

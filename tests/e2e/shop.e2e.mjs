@@ -1292,3 +1292,43 @@ test('"הרשימות שלי": the lists like chats; a new list opens, items go 
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('on a computer the tab uses the width: lists beside the comparing, two columns of departments, prices beside their sum; a phone stays one column', async () => {
+  const items = (d) => {
+    d.tables.shopping_items = [['חלב 3%', 'dairy'], ['ביצים', 'dairy'], ['לחם', 'bakery'], ['עגבניות', 'produce'], ['אורז', 'dry'], ['סבון כלים', 'clean']]
+      .map(([name, aisle], i) => ({ id: 's' + i, household_id: d.hid, name, qty: null, aisle, done: false, created_at: '2026-11-08T08:0' + i + ':00Z', cleared_at: null }));
+    d.tables.price_prefs = [];
+  };
+  const box = (page, sel) => page.locator(sel).first().boundingBox();
+  const { page, db, errors } = await open(1280, items, OWNER);
+  await priceRoutes(page, { db });
+  // Two departments side by side, on one row.
+  const groups = await page.locator('.shop-group').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ x: Math.round(r.x), y: Math.round(r.y) })));
+  assert.ok(new Set(groups.map((g) => g.x)).size === 2, 'the departments in two columns');
+  // The list and the side cards beside it.
+  assert.ok((await box(page, '.shop-side')).x + (await box(page, '.shop-side')).width <= (await box(page, '.shop-main')).x + 1, 'the side cards to the left of the list');
+  // Prices: across the whole width, the sum beside the products.
+  await page.click('.shop-prices-cta button');
+  await page.getByRole('button', { name: /בלי העדפה/ }).first().click();
+  await page.waitForSelector('.pp-hero');
+  const hero = await box(page, '.pp-hero');
+  const list = await box(page, '.pp-list');
+  assert.ok(hero.x + hero.width <= list.x + 1, 'the sum to the left of the products');
+  assert.ok(Math.abs(hero.y - (await box(page, '.pp-set')).y) < 4, 'on the same row as the settings');
+  assert.ok((await box(page, '.price-panel')).width > (await box(page, '.shop-head')).width + 200, 'wider than the list column');
+  // "הרשימות שלי": the lists fill their column, the comparing beside them.
+  await page.click('.shop-listhead .back-btn');
+  await page.waitForSelector('.sl-chat');
+  const cmp = await box(page, '.sl-compare');
+  const main = await box(page, '.sl-main');
+  assert.ok(cmp.x + cmp.width <= main.x + 1 && main.width > 500, 'the lists wide, the comparing beside them');
+  assert.deepEqual(errors, []);
+  await page.close();
+  // A phone: one column, as before.
+  const phone = await open(390, items, OWNER);
+  const xs = await phone.page.locator('.shop-group').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));
+  assert.equal(new Set(xs).size, 1, 'one column of departments');
+  assert.ok((await box(phone.page, '.shop-side')).y > (await box(phone.page, '.shop-main')).y, 'the side cards below the list');
+  assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no sideways scroll');
+  await phone.page.close();
+});
