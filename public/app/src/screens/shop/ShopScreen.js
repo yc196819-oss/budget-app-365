@@ -138,7 +138,9 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   const open = items.filter((i) => !i.cleared_at);
   const bought = open.filter((i) => i.done).length;
   const usualList = usual(all);
-  const prev = previousList(all);
+  // "The previous list" is this list's last shopping (the Shabbat shopping is
+  // not offered back on the pharmacy list); what you usually buy is the home's.
+  const prev = previousList(withLists ? all.filter((i) => listOf(i, lists) === openList) : all);
   const fb = foodBudget(data, new Date());
   // Who added an item matters only when more than one person shops.
   const many = Object.keys(data.members || {}).length > 1;
