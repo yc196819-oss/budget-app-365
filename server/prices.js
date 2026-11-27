@@ -283,3 +283,23 @@ function retryLater(done) {
   return (done || []).filter((c) => c && c.error && !c.online && !/HTTP 40[13]|^save:/i.test(String(c.error))).map((c) => c.key);
 }
 module.exports.retryLater = retryLater;
+
+// After a night's load: how many of the most common products each chain
+// sells (`cover`, from price_coverage), next to the night before. A chain
+// whose file loaded but suddenly has far fewer of them (a broken or partial
+// file) is marked `coverDrop`, for the owner's catalog card.
+//   done: the night's chains ({ key, ... }); cover: [{ chain, has }];
+//   before: the previous night's chains (with their cover), or null.
+const COVER_DROP = 0.15;
+function withCoverage(done, cover, before = null, top = 500) {
+  const has = new Map((cover || []).map((c) => [c.chain, Number(c.has) || 0]));
+  const was = new Map((before || []).filter((c) => c && typeof c.cover === 'number').map((c) => [c.key, c.cover]));
+  return (done || []).map((c) => {
+    if (!c || c.error || !has.has(c.key)) return c;
+    const now = has.get(c.key);
+    const prev = was.get(c.key);
+    const drop = prev != null && prev >= top * 0.2 && now < prev * (1 - COVER_DROP);
+    return { ...c, cover: now, coverOf: top, ...(drop ? { coverDrop: prev } : {}) };
+  });
+}
+module.exports.withCoverage = withCoverage;
