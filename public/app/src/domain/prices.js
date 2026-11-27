@@ -586,7 +586,8 @@ export function storeWhy(s) {
   // From the family's location, a branch in their settlement has a distance too.
   if (s.kind === 'hood') return 'בשכונה שלכם' + (Number(s.km) > 0 ? ', ' + dist : '');
   if (s.kind === 'city') return 'ביישוב שלכם' + (Number(s.km) > 0 ? ', ' + dist : '');
-  return s.city + ', ' + dist;
+  // A branch in no settlement (at a junction, say) shows its distance only.
+  return s.city ? s.city + ', ' + dist : dist;
 }
 // With the family's area set: only the chains with a branch near it, at
 // that branch's price (the server already put it in). A product no branch

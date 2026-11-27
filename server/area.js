@@ -66,6 +66,32 @@ function storePlace(store) {
   return best ? place(best[1]) : null;
 }
 
+// The name of the settlement whose center is within 3 km of a point, or ''.
+function nameNear(pt) {
+  let best = null;
+  for (const code of Object.keys(PLACES)) {
+    const p = place(code);
+    const d = km(p, pt);
+    if (!best || d < best.d) best = { p, d };
+  }
+  return best && best.d <= 3 ? best.p.name : '';
+}
+// Where a branch is, for "in your settlement": as storePlace, unless the
+// branch has its own point far from that settlement (a street named after
+// a settlement, "חשמונאים 99" in Tel Aviv or "אזור התעשייה"; a wrong
+// settlement number; a junction between towns). Such a branch, or one we
+// could place only by its point, is in no settlement: it counts by its
+// real distance alone. (Looking a branch up on the map keeps storePlace,
+// so the question asked stays the same.)
+const AWAY_KM = 8;
+function branchPlace(store) {
+  const p = storePlace(store);
+  if (!hasPoint(store)) return p;
+  const pt = pointOf(store);
+  if (p && km(p, pt) <= AWAY_KM) return p;
+  return { code: null, name: nameNear(pt), ...pt };
+}
+
 // Distance in km between two points on the map.
 function km(a, b) {
   const r = (d) => (d * Math.PI) / 180;
@@ -107,7 +133,7 @@ function nearestStores(stores, home, { maxKm = 5 } = {}) {
     // An online warehouse is not a shop near the family (it is compared as
     // the chain's online shop, everywhere).
     if (isOnline(s.name)) continue;
-    const p = storePlace(s);
+    const p = branchPlace(s);
     if (!p) continue;
     const spot = hasPoint(s) ? pointOf(s) : p;
     const same = p.code === at.code;
@@ -160,4 +186,4 @@ function uniqueStores(list) {
   return [...best.values()];
 }
 
-module.exports = { hasPoint, place, placeByName, suggest, storePlace, km, reachKm, nearestStores, reachCounts, uniqueStores };
+module.exports = { hasPoint, place, placeByName, suggest, storePlace, branchPlace, km, reachKm, nearestStores, reachCounts, uniqueStores };
