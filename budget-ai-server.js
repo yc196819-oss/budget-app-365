@@ -2406,7 +2406,7 @@ const geo = require('./server/geo');
 const STORE_COLS = 'chain,chain_name,store_id,name,address,city,lat,lon,geo_q,geo_at';
 const storeRow = (hid, x) => ({ household_id: hid, chain: x.chain, store_id: x.store_id, chain_name: x.chain_name, name: x.name, address: x.address, city: x.city, km: x.km, kind: x.kind, lat: x.lat == null ? null : x.lat, lon: x.lon == null ? null : x.lon });
 // Each branch's point on the map, from its street address (OpenStreetMap,
-// one a second; up to 800 a night, the rest the next night). Only branch
+// one a second; up to 1,500 a night, the rest the next night). Only branch
 // addresses are sent.
 async function locateStores() {
   const { data: stores } = await allRows(() => supabaseAdmin.from('price_stores').select(STORE_COLS).order('chain').order('store_id'));
