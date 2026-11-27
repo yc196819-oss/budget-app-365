@@ -142,3 +142,21 @@ test('round 6: readable for everyone, light and dark: the list, the store, "save
     await page.close();
   }
 });
+
+test('round 7: a list pasted from WhatsApp into the add box: one item per line, beside what was typed', async () => {
+  const { page, db, errors } = await openHousehold(HOUSEHOLDS[9]);
+  const paste = (text) => page.evaluate((t) => {
+    const el = document.querySelector('.shop-add .input');
+    const dt = new DataTransfer();
+    dt.setData('text/plain', t);
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, text);
+  await page.locator('.shop-add .input').fill('אקונומיקה, ');
+  await paste('רשימה לשבת:\n1. חלב 3%\n2. ביצים x2\n• לחם 🍞\n- עגבניות');
+  assert.equal(await page.locator('.shop-add .input').inputValue(), 'אקונומיקה, חלב 3%, ביצים x2, לחם, עגבניות');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 5);
+  assert.deepEqual(db.tables.shopping_items.map((i) => i.name).sort(), ['אקונומיקה', 'ביצים', 'חלב 3%', 'לחם', 'עגבניות'].sort());
+  assert.deepEqual(errors, []);
+  await page.close();
+});
