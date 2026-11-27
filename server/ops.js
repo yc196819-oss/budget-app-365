@@ -600,7 +600,7 @@ function maskEmail(email) {
   return (u.length <= 2 ? u[0] + '*' : u.slice(0, 2) + '***') + '@' + d;
 }
 function codeMail(code, purpose = 'login') {
-  const what = purpose === 'enable' ? 'להפעלת כניסה בשני שלבים' : 'לכניסה לחשבון';
+  const what = purpose === 'enable' ? 'להפעלת כניסה בשני שלבים' : purpose === 'reset' ? 'למחיקת כל הנתונים והתחלה מחדש' : 'לכניסה לחשבון';
   const subject = code + ' הוא הקוד שלך ' + what;
   const text = 'הקוד שלך ' + what + ' ב"התקציב שלנו": ' + code + '\n\nהקוד בתוקף ל-10 דקות. אם לא ביקשתם אותו, אפשר להתעלם מהמייל, ולשנות סיסמה ליתר ביטחון.';
   const html = '<!doctype html><html lang="he" dir="rtl"><body style="margin:0;padding:24px 12px;background:#F3EDE6;font-family:Arial,Helvetica,sans-serif">'
@@ -963,4 +963,27 @@ function isOwnerEmail(email, emails = [], hashes = []) {
   if (emails.includes(e)) return true;
   return hashes.includes(require('crypto').createHash('sha256').update(e).digest('hex'));
 }
-module.exports = { isOwnerEmail, mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, aiRefundable,AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, heavyAiLine, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, ON_BOARD, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };
+// Starting over: which household the caller may empty. Only an owner, and
+// when they own more than one, only the one they named.
+function startOverHousehold(rows, wanted) {
+  const own = (rows || []).filter((r) => r && r.role === 'owner').map((r) => r.household_id);
+  if (!own.length) return { error: 'not_owner' };
+  if (wanted) return own.includes(wanted) ? { household: wanted } : { error: 'not_owner' };
+  return own.length === 1 ? { household: own[0] } : { error: 'which' };
+}
+// The email the other members get after a start over.
+function startOverMail(who) {
+  const name = String(who || '').trim() || 'מי שפתח את הבית';
+  const subject = 'הנתונים בבית שלכם ב"התקציב שלנו" נמחקו';
+  const body = escHtml(name) + ' מחק/ה את כל הנתונים הכספיים של הבית ב"התקציב שלנו", כדי להתחיל מחדש.';
+  const back = 'אם זו טעות: באפליקציה, בפרופיל, "המידע שלנו", ואז "נמחקו לאחרונה" ו"להחזיר הכל". אפשר עד 30 יום.';
+  const text = name + ' מחק/ה את כל הנתונים הכספיים של הבית ב"התקציב שלנו", כדי להתחיל מחדש.\n\n' + back;
+  const html = '<!doctype html><html lang="he" dir="rtl"><body style="margin:0;padding:24px 12px;background:#F3EDE6;font-family:Arial,Helvetica,sans-serif">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" dir="rtl" style="max-width:480px;margin:0 auto;background:#FFFFFF;border-radius:16px"><tr><td style="padding:26px 24px;text-align:right">'
+    + '<p style="margin:0 0 12px;font-size:16px;line-height:1.6;color:#2B2118">' + body + '</p>'
+    + '<p style="margin:0;font-size:14px;line-height:1.6;color:#5B4B3D">' + escHtml(back) + '</p>'
+    + '</td></tr></table></body></html>';
+  return { subject, text, html };
+}
+
+module.exports = { startOverHousehold, startOverMail, isOwnerEmail, mailHistory, mailOutcomes, mailKpis, campaignResults, aiMonthlyLimit, aiRefundable,AI_MONTHLY_DEFAULT, pageAll, mailedThisWeek, thanksMail, feedbackImage, IMAGE_PATH, IMAGE_MAX, readDraft, draftPrompt, DRAFT_STATUS, shareStats, refCode, campaignStats, israelClock, ownerDigestMail, heavyAiLine, healthOf, todayRows, israelDay, firstName, ownerAction, userAction, threadView, unsubToken, unsubOk, monthInsights, monthlyMail, answerMail, mailShell, escHtml, tokenClaims, makeCode, hashCode, checkCode, CODE_TTL_MS, CODE_TRIES, CODE_ERRORS, maskEmail, codeMail, mailErrorText, reengageList, reengageMail, campaignList, campaignMail, campaignTitle, campaignImage, mailReady, CAMPAIGNS, ON_BOARD, cleanFeedback, feedbackPatch, EVENTS, cleanErrors, cleanEvents, stats, sessionCache, tokenExp, aiCallRow, costOf, alias, perUser, presenceStore, daily, cohorts, uploadFunnel, weekOf };

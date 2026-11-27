@@ -3394,6 +3394,64 @@ app.post('/api/2fa/email/disable', requireAuth, async (req, res) => {
   } catch (err) { return res.status(500).json({ error: 'הכיבוי נכשל. נסו שוב.' }); }
 });
 
+// ═══ starting over: the owner empties the household's money records ═══
+// A code by email (purpose 'reset') plus the typed words. Everything goes to
+// the recycle bin as one batch (30 days); the other members get an email.
+const START_OVER_WORD = 'להתחיל מחדש';
+async function startOverTarget(req) {
+  const { data } = await supabaseAdmin.from('memberships').select('household_id,role').eq('user_id', req.authUserId);
+  return ops.startOverHousehold(data, req.body && req.body.householdId);
+}
+const START_OVER_ERRORS = { not_owner: 'רק מי שפתח את הבית יכול להתחיל מחדש.', which: 'יש לך יותר מבית אחד. פתחו את הבית שרוצים לנקות ונסו שוב.' };
+app.post('/api/household/start-over/code', requireAuth, mfaMailLimiter, async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    const t = await startOverTarget(req);
+    if (t.error) return res.status(403).json({ error: START_OVER_ERRORS[t.error] });
+    const to = await emailOf(req);
+    if (!to) return res.status(400).json({ error: 'אין כתובת מייל בחשבון.' });
+    const code = ops.makeCode();
+    const { error } = await supabaseAdmin.from('mfa_email_codes').upsert({ user_id: req.authUserId, code_hash: ops.hashCode(code, req.authUserId, MFA_SALT), purpose: 'reset', expires_at: new Date(Date.now() + ops.CODE_TTL_MS).toISOString(), attempts: 0, sent_at: new Date().toISOString() });
+    if (error) throw error;
+    try { await sendMailWithFallback({ to, ...ops.codeMail(code, 'reset') }); } catch (err) { return res.status(502).json({ error: ops.mailErrorText(err) }); }
+    return res.json({ sent: true, to: ops.maskEmail(to) });
+  } catch (err) { console.error('start-over code failed:', err.message); return res.status(500).json({ error: 'לא הצלחנו לשלוח קוד. נסו שוב.' }); }
+});
+app.post('/api/household/start-over', requireAuth, mfaTryLimiter, async (req, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'not configured' });
+    if (String((req.body || {}).confirm || '').trim() !== START_OVER_WORD) return res.status(400).json({ error: 'כדי לאשר, כתבו: ' + START_OVER_WORD });
+    const t = await startOverTarget(req);
+    if (t.error) return res.status(403).json({ error: START_OVER_ERRORS[t.error] });
+    // The code is checked here, not with useEmailCode: it must not count as a passed login.
+    const { data: row } = await supabaseAdmin.from('mfa_email_codes').select('*').eq('user_id', req.authUserId).maybeSingle();
+    const result = ops.checkCode(row, req.body && req.body.code, { userId: req.authUserId, salt: MFA_SALT, purpose: 'reset' });
+    if (result === 'wrong') await supabaseAdmin.from('mfa_email_codes').update({ attempts: (row.attempts || 0) + 1 }).eq('user_id', req.authUserId);
+    if (result !== 'ok') return res.status(400).json({ error: ops.CODE_ERRORS[result] });
+    await supabaseAdmin.from('mfa_email_codes').delete().eq('user_id', req.authUserId);
+    const batch = crypto.randomUUID();
+    const { data: removed, error } = await supabaseAdmin.rpc('start_over', { p_household: t.household, p_batch: batch });
+    if (error) {
+      if (/START_OVER_ONCE_A_DAY/.test(error.message || '')) return res.status(429).json({ error: 'כבר התחלתם מחדש היום. אפשר שוב מחר.' });
+      throw error;
+    }
+    console.log('[start-over]', req.authUserId, 'household', t.household, 'rows', removed);
+    // The other members hear about it, with the way back.
+    const { data: members } = await supabaseAdmin.from('memberships').select('user_id,display_name').eq('household_id', t.household);
+    const me = (members || []).find((m) => m.user_id === req.authUserId);
+    const notice = ops.startOverMail(me && me.display_name);
+    let told = 0;
+    for (const m of (members || []).filter((x) => x.user_id !== req.authUserId)) {
+      try {
+        const { data: u } = await supabaseAdmin.auth.admin.getUserById(m.user_id);
+        const addr = u && u.user && u.user.email;
+        if (addr) { await sendMailWithFallback({ to: addr, ...notice }); told += 1; }
+      } catch (err) { console.error('start-over notice failed:', err.message); }
+    }
+    return res.json({ ok: true, removed: removed || 0, batch, told });
+  } catch (err) { console.error('start-over failed:', err.message); return res.status(500).json({ error: 'המחיקה לא הושלמה. נסו שוב.' }); }
+});
+
 // ═══ requests from users (a problem or an idea) ═══
 // Saved, and the owner gets an email at once. The owner answers from the
 // dashboard; the person sees the status and the answer in the app.
