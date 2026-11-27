@@ -3111,6 +3111,32 @@ app.post('/api/admin/kosher', requireAuth, async (req, res) => {
 // Kashrut from Open Food Facts for the most common products, once each and
 // kept for good: started by the owner, a batch at a time, with a report.
 const kosherOpenJob = kosherOpen.empty();
+// The list to fill by hand or with an AI: the most common food products whose
+// kashrut is unknown (also those the open database had nothing for), with
+// their maker, for the owner to download.
+app.get('/api/admin/kosher/todo', requireAuth, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
+    if (!supabaseAdmin || !priceDomain) return res.status(503).json({ error: 'לא זמין כרגע.' });
+    const limit = Math.max(1, Math.min(2000, Number(req.query.limit) || 1000));
+    const { data: top, error } = await supabaseAdmin.rpc('price_kashrut_todo', { p_limit: 2000 });
+    if (error) throw error;
+    const { data: asked } = await supabaseAdmin.from('price_products').select('barcode,name').not('image_checked_at', 'is', null).is('kosher_cert', null).limit(2000);
+    const { data: owned } = await allRows(() => supabaseAdmin.from('kosher_votes').select('barcode').eq('by_owner', true).order('barcode'));
+    const done = new Set((owned || []).map((x) => x.barcode));
+    const seen = new Set();
+    const list = [...(top || []), ...(asked || [])].filter((p) => p && !done.has(p.barcode) && !seen.has(p.barcode) && seen.add(p.barcode) && !priceDomain.kashrutFree(p)).slice(0, limit);
+    const makers = new Map();
+    for (let i = 0; i < list.length; i += 150) {
+      const { data } = await supabaseAdmin.from('price_products').select('barcode,maker').in('barcode', list.slice(i, i + 150).map((p) => p.barcode));
+      for (const r of data || []) makers.set(r.barcode, r.maker || '');
+    }
+    return res.json({ products: list.map((p) => ({ barcode: p.barcode, name: p.name, maker: makers.get(p.barcode) || '', chains: p.chains ?? null })) });
+  } catch (err) {
+    console.error('kosher todo failed:', err.message);
+    return res.status(500).json({ error: 'failed' });
+  }
+});
 app.get('/api/admin/kosher/open', requireAuth, async (req, res) => {
   if (!(await isAdmin(req.authUserId))) return res.status(403).json({ error: 'not allowed' });
   return res.json(kosherOpenJob);
