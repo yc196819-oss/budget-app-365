@@ -127,12 +127,25 @@ test('the food budget beside the list, the area is saved, and sharing by email f
   await page.locator('.shop-area button').click();
   await page.waitForSelector('.toast');
   assert.equal(db.tables.households[0].shop_area, 'בית שמש');
-  const mail = await page.locator('.shop-tools a').first().getAttribute('href');
+  // One "share" button; the ways to share in its menu.
+  assert.deepEqual((await page.locator('.shop-tools > *').allTextContents()).map((t) => t.trim()), ['לשתף את הרשימה']);
+  const share = page.locator('.shop-share > button');
+  assert.equal(await share.getAttribute('aria-expanded'), 'false');
+  await share.click();
+  assert.equal(await share.getAttribute('aria-expanded'), 'true');
+  const mail = await page.locator('.shop-share-menu a').first().getAttribute('href');
   assert.match(decodeURIComponent(mail), /^mailto:\?subject=רשימת קניות&body=מוצרי חלב:\n☐ חלב \(×2\)/);
   // WhatsApp too, but last: most people here share by email or print.
-  const tools = await page.locator('.shop-tools > *').allTextContents();
+  const tools = await page.locator('.shop-share-menu > *').allTextContents();
   assert.deepEqual(tools.map((t) => t.trim()), ['לשלוח במייל', 'להעתיק', 'להדפיס', 'וואטסאפ']);
-  assert.match(decodeURIComponent(await page.locator('.shop-tools a', { hasText: 'וואטסאפ' }).getAttribute('href')), /^https:\/\/wa\.me\/\?text=רשימת קניות\n\nמוצרי חלב:\n☐ חלב \(×2\)/);
+  assert.match(decodeURIComponent(await page.locator('.shop-share-menu a', { hasText: 'וואטסאפ' }).getAttribute('href')), /^https:\/\/wa\.me\/\?text=רשימת קניות\n\nמוצרי חלב:\n☐ חלב \(×2\)/);
+  // Escape closes it, back on the button; so does a click outside.
+  await page.keyboard.press('Escape');
+  await page.locator('.shop-share-menu').waitFor({ state: 'detached', timeout: 2000 });
+  assert.equal(await page.evaluate(() => document.activeElement.closest('.shop-share') !== null), true);
+  await share.click();
+  await page.locator('.shop-budget').click();
+  await page.locator('.shop-share-menu').waitFor({ state: 'detached', timeout: 2000 });
   // The printed page holds the list.
   await page.emulateMedia({ media: 'print' });
   assert.equal(await page.locator('.shop-print').isVisible(), true);
@@ -1330,5 +1343,46 @@ test('on a computer the tab uses the width: lists beside the comparing, two colu
   assert.equal(new Set(xs).size, 1, 'one column of departments');
   assert.ok((await box(phone.page, '.shop-side')).y > (await box(phone.page, '.shop-main')).y, 'the side cards below the list');
   assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no sideways scroll');
+  await phone.page.close();
+});
+
+test('the keyboard on a computer: A to the add box, arrows between the items, Space checks; a phone shows no keys', async () => {
+  const items = (d) => {
+    d.tables.shopping_items = ['חלב', 'לחם', 'ביצים'].map((name, i) => ({ id: 's' + i, household_id: d.hid, name, qty: null, aisle: 'dairy', done: false, created_at: '2026-11-08T08:0' + i + ':00Z', cleared_at: null }));
+  };
+  const { page, db, errors } = await open(1280, items, OWNER);
+  assert.match(await page.locator('.shop-keys').textContent(), /A.*מוסיפים מוצר/);
+  // "Close the list" sits beside its name.
+  const h = await page.locator('.shop-listhead h2').boundingBox();
+  const close = await page.locator('.shop-archive').boundingBox();
+  assert.ok(h.x - (close.x + close.width) < 40, 'beside the name');
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('KeyA');
+  assert.equal(await page.evaluate(() => document.activeElement.matches('.shop-add .input')), true);
+  // Typing A there is a letter, not a jump.
+  await page.keyboard.type('a');
+  assert.equal(await page.locator('.shop-add .input').inputValue(), 'a');
+  await page.locator('.shop-add .input').fill('');
+  // From nothing focused, ↓ is the first item; ↓↑ move; Space checks.
+  await page.locator('.shop-add .input').blur();
+  await page.keyboard.press('ArrowDown');
+  const focused = () => page.evaluate(() => document.activeElement.closest('.shop-item')?.querySelector('.shop-name').textContent);
+  const names = await page.locator('.shop-item .shop-name').allTextContents();
+  assert.equal(await focused(), names[0]);
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await focused(), names[1]);
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  assert.equal(await focused(), names[0], 'stops at the first');
+  await page.keyboard.press('Space');
+  for (let i = 0; i < 30 && !db.tables.shopping_items.find((x) => x.name === names[0]).done; i++) await page.waitForTimeout(100);
+  assert.equal(db.tables.shopping_items.find((x) => x.name === names[0]).done, true);
+  // From an item, A goes back to the box.
+  await page.keyboard.press('KeyA');
+  assert.equal(await page.evaluate(() => document.activeElement.matches('.shop-add .input')), true);
+  assert.deepEqual(errors, []);
+  await page.close();
+  const phone = await open(390, items, OWNER);
+  assert.equal(await phone.page.locator('.shop-keys').count(), 0);
   await phone.page.close();
 });

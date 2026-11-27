@@ -26,3 +26,16 @@ test('never while typing or with a modifier (those belong to the browser)', () =
   assert.equal(isTyping({ tagName: 'BUTTON' }), false);
   assert.equal(isTyping(null), false);
 });
+
+test('in a shopping list: A to the add box, arrows between the items, never while typing a name', async () => {
+  const { shopShortcut } = await import('../public/app/src/domain/shortcuts.js');
+  assert.equal(shopShortcut({ code: 'KeyA' }), 'add');
+  assert.equal(shopShortcut({ code: 'ArrowDown' }), 'next');
+  assert.equal(shopShortcut({ code: 'ArrowUp' }), 'prev');
+  assert.equal(shopShortcut({ code: 'KeyN' }), null, 'N stays "add an expense"');
+  assert.equal(shopShortcut({ code: 'KeyA', typing: true }), null, 'typing "א" in the box is a letter');
+  assert.equal(shopShortcut({ code: 'ArrowDown', typing: true }), null);
+  assert.equal(shopShortcut({ code: 'ArrowDown', typing: true, onItem: true }), 'next', 'from one item to the next');
+  assert.equal(shopShortcut({ code: 'KeyA', typing: true, onItem: true }), 'add');
+  assert.equal(shopShortcut({ code: 'KeyA', ctrlKey: true }), null, 'Ctrl+A selects all, as always');
+});

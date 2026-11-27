@@ -19,3 +19,15 @@ export function isTyping(el) {
   const tag = (el.tagName || '').toLowerCase();
   return tag === 'input' || tag === 'textarea' || tag === 'select' || !!el.isContentEditable;
 }
+
+// In a shopping list on a computer: A jumps to the box that adds items, the
+// arrows move between the items (Space, the browser's own, checks one).
+// Not while typing in a text box; a checked box (an item) is not typing.
+export function shopShortcut({ code, ctrlKey, metaKey, altKey, typing, onItem }) {
+  if (ctrlKey || metaKey || altKey) return null;
+  if (typing && !onItem) return null;
+  if (code === 'KeyA') return 'add';
+  if (code === 'ArrowDown') return 'next';
+  if (code === 'ArrowUp') return 'prev';
+  return null;
+}

@@ -743,6 +743,14 @@ body.chat-open { overflow: hidden; }
 .shop-tools .btn { text-decoration: none; width: auto; min-height: 40px; padding-inline: 12px; gap: 6px; }
 .shop-tools a[aria-disabled="true"] { opacity: .5; pointer-events: none; }
 .shop-add { display: flex; gap: 8px; align-items: center; }
+/* "לשתף את הרשימה": the ways to share, in a small menu under the button. */
+.shop-share { position: relative; display: inline-flex; }
+.shop-share-menu { position: absolute; inset-inline-start: 0; top: calc(100% + 6px); z-index: 5; min-width: 200px; display: grid; gap: 2px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-m); box-shadow: 0 12px 30px var(--scrim); animation: fade-in .14s ease; }
+.shop-share-menu .btn-text { display: flex; align-items: center; gap: 10px; justify-content: flex-start; min-height: 44px; padding: 0 12px; border-radius: var(--radius-s); color: var(--text); font-size: 15px; font-weight: 700; text-decoration: none; }
+.shop-share-menu .btn-text:hover { background: var(--surface-2); }
+.shop-share-menu svg { color: var(--muted); flex: none; }
+.shop-keys { margin: -6px 2px 0; font-size: 13px; color: var(--muted); }
+.shop-keys kbd { margin: 0 2px; }
 .shop-add .input { flex: 1; min-width: 0; font-size: 16px; }
 .shop-add .btn { width: auto; padding-inline: 18px; }
 .shop-mic.on { background: var(--accent); color: #fff; }
@@ -2319,6 +2327,6 @@ body.store-on { overflow: hidden; }
 .sl-pg i { display: block; height: 100%; background: var(--income); }
 .sl-more { justify-content: center; color: var(--accent); font-weight: 700; font-size: 14px; }
 .shop-listhead { display: flex; align-items: center; gap: 10px; }
-.shop-listhead h2 { margin: 0; flex: 1; font-family: var(--font-display); font-size: 24px; }
+.shop-listhead h2 { margin: 0; flex: 0 1 auto; min-width: 0; font-family: var(--font-display); font-size: 24px; }
 .shop-listhead .back-btn { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--surface-2); color: var(--text); font: inherit; font-size: 18px; cursor: pointer; }
-.shop-archive { font-size: 13px; color: var(--muted); }
+.shop-archive { font-size: 13px; color: var(--muted); margin-inline-start: 4px; }
