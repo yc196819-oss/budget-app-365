@@ -188,3 +188,24 @@ test('round 8: a very long name (one long word too) stays inside its tile in the
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('round 10: the advisor\'s cart for 0, 45 or no people says so instead of quietly making a cart for another number', async () => {
+  const { page, errors } = await openHousehold(HOUSEHOLDS[10]);
+  await page.click('.adv-cta');
+  await page.waitForSelector('.cart-builder');
+  await page.locator('.cb-kind', { hasText: 'אורחים' }).click();
+  await page.locator('.cb-meal button', { hasText: 'חלבית' }).click();
+  const go = page.locator('.cart-builder button.btn', { hasText: 'להכין את העגלה' });
+  for (const bad of ['0', '45', '']) {
+    await page.fill('.cb-people input', bad);
+    assert.equal(await go.isDisabled(), true, JSON.stringify(bad));
+    assert.match(await page.locator('#cb-people-bad').textContent(), /בין 1 ל-30/);
+  }
+  await page.fill('.cb-people input', '12');
+  assert.equal(await page.locator('#cb-people-bad').count(), 0);
+  await go.click();
+  await page.waitForSelector('.cart-card .cart-num:not([disabled])', { timeout: 15000 });
+  assert.equal(await page.locator('.cart-card .cart-num').inputValue(), '12', 'the cart is for the 12 typed');
+  assert.deepEqual(errors, []);
+  await page.close();
+});

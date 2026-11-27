@@ -28,8 +28,12 @@ export function CartBuilder({ hid, items, receipts = [], people: homePeople, onC
   const [list, setList] = useState(null);
   const [step, setStep] = useState(-1); // -1: choosing; 0..: filling
   const [ctx, setCtx] = useState(null);
-  const people = Math.max(1, Math.min(30, Math.round(Number(typed)) || homePeople || 4));
-  const ready = kind && (kind !== 'guests' || meal);
+  // "0", "45" or nothing is not quietly made another number: the cart says
+  // how many it is for, so the number must be one it can be for.
+  const typedN = Math.round(Number(String(typed).trim()));
+  const validPeople = String(typed).trim() !== '' && typedN >= 1 && typedN <= 30;
+  const people = validPeople ? typedN : Math.max(1, Math.min(30, Number(homePeople) || 4));
+  const ready = kind && (kind !== 'guests' || meal) && validPeople;
 
   useEffect(() => {
     if (step < 0 || step >= STEPS.length) return undefined;
@@ -78,7 +82,8 @@ export function CartBuilder({ hid, items, receipts = [], people: homePeople, onC
           <span>איזו ארוחה?</span>
           ${[['dairy', 'חלבית'], ['meat', 'בשרית']].map(([k, l]) => html`<button type="button" role="radio" key=${k} aria-checked=${String(meal === k)} onClick=${() => setMeal(k)}>${l}</button>`)}
         </div>`}
-        <label class="cart-people cb-people">כמה אנשים? <input class="cart-num num" type="number" inputmode="numeric" min="1" max="30" value=${typed} aria-label="כמה אנשים" onInput=${(e) => setTyped(e.currentTarget.value)} /></label>
+        <label class="cart-people cb-people">כמה אנשים? <input class="cart-num num" type="number" inputmode="numeric" min="1" max="30" value=${typed} aria-label="כמה אנשים" aria-invalid=${String(!validPeople)} aria-describedby=${validPeople ? undefined : 'cb-people-bad'} onInput=${(e) => setTyped(e.currentTarget.value)} /></label>
+        ${!validPeople && html`<small id="cb-people-bad" class="trip-bad" role="alert">כמה אנשים? מספר בין 1 ל-30</small>`}
         ${kind === 'recipe'
           ? html`<${RecipeInput} onRecipe=${fromRecipe} start=${shared} />`
           : html`<button type="button" class="btn" disabled=${!ready} onClick=${build}><${Icon} name="spark" size=${16} /> להכין את העגלה</button>`}`}
