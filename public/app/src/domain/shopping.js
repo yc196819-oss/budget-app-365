@@ -5,16 +5,16 @@ import { plainLetters } from './produce.js';
 
 // The store's departments, in the order most stores are walked.
 export const AISLES = [
-  { key: 'produce', label: 'ירקות ופירות', words: ['עגבני', 'מלפפון', 'בצל', 'שום', 'תפוח', 'תפוז', 'בננ', 'גזר', 'פלפל', 'חסה', 'כרוב', 'קישוא', 'חציל', 'לימון', 'אבוקדו', 'ענב', 'אגס', 'אפרסק', 'תות', 'פטרוזיליה', 'כוסברה', 'שמיר', 'נענע', 'פטריות', 'בטטה', 'דלעת', 'סלק', 'צנון', 'קלמנטינ', 'אבטיח', 'מלון', 'ירקות', 'פירות', 'תפוא', 'תפו"א', 'תפוחי אדמה'] },
-  { key: 'bakery', label: 'מאפים', words: ['לחם', 'לחמני', 'פית', 'חלה', 'חלות', 'בגט', 'עוגה', 'עוגיות', 'קרואסון', 'מאפ', 'טורטי'] },
-  { key: 'dairy', label: 'מוצרי חלב', words: ['חלב', 'גבינ', 'קוטג', 'יוגורט', 'שמנת', 'חמאה', 'לבן', 'לבנה', 'מעדן', 'ביצ', 'אשל', 'גיל', 'שוקו', 'פודינג'] },
-  { key: 'meat', label: 'בשר, עוף ודגים', words: ['עוף', 'בשר', 'שניצל', 'כרעיים', 'חזה', 'טחון', 'דג', 'סלמון', 'טונה', 'נקניק', 'פרגית', 'הודו', 'כבד', 'קציצ', 'פילה', 'מושט', 'אמנון', 'דניס', 'לברק', 'בורי', 'מוסר ים', 'שוקיים'] },
-  { key: 'dry', label: 'יבשים ומזווה', words: ['אורז', 'פסטה', 'ספגטי', 'קמח', 'סוכר', 'מלח', 'שמן', 'קטני', 'עדשים', 'חומוס', 'שעועית', 'קוסקוס', 'פתיתים', 'קורנפלקס', 'דגני', 'שיבולת', 'תבלין', 'פפריקה', 'כמון', 'רסק', 'קפה', 'תה', 'דבש', 'ריבה', 'ממרח', 'טחינה', 'שוקולד', 'במבה', 'ביסלי', 'חטיף', 'אגוז', 'שקדים', 'צימוק', 'שימורים', 'תירס', 'זיתים', 'מלפפון חמוץ', 'קטשופ', 'מיונז', 'חרדל', 'רוטב', 'אבקת מרק'] },
-  { key: 'frozen', label: 'קפואים', words: ['קפוא', 'גלידה', 'בורקס', 'אפונה', 'ירקות קפואים', 'פיצה'] },
-  { key: 'drinks', label: 'משקאות', words: ['מים', 'סודה', 'מיץ', 'קולה', 'תפוזים', 'בירה', 'יין', 'משקה', 'פטל'] },
-  { key: 'clean', label: 'ניקיון', words: ['כביסה', 'מרכך', 'אקונומיקה', 'סבון כלים', 'נוזל כלים', 'ספוג', 'שקיות', 'נייר טואלט', 'מגבות נייר', 'נייר', 'אלומיניום', 'ניילון', 'מטהר', 'מנקה', 'סנו', 'כלים חד'] },
+  { key: 'produce', label: 'ירקות ופירות', words: ['עגבני', 'מלפפון', 'בצל', 'שום', 'תפוח', 'תפוז', 'בננ', 'גזר', 'פלפל', 'חסה', 'כרוב', 'קישוא', 'חציל', 'לימון', 'אבוקדו', 'ענב', 'אגס', 'אפרסק', 'תות', 'פטרוזיליה', 'כוסברה', 'שמיר', 'נענע', 'פטריות', 'בטטה', 'דלעת', 'סלק', 'צנון', 'קלמנטינ', 'אבטיח', 'מלון', 'ירקות', 'פירות', 'תפוא', 'תפו"א', 'תפוחי אדמה', 'ארטישוק', 'ברוקולי', 'כרובית', 'שעועית ירוקה', 'תמרים'] },
+  { key: 'bakery', label: 'מאפים', words: ['לחם', 'לחמני', 'פית', 'חלה', 'חלות', 'בגט', 'עוגה', 'עוגיות', 'קרואסון', 'מאפ', 'טורטי', 'בייגל', 'פרוסות'] },
+  { key: 'dairy', label: 'מוצרי חלב', words: ['חלב', 'גבינ', 'קוטג', 'יוגורט', 'שמנת', 'חמאה', 'לבן', 'לבנה', 'מעדן', 'ביצ', 'אשל', 'גיל', 'שוקו', 'פודינג', 'מרגרינה', 'טופו'] },
+  { key: 'meat', label: 'בשר, עוף ודגים', words: ['עוף', 'בשר', 'שניצל', 'כרעיים', 'חזה', 'טחון', 'דג', 'סלמון', 'טונה', 'נקניק', 'פרגית', 'הודו', 'כבד', 'קציצ', 'פילה', 'מושט', 'אמנון', 'דניס', 'לברק', 'בורי', 'מוסר ים', 'שוקיים', 'פרגי', 'כנפיים', 'קבב', 'המבורגר', 'אנטריקוט', 'צלעות', 'כתף', 'שווארמה'] },
+  { key: 'dry', label: 'יבשים ומזווה', words: ['אורז', 'פסטה', 'ספגטי', 'קמח', 'סוכר', 'מלח', 'שמן', 'קטני', 'עדשים', 'חומוס', 'שעועית', 'קוסקוס', 'פתיתים', 'קורנפלקס', 'דגני', 'שיבולת', 'תבלין', 'פפריקה', 'כמון', 'רסק', 'קפה', 'תה', 'דבש', 'ריבה', 'ממרח', 'טחינה', 'שוקולד', 'במבה', 'ביסלי', 'חטיף', 'אגוז', 'שקדים', 'צימוק', 'שימורים', 'תירס', 'זיתים', 'מלפפון חמוץ', 'קטשופ', 'מיונז', 'חרדל', 'רוטב', 'אבקת מרק', 'חלבה', 'חלווה', 'שומשום', 'ביסקוויט', 'קרקר', 'חמאת בוטנים', 'בורגול', 'קינואה', 'גרגירי', 'זעתר', 'ריבת', 'אבקת אפייה', 'שמרים', 'וניל', 'פירורי לחם', 'מצות', 'ופל', 'וופל'] },
+  { key: 'frozen', label: 'קפואים', words: ['קפוא', 'גלידה', 'בורקס', 'אפונה', 'ירקות קפואים', 'פיצה', 'בצק'] },
+  { key: 'drinks', label: 'משקאות', words: ['מים', 'סודה', 'מיץ', 'קולה', 'תפוזים', 'בירה', 'יין', 'משקה', 'פטל', 'ספרייט', 'שוופס', 'פריגת', 'תפוזינה', 'פפסי', 'ספרינג', 'נביעות', 'ויסקי', 'וודקה'] },
+  { key: 'clean', label: 'ניקיון', words: ['כביסה', 'מרכך', 'אקונומיקה', 'סבון כלים', 'נוזל כלים', 'ספוג', 'שקיות', 'נייר טואלט', 'מגבות נייר', 'נייר', 'אלומיניום', 'ניילון', 'מטהר', 'מנקה', 'סנו', 'כלים חד', 'נרות', 'פתיליות', 'גפרורים', 'כפפות', 'מטליות', 'שקיות זבל', 'סוללות'] },
   { key: 'care', label: 'היגיינה ופארם', words: ['שמפו', 'סבון', 'מברשת', 'משחת שיניים', 'דאודורנט', 'תחבושות', 'צמר גפן', 'קרם', 'גילוח', 'מרכך שיער'] },
-  { key: 'baby', label: 'תינוקות', words: ['חיתול', 'מגבונים', 'מטרנה', 'סימילאק', 'דייסה', 'מוצץ'] },
+  { key: 'baby', label: 'תינוקות', words: ['חיתול', 'מגבונים', 'מטרנה', 'סימילאק', 'דייסה', 'דייסת', 'מוצץ', 'טיטולים'] },
   { key: 'other', label: 'אחר', words: [] }
 ];
 const AISLE_ORDER = AISLES.map((a) => a.key);
@@ -22,16 +22,27 @@ const AISLE_ORDER = AISLES.map((a) => a.key);
 const norm = (s) => String(s || '').trim().replace(/\s+/g, ' ');
 const key = (s) => norm(s).toLowerCase().replace(/["'׳״]/g, '');
 
-// Which department an item belongs to. A longer match wins ("סבון כלים" is
-// cleaning, "סבון" is hygiene).
+// Which department an item belongs to. A word counts where a word starts
+// (after one prefix letter at most: "לכביסה" is laundry, but "רגיל" is not
+// "גיל" and "פיתות" is not "תות"). The first thing named wins, since in
+// Hebrew it is what the item is ("רוטב עגבניות" is a sauce, "מיץ ענבים" a
+// drink); at the same place, a longer match ("סבון כלים" is cleaning, "סבון"
+// is hygiene).
 // (Letters at a word's end written plainly: "מלפפונים" is cucumbers too.)
+const PREFIX = 'והבלמשכ';
 export function aisleOf(name) {
   const n = plainLetters(key(name));
-  let best = { key: 'other', len: 0 };
+  let best = { key: 'other', pos: Infinity, len: 0 };
   for (const a of AISLES) {
     for (const w of a.words) {
       const k = plainLetters(key(w));
-      if (k.length > best.len && n.includes(k)) best = { key: a.key, len: k.length };
+      for (let at = n.indexOf(k); at >= 0; at = n.indexOf(k, at + 1)) {
+        const start = at === 0 || n[at - 1] === ' ' || (PREFIX.includes(n[at - 1]) && (at === 1 || n[at - 2] === ' '));
+        if (!start) continue;
+        const pos = n.slice(0, at).split(' ').length - 1;
+        if (pos < best.pos || (pos === best.pos && k.length > best.len)) best = { key: a.key, pos, len: k.length };
+        break;
+      }
     }
   }
   return best.key;
@@ -39,6 +50,8 @@ export function aisleOf(name) {
 
 const WORDS = { 'אחד': 1, 'אחת': 1, 'שניים': 2, 'שתיים': 2, 'שני': 2, 'שתי': 2, 'שלוש': 3, 'שלושה': 3, 'ארבע': 4, 'ארבעה': 4, 'חמש': 5, 'חמישה': 5, 'שש': 6, 'שישה': 6, 'עשר': 10, 'עשרה': 10 };
 const UNITS = ['ק"ג', 'קג', 'קילו', 'גרם', 'ליטר', 'ל\'', 'יח\'', 'יחידות', 'חבילות', 'חבילה', 'בקבוקים', 'בקבוק', 'תבניות', 'תבנית', 'שקיות', 'שקית', 'קופסאות', 'קופסה', 'מגשים', 'מגש'];
+
+const WEIGHTS = ['ק"ג', 'קג', 'קילו', 'גרם', 'ליטר'];
 
 // One item from a few typed words: "2 ביצים", "ביצים x2", "שתי תבניות ביצים",
 // "1 ק"ג עגבניות" -> { name, qty }.
@@ -51,7 +64,10 @@ export function cleanLine(text) {
     .replace(/[,;.]+\s*$/, ''));
 }
 export function parseItem(text) {
-  let t = cleanLine(text).replace(/^(ו|גם)\s*/, '');
+  let t = cleanLine(text);
+  // "ולחם" is bread, but "ויסקי" and "ופלים" start with their own "ו".
+  const bare = t.replace(/^(ו|גם)\s*/, '');
+  if (bare !== t && (aisleOf(bare) !== 'other' || aisleOf(t) === 'other')) t = bare;
   if (!t) return null;
   let qty = null;
   // (A number that is a percent is part of the name: "3% חלב".)
@@ -72,11 +88,25 @@ export function parseItem(text) {
     const e = /^(.+?)\s+(\d+(?:[.,]\d+)?)\s*(ק"ג|קג|קילו|גרם|ליטר|ל'|יח'|יחידות)$/.exec(t);
     if (e) return { name: norm(e[1]).slice(0, 80), qty: (e[2] + ' ' + e[3].replace('קג', 'ק"ג').replace('קילו', 'ק"ג')).slice(0, 20) };
   }
-  const unit = UNITS.find((u) => t.startsWith(u + ' '));
+  // A package word is the amount only with a number ("2 שקיות חלב"); alone it
+  // is part of the name ("שקיות זבל"). A weight needs none ("קילו עגבניות").
+  const unit = UNITS.find((u) => t.startsWith(u + ' ') && (qty || WEIGHTS.includes(u)));
   if (unit) { qty = (qty || '1') + ' ' + unit.replace('קג', 'ק"ג').replace('קילו', 'ק"ג'); t = t.slice(unit.length + 1); }
   else if (qty) qty = '×' + qty;
   t = norm(t);
   return t ? { name: t.slice(0, 80), qty: qty ? qty.slice(0, 20) : null } : null;
+}
+
+// "לחם ועגבניות" is two things, but "תה ויסוצקי" is one: a part after "ו"
+// stands alone only when it is a thing we know.
+function splitAnd(chunk) {
+  const parts = String(chunk).split(/\s+(?=ו[א-ת]{2,})/);
+  const out = [];
+  for (const p of parts) {
+    if (out.length && /^ו/.test(p) && aisleOf(p.slice(1)) === 'other') out[out.length - 1] += ' ' + p;
+    else out.push(p);
+  }
+  return out;
 }
 
 // Several items in one line: "חלב, 2 ביצים ולחם".
@@ -84,7 +114,8 @@ export function parseItems(text) {
   return String(text || '')
     // A heading line ("רשימה לשבת:") is not an item.
     .split('\n').filter((l) => !/:\s*$/.test(l.trim())).join('\n')
-    .split(/[,\n،;]|\s+ו(?=[א-ת]{2,})|\s+וגם\s+/)
+    .split(/[,\n،;]|\s+וגם\s+/)
+    .flatMap(splitAnd)
     .map(parseItem)
     .filter(Boolean)
     .map((it) => ({ ...it, aisle: aisleOf(it.name) }));
