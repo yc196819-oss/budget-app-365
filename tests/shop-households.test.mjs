@@ -89,3 +89,10 @@ test('round 9: "not bought three shoppings in a row" counts only shoppings of th
   assert.deepEqual(staleItems(items, trips, 3, lists).map((i) => i.id), ['rice'], 'the shampoo waits for a pharmacy shopping');
   assert.deepEqual(staleItems(items, trips).map((i) => i.id).sort(), ['rice', 'shampoo'], 'without lists: every shopping counts, as before');
 });
+
+test('round 15: half a kilo, a kilo and a half, "2x" and the numbers in words up to twenty', () => {
+  assert.deepEqual(pairs('חצי קילו עגבניות, קילו וחצי בשר טחון, 2 וחצי קילו תפוחים, חצי ליטר שמנת'), [
+    ['עגבניות', '0.5 ק"ג', 'produce'], ['בשר טחון', '1.5 ק"ג', 'meat'], ['תפוחים', '2.5 ק"ג', 'produce'], ['שמנת', '0.5 ליטר', 'dairy']]);
+  assert.deepEqual(pairs('2x חלב, שמונה פיתות, עשרים ביצים'), [['חלב', '×2', 'dairy'], ['פיתות', '×8', 'bakery'], ['ביצים', '×20', 'dairy']]);
+  assert.deepEqual(pairs('חצי לחם'), [['חצי לחם', null, 'bakery']], 'half of something that is not a weight stays in the name');
+});
