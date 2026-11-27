@@ -58,3 +58,12 @@ test('round 2: "how much you paid" read as people type it ("352,90" is not 35,29
   assert.equal(typedAmount('הרבה'), 0);
   assert.equal(typedAmount(''), 0);
 });
+
+test('round 4: a recipe shared as a title and a link is read by its link; a whole recipe is not', async () => {
+  const { recipeLink } = await import('../public/app/src/domain/shopList.js');
+  assert.equal(recipeLink('שקשוקה של סבתא\nhttps://recipes.example.co.il/shakshuka'), 'https://recipes.example.co.il/shakshuka');
+  assert.equal(recipeLink('תראו איזה מתכון (https://x.example/a?b=1).'), 'https://x.example/a?b=1');
+  assert.equal(recipeLink('https://x.example/a'), 'https://x.example/a');
+  assert.equal(recipeLink('2 כוסות קמח, 3 ביצים, כוס סוכר, חצי כוס שמן, שקית אבקת אפייה, כפית וניל, מערבבים הכול ואופים בתנור שחומם מראש ל-180 מעלות כ-40 דקות. מקור: https://x.example/cake'), '', 'a whole recipe stays text');
+  assert.equal(recipeLink('בלי קישור'), '');
+});

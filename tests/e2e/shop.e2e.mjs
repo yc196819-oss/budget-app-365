@@ -533,7 +533,10 @@ test('a recipe page shared from the phone opens the cart from a recipe, with its
   });
   await page.goto(server.base + '/app/?action=shared');
   await page.locator('.cart-builder .rcp').waitFor({ timeout: 10000 });
-  assert.match(await page.locator('textarea[aria-label="טקסט המתכון"]').inputValue(), /שקשוקה של סבתא[\s\S]*recipes\.example/);
+  // A page comes as its title and its link: the link is read (as text, the
+  // title alone held no recipe and the page was never opened).
+  assert.equal(await page.locator('input[aria-label="קישור למתכון"]').inputValue(), 'https://recipes.example.co.il/shakshuka');
+  assert.equal(await page.locator('.rcp-tabs [aria-selected="true"]').textContent(), 'קישור');
   await page.close();
 });
 
