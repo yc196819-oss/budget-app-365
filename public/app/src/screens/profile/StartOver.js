@@ -1,6 +1,6 @@
 import { html } from '../../lib/html.js';
-import { useState } from 'preact/hooks';
-import { api } from '../../lib/api.js';
+import { useEffect, useState } from 'preact/hooks';
+import { myRole, startOverCode, startOver } from '../../data/account.js';
 import { showToast } from '../../lib/toast.js';
 
 const WORD = 'להתחיל מחדש';
@@ -8,7 +8,8 @@ const WORD = 'להתחיל מחדש';
 // Starting over: every money record of the household goes to the recycle
 // bin (30 days, back in one tap), the account, partner and settings stay.
 // A code sent to the account's email, plus typing the words, confirm it.
-export function StartOver({ onDone, onExport }) {
+export function StartOver({ userId, onDone, onExport }) {
+  const [role, setRole] = useState(undefined);
   const [step, setStep] = useState('closed');
   const [to, setTo] = useState('');
   const [code, setCode] = useState('');
@@ -16,11 +17,12 @@ export function StartOver({ onDone, onExport }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => { if (userId) myRole(userId).then(setRole).catch(() => setRole(null)); }, [userId]);
   const close = () => { setStep('closed'); setCode(''); setWord(''); setError(''); };
   const send = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api('/api/household/start-over/code', { method: 'POST', body: {} });
+      const r = await startOverCode();
       setTo(r.to || ''); setStep('code');
     } catch (err) { setError(err.message || 'לא הצלחנו לשלוח קוד. נסו שוב.'); }
     setBusy(false);
@@ -29,7 +31,7 @@ export function StartOver({ onDone, onExport }) {
     if (busy || word.trim() !== WORD || code.replace(/\D/g, '').length !== 6) return;
     setBusy(true); setError('');
     try {
-      const r = await api('/api/household/start-over', { method: 'POST', body: { code: code.replace(/\D/g, ''), confirm: WORD } });
+      const r = await startOver(code.replace(/\D/g, ''), WORD);
       showToast('הנתונים נמחקו. אפשר להחזיר הכל מ"נמחקו לאחרונה" עד 30 יום.');
       close();
       onDone && onDone(r);
@@ -43,10 +45,10 @@ export function StartOver({ onDone, onExport }) {
       <span class="muted" style="font-size:13px;line-height:1.6">מוחקים את כל הנתונים הכספיים של הבית: תנועות, קבצים שהועלו, תקציבים, יעדים, הלוואות, השקעות וחשבונות. החשבון, בן או בת הזוג וההגדרות נשארים.</span>
       <span class="muted" style="font-size:13px;line-height:1.6">הכל עובר ל"נמחקו לאחרונה" ל-30 יום, ואפשר להחזיר בלחיצה אחת.</span>
       ${error && html`<p class="error" role="alert">${error}</p>`}
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
+      ${role && role !== 'owner' ? html`<span class="faint" style="font-size:12px;line-height:1.6">רק מי שפתח את הבית באפליקציה יכול להתחיל מחדש. אפשר לבקש ממנו.</span>` : html`<div style="display:flex;gap:10px;flex-wrap:wrap">
         <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 14px" disabled=${busy} onClick=${onExport}>קודם להוריד עותק</button>
         <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 14px;color:var(--danger);border-color:var(--danger)" disabled=${busy} onClick=${send}>${busy ? 'שולח קוד…' : 'להתחיל מחדש'}</button>
-      </div>
+      </div>`}
     </div>`;
   }
 

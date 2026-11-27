@@ -30,7 +30,7 @@ export async function exportAll(hid, userId) {
 
 export async function binItems(hid) {
   const { data, error } = await sb.from('recycle_bin').select('id,tbl,data,removed_at')
-    .eq('household_id', hid).is('restored_at', null)
+    .eq('household_id', hid).is('restored_at', null).is('batch', null)
     .gte('removed_at', new Date(Date.now() - 30 * 86400000).toISOString())
     .order('removed_at', { ascending: false }).limit(200);
   if (error) throw error;
@@ -40,6 +40,27 @@ export async function binItems(hid) {
 export async function restore(id, hid, userId) {
   track('restore');
   const { error } = await sb.rpc('restore_from_bin', { p_id: id });
+  if (error) throw error;
+  await load(hid, userId, { force: true });
+}
+
+// "Start over": the owner only. The server sends the code and does the removal.
+export async function myRole(userId) {
+  const { data } = await sb.from('memberships').select('role').eq('user_id', userId).limit(1);
+  return (data && data[0] && data[0].role) || null;
+}
+export function startOverCode() { return api('/api/household/start-over/code', { method: 'POST', body: {} }); }
+export function startOver(code, confirm) { return api('/api/household/start-over', { method: 'POST', body: { code, confirm } }); }
+
+// What one "start over" removed, as one line in the recycle bin.
+export async function binBatches(hid) {
+  const { data, error } = await sb.rpc('bin_batches', { p_household: hid });
+  if (error || !Array.isArray(data)) return [];
+  return data.filter((b) => b && b.batch);
+}
+export async function restoreBatch(batch, hid, userId) {
+  track('restore');
+  const { error } = await sb.rpc('restore_batch', { p_batch: batch });
   if (error) throw error;
   await load(hid, userId, { force: true });
 }
