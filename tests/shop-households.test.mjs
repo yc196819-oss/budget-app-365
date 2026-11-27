@@ -46,3 +46,15 @@ test('round 1: a package word without a number is part of the name', () => {
 test('round 1: a thing whose name starts with "ו" keeps it ("ויסקי", "ופלים"); "ולחם" is bread', () => {
   assert.deepEqual(pairs('בירה, ויסקי, ופלים, ולחם'), [['בירה', null, 'drinks'], ['ויסקי', null, 'drinks'], ['ופלים', null, 'dry'], ['לחם', null, 'bakery']]);
 });
+
+test('round 2: "how much you paid" read as people type it ("352,90" is not 35,290)', async () => {
+  const { typedAmount } = await import('../public/app/src/domain/shopTrips.js');
+  assert.equal(typedAmount('352,90'), 352.9);
+  assert.equal(typedAmount('352.90'), 352.9);
+  assert.equal(typedAmount('₪ 1,234.50'), 1234.5);
+  assert.equal(typedAmount('1,234'), 1234);
+  assert.equal(typedAmount('420 ש"ח'), 420);
+  assert.equal(typedAmount('35..2'), 0);
+  assert.equal(typedAmount('הרבה'), 0);
+  assert.equal(typedAmount(''), 0);
+});
