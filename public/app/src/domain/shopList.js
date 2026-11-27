@@ -148,3 +148,14 @@ export function mergeItems(items, more) {
   }
   return out;
 }
+
+// A recipe shared or pasted as a link with words around it ("שקשוקה של
+// סבתא https://…", or a title and the link on two lines, as phones share a
+// page): the link. A whole recipe that happens to hold a link is not one.
+export function recipeLink(text) {
+  const t = String(text || '').trim();
+  const m = /https?:\/\/[^\s<>"']+/i.exec(t);
+  if (!m) return '';
+  const rest = (t.slice(0, m.index) + ' ' + t.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim();
+  return rest.length <= 100 ? m[0].replace(/[).,;!?״"'׳]+$/, '') : '';
+}

@@ -2,14 +2,17 @@ import { html } from '../../lib/html.js';
 import { useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
 import { readRecipe } from '../../data/shopping.js';
+import { recipeLink } from '../../domain/shopList.js';
 
 // A recipe in: a link to a recipe site, its text pasted, or a photo (a
 // cookbook page, a screenshot). The advisor reads its ingredients; the photo
 // and the page are not kept. `start` brings a recipe shared from the phone.
 export function RecipeInput({ onRecipe, onCancel = null, start = null, people = null }) {
-  const [tab, setTab] = useState(start && start.file ? 'image' : start && start.text && !/^https?:\/\//.test(start.text.trim()) ? 'text' : 'link');
-  const [url, setUrl] = useState(start && start.text && /^https?:\/\//.test(start.text.trim()) ? start.text.trim() : '');
-  const [text, setText] = useState(start && start.text && !/^https?:\/\//.test(start.text.trim()) ? start.text : '');
+  // A shared page comes as its title and its link: the link.
+  const startLink = start && start.text ? recipeLink(start.text) : '';
+  const [tab, setTab] = useState(start && start.file ? 'image' : start && start.text && !startLink ? 'text' : 'link');
+  const [url, setUrl] = useState(startLink);
+  const [text, setText] = useState(start && start.text && !startLink ? start.text : '');
   const [file, setFile] = useState((start && start.file) || null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -26,7 +29,7 @@ export function RecipeInput({ onRecipe, onCancel = null, start = null, people = 
   };
   return html`<div class="rcp" role="group" aria-label="מתכון">
     <div class="rcp-tabs" role="tablist">${[['link', 'קישור'], ['text', 'טקסט'], ['image', 'תמונה']].map(([k, l]) => html`<button type="button" role="tab" key=${k} aria-selected=${String(tab === k)} onClick=${() => { setTab(k); setError(''); }}>${l}</button>`)}</div>
-    ${tab === 'link' && html`<input class="input" type="url" dir="ltr" inputmode="url" placeholder="https://…" aria-label="קישור למתכון" value=${url} onInput=${(e) => setUrl(e.currentTarget.value)} />`}
+    ${tab === 'link' && html`<input class="input" type="url" dir="ltr" inputmode="url" placeholder="https://…" aria-label="קישור למתכון" value=${url} onInput=${(e) => setUrl(recipeLink(e.currentTarget.value) || e.currentTarget.value)} />`}
     ${tab === 'text' && html`<textarea class="input" rows="5" placeholder="מדביקים כאן את המתכון, או רק את רשימת המצרכים" aria-label="טקסט המתכון" value=${text} onInput=${(e) => setText(e.currentTarget.value)}></textarea>`}
     ${tab === 'image' && html`<button type="button" class="rcp-pick" onClick=${() => pick.current && pick.current.click()}><${Icon} name="image" size=${18} /> ${file ? file.name || 'תמונה נבחרה' : 'לצלם או לבחור תמונה של המתכון'}</button>
       <input type="file" accept="image/*" hidden ref=${pick} onChange=${(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) setFile(f); }} />`}
