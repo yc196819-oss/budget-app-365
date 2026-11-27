@@ -1,4 +1,4 @@
-import { aisleOf } from './shopping.js';
+import { aisleOf, AISLES } from './shopping.js';
 import { promoCost } from './promos.js';
 import { deliveryFor } from './chainShops.js';
 import { plainLetters, produceOf, pieceGrams, freshTerm } from './produce.js';
@@ -59,9 +59,45 @@ export function certFromText(text) {
   const c = CERTS.find((x) => x.re.test(t));
   return c ? c.name : null;
 }
-// Products that are not food need no kashrut (cleaning, hygiene).
-const NONFOOD = /שמפו|מרכך שיער|סבון|אקונומיקה|נוזל כלים|אבקת כביסה|ג'?ל כביסה|מרכך כביסה|ספוג|נייר טואלט|מגבונים|טישו|חיתול|מברשת שיניים|דאודורנט|קרם גוף|קרם ידיים|שקיות אשפה|נייר אפייה|נייר כסף|מטהר אוויר|מסקרה|ליפסטיק|תחבושות|סכיני גילוח|ניקוי|מנקה|כלים חד/;
-export const nonFood = (product) => NONFOOD.test(String((product && product.name) || ''));
+// Products that are not food need no kashrut: cleaning, hygiene, babies'
+// non-food, and paper, plastic and disposables.
+const NONFOOD = new RegExp([
+  // hygiene and pharm
+  'שמפו', 'מרכך שיער', 'סבון', 'משחת שיניים', 'מברשת שיניים', 'חוט דנטלי', 'מי פה', 'דאודורנט', 'קרם גוף', 'קרם ידיים', 'קרם פנים', 'קרם הגנה',
+  'מסקרה', 'ליפסטיק', 'לק לציפורניים', 'תחבושות', 'טמפונ', 'צמר גפן', 'מקלוני אוזניים', 'סכיני גילוח', 'קצף גילוח', 'ג\'?ל רחצה', 'תרחיץ',
+  // babies (not formula or baby food)
+  'חיתול', 'טיטול', 'מגבונים', 'מוצץ',
+  // cleaning and laundry
+  'אקונומיקה', 'נוזל כלים', 'אבקת כביסה', 'ג\'?ל כביסה', 'מרכך כביסה', 'קפסולות כביסה', 'מסיר כתמים', 'למדיח', 'מבריק', 'ספוג', 'ספוגית', 'מטליות',
+  'ניקוי', 'מנקה', 'מטהר אוויר', 'מפיג ריח', 'קוטל', 'מלכודת',
+  // paper, plastic and disposables
+  'נייר טואלט', 'מגבות נייר', 'נייר מגבת', 'טישו', 'ממחטות', 'מפיות', 'נייר אפייה', 'נייר כסף', 'נייר אלומיניום', 'רדיד אלומיניום', 'ניילון נצמד',
+  'שקיות אשפה', 'שקיות זבל', 'שקיות הקפאה', 'שקיות סנדוויץ', 'שקיות ניילון', 'שקיות לאחסון',
+  'כלים חד', 'צלחות', 'כוסות', 'מזלגות', 'סכינים חד', 'כפות חד', 'כפיות חד', 'סכו"?ם', 'קשיות', 'קיסמים', 'מפה חד', 'מפות חד',
+  'תבנית אלומיניום', 'תבניות אלומיניום', 'תבנית חד', 'תבניות חד', 'מגשי אלומיניום', 'כפפות',
+  // other household goods
+  'סוללות', 'גפרורים', 'מצית', 'נורת', 'נורה(\\s|$)', 'נרות נשמה', 'פחמים', 'שקית קירור'
+].join('|'));
+// (A cake or a biscuit is food, even a sponge cake: "עוגת ספוג".)
+const FOOD_WORDS = /עוג|מאפ|ביסקוויט|ופל|לחם/;
+export const nonFood = (product) => { const n = String((product && product.name) || ''); return NONFOOD.test(n) && !FOOD_WORDS.test(n); };
+// Fresh fruit and vegetables: their kashrut (tithes, insects) goes by the
+// store that sells them, not by a certifier on a package, so the product
+// itself is not checked. Only the plain thing counts: the name starts with
+// the fruit or vegetable ("כרוב אדום", "גזר 1 ק"ג", "בצל אדום מארז"), and
+// nothing in it says it was made into something (a salad, jam, juice, a
+// canned, frozen, dried, crushed or cooked product), which is food like any
+// other and is checked. When unsure, it is checked.
+const NOT_FRESH = /ריב|קונפיטור|מרמלד|לפתן|אבקת|גרוס|טחון|כתוש|יבש|צימוק|תבלין|קופס|פחית|צנצנ|סירופ|ג['׳]?לי|סוכרי|שמן|(^|\s)תה(\s|$)|חליט|מחית|קטשופ|יין|בירה|ליקר|רכז|תרכיז|מוגז|שייק|פסטה|פיצה|עוג|מאפ|בורקס|לחם|במבה|ביסלי|גבינ|יוגורט|מעדן|קפה|בסגנון|קלוי|אפוי|מבושל|צלוי|ממותק|זרעי|גרעין|נמס|טבליות|גבישי|פתית|מוחמצ|מוחמץ|מטחנה|מיונז|גומי|פלפלונים|תפוזינה|ט\.|(^|\s)עם(\s|$)|\d\s*ל['׳]?(\s|$)|פלפל (שחור|לבן|אנגלי|ורוד)|(^|\s)ב(לימון|שמן|חומץ|רוטב|מלח|טעם)|מ["״]?ל(\s|$)|ליטר/;
+const PRODUCE_WORDS = AISLES.find((a) => a.key === 'produce').words.filter((w) => !['ירקות', 'פירות'].includes(w));
+export const freshProduce = (product) => {
+  const n = String((product && product.name) || '').trim();
+  const first = n.split(/\s+/)[0].replace(/["'׳״]/g, '');
+  if (!PRODUCE_WORDS.some((w) => first.startsWith(w.replace(/["'׳״]/g, '')))) return false;
+  return !MADE.test(n) && !NOT_FRESH.test(n) && (sizeOfProduct(product) || {}).unit !== 'l';
+};
+// No kashrut to check for this product: not food, or fresh fruit and vegetables.
+export const kashrutFree = (product) => nonFood(product) || freshProduce(product);
 // The product's certifier and who said so: the owner first, then what most
 // families marked (at least one), then the open product database.
 export function certOf(product) {
@@ -242,10 +278,11 @@ export function allowed(product, pref) {
   if (!pref || pref === 'any') return true;
   if (Array.isArray(pref)) {
     if (!pref.length) return true;
-    if (nonFood(product)) return true;
+    if (kashrutFree(product)) return true;
     const c = certOf(product);
     return !!c && c.cert !== NOT_KOSHER && pref.includes(c.cert);
   }
+  if (kashrutFree(product)) return true;
   const l = levelOf(product);
   return !!l && rank(l.level) >= rank(pref);
 }
