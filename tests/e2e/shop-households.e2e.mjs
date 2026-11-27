@@ -160,3 +160,31 @@ test('round 7: a list pasted from WhatsApp into the add box: one item per line, 
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('round 8: a very long name (one long word too) stays inside its tile in the store and its row in the lists, on the smallest phone', async () => {
+  const { page, errors } = await openHousehold(HOUSEHOLDS[4]);
+  const outside = () => page.evaluate(() => [...document.querySelectorAll('.store-n, .shop-name, .sl-mid b')].filter((e) => { const b = e.getBoundingClientRect(); const p = e.closest('.store-tile, .shop-item, .sl-chat, .sl-compare').getBoundingClientRect(); return b.right > p.right + 1 || b.left < p.left - 1; }).map((e) => e.textContent));
+  await page.locator('.shop-add .input').fill('אבקתכביסהמרוכזתבמיוחדלמכונותחזיתיות, גבינה צהובה עמק 28% פרוסה דקה במיוחד מארז חסכוני משפחתי');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.shop-item').length === 2);
+  assert.deepEqual(await outside(), [], 'the list');
+  await page.click('.store-go');
+  await page.waitForSelector('.store-tile .store-n');
+  // (Escape is listened for once the screen has settled: body.store-on.)
+  await page.waitForSelector('body.store-on');
+  assert.deepEqual(await outside(), [], 'the store');
+  assert.equal(await noSideways(page), true);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.store'));
+  await page.click('.shop-listhead .back-btn');
+  await page.click('.sl-new');
+  await page.fill('#sl-name', 'רשימהארוכהמאודלחגהפסחשלכלהמשפחההמורחבתעםכלהדודים');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.shop-add');
+  await page.click('.shop-listhead .back-btn');
+  await page.waitForSelector('.sl-chat');
+  assert.deepEqual(await outside(), [], 'the lists');
+  assert.equal(await noSideways(page), true);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

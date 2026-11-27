@@ -2166,7 +2166,7 @@ body.store-on { overflow: hidden; }
   border: 1.5px solid color-mix(in srgb, var(--text) 10%, transparent); border-radius: 18px; background: var(--surface); color: var(--text); font: inherit; text-align: start; cursor: pointer;
   -webkit-tap-highlight-color: transparent; transition: background .15s, border-color .15s, transform .1s; }
 .store-tile:active { transform: scale(.97); }
-.store-n { font-size: 18px; font-weight: 700; line-height: 1.25; }
+.store-n { font-size: 18px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; max-width: 100%; }
 .store-q { font-size: 14px; color: var(--accent); font-weight: 700; }
 .store-tick { position: absolute; top: 12px; inset-inline-end: 12px; width: 24px; height: 24px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--text) 25%, transparent); display: grid; place-items: center; }
 .store-tile.done { background: transparent; border-style: dashed; }
@@ -2313,7 +2313,7 @@ body.store-on { overflow: hidden; }
 .sl-av { width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; flex: none; background: var(--accent-tint); color: var(--accent); }
 .sl-av.sl-done { background: var(--surface-2); color: var(--muted); }
 .sl-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.sl-mid b { font-size: 16px; }
+.sl-mid b { font-size: 16px; overflow-wrap: anywhere; }
 .sl-mid small { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sl-end { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; font-size: 12px; color: var(--muted); flex: none; }
 .sl-pg { width: 54px; height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
