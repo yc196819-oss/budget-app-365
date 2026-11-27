@@ -772,14 +772,18 @@ export function chainListText(row, items) {
   const money = (n) => '₪' + (Math.round(n * 100) / 100).toFixed(2);
   const lines = [];
   const missing = [];
+  // What has no price (fresh food by weight, what was not found) is still
+  // to buy: the one who goes shopping gets the whole list.
+  const unpriced = [];
   for (const it of items) {
     const l = row.lines.find((x) => x.id === it.id);
-    if (!l) continue;
+    if (!l) { unpriced.push('☐ ' + it.name + (it.qty ? ' ' + it.qty : '')); continue; }
     if (!l.product) { missing.push(it.name); continue; }
     const z = sizeText(sizeOfProduct(l.product));
     lines.push('☐ ' + it.name + (it.qty ? ' ' + it.qty : '') + ': ' + l.product.name + (z && !l.product.name.includes(z) ? ' ' + z : '') + ' · ' + money(l.cost != null ? l.cost : l.price) + (l.promo ? ' (במבצע)' : ''));
   }
   return ['רשימה לקנייה ב' + row.name + (row.store ? ' (' + row.store + ')' : '') + ': בערך ' + money(row.total) + (row.delivery ? ' (כולל משלוח ' + money(row.delivery.fee) + ')' : ''), '', ...lines,
+    ...(unpriced.length ? ['', 'ועוד, בלי מחיר בהשוואה (טרי במשקל או לא נמצא):', ...unpriced] : []),
     ...(missing.length ? ['', 'אין ב' + row.name + ': ' + missing.join(', ')] : []), '', 'מ"התקציב שלנו"'].join('\n');
 }
 

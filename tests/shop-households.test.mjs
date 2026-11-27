@@ -96,3 +96,11 @@ test('round 15: half a kilo, a kilo and a half, "2x" and the numbers in words up
   assert.deepEqual(pairs('2x חלב, שמונה פיתות, עשרים ביצים'), [['חלב', '×2', 'dairy'], ['פיתות', '×8', 'bakery'], ['ביצים', '×20', 'dairy']]);
   assert.deepEqual(pairs('חצי לחם'), [['חצי לחם', null, 'bakery']], 'half of something that is not a weight stays in the name');
 });
+
+test('round 16: the list sent to whoever goes shopping keeps what has no price (fresh food, not found), not only the priced things', async () => {
+  const { chainListText } = await import('../public/app/src/domain/prices.js');
+  const row = { name: 'רשת א', total: 12.4, lines: [{ id: '1', product: { name: 'חלב 3% 1 ליטר', qty: 1, unit: 'ליטר' }, price: 6.2, cost: 12.4 }] };
+  const t = chainListText(row, [{ id: '1', name: 'חלב 3%', qty: '×2' }, { id: '2', name: 'עגבניות', qty: '1 ק"ג' }, { id: '3', name: 'זעתר' }]);
+  assert.match(t, /☐ חלב 3% ×2: חלב 3% 1 ליטר · ₪12\.40/);
+  assert.match(t, /בלי מחיר בהשוואה[^\n]*\n☐ עגבניות 1 ק"ג\n☐ זעתר/);
+});
