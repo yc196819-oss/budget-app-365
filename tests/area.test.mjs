@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-const { place, placeByName, suggest, storePlace, km, reachKm, nearestStores, reachCounts } = createRequire(import.meta.url)('../server/area.js');
+const { place, placeByName, suggest, storePlace, branchPlace, km, reachKm, nearestStores, reachCounts } = createRequire(import.meta.url)('../server/area.js');
 
 // Made-up branches, at real settlement numbers.
 const S = (chain, store_id, name, address, city) => ({ chain, chain_name: chain, store_id, name, address, city });
@@ -65,4 +65,32 @@ test('how many chains at each distance, 0 to 10 km', () => {
   ];
   // Beit Shemesh itself; Tzora about 2.6 km; Kfar Uria about 6.5 km; Jerusalem about 23 km, never.
   assert.deepEqual(reachCounts(stores, { code: '2610' }), [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]);
+});
+
+test('settlements that were far from where they are: Hebron, Kiryat Arba, Ofra, Karne Shomron, Tamra', () => {
+  const near = (code, lat, lon) => assert.ok(km(place(code), { lat, lon }) < 3, place(code).name + ' at ' + place(code).lat + ',' + place(code).lon);
+  near('3400', 31.53, 35.095);
+  near('3611', 31.53, 35.12);
+  near('3617', 31.956, 35.26);
+  near('3640', 32.17, 35.1);
+  near('8900', 32.853, 35.198);
+});
+
+test('a branch whose own point is far from the settlement in its name is in no settlement: it counts by distance', () => {
+  // A Tel Aviv street named after a settlement (made-up branch).
+  const street = { ...S('x', '1', 'סניף', 'חשמונאים 99', '0'), lat: 32.0697, lon: 34.7842 };
+  assert.equal(storePlace(street).name, 'חשמונאים', 'looked up on the map as before');
+  const p = branchPlace(street);
+  assert.equal(p.code, null);
+  assert.equal(p.name, 'תל אביב - יפו', 'named after the settlement around it');
+  // Near its settlement, or with no point: as before.
+  assert.equal(branchPlace({ ...S('x', '2', 'סניף', 'הרצל 1', '2610'), lat: 31.75, lon: 34.99 }).code, '2610');
+  assert.equal(branchPlace(S('x', '3', 'סניף', 'הרצל 1', '2610')).code, '2610');
+  // At a junction far from every center: no name, only its distance.
+  assert.equal(branchPlace({ ...S('x', '4', 'תחנה', 'צומת', '0'), lat: 30.79, lon: 34.77 }).name, '');
+  // Families in Hashmonaim no longer get the Tel Aviv branch as "in your settlement".
+  assert.deepEqual(nearestStores([street], { code: '3770' }, { maxKm: 5 }), []);
+  const ta = nearestStores([street], { code: '5000' }, { maxKm: 5 })[0];
+  assert.equal(ta.kind, 'near');
+  assert.ok(ta.km < 5);
 });

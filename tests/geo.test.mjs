@@ -150,3 +150,8 @@ test('a few misses between finds are kept as not found', async () => {
   assert.deepEqual(saved, [['1', 'found'], ['2', 'missed'], ['3', 'found']]);
   assert.deepEqual(r, { asked: 3, found: 2, missed: 1, left: 0, error: null });
 });
+
+test('a branch in no settlement shows its distance only', () => {
+  assert.equal(storeWhy({ kind: 'near', km: 3.4, city: '' }), '3.4 ק"מ');
+  assert.equal(storeWhy({ kind: 'near', km: 3, city: 'צרעה' }), 'צרעה, 3 ק"מ');
+});
