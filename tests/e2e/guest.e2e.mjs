@@ -173,3 +173,30 @@ test('a home link (a partner): the household\'s own list, saved on the server, t
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('round 5 (the Shabbat testing): on a shopping link, a thing already on the list says so, "קוטג\'" is "קוטג", and finished shoppings older than 120 days leave the browser', async () => {
+  const { page, errors } = await guestPage();
+  await page.locator('.guest-shop .shop-add').waitFor();
+  await page.evaluate(() => localStorage.setItem('guest:list', JSON.stringify([
+    { id: 'old', name: 'אורז', aisle: 'dry', done: true, created_at: '2025-01-01T10:00:00Z', cleared_at: '2025-01-02T10:00:00Z' },
+    { id: 'recent', name: 'קפה', aisle: 'dry', done: true, created_at: new Date(Date.now() - 5 * 86400000).toISOString(), cleared_at: new Date(Date.now() - 4 * 86400000).toISOString() }
+  ])));
+  await page.reload();
+  await page.locator('.guest-shop .shop-add').waitFor();
+  await page.locator('.shop-add .input').fill('קוטג\', חלב');
+  await page.keyboard.press('Enter');
+  await page.locator('.shop-item', { hasText: 'חלב' }).waitFor();
+  await page.locator('.shop-add .input').fill('קוטג');
+  await page.keyboard.press('Enter');
+  await page.locator('.guest-shop [role=status]', { hasText: 'קוטג כבר ברשימה' }).waitFor();
+  assert.equal(await page.locator('.shop-item').count(), 2);
+  await page.locator('.shop-add .input').fill('חלב, קוטג׳');
+  await page.keyboard.press('Enter');
+  await page.locator('.guest-shop [role=status]', { hasText: 'הכול כבר ברשימה' }).waitFor();
+  // Saving again keeps only what is recent.
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('guest:list')).map((i) => i.id));
+  assert.equal(kept.includes('old'), false);
+  assert.equal(kept.includes('recent'), true);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

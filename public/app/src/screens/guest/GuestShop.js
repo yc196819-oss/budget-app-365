@@ -1,15 +1,22 @@
 import { html } from '../../lib/html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../components/Icon.js';
-import { parseItems, grouped } from '../../domain/shopping.js';
+import { parseItems, grouped, onList } from '../../domain/shopping.js';
 import { readLocal, writeLocal } from '../../lib/storage.js';
 import { setGuest, guestCheck, guestCall } from '../../data/prices.js';
 import { AdvisorList } from '../shop/AdvisorList.js';
 import { PricePanel } from '../shop/PricePanel.js';
 
 const AISLE_ICON = { produce: 'leaf', bakery: 'bread', dairy: 'milk', meat: 'fish', dry: 'jar', frozen: 'snow', drinks: 'cup', clean: 'drop', care: 'drop', baby: 'baby', other: 'cart' };
-const key = (s) => String(s || '').trim().replace(/\s+/g, ' ');
-const load = () => { try { const l = JSON.parse(readLocal('guest:list', '[]')); return Array.isArray(l) ? l : []; } catch (_e) { return []; } };
+// The list kept in this browser; finished shoppings older than 120 days
+// leave it (as on the home's list), so it does not grow for ever.
+const KEEP = 120 * 86400000;
+const load = () => {
+  try {
+    const l = JSON.parse(readLocal('guest:list', '[]'));
+    return Array.isArray(l) ? l.filter((i) => !i.cleared_at || Date.now() - new Date(i.cleared_at).getTime() < KEEP) : [];
+  } catch (_e) { return []; }
+};
 
 // The token from "#/guest/<token>", or null.
 export function guestToken(hash) {
@@ -50,9 +57,10 @@ export function GuestShop({ token }) {
   const save = (next) => { setItemsState(next); if (!home) writeLocal('guest:list', JSON.stringify(next)); };
   const failed = () => { setErr('לא נשמר. נסו שוב.'); if (home) pull(); };
   const add = (list) => {
-    const have = new Set(items.filter((i) => !i.cleared_at).map((i) => key(i.name)));
     const now = new Date().toISOString();
-    const wanted = list.filter((x) => x.name && !have.has(key(x.name)));
+    // ("קוטג'" and "קוטג" are the same thing, as on the home's list.)
+    const wanted = list.filter((x, n) => x.name && !onList(items, x.name) && !list.slice(0, n).some((y) => onList([y], x.name)));
+    if (!wanted.length && list.length) setErr(list.length === 1 ? list[0].name + ' כבר ברשימה' : 'הכול כבר ברשימה');
     if (home) {
       if (wanted.length) guestCall('/items', { items: wanted.map((x) => ({ name: x.name, qty: x.qty || null, aisle: x.aisle || 'other' })) }).then((r) => setItemsState((all) => [...all, ...(r.items || [])])).catch(failed);
       return wanted.length;
@@ -61,7 +69,7 @@ export function GuestShop({ token }) {
     save([...items, ...fresh]);
     return fresh.length;
   };
-  const submit = (e) => { e.preventDefault(); if (!text.trim()) return; add(parseItems(text)); setText(''); if (input.current) input.current.focus(); };
+  const submit = (e) => { e.preventDefault(); if (!text.trim()) return; setErr(''); add(parseItems(text)); setText(''); if (input.current) input.current.focus(); };
   const toggle = (it) => {
     save(items.map((x) => (x.id === it.id ? { ...x, done: !x.done } : x)));
     if (home) guestCall('/items/' + it.id, { done: !it.done }, 'PATCH').catch(failed);
