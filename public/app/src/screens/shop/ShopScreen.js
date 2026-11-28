@@ -260,7 +260,7 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
       ${prev.length > 0 && html`<div class="card stack" style="gap:8px">
         <b>הרשימה מהפעם הקודמת</b>
         <span class="muted" style="font-size:14px;line-height:1.5">${prev.slice(0, 6).map((i) => i.name).join(', ')}${prev.length > 6 ? ' ועוד ' + (prev.length - 6) : ''}</span>
-        <button type="button" class="btn btn-ghost" onClick=${() => add(prev.map((i) => ({ name: i.name, qty: i.qty, aisle: i.aisle || aisleOf(i.name) })), 'reuse')}>להחזיר את כל ${prev.length} לרשימה</button>
+        <button type="button" class="btn btn-ghost" onClick=${() => add(prev.map((i) => ({ name: i.name, qty: i.qty, aisle: i.aisle && i.aisle !== 'other' ? i.aisle : aisleOf(i.name) })), 'reuse')}>להחזיר את כל ${prev.length} לרשימה</button>
       </div>`}
       ${usualList.length > 0 && html`<div class="card stack" style="gap:8px">
         <b>מה שאתם קונים בדרך כלל</b>
