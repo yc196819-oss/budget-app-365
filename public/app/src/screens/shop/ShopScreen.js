@@ -170,7 +170,15 @@ export function ShopScreen({ data, owner = false, asUser = false, onOwnerView = 
   };
   const remove = async (i) => {
     shop.patch((all) => all.filter((x) => x.id !== i.id));
-    try { await removeItem(i.id); } catch (_e) { shop.reload(); showToast('לא נמחק. נסו שוב.'); }
+    try { await removeItem(i.id); } catch (_e) { shop.reload(); showToast('לא נמחק. נסו שוב.'); return; }
+    // The X is always there, so a finger can catch it by mistake: a moment to take it back.
+    showToast('הורד מהרשימה: ' + i.name, { undo: async () => {
+      try {
+        const rows = await addItems(data.hid, [{ name: i.name, qty: i.qty, aisle: i.aisle }], withLists ? i.list_id || openList : null);
+        if (i.done && rows[0]) { await setDone(rows[0].id, true); rows[0] = { ...rows[0], done: true }; }
+        shop.patch((all) => [...all, ...rows.filter((r) => !all.some((a) => a.id === r.id))]);
+      } catch (_e) { showToast('לא הוחזר. אפשר להוסיף שוב.'); }
+    } });
   };
   const finish = async () => {
     try { await finishShopping(data.hid); track('shop_done'); await shop.reload(); showToast('נשמר. מה שקניתם יופיע ב"מה שאתם קונים בדרך כלל".'); } catch (_e) { showToast('לא נשמר. נסו שוב.'); }
