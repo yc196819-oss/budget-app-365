@@ -71,6 +71,14 @@ export function parseItem(text) {
   if (!t) return null;
   // "2x חלב" is two of milk, not "x חלב".
   t = t.replace(/^(\d+)\s*[x×*]\s+/, '$1 ');
+  // The amount in brackets at the end, as our own copied list writes it
+  // ("עגבניות (1 ק"ג)", "חלב (×2)"): pasted back, it is the amount again.
+  // Other words in brackets stay in the name ("בשר טחון (מהקצב)").
+  const br = /^(.+?)\s*\(\s*([×x]?\s*\d+(?:[.,]\d+)?(?:\s+[^()\d]{1,12})?)\s*\)$/.exec(t);
+  if (br && norm(br[1])) {
+    const q = br[2].replace(/^[×x]\s*/, '×');
+    return { name: norm(br[1]).slice(0, 80), qty: (/^\d+(?:[.,]\d+)?$/.test(q) ? '×' + q : q).slice(0, 20) };
+  }
   // Half a kilo, a kilo and a half: "חצי קילו עגבניות", "קילו וחצי בשר",
   // "2 וחצי ליטר".
   const half = /^(?:(\d+)\s+)?(?:(ו?חצי)\s+)?(ק"ג|קג|קילו|ליטר)(?:\s+(וחצי))?\s+(.+)$/.exec(t);
