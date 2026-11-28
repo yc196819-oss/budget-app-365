@@ -326,3 +326,17 @@ test('round 18: an item removed by mistake comes back with "ביטול", on its 
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('round 19: a long list on one line (40 things, commas) pasted into the add box keeps every item, not the first 300 letters', async () => {
+  const { page, errors, db } = await openHousehold(HOUSEHOLDS[13]);
+  const names = ['חלב 3%', 'לחם אחיד', 'ביצים L', 'גבינה לבנה 5%', 'קוטג׳', 'יוגורט', 'שמנת חמוצה', 'חמאה', 'עגבניות', 'מלפפונים', 'בצל', 'שום', 'תפוחי אדמה', 'גזר', 'פלפל אדום', 'חסה', 'פטרוזיליה', 'שמיר', 'לימון', 'תפוחים', 'בננות', 'אורז', 'פסטה', 'קמח', 'סוכר', 'שמן קנולה', 'שמן זית', 'טחינה', 'חומוס', 'טונה', 'תירס', 'רסק עגבניות', 'קפה', 'תה', 'קורנפלקס', 'נייר טואלט', 'אקונומיקה', 'סבון כלים', 'שקיות זבל', 'מגבונים'];
+  const line = names.join(', ');
+  assert.ok(line.length > 300, 'the list is ' + line.length + ' letters');
+  await page.locator('.shop-add .input').focus();
+  await page.keyboard.insertText(line);
+  await page.keyboard.press('Enter');
+  await page.waitForFunction((n) => document.querySelectorAll('.shop-item').length >= n - 1, names.length, { timeout: 5000 }).catch(() => {});
+  assert.equal(db.tables.shopping_items.length, names.length, 'items saved');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
