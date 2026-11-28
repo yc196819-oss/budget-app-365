@@ -48,7 +48,7 @@ export function aisleOf(name) {
   return best.key;
 }
 
-const WORDS = { 'אחד': 1, 'אחת': 1, 'שניים': 2, 'שתיים': 2, 'שני': 2, 'שתי': 2, 'שלוש': 3, 'שלושה': 3, 'ארבע': 4, 'ארבעה': 4, 'חמש': 5, 'חמישה': 5, 'שש': 6, 'שישה': 6, 'עשר': 10, 'עשרה': 10 };
+const WORDS = { 'אחד': 1, 'אחת': 1, 'שניים': 2, 'שתיים': 2, 'שני': 2, 'שתי': 2, 'שלוש': 3, 'שלושה': 3, 'ארבע': 4, 'ארבעה': 4, 'חמש': 5, 'חמישה': 5, 'שש': 6, 'שישה': 6, 'שבע': 7, 'שבעה': 7, 'שמונה': 8, 'תשע': 9, 'תשעה': 9, 'עשר': 10, 'עשרה': 10, 'עשרים': 20 };
 const UNITS = ['ק"ג', 'קג', 'קילו', 'גרם', 'ליטר', 'ל\'', 'יח\'', 'יחידות', 'חבילות', 'חבילה', 'בקבוקים', 'בקבוק', 'תבניות', 'תבנית', 'שקיות', 'שקית', 'קופסאות', 'קופסה', 'מגשים', 'מגש'];
 
 const WEIGHTS = ['ק"ג', 'קג', 'קילו', 'גרם', 'ליטר'];
@@ -69,6 +69,16 @@ export function parseItem(text) {
   const bare = t.replace(/^(ו|גם)\s*/, '');
   if (bare !== t && (aisleOf(bare) !== 'other' || aisleOf(t) === 'other')) t = bare;
   if (!t) return null;
+  // "2x חלב" is two of milk, not "x חלב".
+  t = t.replace(/^(\d+)\s*[x×*]\s+/, '$1 ');
+  // Half a kilo, a kilo and a half: "חצי קילו עגבניות", "קילו וחצי בשר",
+  // "2 וחצי ליטר".
+  const half = /^(?:(\d+)\s+)?(?:(ו?חצי)\s+)?(ק"ג|קג|קילו|ליטר)(?:\s+(וחצי))?\s+(.+)$/.exec(t);
+  if (half && (half[2] || half[4]) && !(half[2] && half[4])) {
+    const n = (half[1] ? Number(half[1]) : half[2] && !half[2].startsWith('ו') ? 0 : 1) + 0.5;
+    const name = norm(half[5]);
+    if (name) return { name: name.slice(0, 80), qty: n + ' ' + (half[3] === 'ליטר' ? 'ליטר' : 'ק"ג') };
+  }
   let qty = null;
   // (A number that is a percent is part of the name: "3% חלב".)
   let m = /^(\d+(?:[.,]\d+)?)(?!\s*%)\s*(.*)$/.exec(t);
@@ -113,7 +123,8 @@ function splitAnd(chunk) {
   const parts = String(chunk).split(/\s+(?=ו[א-ת]{2,})/);
   const out = [];
   for (const p of parts) {
-    if (out.length && /^ו/.test(p) && aisleOf(p.slice(1)) === 'other') out[out.length - 1] += ' ' + p;
+    // ("וחצי" is half, never a second thing: "קילו וחצי בשר".)
+    if (out.length && /^ו/.test(p) && (/^וחצי(\s|$)/.test(p) || aisleOf(p.slice(1)) === 'other')) out[out.length - 1] += ' ' + p;
     else out.push(p);
   }
   return out;
